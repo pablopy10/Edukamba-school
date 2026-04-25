@@ -95,6 +95,13 @@ export const ModulesProvider = ({ children }: { children: ReactNode }) => {
 
 export const useModules = () => {
   const ctx = useContext(ModulesContext);
-  if (!ctx) throw new Error("useModules must be used within ModulesProvider");
+  if (!ctx) {
+    return {
+      modules: defaults,
+      setModule: () => {},
+      setAll: () => {},
+      resetDefaults: () => {},
+    } as Ctx;
+  }
   return ctx;
 };
