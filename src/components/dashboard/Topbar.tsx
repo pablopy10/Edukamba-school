@@ -1,4 +1,5 @@
 import { Search, MessageSquare, Bell } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export const Topbar = () => {
   return (
@@ -16,9 +17,13 @@ export const Topbar = () => {
         <button className="flex h-11 w-11 items-center justify-center rounded-full bg-card text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent">
           <MessageSquare className="h-5 w-5" strokeWidth={1.75} />
         </button>
-        <button className="flex h-11 w-11 items-center justify-center rounded-full bg-card text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent">
+        <Link
+          to="/notificacoes"
+          aria-label="Notificações"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-card text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent"
+        >
           <Bell className="h-5 w-5" strokeWidth={1.75} />
-        </button>
+        </Link>
         <div className="flex items-center gap-3 pl-2">
           <div className="text-right">
             <p className="text-sm font-semibold text-foreground">Linda Adora</p>
