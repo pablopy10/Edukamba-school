@@ -1,29 +1,37 @@
-import { GraduationCap, LayoutDashboard, Users, UserSquare2, ClipboardCheck, DollarSign, Bell, Calendar, BookOpen, MessageSquare, User, Settings, LogOut, ChevronRight } from "lucide-react";
+import { GraduationCap, Home, Users, Receipt, BookOpen, Presentation, Contact, PersonStanding, UsersRound, CalendarDays, BookMarked, CalendarCheck, Smartphone, BookOpenCheck, BarChart3, Clock, UserCircle, Settings, Package, LogOut, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
 type Item = { icon: React.ElementType; label: string; hasArrow?: boolean };
 
 const menu: Item[] = [
-  { icon: LayoutDashboard, label: "Dashboard" },
+  { icon: Home, label: "Painel de Controlo" },
   { icon: GraduationCap, label: "Professores" },
   { icon: Users, label: "Alunos" },
-  { icon: UserSquare2, label: "Frequência" },
-  { icon: DollarSign, label: "Financeiro", hasArrow: true },
-  { icon: Bell, label: "Avisos" },
-  { icon: Calendar, label: "Calendário" },
-  { icon: BookOpen, label: "Biblioteca" },
-  { icon: MessageSquare, label: "Mensagens" },
+  { icon: Receipt, label: "Matrículas" },
+  { icon: BookOpen, label: "Cursos" },
+  { icon: Presentation, label: "Turmas" },
+  { icon: Contact, label: "Disciplinas" },
+  { icon: PersonStanding, label: "Educadores" },
+  { icon: UsersRound, label: "Presenças" },
+  { icon: CalendarDays, label: "Horário" },
+  { icon: BookMarked, label: "Avaliações" },
+  { icon: CalendarCheck, label: "Eventos" },
+  { icon: Smartphone, label: "Pedidos" },
+  { icon: BookOpenCheck, label: "Material" },
+  { icon: BarChart3, label: "Relatórios" },
+  { icon: Clock, label: "Timesheet" },
 ];
 
 const other: Item[] = [
-  { icon: User, label: "Perfil" },
-  { icon: Settings, label: "Configurações" },
+  { icon: UserCircle, label: "Perfil" },
+  { icon: Settings, label: "Definições" },
+  { icon: Package, label: "Módulos" },
   { icon: LogOut, label: "Sair" },
 ];
 
 export const Sidebar = () => {
-  const [active, setActive] = useState("Dashboard");
+  const [active, setActive] = useState("Painel de Controlo");
 
   const renderItem = (item: Item) => {
     const Icon = item.icon;
@@ -47,12 +55,10 @@ export const Sidebar = () => {
   };
 
   return (
-    <aside className="hidden lg:flex w-64 shrink-0 flex-col gap-6 border-r border-sidebar-border bg-sidebar p-5">
-      <div className="flex items-center gap-2 px-2">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pastel-blue text-pastel-blue-foreground">
-          <GraduationCap className="h-6 w-6" strokeWidth={2} />
-        </div>
-        <span className="text-xl font-bold tracking-tight text-foreground">Edukamba</span>
+    <aside className="hidden lg:flex w-64 shrink-0 flex-col gap-6 border-r border-sidebar-border bg-sidebar p-5 overflow-y-auto max-h-screen">
+      <div className="flex items-center justify-center gap-1 px-2 pt-2">
+        <span className="text-3xl font-extrabold tracking-tight text-foreground">Edu</span>
+        <span className="text-3xl font-extrabold tracking-tight text-pastel-blue-foreground">Kamba</span>
       </div>
 
       <div className="flex flex-col gap-1">
