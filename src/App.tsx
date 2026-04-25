@@ -8,6 +8,7 @@ import NotFound from "./pages/NotFound.tsx";
 import Alunos from "./pages/Alunos.tsx";
 import AlunoPerfil from "./pages/AlunoPerfil.tsx";
 import Professores from "./pages/Professores.tsx";
+import ProfessorPerfil from "./pages/ProfessorPerfil.tsx";
 import Matriculas from "./pages/Matriculas.tsx";
 import Cursos from "./pages/Cursos.tsx";
 import Turmas from "./pages/Turmas.tsx";
@@ -36,6 +37,7 @@ const App = () => (
           <Route path="/alunos" element={<Alunos />} />
           <Route path="/alunos/:id" element={<AlunoPerfil />} />
           <Route path="/professores" element={<Professores />} />
+          <Route path="/professores/:id" element={<ProfessorPerfil />} />
           <Route path="/matriculas" element={<Matriculas />} />
           <Route path="/cursos" element={<Cursos />} />
           <Route path="/turmas" element={<Turmas />} />
