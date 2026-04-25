@@ -37,8 +37,8 @@ const Modulos = () => {
     >
       <span
         className={cn(
-          "absolute left-0 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full border border-border bg-card shadow-soft transition-transform",
-          checked ? "translate-x-[18px]" : "-translate-x-[6px]",
+          "absolute left-0 top-1/2 h-7 w-7 -translate-y-1/2 rounded-full border border-border bg-card shadow-soft transition-transform",
+          checked ? "translate-x-[20px]" : "-translate-x-[4px]",
         )}
       />
     </button>
