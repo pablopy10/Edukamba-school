@@ -4,6 +4,7 @@ import { GraduationCap, Loader2, Mail, Lock, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
@@ -162,9 +163,8 @@ const Auth = () => {
                   <Label htmlFor="login-password">Password</Label>
                   <div className="relative">
                     <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
+                    <PasswordInput
                       id="login-password"
-                      type="password"
                       required
                       autoComplete="current-password"
                       placeholder="••••••••"
@@ -233,9 +233,8 @@ const Auth = () => {
                   <Label htmlFor="signup-password">Password</Label>
                   <div className="relative">
                     <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
+                    <PasswordInput
                       id="signup-password"
-                      type="password"
                       required
                       minLength={6}
                       autoComplete="new-password"
