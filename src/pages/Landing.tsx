@@ -348,6 +348,12 @@ const Landing = () => {
             <a href="#planos" className="hover:text-foreground">
               Planos
             </a>
+            <Link to="/termos" className="hover:text-foreground">
+              Termos
+            </Link>
+            <Link to="/privacidade" className="hover:text-foreground">
+              Privacidade
+            </Link>
             <Link to="/dashboard" className="hover:text-foreground">
               Painel
             </Link>
