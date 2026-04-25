@@ -1,4 +1,4 @@
-import { GraduationCap, Home, Users, Receipt, BookOpen, Presentation, Contact, PersonStanding, UsersRound, CalendarDays, BookMarked, CalendarCheck, Smartphone, BookOpenCheck, BarChart3, Clock, UserCircle, Settings, Package, LogOut, ChevronRight, Sparkles, Bell } from "lucide-react";
+import { GraduationCap, Home, Users, Receipt, BookOpen, Presentation, Contact, PersonStanding, UsersRound, CalendarDays, BookMarked, CalendarCheck, Smartphone, BookOpenCheck, BarChart3, Clock, UserCircle, Settings, Package, LogOut, ChevronRight, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavLink, useLocation } from "react-router-dom";
 import { useModules, ModuleKey } from "@/context/ModulesContext";
@@ -26,7 +26,6 @@ const menu: Item[] = [
 ];
 
 const other: Item[] = [
-  { icon: Bell, label: "Notificações", to: "/notificacoes" },
   { icon: UserCircle, label: "Perfil", to: "/perfil" },
   { icon: Settings, label: "Definições", to: "/definicoes" },
   { icon: Package, label: "Módulos", to: "/modulos" },
