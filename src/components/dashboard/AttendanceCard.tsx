@@ -1,15 +1,13 @@
 import { ChevronDown } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip } from "recharts";
 
-const data = [
-  { day: "Seg", present: 65, absent: 60 },
-  { day: "Ter", present: 75, absent: 55 },
-  { day: "Qua", present: 92, absent: 70 },
-  { day: "Qui", present: 78, absent: 72 },
-  { day: "Sex", present: 75, absent: 65 },
-];
+interface AttendanceCardProps {
+  data: { day: string; present: number; absent: number }[];
+}
 
-export const AttendanceCard = () => {
+export const AttendanceCard = ({ data }: AttendanceCardProps) => {
+  const maxValue = Math.max(10, ...data.flatMap((d) => [d.present, d.absent]));
+  const yMax = Math.ceil(maxValue / 5) * 5 || 10;
   return (
     <div className="flex h-full flex-col gap-5 rounded-2xl bg-card p-6 shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -17,9 +15,6 @@ export const AttendanceCard = () => {
         <div className="flex items-center gap-2">
           <button className="flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent">
             Semanal <ChevronDown className="h-3 w-3" />
-          </button>
-          <button className="flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent">
-            Série 3 <ChevronDown className="h-3 w-3" />
           </button>
         </div>
       </div>
@@ -38,7 +33,7 @@ export const AttendanceCard = () => {
           <BarChart data={data} barCategoryGap="25%">
             <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 3" />
             <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-            <YAxis axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} />
+            <YAxis axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} domain={[0, yMax]} allowDecimals={false} />
             <Tooltip
               cursor={{ fill: "hsl(var(--accent))", opacity: 0.4 }}
               contentStyle={{
@@ -54,6 +49,9 @@ export const AttendanceCard = () => {
           </BarChart>
         </ResponsiveContainer>
       </div>
+      {data.every((d) => d.present === 0 && d.absent === 0) && (
+        <p className="text-center text-xs text-muted-foreground">Sem registos de frequência esta semana.</p>
+      )}
     </div>
   );
 };
