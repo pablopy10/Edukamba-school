@@ -1,35 +1,18 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Search, Filter, Plus, MoreHorizontal, Mail, Phone, Pencil, Trash2 } from "lucide-react";
+import { Search, Plus, Mail, Pencil, Trash2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { TeacherFormDialog, TeacherRow } from "@/components/professores/TeacherFormDialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { toast } from "@/hooks/use-toast";
 
-type Teacher = {
-  id: string;
-  name: string;
-  email: string;
-  teacherId: string;
-  subject: string;
-  hireDate: string;
-  phone: string;
-  initials: string;
-  avatarColor: "lilac" | "blue" | "yellow" | "green" | "pink";
-};
+type SubjectOpt = { id: string; name: string };
 
-const teachers: Teacher[] = [
-  { id: "1", name: "Carla Mendes", email: "cmendes@edukamba.edu", teacherId: "PROF-2016-001", subject: "Matemática", hireDate: "12/03/2016", phone: "(244) 924 101 010", initials: "CM", avatarColor: "pink" },
-  { id: "2", name: "Tiago Ferreira", email: "tferreira@edukamba.edu", teacherId: "PROF-2014-002", subject: "Física", hireDate: "01/09/2014", phone: "(244) 924 202 020", initials: "TF", avatarColor: "blue" },
-  { id: "3", name: "Helena Costa", email: "hcosta@edukamba.edu", teacherId: "PROF-2017-003", subject: "Português", hireDate: "23/01/2017", phone: "(244) 924 303 030", initials: "HC", avatarColor: "yellow" },
-  { id: "4", name: "Rui Pereira", email: "rpereira@edukamba.edu", teacherId: "PROF-2015-004", subject: "Química", hireDate: "10/06/2015", phone: "(244) 924 404 040", initials: "RP", avatarColor: "green" },
-  { id: "5", name: "Sofia Almeida", email: "salmeida@edukamba.edu", teacherId: "PROF-2018-005", subject: "Biologia", hireDate: "05/02/2018", phone: "(244) 924 505 050", initials: "SA", avatarColor: "lilac" },
-  { id: "6", name: "Bruno Santos", email: "bsantos@edukamba.edu", teacherId: "PROF-2015-006", subject: "História", hireDate: "18/08/2015", phone: "(244) 924 606 060", initials: "BS", avatarColor: "pink" },
-  { id: "7", name: "Inês Rocha", email: "irocha@edukamba.edu", teacherId: "PROF-2019-007", subject: "Geografia", hireDate: "14/04/2019", phone: "(244) 924 707 070", initials: "IR", avatarColor: "blue" },
-  { id: "8", name: "Pedro Lima", email: "plima@edukamba.edu", teacherId: "PROF-2017-008", subject: "Ed. Física", hireDate: "30/10/2017", phone: "(244) 924 808 080", initials: "PL", avatarColor: "yellow" },
-  { id: "9", name: "Marta Dias", email: "mdias@edukamba.edu", teacherId: "PROF-2016-009", subject: "Inglês", hireDate: "07/07/2016", phone: "(244) 924 909 090", initials: "MD", avatarColor: "green" },
-  { id: "10", name: "André Nunes", email: "anunes@edukamba.edu", teacherId: "PROF-2019-010", subject: "Informática", hireDate: "21/11/2019", phone: "(244) 924 111 222", initials: "AN", avatarColor: "lilac" },
-];
-
-const avatarStyles: Record<Teacher["avatarColor"], string> = {
+const avatarStyles: Record<string, string> = {
   lilac: "bg-pastel-lilac text-pastel-lilac-foreground",
   blue: "bg-pastel-blue text-pastel-blue-foreground",
   yellow: "bg-pastel-yellow text-pastel-yellow-foreground",
@@ -37,18 +20,90 @@ const avatarStyles: Record<Teacher["avatarColor"], string> = {
   pink: "bg-pastel-pink text-pastel-pink-foreground",
 };
 
+const initialsOf = (name: string) =>
+  name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
+
 const Professores = () => {
-  const [selected, setSelected] = useState<string[]>(["2", "3"]);
+  const navigate = useNavigate();
+  const [teachers, setTeachers] = useState<TeacherRow[]>([]);
+  const [subjects, setSubjects] = useState<SubjectOpt[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterSubject, setFilterSubject] = useState<string>("all");
+  const [hireFrom, setHireFrom] = useState("");
+  const [hireTo, setHireTo] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<TeacherRow | null>(null);
+  const [deleting, setDeleting] = useState<TeacherRow | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    const [{ data: tData, error: tErr }, { data: sData }] = await Promise.all([
+      supabase
+        .from("teachers")
+        .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, profiles(full_name, phone)")
+        .order("created_at", { ascending: false }),
+      supabase.from("subjects").select("id, name").order("name"),
+    ]);
+    if (tErr) {
+      toast({ title: "Erro a carregar professores", description: tErr.message, variant: "destructive" });
+    }
+    setTeachers((tData ?? []) as unknown as TeacherRow[]);
+    setSubjects((sData ?? []) as SubjectOpt[]);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const subjectName = (id: string | null) => subjects.find((s) => s.id === id)?.name ?? "—";
+
+  const filtered = useMemo(() => {
+    return teachers.filter((t) => {
+      const name = t.profiles?.full_name ?? "";
+      const matchSearch = !search || [name, t.employee_id ?? "", subjectName(t.subject_id)]
+        .some((f) => f.toLowerCase().includes(search.toLowerCase()));
+      const matchSubject = filterSubject === "all" || t.subject_id === filterSubject;
+      const matchFrom = !hireFrom || (t.hire_date && t.hire_date >= hireFrom);
+      const matchTo = !hireTo || (t.hire_date && t.hire_date <= hireTo);
+      return matchSearch && matchSubject && matchFrom && matchTo;
+    });
+  }, [teachers, search, filterSubject, hireFrom, hireTo, subjects]);
 
   const toggle = (id: string) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
-  const allSelected = selected.length === teachers.length;
-  const toggleAll = () => setSelected(allSelected ? [] : teachers.map((t) => t.id));
+  const allSelected = filtered.length > 0 && selected.length === filtered.length;
+  const toggleAll = () => setSelected(allSelected ? [] : filtered.map((t) => t.id));
 
-  const filtered = teachers.filter((t) =>
-    [t.name, t.email, t.teacherId, t.subject].some((f) => f.toLowerCase().includes(search.toLowerCase())),
-  );
+  const handleDelete = async () => {
+    if (!deleting) return;
+    const { error } = await supabase.from("teachers").delete().eq("id", deleting.id);
+    if (error) {
+      toast({ title: "Erro a eliminar", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Professor removido" });
+      setDeleting(null);
+      load();
+    }
+  };
+
+  const openChat = (profileId: string | null) => {
+    if (!profileId) return;
+    navigate(`/chat?to=${profileId}`);
+  };
+
+  const stats = useMemo(() => ({
+    total: teachers.length,
+    active: teachers.length, // is_active default true; placeholder
+    newThisMonth: teachers.filter((t) => {
+      if (!t.hire_date) return false;
+      const d = new Date(t.hire_date);
+      const now = new Date();
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    }).length,
+    inactive: 0,
+  }), [teachers]);
 
   return (
     <DashboardLayout>
@@ -59,7 +114,7 @@ const Professores = () => {
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Professores</h1>
             <p className="text-sm text-muted-foreground">Faça a gestão e acompanhe todos os professores da escola.</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -70,24 +125,52 @@ const Professores = () => {
                 className="h-11 w-72 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             </div>
-            <button className="flex h-11 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent">
-              <Filter className="h-4 w-4" strokeWidth={1.75} />
-              Filtrar
-            </button>
-            <button className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
+            <button
+              onClick={() => { setEditing(null); setFormOpen(true); }}
+              className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
               <Plus className="h-4 w-4" strokeWidth={2.25} />
               Novo Professor
             </button>
           </div>
         </div>
 
+        {/* Filters row */}
+        <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card">
+          <div className="min-w-[180px] flex-1">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Disciplina</label>
+            <Select value={filterSubject} onValueChange={setFilterSubject}>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as disciplinas</SelectItem>
+                {subjects.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Admissão de</label>
+            <Input type="date" value={hireFrom} onChange={(e) => setHireFrom(e.target.value)} className="h-10" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">até</label>
+            <Input type="date" value={hireTo} onChange={(e) => setHireTo(e.target.value)} className="h-10" />
+          </div>
+          {(filterSubject !== "all" || hireFrom || hireTo) && (
+            <button
+              onClick={() => { setFilterSubject("all"); setHireFrom(""); setHireTo(""); }}
+              className="h-10 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground hover:bg-muted"
+            >Limpar filtros</button>
+          )}
+        </div>
+
         {/* Stats row */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
-            { label: "Total de Professores", value: "184", color: "bg-pastel-blue text-pastel-blue-foreground" },
-            { label: "Professores Activos", value: "172", color: "bg-pastel-green text-pastel-green-foreground" },
-            { label: "Novos este mês", value: "6", color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-            { label: "Inactivos", value: "12", color: "bg-pastel-pink text-pastel-pink-foreground" },
+            { label: "Total de Professores", value: String(stats.total), color: "bg-pastel-blue text-pastel-blue-foreground" },
+            { label: "Professores Activos", value: String(stats.active), color: "bg-pastel-green text-pastel-green-foreground" },
+            { label: "Novos este mês", value: String(stats.newThisMonth), color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+            { label: "Inactivos", value: String(stats.inactive), color: "bg-pastel-pink text-pastel-pink-foreground" },
           ].map((stat) => (
             <div key={stat.label} className="rounded-2xl bg-card p-5 shadow-card">
               <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", stat.color)}>
@@ -133,8 +216,21 @@ const Professores = () => {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((t) => {
+                {loading && (
+                  <tr><td colSpan={7} className="py-10 text-center text-muted-foreground">
+                    <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                  </td></tr>
+                )}
+                {!loading && filtered.length === 0 && (
+                  <tr><td colSpan={7} className="py-10 text-center text-muted-foreground">
+                    Nenhum professor encontrado.
+                  </td></tr>
+                )}
+                {!loading && filtered.map((t) => {
                   const isSelected = selected.includes(t.id);
+                  const name = t.profiles?.full_name ?? "—";
+                  const initials = initialsOf(name) || "??";
+                  const color = (t.avatar_color as string) || "blue";
                   return (
                     <tr
                       key={t.id}
@@ -153,41 +249,37 @@ const Professores = () => {
                       </td>
                       <td className="py-4 pr-4">
                         <div className="flex items-center gap-3">
-                          <div className={cn("flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold", avatarStyles[t.avatarColor])}>
-                            {t.initials}
+                          <div className={cn("flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold", avatarStyles[color] ?? avatarStyles.blue)}>
+                            {initials}
                           </div>
                           <div>
                             <Link to={`/professores/${t.id}`} className="font-semibold text-foreground transition-colors hover:text-pastel-blue-foreground hover:underline">
-                              {t.name}
+                              {name}
                             </Link>
-                            <p className="text-xs text-muted-foreground">{t.email}</p>
+                            <p className="text-xs text-muted-foreground">{t.profiles?.phone ?? ""}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="py-4 pr-4 text-foreground">{t.teacherId}</td>
+                      <td className="py-4 pr-4 text-foreground">{t.employee_id ?? "—"}</td>
                       <td className="py-4 pr-4">
-                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{t.subject}</span>
+                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{subjectName(t.subject_id)}</span>
                       </td>
-                      <td className="py-4 pr-4 text-muted-foreground">{t.hireDate}</td>
+                      <td className="py-4 pr-4 text-muted-foreground">
+                        {t.hire_date ? new Date(t.hire_date).toLocaleDateString("pt-PT") : "—"}
+                      </td>
                       <td className="py-4 pr-4">
-                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{t.phone}</span>
+                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{t.profiles?.phone ?? "—"}</span>
                       </td>
                       <td className="py-4 pr-5">
                         <div className="flex items-center justify-end gap-1">
-                          <button title="Email" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/40 hover:text-pastel-blue-foreground">
+                          <button onClick={() => openChat(t.profile_id)} title="Conversar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/40 hover:text-pastel-blue-foreground">
                             <Mail className="h-4 w-4" strokeWidth={1.75} />
                           </button>
-                          <button title="Telefone" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-green/40 hover:text-pastel-green-foreground">
-                            <Phone className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                          <button title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
+                          <button onClick={() => { setEditing(t); setFormOpen(true); }} title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
                             <Pencil className="h-4 w-4" strokeWidth={1.75} />
                           </button>
-                          <button title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
+                          <button onClick={() => setDeleting(t)} title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
                             <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                          <button title="Mais" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted">
-                            <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} />
                           </button>
                         </div>
                       </td>
@@ -201,28 +293,37 @@ const Professores = () => {
           {/* Pagination */}
           <div className="flex flex-col items-center justify-between gap-3 border-t border-border p-5 sm:flex-row">
             <p className="text-xs text-muted-foreground">
-              A mostrar 1–{filtered.length} de {teachers.length} professores
+              A mostrar {filtered.length} de {teachers.length} professores
             </p>
-            <div className="flex items-center gap-2">
-              <button className="h-9 rounded-full border border-border bg-card px-4 text-xs font-medium text-foreground transition-colors hover:bg-accent">Anterior</button>
-              {[1, 2, 3, 4].map((p) => (
-                <button
-                  key={p}
-                  className={cn(
-                    "h-9 w-9 rounded-full text-xs font-semibold transition-colors",
-                    p === 1
-                      ? "bg-pastel-blue text-pastel-blue-foreground shadow-soft"
-                      : "text-muted-foreground hover:bg-muted",
-                  )}
-                >
-                  {p}
-                </button>
-              ))}
-              <button className="h-9 rounded-full border border-border bg-card px-4 text-xs font-medium text-foreground transition-colors hover:bg-accent">Seguinte</button>
-            </div>
           </div>
         </div>
       </div>
+
+      <TeacherFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        subjects={subjects}
+        teacher={editing}
+        onSaved={load}
+      />
+
+      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover professor?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem a certeza que quer remover <strong>{deleting?.profiles?.full_name}</strong>?
+              Esta acção não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 };

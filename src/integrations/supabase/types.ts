@@ -1104,6 +1104,67 @@ export type Database = {
           },
         ]
       }
+      teachers: {
+        Row: {
+          avatar_color: string | null
+          created_at: string
+          employee_id: string | null
+          hire_date: string | null
+          id: string
+          is_active: boolean | null
+          profile_id: string | null
+          school_id: string | null
+          subject_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_color?: string | null
+          created_at?: string
+          employee_id?: string | null
+          hire_date?: string | null
+          id?: string
+          is_active?: boolean | null
+          profile_id?: string | null
+          school_id?: string | null
+          subject_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_color?: string | null
+          created_at?: string
+          employee_id?: string | null
+          hire_date?: string | null
+          id?: string
+          is_active?: boolean | null
+          profile_id?: string | null
+          school_id?: string | null
+          subject_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teachers_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teachers_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teachers_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
