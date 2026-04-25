@@ -1,4 +1,4 @@
-import { GraduationCap, Home, Users, Receipt, BookOpen, Presentation, Contact, PersonStanding, UsersRound, CalendarDays, BookMarked, CalendarCheck, Smartphone, BookOpenCheck, BarChart3, Clock, UserCircle, Settings, Package, LogOut, ChevronRight } from "lucide-react";
+import { GraduationCap, Home, Users, Receipt, BookOpen, Presentation, Contact, PersonStanding, UsersRound, CalendarDays, BookMarked, CalendarCheck, Smartphone, BookOpenCheck, BarChart3, Clock, UserCircle, Settings, Package, LogOut, ChevronRight, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavLink, useLocation } from "react-router-dom";
 
@@ -17,6 +17,7 @@ const menu: Item[] = [
   { icon: CalendarDays, label: "Horário", to: "/horario" },
   { icon: BookMarked, label: "Avaliações", to: "/avaliacoes" },
   { icon: CalendarCheck, label: "Eventos", to: "/eventos" },
+  { icon: Sparkles, label: "Extracurriculares", to: "/extracurriculares" },
   { icon: Smartphone, label: "Pedidos", to: "/pedidos" },
   { icon: BookOpenCheck, label: "Material", to: "/material" },
   { icon: BarChart3, label: "Relatórios", to: "/relatorios" },
