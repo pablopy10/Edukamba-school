@@ -20,6 +20,7 @@ import Extracurriculares from "./pages/Extracurriculares.tsx";
 import Pedidos from "./pages/Pedidos.tsx";
 import Material from "./pages/Material.tsx";
 import Relatorios from "./pages/Relatorios.tsx";
+import Timesheet from "./pages/Timesheet.tsx";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +48,7 @@ const App = () => (
           <Route path="/pedidos" element={<Pedidos />} />
           <Route path="/material" element={<Material />} />
           <Route path="/relatorios" element={<Relatorios />} />
+          <Route path="/timesheet" element={<Timesheet />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
