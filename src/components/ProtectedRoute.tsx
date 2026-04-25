@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,22 +8,47 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const [schoolChecked, setSchoolChecked] = useState(false);
   const [hasSchool, setHasSchool] = useState<boolean>(false);
+  const checkedForUserRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (loading || !user) {
+    if (loading) return;
+    if (!user) {
+      checkedForUserRef.current = null;
       setSchoolChecked(false);
+      setHasSchool(false);
       return;
     }
-    supabase
-      .from("profiles")
-      .select("school_id")
-      .eq("id", user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        setHasSchool(!!data?.school_id);
+    // Only check once per authenticated user id (avoid re-running on every auth event)
+    if (checkedForUserRef.current === user.id) return;
+    checkedForUserRef.current = user.id;
+
+    let cancelled = false;
+    const run = async () => {
+      // Retry briefly to handle the race with the handle_new_user trigger
+      for (let i = 0; i < 5; i++) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("school_id")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        if (data) {
+          setHasSchool(!!data.school_id);
+          setSchoolChecked(true);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      if (!cancelled) {
+        setHasSchool(false);
         setSchoolChecked(true);
-      });
-  }, [user, loading]);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, loading]);
 
   if (loading || (session && !schoolChecked)) {
     return (
