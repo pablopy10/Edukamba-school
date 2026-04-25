@@ -19,14 +19,14 @@ type SchoolClass = {
 };
 
 const classes: SchoolClass[] = [
-  { id: "1", name: "10º A", code: "T-10A-25", course: "Ciências Naturais", teacher: "Carla Mendes", room: "Sala 12", shift: "Manhã", students: 32, capacity: 35, color: "blue" },
-  { id: "2", name: "12º B", code: "T-12B-25", course: "Letras Modernas", teacher: "Helena Costa", room: "Sala 04", shift: "Manhã", students: 28, capacity: 30, color: "pink" },
+  { id: "1", name: "7º C", code: "T-07C-25", course: "Línguas Estrangeiras", teacher: "Marta Dias", room: "Sala 03", shift: "Manhã", students: 31, capacity: 32, color: "blue" },
+  { id: "2", name: "8º B", code: "T-08B-25", course: "Artes Visuais", teacher: "Sofia Almeida", room: "Sala 07", shift: "Tarde", students: 24, capacity: 28, color: "lilac" },
   { id: "3", name: "9º B", code: "T-09B-25", course: "Económicas", teacher: "Tiago Ferreira", room: "Sala 18", shift: "Tarde", students: 30, capacity: 32, color: "yellow" },
-  { id: "4", name: "11º A", code: "T-11A-25", course: "Ciências Naturais", teacher: "Rui Pereira", room: "Sala 22", shift: "Manhã", students: 26, capacity: 30, color: "green" },
-  { id: "5", name: "8º B", code: "T-08B-25", course: "Artes Visuais", teacher: "Sofia Almeida", room: "Sala 07", shift: "Tarde", students: 24, capacity: 28, color: "lilac" },
-  { id: "6", name: "9º C", code: "T-09C-25", course: "Letras Modernas", teacher: "Bruno Santos", room: "Sala 15", shift: "Noite", students: 22, capacity: 30, color: "pink" },
-  { id: "7", name: "7º C", code: "T-07C-25", course: "Línguas Estrangeiras", teacher: "Marta Dias", room: "Sala 03", shift: "Manhã", students: 31, capacity: 32, color: "blue" },
-  { id: "8", name: "10º B", code: "T-10B-25", course: "Económicas", teacher: "Pedro Lima", room: "Sala 09", shift: "Tarde", students: 29, capacity: 30, color: "yellow" },
+  { id: "4", name: "9º C", code: "T-09C-25", course: "Letras Modernas", teacher: "Bruno Santos", room: "Sala 15", shift: "Noite", students: 22, capacity: 30, color: "pink" },
+  { id: "5", name: "10º A", code: "T-10A-25", course: "Ciências Naturais", teacher: "Carla Mendes", room: "Sala 12", shift: "Manhã", students: 32, capacity: 35, color: "blue" },
+  { id: "6", name: "10º B", code: "T-10B-25", course: "Económicas", teacher: "Pedro Lima", room: "Sala 09", shift: "Tarde", students: 29, capacity: 30, color: "yellow" },
+  { id: "7", name: "11º A", code: "T-11A-25", course: "Ciências Naturais", teacher: "Rui Pereira", room: "Sala 22", shift: "Manhã", students: 26, capacity: 30, color: "green" },
+  { id: "8", name: "12º B", code: "T-12B-25", course: "Letras Modernas", teacher: "Helena Costa", room: "Sala 04", shift: "Manhã", students: 28, capacity: 30, color: "pink" },
 ];
 
 const colorStyles: Record<SchoolClass["color"], string> = {
