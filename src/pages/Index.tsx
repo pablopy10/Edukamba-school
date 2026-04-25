@@ -7,6 +7,8 @@ import { CalendarCard } from "@/components/dashboard/CalendarCard";
 import { AgendaCard } from "@/components/dashboard/AgendaCard";
 import { MessagesCard } from "@/components/dashboard/MessagesCard";
 import { ClassroomPerformanceCard } from "@/components/dashboard/ClassroomPerformanceCard";
+import { HonorRollCard } from "@/components/dashboard/HonorRollCard";
+import { ComplaintsCard } from "@/components/dashboard/ComplaintsCard";
 import { useDashboardData } from "@/hooks/useDashboardData";
 
 const Index = () => {
@@ -33,13 +35,17 @@ const Index = () => {
                 <AttendanceCard />
               </section>
 
-              {/* Earnings + side stats */}
-              <section className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_240px]">
+              {/* Performance row: best + worst classroom + honor roll */}
+              <section className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-[220px_220px_1fr]">
+                <ClassroomPerformanceCard variant="best" />
+                <ClassroomPerformanceCard variant="worst" />
+                <HonorRollCard />
+              </section>
+
+              {/* Earnings + Complaints */}
+              <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <EarningsCard />
-                <div className="flex flex-col gap-6">
-                  <ClassroomPerformanceCard variant="best" />
-                  <ClassroomPerformanceCard variant="worst" />
-                </div>
+                <ComplaintsCard />
               </section>
             </div>
 
