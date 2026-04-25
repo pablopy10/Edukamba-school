@@ -52,7 +52,7 @@ export const Sidebar = () => {
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pastel-blue text-pastel-blue-foreground">
           <GraduationCap className="h-6 w-6" strokeWidth={2} />
         </div>
-        <span className="text-xl font-bold tracking-tight text-foreground">SchoolHub</span>
+        <span className="text-xl font-bold tracking-tight text-foreground">Edukamba</span>
       </div>
 
       <div className="flex flex-col gap-1">

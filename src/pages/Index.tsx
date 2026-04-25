@@ -21,7 +21,7 @@ const Index = () => {
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_320px]">
             {/* Center column */}
             <div className="flex flex-col gap-6">
-              <h1 className="sr-only">Painel SchoolHub</h1>
+              <h1 className="sr-only">Painel Edukamba</h1>
 
               {/* Stat cards */}
               <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
