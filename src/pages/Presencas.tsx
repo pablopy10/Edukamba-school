@@ -54,7 +54,7 @@ const StatusCell = ({ status }: { status: Status }) => {
     <span
       className={cn(
         "flex h-7 w-7 items-center justify-center rounded-full text-white shadow-soft",
-        status === "present" ? "bg-pastel-blue-foreground/80" : "bg-destructive",
+        status === "present" ? "bg-pastel-blue text-pastel-blue-foreground" : "bg-destructive",
       )}
     >
       {status === "present" ? <Check className="h-4 w-4" strokeWidth={3} /> : <X className="h-4 w-4" strokeWidth={3} />}
@@ -165,7 +165,7 @@ const Presencas = () => {
         {/* Legend */}
         <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-pastel-blue-foreground/80 text-white">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-pastel-blue text-pastel-blue-foreground">
               <Check className="h-3.5 w-3.5" strokeWidth={3} />
             </span>
             Presente
