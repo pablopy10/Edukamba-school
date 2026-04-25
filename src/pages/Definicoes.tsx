@@ -238,15 +238,15 @@ const Definicoes = () => {
       type="button"
       onClick={() => onChange(!checked)}
       className={cn(
-        "relative h-5 w-10 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-pastel-blue/40",
-        checked ? "bg-pastel-blue-foreground" : "bg-muted",
+        "relative h-6 w-11 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-pastel-blue/40",
+        checked ? "bg-pastel-blue" : "bg-muted",
       )}
       aria-pressed={checked}
     >
       <span
         className={cn(
-          "absolute top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-white border border-border shadow-card transition-transform",
-          checked ? "translate-x-[18px]" : "-translate-x-[2px]",
+          "absolute left-0 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full border border-border bg-card shadow-soft transition-transform",
+          checked ? "translate-x-[18px]" : "-translate-x-[6px]",
         )}
       />
     </button>
