@@ -25,16 +25,19 @@ import Relatorios from "./pages/Relatorios.tsx";
 import Timesheet from "./pages/Timesheet.tsx";
 import Perfil from "./pages/Perfil.tsx";
 import Definicoes from "./pages/Definicoes.tsx";
+import Modulos from "./pages/Modulos.tsx";
+import { ModulesProvider } from "./context/ModulesContext";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
+    <ModulesProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/alunos" element={<Alunos />} />
           <Route path="/alunos/:id" element={<AlunoPerfil />} />
@@ -57,11 +60,13 @@ const App = () => (
           <Route path="/timesheet" element={<Timesheet />} />
           <Route path="/perfil" element={<Perfil />} />
           <Route path="/definicoes" element={<Definicoes />} />
+          <Route path="/modulos" element={<Modulos />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </ModulesProvider>
   </QueryClientProvider>
 );
 
