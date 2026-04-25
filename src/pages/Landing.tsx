@@ -119,10 +119,10 @@ const Landing = () => {
           </nav>
           <div className="flex items-center gap-2">
             <Button variant="ghost" asChild className="hidden sm:inline-flex">
-              <Link to="/dashboard">Entrar</Link>
+              <Link to="/auth">Entrar</Link>
             </Button>
             <Button asChild className="rounded-full bg-pastel-blue-foreground text-primary-foreground hover:bg-pastel-blue-foreground/90">
-              <Link to="/dashboard">
+              <Link to="/auth">
                 Começar
                 <ArrowRight className="h-4 w-4" />
               </Link>
@@ -156,7 +156,7 @@ const Landing = () => {
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <Button asChild size="lg" className="rounded-full bg-pastel-blue-foreground text-primary-foreground hover:bg-pastel-blue-foreground/90">
-                <Link to="/dashboard">
+                <Link to="/auth">
                   Aceder ao painel
                   <ArrowRight className="h-4 w-4" />
                 </Link>
@@ -298,7 +298,7 @@ const Landing = () => {
                   className={`mt-auto rounded-full ${plan.highlight ? "bg-pastel-blue-foreground text-primary-foreground hover:bg-pastel-blue-foreground/90" : ""}`}
                   variant={plan.highlight ? "default" : "outline"}
                 >
-                  <Link to="/dashboard">{plan.cta}</Link>
+                  <Link to="/auth">{plan.cta}</Link>
                 </Button>
               </Card>
             ))}
@@ -319,7 +319,7 @@ const Landing = () => {
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button asChild size="lg" className="rounded-full bg-pastel-blue-foreground text-primary-foreground hover:bg-pastel-blue-foreground/90">
-              <Link to="/dashboard">
+              <Link to="/auth">
                 Aceder ao painel
                 <ArrowRight className="h-4 w-4" />
               </Link>
@@ -348,6 +348,12 @@ const Landing = () => {
             <a href="#planos" className="hover:text-foreground">
               Planos
             </a>
+            <Link to="/termos" className="hover:text-foreground">
+              Termos
+            </Link>
+            <Link to="/privacidade" className="hover:text-foreground">
+              Privacidade
+            </Link>
             <Link to="/dashboard" className="hover:text-foreground">
               Painel
             </Link>
