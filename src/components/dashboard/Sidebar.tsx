@@ -62,7 +62,7 @@ export const Sidebar = () => {
     <aside className="sidebar-scroll hidden lg:flex sticky top-0 w-64 shrink-0 flex-col gap-6 border-r border-sidebar-border bg-sidebar p-5 overflow-y-auto h-screen max-h-screen self-start">
       <div className="flex items-center justify-center gap-1 px-2 pt-2">
         <span className="text-3xl font-extrabold tracking-tight text-foreground">Edu</span>
-        <span className="text-3xl font-extrabold tracking-tight text-pastel-blue-foreground">Kamba</span>
+        <span className="text-3xl font-extrabold tracking-tight text-sidebar-ring">Kamba</span>
       </div>
 
       <div className="flex flex-col gap-1">
