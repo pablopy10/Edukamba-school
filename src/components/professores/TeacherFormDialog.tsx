@@ -123,7 +123,7 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Editar Professor" : "Novo Professor"}</DialogTitle>
           <DialogDescription>
