@@ -1,17 +1,30 @@
+import { useState } from "react";
 import { Search, MessageSquare, Bell } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 export const Topbar = () => {
+  const navigate = useNavigate();
+  const [q, setQ] = useState("");
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const term = q.trim();
+    navigate(term ? `/pesquisa?q=${encodeURIComponent(term)}` : "/pesquisa");
+  };
+
   return (
     <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="relative w-full max-w-md">
+      <form onSubmit={submit} className="relative w-full max-w-md" role="search">
         <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
           type="text"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onFocus={() => navigate("/pesquisa")}
           placeholder="Buscar..."
           className="h-11 w-full rounded-full border border-border bg-card pl-11 pr-4 text-sm text-foreground placeholder:text-muted-foreground shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
         />
-      </div>
+      </form>
 
       <div className="flex items-center gap-3">
         <Link
