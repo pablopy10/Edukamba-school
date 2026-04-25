@@ -1,27 +1,28 @@
 import { GraduationCap, Home, Users, Receipt, BookOpen, Presentation, Contact, PersonStanding, UsersRound, CalendarDays, BookMarked, CalendarCheck, Smartphone, BookOpenCheck, BarChart3, Clock, UserCircle, Settings, Package, LogOut, ChevronRight, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavLink, useLocation } from "react-router-dom";
+import { useModules, ModuleKey } from "@/context/ModulesContext";
 
-type Item = { icon: React.ElementType; label: string; to: string; hasArrow?: boolean };
+type Item = { icon: React.ElementType; label: string; to: string; hasArrow?: boolean; moduleKey?: ModuleKey };
 
 const menu: Item[] = [
   { icon: Home, label: "Painel de Controlo", to: "/" },
-  { icon: GraduationCap, label: "Professores", to: "/professores" },
-  { icon: Users, label: "Alunos", to: "/alunos" },
-  { icon: Receipt, label: "Matrículas", to: "/matriculas" },
-  { icon: BookOpen, label: "Cursos", to: "/cursos" },
-  { icon: Presentation, label: "Turmas", to: "/turmas" },
-  { icon: Contact, label: "Disciplinas", to: "/disciplinas" },
-  { icon: PersonStanding, label: "Educadores", to: "/educadores" },
-  { icon: UsersRound, label: "Presenças", to: "/presencas" },
-  { icon: CalendarDays, label: "Horário", to: "/horario" },
-  { icon: BookMarked, label: "Avaliações", to: "/avaliacoes" },
-  { icon: CalendarCheck, label: "Eventos", to: "/eventos" },
-  { icon: Sparkles, label: "Extracurriculares", to: "/extracurriculares" },
-  { icon: Smartphone, label: "Pedidos", to: "/pedidos" },
-  { icon: BookOpenCheck, label: "Material", to: "/material" },
-  { icon: BarChart3, label: "Relatórios", to: "/relatorios" },
-  { icon: Clock, label: "Timesheet", to: "/timesheet" },
+  { icon: GraduationCap, label: "Professores", to: "/professores", moduleKey: "professores" },
+  { icon: Users, label: "Alunos", to: "/alunos", moduleKey: "alunos" },
+  { icon: Receipt, label: "Matrículas", to: "/matriculas", moduleKey: "matriculas" },
+  { icon: BookOpen, label: "Cursos", to: "/cursos", moduleKey: "cursos" },
+  { icon: Presentation, label: "Turmas", to: "/turmas", moduleKey: "turmas" },
+  { icon: Contact, label: "Disciplinas", to: "/disciplinas", moduleKey: "disciplinas" },
+  { icon: PersonStanding, label: "Educadores", to: "/educadores", moduleKey: "educadores" },
+  { icon: UsersRound, label: "Presenças", to: "/presencas", moduleKey: "presencas" },
+  { icon: CalendarDays, label: "Horário", to: "/horario", moduleKey: "horario" },
+  { icon: BookMarked, label: "Avaliações", to: "/avaliacoes", moduleKey: "avaliacoes" },
+  { icon: CalendarCheck, label: "Eventos", to: "/eventos", moduleKey: "eventos" },
+  { icon: Sparkles, label: "Extracurriculares", to: "/extracurriculares", moduleKey: "extracurriculares" },
+  { icon: Smartphone, label: "Pedidos", to: "/pedidos", moduleKey: "pedidos" },
+  { icon: BookOpenCheck, label: "Material", to: "/material", moduleKey: "material" },
+  { icon: BarChart3, label: "Relatórios", to: "/relatorios", moduleKey: "relatorios" },
+  { icon: Clock, label: "Timesheet", to: "/timesheet", moduleKey: "timesheet" },
 ];
 
 const other: Item[] = [
@@ -33,6 +34,8 @@ const other: Item[] = [
 
 export const Sidebar = () => {
   const location = useLocation();
+  const { modules } = useModules();
+  const visibleMenu = menu.filter((i) => !i.moduleKey || modules[i.moduleKey]);
 
   const renderItem = (item: Item) => {
     const Icon = item.icon;
@@ -64,7 +67,7 @@ export const Sidebar = () => {
 
       <div className="flex flex-col gap-1">
         <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Menu</p>
-        {menu.map(renderItem)}
+        {visibleMenu.map(renderItem)}
       </div>
 
       <div className="mt-auto flex flex-col gap-1">
