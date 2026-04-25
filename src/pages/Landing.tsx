@@ -1,0 +1,360 @@
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import {
+  GraduationCap,
+  Users,
+  CalendarCheck,
+  Wallet,
+  BarChart3,
+  MessageSquare,
+  ShieldCheck,
+  Sparkles,
+  ArrowRight,
+  Check,
+} from "lucide-react";
+import heroImage from "@/assets/landing-hero.jpg";
+
+const features = [
+  {
+    icon: Users,
+    title: "Gestão de Alunos",
+    description: "Cadastro, matrículas e perfis completos num só lugar.",
+    tone: "bg-pastel-lilac text-pastel-lilac-foreground",
+  },
+  {
+    icon: CalendarCheck,
+    title: "Presenças & Horários",
+    description: "Controle diário de presenças e organização de horários.",
+    tone: "bg-pastel-yellow text-pastel-yellow-foreground",
+  },
+  {
+    icon: Wallet,
+    title: "Pagamentos",
+    description: "Propinas, recibos e validação de comprovativos.",
+    tone: "bg-pastel-green text-pastel-green-foreground",
+  },
+  {
+    icon: BarChart3,
+    title: "Relatórios",
+    description: "Dados claros sobre desempenho, frequência e finanças.",
+    tone: "bg-pastel-blue text-pastel-blue-foreground",
+  },
+  {
+    icon: MessageSquare,
+    title: "Comunicação",
+    description: "Mensagens entre escola, professores e encarregados.",
+    tone: "bg-pastel-pink text-pastel-pink-foreground",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Seguro & Privado",
+    description: "Dados protegidos com permissões por perfil.",
+    tone: "bg-pastel-lilac text-pastel-lilac-foreground",
+  },
+];
+
+const stats = [
+  { value: "120+", label: "Escolas activas" },
+  { value: "98%", label: "Satisfação" },
+  { value: "24/7", label: "Suporte" },
+];
+
+const plans = [
+  {
+    name: "Essencial",
+    price: "Grátis",
+    description: "Para escolas a começar a digitalizar.",
+    features: ["Até 100 alunos", "Gestão básica", "Suporte por e-mail"],
+    cta: "Começar agora",
+    highlight: false,
+  },
+  {
+    name: "Pro",
+    price: "15.000 Kz",
+    suffix: "/mês",
+    description: "Para escolas em crescimento.",
+    features: [
+      "Alunos ilimitados",
+      "Pagamentos integrados",
+      "Relatórios avançados",
+      "Suporte prioritário",
+    ],
+    cta: "Experimentar Pro",
+    highlight: true,
+  },
+  {
+    name: "Instituição",
+    price: "Sob consulta",
+    description: "Para grupos e redes escolares.",
+    features: ["Multi-escola", "Domínio próprio", "Integrações dedicadas"],
+    cta: "Falar connosco",
+    highlight: false,
+  },
+];
+
+const Landing = () => {
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      {/* Navigation */}
+      <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur">
+        <div className="container flex h-16 items-center justify-between">
+          <Link to="/" className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <GraduationCap className="h-5 w-5" />
+            </div>
+            <span className="text-lg font-semibold tracking-tight">Edukamba</span>
+          </Link>
+          <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
+            <a href="#funcionalidades" className="transition-colors hover:text-foreground">
+              Funcionalidades
+            </a>
+            <a href="#planos" className="transition-colors hover:text-foreground">
+              Planos
+            </a>
+            <a href="#contacto" className="transition-colors hover:text-foreground">
+              Contacto
+            </a>
+          </nav>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" asChild className="hidden sm:inline-flex">
+              <Link to="/dashboard">Entrar</Link>
+            </Button>
+            <Button asChild className="rounded-full">
+              <Link to="/dashboard">
+                Começar
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      {/* Hero */}
+      <section className="relative overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 -z-10">
+          <div className="absolute -top-32 left-1/2 h-[480px] w-[480px] -translate-x-1/2 rounded-full bg-gradient-lilac opacity-60 blur-3xl" />
+          <div className="absolute -bottom-40 -right-20 h-[420px] w-[420px] rounded-full bg-gradient-yellow opacity-50 blur-3xl" />
+        </div>
+
+        <div className="container grid gap-12 py-20 lg:grid-cols-2 lg:items-center lg:py-28">
+          <div className="flex flex-col gap-6">
+            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground shadow-soft">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              Plataforma de gestão escolar moderna
+            </span>
+            <h1 className="text-4xl font-bold leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl">
+              A escola toda,{" "}
+              <span className="bg-gradient-to-r from-primary to-[hsl(var(--pastel-pink-foreground))] bg-clip-text text-transparent">
+                num único painel
+              </span>
+            </h1>
+            <p className="max-w-xl text-lg text-muted-foreground">
+              O Edukamba reúne alunos, professores, presenças, pagamentos e relatórios numa
+              plataforma simples, leve e pronta para a realidade das escolas africanas.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button asChild size="lg" className="rounded-full">
+                <Link to="/dashboard">
+                  Aceder ao painel
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="rounded-full">
+                <a href="#funcionalidades">Ver funcionalidades</a>
+              </Button>
+            </div>
+
+            <dl className="mt-6 grid grid-cols-3 gap-4 border-t border-border pt-6">
+              {stats.map((stat) => (
+                <div key={stat.label}>
+                  <dt className="text-2xl font-semibold tracking-tight">{stat.value}</dt>
+                  <dd className="text-xs text-muted-foreground">{stat.label}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
+          <div className="relative">
+            <div className="absolute -inset-4 rounded-[2rem] bg-gradient-lilac opacity-50 blur-2xl" />
+            <div className="relative overflow-hidden rounded-[2rem] border border-border bg-card shadow-card">
+              <img
+                src={heroImage}
+                alt="Painel Edukamba com gestão escolar moderna"
+                className="h-full w-full object-cover"
+                loading="eager"
+              />
+            </div>
+            <Card className="absolute -left-6 bottom-8 hidden w-56 gap-2 rounded-2xl border-border/60 p-4 shadow-card sm:block">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pastel-green text-pastel-green-foreground">
+                  <CalendarCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Presenças hoje</p>
+                  <p className="text-base font-semibold">96,4%</p>
+                </div>
+              </div>
+            </Card>
+            <Card className="absolute -right-6 top-8 hidden w-56 gap-2 rounded-2xl border-border/60 p-4 shadow-card sm:block">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pastel-yellow text-pastel-yellow-foreground">
+                  <Wallet className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Receita do mês</p>
+                  <p className="text-base font-semibold">2,4M Kz</p>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section id="funcionalidades" className="container py-20 lg:py-28">
+        <div className="mx-auto mb-12 max-w-2xl text-center">
+          <span className="text-sm font-medium uppercase tracking-wider text-primary">
+            Funcionalidades
+          </span>
+          <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
+            Tudo o que a sua escola precisa
+          </h2>
+          <p className="mt-4 text-muted-foreground">
+            Ferramentas desenhadas para a rotina real de directores, secretarias, professores e
+            encarregados de educação.
+          </p>
+        </div>
+
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {features.map(({ icon: Icon, title, description, tone }) => (
+            <Card
+              key={title}
+              className="group flex flex-col gap-4 rounded-2xl border-border/60 p-6 shadow-soft transition-all hover:-translate-y-1 hover:shadow-card"
+            >
+              <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${tone}`}>
+                <Icon className="h-6 w-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-semibold">{title}</h3>
+                <p className="text-sm text-muted-foreground">{description}</p>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="planos" className="border-t border-border/60 bg-card/30 py-20 lg:py-28">
+        <div className="container">
+          <div className="mx-auto mb-12 max-w-2xl text-center">
+            <span className="text-sm font-medium uppercase tracking-wider text-primary">
+              Planos
+            </span>
+            <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
+              Preços simples e transparentes
+            </h2>
+            <p className="mt-4 text-muted-foreground">
+              Escolha o plano ideal para a dimensão da sua escola. Sem surpresas.
+            </p>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-3">
+            {plans.map((plan) => (
+              <Card
+                key={plan.name}
+                className={`relative flex flex-col gap-6 rounded-2xl p-8 shadow-soft ${
+                  plan.highlight
+                    ? "border-primary bg-card ring-1 ring-primary/40"
+                    : "border-border/60"
+                }`}
+              >
+                {plan.highlight && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
+                    Mais popular
+                  </span>
+                )}
+                <div>
+                  <h3 className="text-lg font-semibold">{plan.name}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-4xl font-bold tracking-tight">{plan.price}</span>
+                  {plan.suffix && (
+                    <span className="text-sm text-muted-foreground">{plan.suffix}</span>
+                  )}
+                </div>
+                <ul className="flex flex-col gap-3 text-sm">
+                  {plan.features.map((f) => (
+                    <li key={f} className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-primary" />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Button
+                  asChild
+                  className="mt-auto rounded-full"
+                  variant={plan.highlight ? "default" : "outline"}
+                >
+                  <Link to="/dashboard">{plan.cta}</Link>
+                </Button>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section id="contacto" className="container py-20 lg:py-28">
+        <Card className="relative overflow-hidden rounded-3xl border-border/60 bg-gradient-lilac p-10 text-center shadow-card sm:p-16">
+          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-gradient-yellow opacity-60 blur-3xl" />
+          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+            Pronto a transformar a sua escola?
+          </h2>
+          <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
+            Comece hoje com o Edukamba e dê à sua equipa as ferramentas certas para gerir,
+            comunicar e crescer.
+          </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Button asChild size="lg" className="rounded-full">
+              <Link to="/dashboard">
+                Aceder ao painel
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="rounded-full">
+              <a href="mailto:contacto@edukamba.ao">Falar com vendas</a>
+            </Button>
+          </div>
+        </Card>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-border/60">
+        <div className="container flex flex-col items-center justify-between gap-4 py-8 text-sm text-muted-foreground sm:flex-row">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <GraduationCap className="h-4 w-4" />
+            </div>
+            <span className="font-medium text-foreground">Edukamba</span>
+            <span>© {new Date().getFullYear()}</span>
+          </div>
+          <div className="flex items-center gap-6">
+            <a href="#funcionalidades" className="hover:text-foreground">
+              Funcionalidades
+            </a>
+            <a href="#planos" className="hover:text-foreground">
+              Planos
+            </a>
+            <Link to="/dashboard" className="hover:text-foreground">
+              Painel
+            </Link>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+export default Landing;
