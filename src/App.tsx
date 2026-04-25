@@ -24,6 +24,7 @@ import Material from "./pages/Material.tsx";
 import Relatorios from "./pages/Relatorios.tsx";
 import Timesheet from "./pages/Timesheet.tsx";
 import Perfil from "./pages/Perfil.tsx";
+import Definicoes from "./pages/Definicoes.tsx";
 
 const queryClient = new QueryClient();
 
@@ -55,6 +56,7 @@ const App = () => (
           <Route path="/relatorios" element={<Relatorios />} />
           <Route path="/timesheet" element={<Timesheet />} />
           <Route path="/perfil" element={<Perfil />} />
+          <Route path="/definicoes" element={<Definicoes />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
