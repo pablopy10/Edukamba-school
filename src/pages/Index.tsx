@@ -6,7 +6,7 @@ import { EarningsCard } from "@/components/dashboard/EarningsCard";
 import { CalendarCard } from "@/components/dashboard/CalendarCard";
 import { AgendaCard } from "@/components/dashboard/AgendaCard";
 import { MessagesCard } from "@/components/dashboard/MessagesCard";
-import { MiniStatCard } from "@/components/dashboard/MiniStatCard";
+import { ClassroomPerformanceCard } from "@/components/dashboard/ClassroomPerformanceCard";
 import { useDashboardData } from "@/hooks/useDashboardData";
 
 const Index = () => {
@@ -37,8 +37,8 @@ const Index = () => {
               <section className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_240px]">
                 <EarningsCard />
                 <div className="flex flex-col gap-6">
-                  <MiniStatCard icon="award" value={fmt(counts.students)} label="Alunos ativos" delta={0} />
-                  <MiniStatCard icon="trophy" value={fmt(counts.classrooms)} label="Turmas" delta={0} />
+                  <ClassroomPerformanceCard variant="best" />
+                  <ClassroomPerformanceCard variant="worst" />
                 </div>
               </section>
             </div>
