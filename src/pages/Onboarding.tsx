@@ -128,37 +128,19 @@ const Onboarding = () => {
         logoUrl = pub.publicUrl;
       }
 
-      // 2. Create school
-      const { data: school, error: schoolError } = await supabase
-        .from("schools")
-        .insert({
-          name: name.trim(),
-          nif: nif.trim() || null,
-          address: address.trim() || null,
-          logo_url: logoUrl,
-          primary_color: primaryColor,
-          secondary_color: secondaryColor,
-        })
-        .select("id")
-        .single();
-      if (schoolError) throw schoolError;
-
-      // 3. Link profile to school
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({ school_id: school.id, role: "ADMIN" })
-        .eq("id", user.id);
-      if (profileError) throw profileError;
-
-      // 4. Create academic year
-      const { error: yearError } = await supabase.from("academic_years").insert({
-        school_id: school.id,
-        label: yearLabel.trim(),
-        start_date: startDate,
-        end_date: endDate,
-        is_active: true,
+      // 2. Atomically create school, link profile and create academic year
+      const { error: rpcError } = await supabase.rpc("create_school_with_admin", {
+        _name: name.trim(),
+        _nif: nif.trim() || null,
+        _address: address.trim() || null,
+        _logo_url: logoUrl,
+        _primary_color: primaryColor,
+        _secondary_color: secondaryColor,
+        _year_label: yearLabel.trim(),
+        _year_start: startDate,
+        _year_end: endDate,
       });
-      if (yearError) throw yearError;
+      if (rpcError) throw rpcError;
 
       toast({ title: "Escola criada!", description: "Bem-vindo ao Edukamba." });
       navigate("/dashboard", { replace: true });

@@ -1035,6 +1035,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_school_with_admin: {
+        Args: {
+          _address: string
+          _logo_url: string
+          _name: string
+          _nif: string
+          _primary_color: string
+          _secondary_color: string
+          _year_end: string
+          _year_label: string
+          _year_start: string
+        }
+        Returns: string
+      }
       get_auth_role: {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
