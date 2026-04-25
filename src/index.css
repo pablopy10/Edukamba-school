@@ -8,51 +8,70 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* SchoolHub — soft pastel admin theme */
+    --background: 220 30% 97%;
+    --foreground: 222 25% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 222 25% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 222 25% 12%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Brand: soft lilac */
+    --primary: 252 65% 70%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 220 25% 94%;
+    --secondary-foreground: 222 25% 12%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 220 20% 95%;
+    --muted-foreground: 220 10% 50%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 252 80% 96%;
+    --accent-foreground: 252 50% 30%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 80% 60%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 220 20% 92%;
+    --input: 220 20% 92%;
+    --ring: 252 65% 70%;
 
-    --radius: 0.5rem;
+    --radius: 1rem;
 
-    --sidebar-background: 0 0% 98%;
+    /* Pastel palette */
+    --pastel-lilac: 252 90% 88%;
+    --pastel-lilac-foreground: 252 50% 30%;
+    --pastel-yellow: 48 100% 80%;
+    --pastel-yellow-foreground: 35 60% 30%;
+    --pastel-blue: 205 90% 82%;
+    --pastel-blue-foreground: 210 60% 30%;
+    --pastel-green: 145 60% 78%;
+    --pastel-green-foreground: 145 50% 25%;
+    --pastel-pink: 340 90% 88%;
+    --pastel-pink-foreground: 340 50% 35%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    --success: 145 65% 45%;
+    --warning: 35 95% 60%;
 
-    --sidebar-primary: 240 5.9% 10%;
+    /* Sidebar — clean white */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 15% 35%;
+    --sidebar-primary: 252 90% 92%;
+    --sidebar-primary-foreground: 252 60% 35%;
+    --sidebar-accent: 220 25% 96%;
+    --sidebar-accent-foreground: 222 25% 12%;
+    --sidebar-border: 220 20% 93%;
+    --sidebar-ring: 252 65% 70%;
 
-    --sidebar-primary-foreground: 0 0% 98%;
+    /* Gradients & shadows */
+    --gradient-lilac: linear-gradient(135deg, hsl(252 90% 92%), hsl(252 90% 85%));
+    --gradient-yellow: linear-gradient(135deg, hsl(48 100% 86%), hsl(48 100% 78%));
+    --shadow-soft: 0 1px 2px hsl(220 20% 50% / 0.04), 0 4px 16px hsl(220 20% 50% / 0.06);
+    --shadow-card: 0 2px 8px hsl(220 25% 40% / 0.05);
 
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --transition-smooth: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .dark {
