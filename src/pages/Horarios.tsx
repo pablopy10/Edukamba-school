@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Filter, Plus, Printer, Download, ChevronDown, Clock, MapPin, User } from "lucide-react";
+import { Filter, Plus, Printer, Download, ChevronDown, Clock, MapPin, User, GripVertical, Sun, Sunset, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
 
 type Subject = {
   name: string;
@@ -10,7 +11,8 @@ type Subject = {
   color: "lilac" | "blue" | "yellow" | "green" | "pink";
 };
 
-type ScheduleCell = Subject | "BREAK" | null;
+type ScheduleCell = Subject | null;
+type Shift = "manha" | "tarde" | "noite";
 
 const colorStyles: Record<Subject["color"], string> = {
   lilac: "bg-pastel-lilac text-pastel-lilac-foreground",
@@ -22,81 +24,114 @@ const colorStyles: Record<Subject["color"], string> = {
 
 const days = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"] as const;
 
-const slots = [
-  { start: "07:30", end: "08:20" },
-  { start: "08:20", end: "09:10" },
-  { start: "09:10", end: "10:00" },
-  { start: "10:00", end: "10:20", isBreak: true, label: "Intervalo" },
-  { start: "10:20", end: "11:10" },
-  { start: "11:10", end: "12:00" },
-  { start: "12:00", end: "12:50" },
-];
-
-const turmas = ["7º C", "8º B", "9º B", "9º C", "10º A", "10º B", "11º A", "12º B"];
-
-// Mock schedule per turma
-const schedules: Record<string, ScheduleCell[][]> = {
-  "10º A": [
-    [
-      { name: "Matemática", teacher: "Carla Mendes", room: "Sala 12", color: "blue" },
-      { name: "Português", teacher: "Marta Dias", room: "Sala 03", color: "lilac" },
-      { name: "Física", teacher: "Rui Pereira", room: "Lab 02", color: "green" },
-      { name: "História", teacher: "Helena Costa", room: "Sala 04", color: "yellow" },
-      { name: "Inglês", teacher: "Sofia Almeida", room: "Sala 07", color: "pink" },
-    ],
-    [
-      { name: "Matemática", teacher: "Carla Mendes", room: "Sala 12", color: "blue" },
-      { name: "Português", teacher: "Marta Dias", room: "Sala 03", color: "lilac" },
-      { name: "Química", teacher: "Tiago Ferreira", room: "Lab 01", color: "green" },
-      { name: "Geografia", teacher: "Pedro Lima", room: "Sala 09", color: "yellow" },
-      { name: "Inglês", teacher: "Sofia Almeida", room: "Sala 07", color: "pink" },
-    ],
-    [
-      { name: "Biologia", teacher: "Rui Pereira", room: "Lab 02", color: "green" },
-      { name: "Filosofia", teacher: "Bruno Santos", room: "Sala 15", color: "lilac" },
-      { name: "Química", teacher: "Tiago Ferreira", room: "Lab 01", color: "green" },
-      { name: "Educação Física", teacher: "Pedro Lima", room: "Pavilhão", color: "blue" },
-      { name: "Artes", teacher: "Sofia Almeida", room: "Sala 07", color: "pink" },
-    ],
-    ["BREAK", "BREAK", "BREAK", "BREAK", "BREAK"],
-    [
-      { name: "Português", teacher: "Marta Dias", room: "Sala 03", color: "lilac" },
-      { name: "Matemática", teacher: "Carla Mendes", room: "Sala 12", color: "blue" },
-      { name: "Inglês", teacher: "Sofia Almeida", room: "Sala 07", color: "pink" },
-      { name: "Biologia", teacher: "Rui Pereira", room: "Lab 02", color: "green" },
-      { name: "Matemática", teacher: "Carla Mendes", room: "Sala 12", color: "blue" },
-    ],
-    [
-      { name: "História", teacher: "Helena Costa", room: "Sala 04", color: "yellow" },
-      { name: "Física", teacher: "Rui Pereira", room: "Lab 02", color: "green" },
-      { name: "Filosofia", teacher: "Bruno Santos", room: "Sala 15", color: "lilac" },
-      { name: "Educação Física", teacher: "Pedro Lima", room: "Pavilhão", color: "blue" },
-      { name: "Geografia", teacher: "Pedro Lima", room: "Sala 09", color: "yellow" },
-    ],
-    [
-      null,
-      { name: "Estudo", teacher: "—", room: "Biblioteca", color: "yellow" },
-      null,
-      { name: "Artes", teacher: "Sofia Almeida", room: "Sala 07", color: "pink" },
-      null,
-    ],
+// Slots de 2h em 2h por turno
+const shiftSlots: Record<Shift, { start: string; end: string }[]> = {
+  manha: [
+    { start: "07:00", end: "09:00" },
+    { start: "09:00", end: "11:00" },
+    { start: "11:00", end: "13:00" },
+  ],
+  tarde: [
+    { start: "13:00", end: "15:00" },
+    { start: "15:00", end: "17:00" },
+    { start: "17:00", end: "19:00" },
+  ],
+  noite: [
+    { start: "18:00", end: "20:00" },
+    { start: "20:00", end: "22:00" },
+    { start: "22:00", end: "23:59" },
   ],
 };
 
-const buildDefault = (): ScheduleCell[][] => schedules["10º A"];
+const turmas: { name: string; shift: Shift }[] = [
+  { name: "7º C", shift: "manha" },
+  { name: "8º B", shift: "manha" },
+  { name: "9º B", shift: "tarde" },
+  { name: "9º C", shift: "tarde" },
+  { name: "10º A", shift: "manha" },
+  { name: "10º B", shift: "tarde" },
+  { name: "11º A", shift: "noite" },
+  { name: "12º B", shift: "noite" },
+];
+
+const subjectPool: Subject[] = [
+  { name: "Matemática", teacher: "Carla Mendes", room: "Sala 12", color: "blue" },
+  { name: "Português", teacher: "Marta Dias", room: "Sala 03", color: "lilac" },
+  { name: "Física", teacher: "Rui Pereira", room: "Lab 02", color: "green" },
+  { name: "História", teacher: "Helena Costa", room: "Sala 04", color: "yellow" },
+  { name: "Inglês", teacher: "Sofia Almeida", room: "Sala 07", color: "pink" },
+  { name: "Química", teacher: "Tiago Ferreira", room: "Lab 01", color: "green" },
+  { name: "Geografia", teacher: "Pedro Lima", room: "Sala 09", color: "yellow" },
+  { name: "Filosofia", teacher: "Bruno Santos", room: "Sala 15", color: "lilac" },
+  { name: "Biologia", teacher: "Rui Pereira", room: "Lab 02", color: "green" },
+  { name: "Educação Física", teacher: "Pedro Lima", room: "Pavilhão", color: "blue" },
+  { name: "Artes", teacher: "Sofia Almeida", room: "Sala 07", color: "pink" },
+];
+
+const buildSchedule = (seed: number): ScheduleCell[][] => {
+  const rows: ScheduleCell[][] = [];
+  for (let r = 0; r < 3; r++) {
+    const row: ScheduleCell[] = [];
+    for (let c = 0; c < 5; c++) {
+      const idx = (r * 5 + c + seed) % subjectPool.length;
+      // Deixa algumas células vazias
+      row.push((r + c + seed) % 7 === 0 ? null : subjectPool[idx]);
+    }
+    rows.push(row);
+  }
+  return rows;
+};
+
+const shiftMeta: Record<Shift, { label: string; icon: typeof Sun; color: string }> = {
+  manha: { label: "Manhã", icon: Sun, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+  tarde: { label: "Tarde", icon: Sunset, color: "bg-pastel-pink text-pastel-pink-foreground" },
+  noite: { label: "Noite", icon: Moon, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
+};
 
 const Horarios = () => {
-  const [turma, setTurma] = useState("10º A");
+  const [turmaName, setTurmaName] = useState("10º A");
   const [openTurma, setOpenTurma] = useState(false);
-  const schedule = schedules[turma] ?? buildDefault();
+  const [schedules, setSchedules] = useState<Record<string, ScheduleCell[][]>>(() => {
+    const map: Record<string, ScheduleCell[][]> = {};
+    turmas.forEach((t, i) => (map[t.name] = buildSchedule(i)));
+    return map;
+  });
+  const [dragFrom, setDragFrom] = useState<{ row: number; col: number } | null>(null);
+  const [dragOver, setDragOver] = useState<{ row: number; col: number } | null>(null);
 
-  const totalAulas = schedule.flat().filter((c) => c && c !== "BREAK").length;
-  const disciplinasUnicas = new Set(
-    schedule.flat().filter((c): c is Subject => !!c && c !== "BREAK").map((s) => s.name),
-  ).size;
-  const professoresUnicos = new Set(
-    schedule.flat().filter((c): c is Subject => !!c && c !== "BREAK").map((s) => s.teacher),
-  ).size;
+  const turma = turmas.find((t) => t.name === turmaName) ?? turmas[0];
+  const slots = shiftSlots[turma.shift];
+  const schedule = schedules[turmaName];
+
+  const stats = useMemo(() => {
+    const flat = schedule.flat().filter((c): c is Subject => !!c);
+    return {
+      totalAulas: flat.length,
+      disciplinas: new Set(flat.map((s) => s.name)).size,
+      professores: new Set(flat.map((s) => s.teacher)).size,
+    };
+  }, [schedule]);
+
+  const handleDrop = (toRow: number, toCol: number) => {
+    if (!dragFrom) return;
+    if (dragFrom.row === toRow && dragFrom.col === toCol) {
+      setDragFrom(null);
+      setDragOver(null);
+      return;
+    }
+    setSchedules((prev) => {
+      const current = prev[turmaName].map((r) => [...r]);
+      const tmp = current[dragFrom.row][dragFrom.col];
+      current[dragFrom.row][dragFrom.col] = current[toRow][toCol];
+      current[toRow][toCol] = tmp;
+      return { ...prev, [turmaName]: current };
+    });
+    toast({ title: "Horário atualizado", description: "Aula movida com sucesso." });
+    setDragFrom(null);
+    setDragOver(null);
+  };
+
+  const ShiftIcon = shiftMeta[turma.shift].icon;
 
   return (
     <DashboardLayout>
@@ -105,7 +140,9 @@ const Horarios = () => {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Horários</h1>
-            <p className="text-sm text-muted-foreground">Visualize o horário das aulas das turmas.</p>
+            <p className="text-sm text-muted-foreground">
+              Arraste e solte as aulas para reorganizar o horário.
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative">
@@ -113,26 +150,35 @@ const Horarios = () => {
                 onClick={() => setOpenTurma((v) => !v)}
                 className="flex h-11 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent"
               >
-                Turma: <span className="font-semibold">{turma}</span>
+                Turma: <span className="font-semibold">{turmaName}</span>
                 <ChevronDown className="h-4 w-4" strokeWidth={1.75} />
               </button>
               {openTurma && (
-                <div className="absolute right-0 z-20 mt-2 w-44 overflow-hidden rounded-2xl border border-border bg-card p-2 shadow-card">
-                  {turmas.map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => {
-                        setTurma(t);
-                        setOpenTurma(false);
-                      }}
-                      className={cn(
-                        "flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition-colors",
-                        t === turma ? "bg-pastel-blue text-pastel-blue-foreground" : "text-foreground hover:bg-muted",
-                      )}
-                    >
-                      {t}
-                    </button>
-                  ))}
+                <div className="absolute right-0 z-20 mt-2 w-52 overflow-hidden rounded-2xl border border-border bg-card p-2 shadow-card">
+                  {turmas.map((t) => {
+                    const Icon = shiftMeta[t.shift].icon;
+                    return (
+                      <button
+                        key={t.name}
+                        onClick={() => {
+                          setTurmaName(t.name);
+                          setOpenTurma(false);
+                        }}
+                        className={cn(
+                          "flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition-colors",
+                          t.name === turmaName
+                            ? "bg-pastel-blue text-pastel-blue-foreground"
+                            : "text-foreground hover:bg-muted",
+                        )}
+                      >
+                        <span>{t.name}</span>
+                        <span className="inline-flex items-center gap-1 text-xs opacity-70">
+                          <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                          {shiftMeta[t.shift].label}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -158,9 +204,9 @@ const Horarios = () => {
         {/* Stats */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
-            { label: "Total de Aulas", value: String(totalAulas), color: "bg-pastel-blue text-pastel-blue-foreground" },
-            { label: "Disciplinas", value: String(disciplinasUnicas), color: "bg-pastel-lilac text-pastel-lilac-foreground" },
-            { label: "Professores", value: String(professoresUnicos), color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+            { label: "Total de Aulas", value: String(stats.totalAulas), color: "bg-pastel-blue text-pastel-blue-foreground" },
+            { label: "Disciplinas", value: String(stats.disciplinas), color: "bg-pastel-lilac text-pastel-lilac-foreground" },
+            { label: "Professores", value: String(stats.professores), color: "bg-pastel-yellow text-pastel-yellow-foreground" },
             { label: "Dias por Semana", value: "5", color: "bg-pastel-green text-pastel-green-foreground" },
           ].map((stat) => (
             <div key={stat.label} className="rounded-2xl bg-card p-5 shadow-card">
@@ -174,10 +220,21 @@ const Horarios = () => {
 
         {/* Schedule grid */}
         <div className="overflow-hidden rounded-2xl bg-card shadow-card">
-          <div className="flex items-center justify-between border-b border-border px-6 py-4">
-            <div>
-              <h2 className="text-base font-bold text-foreground">Horário Semanal — {turma}</h2>
-              <p className="text-xs text-muted-foreground">Ano letivo 2025/2026</p>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div>
+                <h2 className="text-base font-bold text-foreground">Horário Semanal — {turmaName}</h2>
+                <p className="text-xs text-muted-foreground">Ano letivo 2025/2026 · Blocos de 2h</p>
+              </div>
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold",
+                  shiftMeta[turma.shift].color,
+                )}
+              >
+                <ShiftIcon className="h-3.5 w-3.5" strokeWidth={2} />
+                Turno: {shiftMeta[turma.shift].label}
+              </span>
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Clock className="h-3.5 w-3.5" strokeWidth={1.75} />
@@ -204,7 +261,21 @@ const Horarios = () => {
 
                 {/* Slot rows */}
                 {slots.map((slot, rowIdx) => (
-                  <Row key={`${slot.start}-${rowIdx}`} slot={slot} cells={schedule[rowIdx] ?? []} />
+                  <Row
+                    key={`${slot.start}-${rowIdx}`}
+                    slot={slot}
+                    rowIdx={rowIdx}
+                    cells={schedule[rowIdx] ?? []}
+                    dragFrom={dragFrom}
+                    dragOver={dragOver}
+                    onDragStart={(col) => setDragFrom({ row: rowIdx, col })}
+                    onDragEnd={() => {
+                      setDragFrom(null);
+                      setDragOver(null);
+                    }}
+                    onDragOverCell={(col) => setDragOver({ row: rowIdx, col })}
+                    onDrop={(col) => handleDrop(rowIdx, col)}
+                  />
                 ))}
               </div>
             </div>
@@ -236,53 +307,114 @@ const Horarios = () => {
 
 const Row = ({
   slot,
+  rowIdx,
   cells,
+  dragFrom,
+  dragOver,
+  onDragStart,
+  onDragEnd,
+  onDragOverCell,
+  onDrop,
 }: {
-  slot: { start: string; end: string; isBreak?: boolean; label?: string };
+  slot: { start: string; end: string };
+  rowIdx: number;
   cells: ScheduleCell[];
+  dragFrom: { row: number; col: number } | null;
+  dragOver: { row: number; col: number } | null;
+  onDragStart: (col: number) => void;
+  onDragEnd: () => void;
+  onDragOverCell: (col: number) => void;
+  onDrop: (col: number) => void;
 }) => {
-  if (slot.isBreak) {
-    return (
-      <>
-        <div className="flex flex-col items-end justify-center pr-2 text-xs">
-          <span className="font-semibold text-foreground">{slot.start}</span>
-          <span className="text-muted-foreground">{slot.end}</span>
-        </div>
-        <div className="col-span-5 flex items-center justify-center rounded-xl border border-dashed border-border bg-muted/40 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {slot.label ?? "Intervalo"}
-        </div>
-      </>
-    );
-  }
-
   return (
     <>
       <div className="flex flex-col items-end justify-center pr-2 text-xs">
         <span className="font-semibold text-foreground">{slot.start}</span>
         <span className="text-muted-foreground">{slot.end}</span>
       </div>
-      {cells.map((cell, i) => (
-        <Cell key={i} cell={cell} />
-      ))}
-      {Array.from({ length: Math.max(0, 5 - cells.length) }).map((_, i) => (
-        <Cell key={`empty-${i}`} cell={null} />
-      ))}
+      {Array.from({ length: 5 }).map((_, col) => {
+        const cell = cells[col] ?? null;
+        const isDragging = dragFrom?.row === rowIdx && dragFrom?.col === col;
+        const isOver = dragOver?.row === rowIdx && dragOver?.col === col && !isDragging;
+        return (
+          <Cell
+            key={col}
+            cell={cell}
+            isDragging={isDragging}
+            isOver={isOver}
+            onDragStart={() => onDragStart(col)}
+            onDragEnd={onDragEnd}
+            onDragOver={(e) => {
+              e.preventDefault();
+              onDragOverCell(col);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              onDrop(col);
+            }}
+          />
+        );
+      })}
     </>
   );
 };
 
-const Cell = ({ cell }: { cell: ScheduleCell }) => {
-  if (!cell || cell === "BREAK") {
-    return <div className="min-h-[80px] rounded-xl border border-dashed border-border bg-muted/20" />;
+const Cell = ({
+  cell,
+  isDragging,
+  isOver,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
+}: {
+  cell: ScheduleCell;
+  isDragging: boolean;
+  isOver: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+}) => {
+  const baseDrop = "min-h-[100px] rounded-xl transition-all";
+
+  if (!cell) {
+    return (
+      <div
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        className={cn(
+          baseDrop,
+          "border border-dashed",
+          isOver ? "border-pastel-blue-foreground bg-pastel-blue/40" : "border-border bg-muted/20",
+        )}
+      />
+    );
   }
+
   return (
     <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", cell.name);
+        onDragStart();
+      }}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
       className={cn(
-        "group flex min-h-[80px] cursor-pointer flex-col justify-between rounded-xl p-3 transition-transform hover:-translate-y-0.5",
+        baseDrop,
+        "group flex cursor-grab flex-col justify-between p-3 active:cursor-grabbing",
         colorStyles[cell.color],
+        isDragging && "opacity-40 scale-95",
+        isOver && "ring-2 ring-foreground/30 ring-offset-2 ring-offset-card",
       )}
     >
-      <p className="text-sm font-bold leading-tight">{cell.name}</p>
+      <div className="flex items-start justify-between gap-1">
+        <p className="text-sm font-bold leading-tight">{cell.name}</p>
+        <GripVertical className="h-3.5 w-3.5 opacity-40 group-hover:opacity-80" strokeWidth={2} />
+      </div>
       <div className="flex flex-col gap-0.5 text-[11px] opacity-80">
         <span className="inline-flex items-center gap-1 truncate">
           <User className="h-3 w-3" strokeWidth={2} />
