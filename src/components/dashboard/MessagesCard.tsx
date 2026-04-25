@@ -1,12 +1,16 @@
-const messages = [
-  { name: "Dra. Lila Ramirez", time: "09:00", text: "Confira o relatório mensal de frequência antes do prazo de 30 de abril.", initials: "LR", color: "bg-pastel-pink text-pastel-pink-foreground" },
-  { name: "Sra. Heather Morris", time: "10:15", text: "Não esqueça do treinamento da equipe sobre ferramentas digitais agendado para 5/05.", initials: "HM", color: "bg-pastel-lilac text-pastel-lilac-foreground", badge: 4 },
-  { name: "Sr. Carl Jenkins", time: "14:00", text: "Reunião de revisão orçamentária para o próximo ano fiscal em 28 de abril.", initials: "CJ", color: "bg-pastel-blue text-pastel-blue-foreground" },
-  { name: "Oficial Dan Brooks", time: "15:10", text: "Revise os protocolos de segurança atualizados em vigor a partir de 1º de maio.", initials: "DB", color: "bg-pastel-yellow text-pastel-yellow-foreground", badge: 2 },
-  { name: "Sra. Tina Goldberg", time: "17:00", text: "Lembrete: atualização importante do sistema de TI em 8/05 das 13h às 16h.", initials: "TG", color: "bg-pastel-green text-pastel-green-foreground", badge: 6 },
+const palette = [
+  "bg-pastel-pink text-pastel-pink-foreground",
+  "bg-pastel-lilac text-pastel-lilac-foreground",
+  "bg-pastel-blue text-pastel-blue-foreground",
+  "bg-pastel-yellow text-pastel-yellow-foreground",
+  "bg-pastel-green text-pastel-green-foreground",
 ];
 
-export const MessagesCard = () => {
+interface MessagesCardProps {
+  messages: { id: string; name: string; initials: string; text: string; time: string; unread: boolean }[];
+}
+
+export const MessagesCard = ({ messages }: MessagesCardProps) => {
   return (
     <div className="flex flex-col gap-4 rounded-2xl bg-card p-6 shadow-card">
       <div className="flex items-center justify-between">
@@ -14,9 +18,14 @@ export const MessagesCard = () => {
         <button className="text-xs font-semibold text-primary hover:underline">Ver todas</button>
       </div>
       <div className="flex flex-col gap-4">
-        {messages.map((m) => (
-          <div key={m.name} className="flex items-start gap-3">
-            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold ${m.color}`}>
+        {messages.length === 0 && (
+          <p className="rounded-xl bg-muted/50 p-4 text-center text-xs text-muted-foreground">
+            Sem mensagens recentes.
+          </p>
+        )}
+        {messages.map((m, i) => (
+          <div key={m.id} className="flex items-start gap-3">
+            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold ${palette[i % palette.length]}`}>
               {m.initials}
             </div>
             <div className="min-w-0 flex-1">
@@ -26,10 +35,8 @@ export const MessagesCard = () => {
               </div>
               <p className="line-clamp-2 text-xs text-muted-foreground">{m.text}</p>
             </div>
-            {m.badge && (
-              <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-pastel-lilac px-1.5 text-[10px] font-bold text-pastel-lilac-foreground">
-                {m.badge}
-              </span>
+            {m.unread && (
+              <span className="ml-1 mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" aria-label="Não lida" />
             )}
           </div>
         ))}
