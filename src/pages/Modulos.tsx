@@ -30,15 +30,15 @@ const Modulos = () => {
       type="button"
       onClick={() => onChange(!checked)}
       className={cn(
-        "relative h-7 w-[52px] shrink-0 rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-pastel-blue/40",
-        checked ? "bg-pastel-blue-foreground border-pastel-blue-foreground" : "bg-muted border-border",
+        "relative h-5 w-10 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-pastel-blue/40",
+        checked ? "bg-pastel-blue-foreground" : "bg-muted",
       )}
       aria-pressed={checked}
     >
       <span
         className={cn(
-          "absolute top-1/2 -translate-y-1/2 h-5 w-5 rounded-full bg-white shadow-card transition-transform",
-          checked ? "translate-x-[26px]" : "translate-x-0.5",
+          "absolute top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-white border border-border shadow-card transition-transform",
+          checked ? "translate-x-[18px]" : "-translate-x-[2px]",
         )}
       />
     </button>
