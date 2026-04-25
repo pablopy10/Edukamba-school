@@ -1,45 +1,45 @@
 import { GraduationCap, Home, Users, Receipt, BookOpen, Presentation, Contact, PersonStanding, UsersRound, CalendarDays, BookMarked, CalendarCheck, Smartphone, BookOpenCheck, BarChart3, Clock, UserCircle, Settings, Package, LogOut, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 
-type Item = { icon: React.ElementType; label: string; hasArrow?: boolean };
+type Item = { icon: React.ElementType; label: string; to: string; hasArrow?: boolean };
 
 const menu: Item[] = [
-  { icon: Home, label: "Painel de Controlo" },
-  { icon: GraduationCap, label: "Professores" },
-  { icon: Users, label: "Alunos" },
-  { icon: Receipt, label: "Matrículas" },
-  { icon: BookOpen, label: "Cursos" },
-  { icon: Presentation, label: "Turmas" },
-  { icon: Contact, label: "Disciplinas" },
-  { icon: PersonStanding, label: "Educadores" },
-  { icon: UsersRound, label: "Presenças" },
-  { icon: CalendarDays, label: "Horário" },
-  { icon: BookMarked, label: "Avaliações" },
-  { icon: CalendarCheck, label: "Eventos" },
-  { icon: Smartphone, label: "Pedidos" },
-  { icon: BookOpenCheck, label: "Material" },
-  { icon: BarChart3, label: "Relatórios" },
-  { icon: Clock, label: "Timesheet" },
+  { icon: Home, label: "Painel de Controlo", to: "/" },
+  { icon: GraduationCap, label: "Professores", to: "/professores" },
+  { icon: Users, label: "Alunos", to: "/alunos" },
+  { icon: Receipt, label: "Matrículas", to: "/matriculas" },
+  { icon: BookOpen, label: "Cursos", to: "/cursos" },
+  { icon: Presentation, label: "Turmas", to: "/turmas" },
+  { icon: Contact, label: "Disciplinas", to: "/disciplinas" },
+  { icon: PersonStanding, label: "Educadores", to: "/educadores" },
+  { icon: UsersRound, label: "Presenças", to: "/presencas" },
+  { icon: CalendarDays, label: "Horário", to: "/horario" },
+  { icon: BookMarked, label: "Avaliações", to: "/avaliacoes" },
+  { icon: CalendarCheck, label: "Eventos", to: "/eventos" },
+  { icon: Smartphone, label: "Pedidos", to: "/pedidos" },
+  { icon: BookOpenCheck, label: "Material", to: "/material" },
+  { icon: BarChart3, label: "Relatórios", to: "/relatorios" },
+  { icon: Clock, label: "Timesheet", to: "/timesheet" },
 ];
 
 const other: Item[] = [
-  { icon: UserCircle, label: "Perfil" },
-  { icon: Settings, label: "Definições" },
-  { icon: Package, label: "Módulos" },
-  { icon: LogOut, label: "Sair" },
+  { icon: UserCircle, label: "Perfil", to: "/perfil" },
+  { icon: Settings, label: "Definições", to: "/definicoes" },
+  { icon: Package, label: "Módulos", to: "/modulos" },
+  { icon: LogOut, label: "Sair", to: "/sair" },
 ];
 
 export const Sidebar = () => {
-  const [active, setActive] = useState("Painel de Controlo");
+  const location = useLocation();
 
   const renderItem = (item: Item) => {
     const Icon = item.icon;
-    const isActive = active === item.label;
+    const isActive = location.pathname === item.to;
     return (
-      <button
+      <NavLink
         key={item.label}
-        onClick={() => setActive(item.label)}
+        to={item.to}
         className={cn(
           "group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-[var(--transition-smooth)]",
           isActive
@@ -50,7 +50,7 @@ export const Sidebar = () => {
         <Icon className="h-5 w-5 shrink-0" strokeWidth={1.75} />
         <span className="flex-1 text-left">{item.label}</span>
         {item.hasArrow && <ChevronRight className="h-4 w-4 opacity-60" />}
-      </button>
+      </NavLink>
     );
   };
 
