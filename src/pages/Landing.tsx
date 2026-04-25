@@ -119,11 +119,11 @@ const Landing = () => {
           </nav>
           <div className="flex items-center gap-2">
             <Button variant="ghost" asChild className="hidden sm:inline-flex">
-              <Link to="/auth">Entrar</Link>
+              <Link to="/auth?tab=login">Entrar</Link>
             </Button>
             <Button asChild className="rounded-full bg-pastel-blue-foreground text-primary-foreground hover:bg-pastel-blue-foreground/90">
-              <Link to="/auth">
-                Começar
+              <Link to="/auth?tab=signup">
+                Criar conta
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
