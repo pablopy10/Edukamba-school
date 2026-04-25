@@ -20,19 +20,19 @@ const features = [
     icon: Users,
     title: "Gestão de Alunos",
     description: "Cadastro, matrículas e perfis completos num só lugar.",
-    tone: "bg-pastel-lilac text-pastel-lilac-foreground",
+    tone: "bg-pastel-blue text-pastel-blue-foreground",
   },
   {
     icon: CalendarCheck,
     title: "Presenças & Horários",
     description: "Controle diário de presenças e organização de horários.",
-    tone: "bg-pastel-yellow text-pastel-yellow-foreground",
+    tone: "bg-pastel-blue text-pastel-blue-foreground",
   },
   {
     icon: Wallet,
     title: "Pagamentos",
     description: "Propinas, recibos e validação de comprovativos.",
-    tone: "bg-pastel-green text-pastel-green-foreground",
+    tone: "bg-pastel-blue text-pastel-blue-foreground",
   },
   {
     icon: BarChart3,
@@ -44,13 +44,13 @@ const features = [
     icon: MessageSquare,
     title: "Comunicação",
     description: "Mensagens entre escola, professores e encarregados.",
-    tone: "bg-pastel-pink text-pastel-pink-foreground",
+    tone: "bg-pastel-blue text-pastel-blue-foreground",
   },
   {
     icon: ShieldCheck,
     title: "Seguro & Privado",
     description: "Dados protegidos com permissões por perfil.",
-    tone: "bg-pastel-lilac text-pastel-lilac-foreground",
+    tone: "bg-pastel-blue text-pastel-blue-foreground",
   },
 ];
 
@@ -63,19 +63,20 @@ const stats = [
 const plans = [
   {
     name: "Essencial",
-    price: "Grátis",
+    price: "350 Kz",
+    suffix: "/aluno · mês",
     description: "Para escolas a começar a digitalizar.",
-    features: ["Até 100 alunos", "Gestão básica", "Suporte por e-mail"],
+    features: ["Gestão de alunos e turmas", "Presenças e horários", "Suporte por e-mail"],
     cta: "Começar agora",
     highlight: false,
   },
   {
     name: "Pro",
-    price: "15.000 Kz",
-    suffix: "/mês",
+    price: "600 Kz",
+    suffix: "/aluno · mês",
     description: "Para escolas em crescimento.",
     features: [
-      "Alunos ilimitados",
+      "Tudo do plano Essencial",
       "Pagamentos integrados",
       "Relatórios avançados",
       "Suporte prioritário",
