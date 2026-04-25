@@ -8,16 +8,26 @@ const monthNames = [
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 
-export const CalendarCard = () => {
-  const now = new Date();
-  const [cursor, setCursor] = useState(new Date(now.getFullYear(), now.getMonth(), 1));
+interface CalendarCardProps {
+  selectedDate: Date;
+  onSelect: (date: Date) => void;
+}
+
+const isSameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
+
+export const CalendarCard = ({ selectedDate, onSelect }: CalendarCardProps) => {
+  const today = new Date();
+  const [cursor, setCursor] = useState(
+    new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1),
+  );
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
   const firstDow = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
-  const today = now.getDate();
 
   const cells: (number | null)[] = [
     ...Array(firstDow).fill(null),
@@ -48,22 +58,29 @@ export const CalendarCard = () => {
         {days.map((d) => (
           <p key={d} className="py-1 text-[11px] font-medium text-muted-foreground">{d}</p>
         ))}
-        {cells.map((d, i) => (
-          <div key={i} className="flex h-10 items-center justify-center">
-            {d !== null && (
+        {cells.map((d, i) => {
+          if (d === null) return <div key={i} className="h-10" />;
+          const cellDate = new Date(year, month, d);
+          const isToday = isSameDay(cellDate, today);
+          const isSelected = isSameDay(cellDate, selectedDate);
+          return (
+            <div key={i} className="flex h-10 items-center justify-center">
               <button
+                onClick={() => onSelect(cellDate)}
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-xl text-sm font-semibold transition-[var(--transition-smooth)]",
-                  isCurrentMonth && d === today
+                  isSelected
+                    ? "bg-primary text-primary-foreground"
+                    : isToday
                     ? "bg-pastel-blue text-pastel-blue-foreground"
                     : "text-foreground hover:bg-accent",
                 )}
               >
                 {d}
               </button>
-            )}
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -10,9 +10,11 @@ import { ClassroomPerformanceCard } from "@/components/dashboard/ClassroomPerfor
 import { HonorRollCard } from "@/components/dashboard/HonorRollCard";
 import { ComplaintsCard } from "@/components/dashboard/ComplaintsCard";
 import { useDashboardData } from "@/hooks/useDashboardData";
+import { useState } from "react";
 
 const Index = () => {
-  const { counts, gender, agenda, messages } = useDashboardData();
+  const { counts, gender, messages } = useDashboardData();
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const fmt = (n: number) => n.toLocaleString("pt-PT");
   return (
     <DashboardLayout>
@@ -51,8 +53,8 @@ const Index = () => {
 
             {/* Right column */}
             <aside className="flex flex-col gap-6">
-              <CalendarCard />
-              <AgendaCard items={agenda} />
+              <CalendarCard selectedDate={selectedDate} onSelect={setSelectedDate} />
+              <AgendaCard date={selectedDate} />
               <MessagesCard messages={messages} />
             </aside>
       </div>
