@@ -1,5 +1,4 @@
-import { Sidebar } from "@/components/dashboard/Sidebar";
-import { Topbar } from "@/components/dashboard/Topbar";
+import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { StudentsCard } from "@/components/dashboard/StudentsCard";
 import { AttendanceCard } from "@/components/dashboard/AttendanceCard";
@@ -11,14 +10,8 @@ import { MiniStatCard } from "@/components/dashboard/MiniStatCard";
 
 const Index = () => {
   return (
-    <div className="flex min-h-screen w-full bg-background font-sans text-foreground">
-      <Sidebar />
-
-      <main className="flex-1 overflow-x-hidden">
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-6 p-5 lg:p-7">
-          <Topbar />
-
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_320px]">
+    <DashboardLayout>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_320px]">
             {/* Center column */}
             <div className="flex flex-col gap-6">
               <h1 className="sr-only">Painel Edukamba</h1>
@@ -53,10 +46,8 @@ const Index = () => {
               <AgendaCard />
               <MessagesCard />
             </aside>
-          </div>
-        </div>
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 };
 
