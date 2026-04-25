@@ -78,7 +78,6 @@ const Perfil = () => {
     smsNotif: false,
     weeklyReport: true,
     eventReminders: true,
-    theme: "light" as "light" | "dark" | "system",
   });
 
   // Security
@@ -448,26 +447,6 @@ const Perfil = () => {
                   <Toggle checked={prefs[p.k]} onChange={(v) => setPrefs({ ...prefs, [p.k]: v })} />
                 </div>
               ))}
-            </div>
-
-            <div className="mt-6 border-t border-border pt-5">
-              <p className="mb-3 text-sm font-medium text-foreground">Tema da aplicação</p>
-              <div className="flex flex-wrap gap-2">
-                {(["light", "dark", "system"] as const).map((th) => (
-                  <button
-                    key={th}
-                    onClick={() => setPrefs({ ...prefs, theme: th })}
-                    className={cn(
-                      "rounded-xl px-4 py-2 text-sm font-medium capitalize transition-[var(--transition-smooth)]",
-                      prefs.theme === th
-                        ? "bg-pastel-blue text-pastel-blue-foreground shadow-soft"
-                        : "bg-muted text-muted-foreground hover:bg-accent",
-                    )}
-                  >
-                    {th === "light" ? "Claro" : th === "dark" ? "Escuro" : "Sistema"}
-                  </button>
-                ))}
-              </div>
             </div>
 
             <div className="mt-6 flex justify-end">
