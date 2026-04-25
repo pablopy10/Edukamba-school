@@ -28,6 +28,7 @@ import Definicoes from "./pages/Definicoes.tsx";
 import Modulos from "./pages/Modulos.tsx";
 import Notificacoes from "./pages/Notificacoes.tsx";
 import Chat from "./pages/Chat.tsx";
+import Pesquisa from "./pages/Pesquisa.tsx";
 import { ModulesProvider } from "./context/ModulesContext";
 
 const queryClient = new QueryClient();
@@ -65,6 +66,7 @@ const App = () => (
           <Route path="/modulos" element={<Modulos />} />
           <Route path="/notificacoes" element={<Notificacoes />} />
           <Route path="/chat" element={<Chat />} />
+          <Route path="/pesquisa" element={<Pesquisa />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
           </Routes>
