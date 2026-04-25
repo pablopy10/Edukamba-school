@@ -14,9 +14,13 @@ export const Topbar = () => {
       </div>
 
       <div className="flex items-center gap-3">
-        <button className="flex h-11 w-11 items-center justify-center rounded-full bg-card text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent">
+        <Link
+          to="/chat"
+          aria-label="Chat"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-card text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent"
+        >
           <MessageSquare className="h-5 w-5" strokeWidth={1.75} />
-        </button>
+        </Link>
         <Link
           to="/notificacoes"
           aria-label="Notificações"
