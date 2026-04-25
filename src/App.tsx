@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index.tsx";
 import Landing from "./pages/Landing.tsx";
 import Auth from "./pages/Auth.tsx";
+import Onboarding from "./pages/Onboarding.tsx";
 import Termos from "./pages/Termos.tsx";
 import Privacidade from "./pages/Privacidade.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -48,6 +49,7 @@ const App = () => (
           <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
           <Route path="/termos" element={<Termos />} />
           <Route path="/privacidade" element={<Privacidade />} />
           <Route path="/dashboard" element={<ProtectedRoute><Index /></ProtectedRoute>} />

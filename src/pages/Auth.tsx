@@ -73,11 +73,11 @@ const Auth = () => {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setSignupLoading(true);
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: signupEmail,
       password: signupPassword,
       options: {
-        emailRedirectTo: `${window.location.origin}/dashboard`,
+        emailRedirectTo: `${window.location.origin}/onboarding`,
         data: { full_name: signupName },
       },
     });
@@ -93,12 +93,18 @@ const Auth = () => {
       });
       return;
     }
-    toast({
-      title: "Conta criada!",
-      description: "Verifique o seu email para confirmar a conta.",
-    });
-    setTab("login");
-    setSearchParams({ tab: "login" }, { replace: true });
+    if (data.session) {
+      // Email confirmation disabled — go straight to onboarding
+      toast({ title: "Conta criada!", description: "Vamos configurar a sua escola." });
+      navigate("/onboarding", { replace: true });
+    } else {
+      toast({
+        title: "Conta criada!",
+        description: "Verifique o seu email para confirmar e depois inicie sessão.",
+      });
+      setTab("login");
+      setSearchParams({ tab: "login" }, { replace: true });
+    }
   };
 
   return (
