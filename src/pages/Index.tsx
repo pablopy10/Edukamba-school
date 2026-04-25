@@ -10,7 +10,7 @@ import { MiniStatCard } from "@/components/dashboard/MiniStatCard";
 import { useDashboardData } from "@/hooks/useDashboardData";
 
 const Index = () => {
-  const { counts, gender, attendance, agenda, messages } = useDashboardData();
+  const { counts, gender, agenda, messages } = useDashboardData();
   const fmt = (n: number) => n.toLocaleString("pt-PT");
   return (
     <DashboardLayout>
@@ -30,7 +30,7 @@ const Index = () => {
               {/* Students + Attendance */}
               <section className="grid grid-cols-1 gap-6 lg:grid-cols-[340px_1fr]">
                 <StudentsCard male={gender.male} female={gender.female} total={gender.total} />
-                <AttendanceCard data={attendance} />
+                <AttendanceCard />
               </section>
 
               {/* Earnings + side stats */}
