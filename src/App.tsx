@@ -5,6 +5,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index.tsx";
 import Landing from "./pages/Landing.tsx";
+import Auth from "./pages/Auth.tsx";
+import Termos from "./pages/Termos.tsx";
+import Privacidade from "./pages/Privacidade.tsx";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 import NotFound from "./pages/NotFound.tsx";
 import Alunos from "./pages/Alunos.tsx";
 import AlunoPerfil from "./pages/AlunoPerfil.tsx";
@@ -43,32 +47,35 @@ const App = () => (
         <BrowserRouter>
           <Routes>
           <Route path="/" element={<Landing />} />
-          <Route path="/dashboard" element={<Index />} />
-          <Route path="/alunos" element={<Alunos />} />
-          <Route path="/alunos/:id" element={<AlunoPerfil />} />
-          <Route path="/professores" element={<Professores />} />
-          <Route path="/professores/:id" element={<ProfessorPerfil />} />
-          <Route path="/matriculas" element={<Matriculas />} />
-          <Route path="/cursos" element={<Cursos />} />
-          <Route path="/turmas" element={<Turmas />} />
-          <Route path="/disciplinas" element={<Disciplinas />} />
-          <Route path="/educadores" element={<Educadores />} />
-          <Route path="/presencas" element={<Presencas />} />
-          <Route path="/horario" element={<Horarios />} />
-          <Route path="/horarios" element={<Horarios />} />
-          <Route path="/avaliacoes" element={<Avaliacoes />} />
-          <Route path="/eventos" element={<Eventos />} />
-          <Route path="/extracurriculares" element={<Extracurriculares />} />
-          <Route path="/pedidos" element={<Pedidos />} />
-          <Route path="/material" element={<Material />} />
-          <Route path="/relatorios" element={<Relatorios />} />
-          <Route path="/timesheet" element={<Timesheet />} />
-          <Route path="/perfil" element={<Perfil />} />
-          <Route path="/definicoes" element={<Definicoes />} />
-          <Route path="/modulos" element={<Modulos />} />
-          <Route path="/notificacoes" element={<Notificacoes />} />
-          <Route path="/chat" element={<Chat />} />
-          <Route path="/pesquisa" element={<Pesquisa />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/termos" element={<Termos />} />
+          <Route path="/privacidade" element={<Privacidade />} />
+          <Route path="/dashboard" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/alunos" element={<ProtectedRoute><Alunos /></ProtectedRoute>} />
+          <Route path="/alunos/:id" element={<ProtectedRoute><AlunoPerfil /></ProtectedRoute>} />
+          <Route path="/professores" element={<ProtectedRoute><Professores /></ProtectedRoute>} />
+          <Route path="/professores/:id" element={<ProtectedRoute><ProfessorPerfil /></ProtectedRoute>} />
+          <Route path="/matriculas" element={<ProtectedRoute><Matriculas /></ProtectedRoute>} />
+          <Route path="/cursos" element={<ProtectedRoute><Cursos /></ProtectedRoute>} />
+          <Route path="/turmas" element={<ProtectedRoute><Turmas /></ProtectedRoute>} />
+          <Route path="/disciplinas" element={<ProtectedRoute><Disciplinas /></ProtectedRoute>} />
+          <Route path="/educadores" element={<ProtectedRoute><Educadores /></ProtectedRoute>} />
+          <Route path="/presencas" element={<ProtectedRoute><Presencas /></ProtectedRoute>} />
+          <Route path="/horario" element={<ProtectedRoute><Horarios /></ProtectedRoute>} />
+          <Route path="/horarios" element={<ProtectedRoute><Horarios /></ProtectedRoute>} />
+          <Route path="/avaliacoes" element={<ProtectedRoute><Avaliacoes /></ProtectedRoute>} />
+          <Route path="/eventos" element={<ProtectedRoute><Eventos /></ProtectedRoute>} />
+          <Route path="/extracurriculares" element={<ProtectedRoute><Extracurriculares /></ProtectedRoute>} />
+          <Route path="/pedidos" element={<ProtectedRoute><Pedidos /></ProtectedRoute>} />
+          <Route path="/material" element={<ProtectedRoute><Material /></ProtectedRoute>} />
+          <Route path="/relatorios" element={<ProtectedRoute><Relatorios /></ProtectedRoute>} />
+          <Route path="/timesheet" element={<ProtectedRoute><Timesheet /></ProtectedRoute>} />
+          <Route path="/perfil" element={<ProtectedRoute><Perfil /></ProtectedRoute>} />
+          <Route path="/definicoes" element={<ProtectedRoute><Definicoes /></ProtectedRoute>} />
+          <Route path="/modulos" element={<ProtectedRoute><Modulos /></ProtectedRoute>} />
+          <Route path="/notificacoes" element={<ProtectedRoute><Notificacoes /></ProtectedRoute>} />
+          <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+          <Route path="/pesquisa" element={<ProtectedRoute><Pesquisa /></ProtectedRoute>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
           </Routes>
