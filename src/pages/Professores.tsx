@@ -2,6 +2,7 @@ import { useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Search, Filter, Plus, MoreHorizontal, Mail, Phone, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Link } from "react-router-dom";
 
 type Teacher = {
   id: string;
@@ -156,7 +157,9 @@ const Professores = () => {
                             {t.initials}
                           </div>
                           <div>
-                            <p className="font-semibold text-foreground">{t.name}</p>
+                            <Link to={`/professores/${t.id}`} className="font-semibold text-foreground transition-colors hover:text-pastel-blue-foreground hover:underline">
+                              {t.name}
+                            </Link>
                             <p className="text-xs text-muted-foreground">{t.email}</p>
                           </div>
                         </div>
