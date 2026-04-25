@@ -13,6 +13,7 @@ import Turmas from "./pages/Turmas.tsx";
 import Disciplinas from "./pages/Disciplinas.tsx";
 import Educadores from "./pages/Educadores.tsx";
 import Presencas from "./pages/Presencas.tsx";
+import Horarios from "./pages/Horarios.tsx";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +33,8 @@ const App = () => (
           <Route path="/disciplinas" element={<Disciplinas />} />
           <Route path="/educadores" element={<Educadores />} />
           <Route path="/presencas" element={<Presencas />} />
+          <Route path="/horario" element={<Horarios />} />
+          <Route path="/horarios" element={<Horarios />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
