@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { CalendarDays, ChevronDown, Check, X } from "lucide-react";
+import { CalendarDays, ChevronDown, Check, X, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Status = "present" | "absent" | "none";
+type Status = "present" | "absent" | "late" | "none";
 
 type StudentRow = {
   id: string;
@@ -14,28 +14,29 @@ type StudentRow = {
 const days = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
 const weekendIdx = new Set<number>([5, 6, 12, 13]); // dias 13, 14, 20, 21 (sáb/dom)
 
-const buildRow = (id: string, name: string, absentDays: number[]): StudentRow => ({
+const buildRow = (id: string, name: string, absentDays: number[], lateDays: number[] = []): StudentRow => ({
   id,
   name,
   attendance: days.map((d, i) => {
     if (weekendIdx.has(i)) return "none";
+    if (lateDays.includes(d)) return "late";
     return absentDays.includes(d) ? "absent" : "present";
   }),
 });
 
 const students: StudentRow[] = [
-  buildRow("1", "Lucas Johnson", [9, 16]),
-  buildRow("2", "Emily Peterson", [17]),
-  buildRow("3", "Michael Brown", [11, 16]),
-  buildRow("4", "Hannah White", [9, 18]),
-  buildRow("5", "Oliver Martinez", []),
-  buildRow("6", "Isabella Garcia", [12]),
-  buildRow("7", "Ethan Lee", [15, 17]),
-  buildRow("8", "Sophia Wilson", [8]),
-  buildRow("9", "Mason Clark", [10, 19]),
-  buildRow("10", "Ava Rodriguez", [11]),
-  buildRow("11", "Logan Hall", [16]),
-  buildRow("12", "Mia Allen", [9, 12]),
+  buildRow("1", "Lucas Johnson", [9, 16], [11]),
+  buildRow("2", "Emily Peterson", [17], [8]),
+  buildRow("3", "Michael Brown", [11, 16], [19]),
+  buildRow("4", "Hannah White", [9, 18], []),
+  buildRow("5", "Oliver Martinez", [], [10, 17]),
+  buildRow("6", "Isabella Garcia", [12], [16]),
+  buildRow("7", "Ethan Lee", [15, 17], []),
+  buildRow("8", "Sophia Wilson", [8], [12]),
+  buildRow("9", "Mason Clark", [10, 19], [15]),
+  buildRow("10", "Ava Rodriguez", [11], [18]),
+  buildRow("11", "Logan Hall", [16], [9]),
+  buildRow("12", "Mia Allen", [9, 12], [17]),
 ];
 
 const FilterChip = ({ icon: Icon, label }: { icon?: React.ElementType; label: string }) => (
@@ -48,16 +49,22 @@ const FilterChip = ({ icon: Icon, label }: { icon?: React.ElementType; label: st
 
 const StatusCell = ({ status }: { status: Status }) => {
   if (status === "none") {
-    return <span className="text-sm text-muted-foreground">—</span>;
+    return <span className="text-xs text-muted-foreground">—</span>;
   }
+  const config = {
+    present: { bg: "bg-pastel-blue text-pastel-blue-foreground", Icon: Check },
+    absent: { bg: "bg-destructive text-white", Icon: X },
+    late: { bg: "bg-pastel-yellow text-pastel-yellow-foreground", Icon: Clock },
+  }[status];
+  const { Icon } = config;
   return (
     <span
       className={cn(
-        "flex h-7 w-7 items-center justify-center rounded-full text-white shadow-soft",
-        status === "present" ? "bg-pastel-blue text-pastel-blue-foreground" : "bg-destructive",
+        "flex h-5 w-5 items-center justify-center rounded-full shadow-soft",
+        config.bg,
       )}
     >
-      {status === "present" ? <Check className="h-4 w-4" strokeWidth={3} /> : <X className="h-4 w-4" strokeWidth={3} />}
+      <Icon className="h-3 w-3" strokeWidth={3} />
     </span>
   );
 };
@@ -84,7 +91,7 @@ const Presencas = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
           <div className="rounded-2xl bg-pastel-blue p-5 shadow-card">
             <p className="text-xs font-semibold uppercase tracking-wider text-pastel-blue-foreground/80">Total de Alunos</p>
             <p className="mt-2 text-3xl font-bold text-pastel-blue-foreground">{students.length}</p>
@@ -95,15 +102,21 @@ const Presencas = () => {
               {students.reduce((acc, s) => acc + s.attendance.filter((a) => a === "present").length, 0)}
             </p>
           </div>
+          <div className="rounded-2xl bg-pastel-yellow p-5 shadow-card">
+            <p className="text-xs font-semibold uppercase tracking-wider text-pastel-yellow-foreground/80">Atrasos</p>
+            <p className="mt-2 text-3xl font-bold text-pastel-yellow-foreground">
+              {students.reduce((acc, s) => acc + s.attendance.filter((a) => a === "late").length, 0)}
+            </p>
+          </div>
           <div className="rounded-2xl bg-pastel-pink p-5 shadow-card">
             <p className="text-xs font-semibold uppercase tracking-wider text-pastel-pink-foreground/80">Faltas</p>
             <p className="mt-2 text-3xl font-bold text-pastel-pink-foreground">
               {students.reduce((acc, s) => acc + s.attendance.filter((a) => a === "absent").length, 0)}
             </p>
           </div>
-          <div className="rounded-2xl bg-pastel-yellow p-5 shadow-card">
-            <p className="text-xs font-semibold uppercase tracking-wider text-pastel-yellow-foreground/80">Taxa Presença</p>
-            <p className="mt-2 text-3xl font-bold text-pastel-yellow-foreground">
+          <div className="rounded-2xl bg-pastel-lilac p-5 shadow-card">
+            <p className="text-xs font-semibold uppercase tracking-wider text-pastel-lilac-foreground/80">Taxa Presença</p>
+            <p className="mt-2 text-3xl font-bold text-pastel-lilac-foreground">
               {(() => {
                 const total = students.reduce((acc, s) => acc + s.attendance.filter((a) => a !== "none").length, 0);
                 const present = students.reduce((acc, s) => acc + s.attendance.filter((a) => a === "present").length, 0);
@@ -165,14 +178,20 @@ const Presencas = () => {
         {/* Legend */}
         <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-pastel-blue text-pastel-blue-foreground">
-              <Check className="h-3.5 w-3.5" strokeWidth={3} />
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-pastel-blue text-pastel-blue-foreground">
+              <Check className="h-3 w-3" strokeWidth={3} />
             </span>
             Presente
           </div>
           <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-white">
-              <X className="h-3.5 w-3.5" strokeWidth={3} />
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-pastel-yellow text-pastel-yellow-foreground">
+              <Clock className="h-3 w-3" strokeWidth={3} />
+            </span>
+            Atrasado
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-white">
+              <X className="h-3 w-3" strokeWidth={3} />
             </span>
             Falta
           </div>
