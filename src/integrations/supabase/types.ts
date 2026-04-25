@@ -398,6 +398,80 @@ export type Database = {
           },
         ]
       }
+      complaints: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          reporter_id: string | null
+          school_id: string | null
+          severity: string
+          status: string
+          subject: string
+          target_profile_id: string | null
+          target_student_id: string | null
+          target_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          reporter_id?: string | null
+          school_id?: string | null
+          severity?: string
+          status?: string
+          subject: string
+          target_profile_id?: string | null
+          target_student_id?: string | null
+          target_type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          reporter_id?: string | null
+          school_id?: string | null
+          severity?: string
+          status?: string
+          subject?: string
+          target_profile_id?: string | null
+          target_student_id?: string | null
+          target_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "complaints_reporter_id_fkey"
+            columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "complaints_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "complaints_target_profile_id_fkey"
+            columns: ["target_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "complaints_target_student_id_fkey"
+            columns: ["target_student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       courses: {
         Row: {
           description: string | null
