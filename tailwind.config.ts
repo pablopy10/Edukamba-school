@@ -47,6 +47,30 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        success: "hsl(var(--success))",
+        warning: "hsl(var(--warning))",
+        pastel: {
+          lilac: {
+            DEFAULT: "hsl(var(--pastel-lilac))",
+            foreground: "hsl(var(--pastel-lilac-foreground))",
+          },
+          yellow: {
+            DEFAULT: "hsl(var(--pastel-yellow))",
+            foreground: "hsl(var(--pastel-yellow-foreground))",
+          },
+          blue: {
+            DEFAULT: "hsl(var(--pastel-blue))",
+            foreground: "hsl(var(--pastel-blue-foreground))",
+          },
+          green: {
+            DEFAULT: "hsl(var(--pastel-green))",
+            foreground: "hsl(var(--pastel-green-foreground))",
+          },
+          pink: {
+            DEFAULT: "hsl(var(--pastel-pink))",
+            foreground: "hsl(var(--pastel-pink-foreground))",
+          },
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
@@ -58,10 +82,24 @@ export default {
           ring: "hsl(var(--sidebar-ring))",
         },
       },
+      fontFamily: {
+        sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+        display: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+      },
+      backgroundImage: {
+        'gradient-lilac': 'var(--gradient-lilac)',
+        'gradient-yellow': 'var(--gradient-yellow)',
+      },
+      boxShadow: {
+        soft: 'var(--shadow-soft)',
+        card: 'var(--shadow-card)',
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        xl: "calc(var(--radius) + 4px)",
+        '2xl': "calc(var(--radius) + 8px)",
       },
       keyframes: {
         "accordion-down": {

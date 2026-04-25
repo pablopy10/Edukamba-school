@@ -1,0 +1,37 @@
+import { Search, MessageSquare, Bell } from "lucide-react";
+
+export const Topbar = () => {
+  return (
+    <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="relative w-full max-w-md">
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          type="text"
+          placeholder="Buscar..."
+          className="h-11 w-full rounded-full border border-border bg-card pl-11 pr-4 text-sm text-foreground placeholder:text-muted-foreground shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
+        />
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button className="flex h-11 w-11 items-center justify-center rounded-full bg-card text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent">
+          <MessageSquare className="h-5 w-5" strokeWidth={1.75} />
+        </button>
+        <button className="flex h-11 w-11 items-center justify-center rounded-full bg-card text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent">
+          <Bell className="h-5 w-5" strokeWidth={1.75} />
+        </button>
+        <div className="flex items-center gap-3 pl-2">
+          <div className="text-right">
+            <p className="text-sm font-semibold text-foreground">Linda Adora</p>
+            <p className="text-xs text-muted-foreground">Administradora</p>
+          </div>
+          <div className="relative">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-lilac text-sm font-bold text-pastel-lilac-foreground shadow-soft">
+              LA
+            </div>
+            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-card bg-success" />
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+};
