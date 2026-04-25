@@ -9,7 +9,8 @@ export const Topbar = () => {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const term = q.trim();
-    navigate(term ? `/pesquisa?q=${encodeURIComponent(term)}` : "/pesquisa");
+    if (!term) return;
+    navigate(`/pesquisa?q=${encodeURIComponent(term)}`);
   };
 
   return (
@@ -20,7 +21,6 @@ export const Topbar = () => {
           type="text"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          onFocus={() => navigate("/pesquisa")}
           placeholder="Buscar..."
           className="h-11 w-full rounded-full border border-border bg-card pl-11 pr-4 text-sm text-foreground placeholder:text-muted-foreground shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
         />
