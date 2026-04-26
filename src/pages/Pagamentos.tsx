@@ -16,7 +16,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search } from "lucide-react";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
 
 type FeeRule = {
@@ -50,6 +50,17 @@ type StudentDiscount = {
 
 type AcademicYear = { id: string; label: string; is_active: boolean | null };
 type StudentLite = { id: string; full_name: string };
+
+type FeeListRow = {
+  id: string;
+  amount_due: number;
+  due_date: string;
+  is_paid: boolean | null;
+  month_index: number | null;
+  student_id: string | null;
+  academic_year_id: string | null;
+  student?: { id: string; full_name: string; parent_id: string | null } | null;
+};
 
 const fmtAOA = (n: number) =>
   new Intl.NumberFormat("pt-PT", { style: "currency", currency: "AOA", maximumFractionDigits: 0 }).format(n || 0);
@@ -101,6 +112,12 @@ const Pagamentos = () => {
   const [generateOpen, setGenerateOpen] = useState(false);
   const [generateYearId, setGenerateYearId] = useState<string>("");
 
+  const [allFees, setAllFees] = useState<FeeListRow[]>([]);
+  const [feeFilter, setFeeFilter] = useState<"all" | "paid" | "pending" | "overdue">("pending");
+  const [feeYearFilter, setFeeYearFilter] = useState<string>("all");
+  const [feeSearch, setFeeSearch] = useState("");
+  const [remindingFeeId, setRemindingFeeId] = useState<string | null>(null);
+
   const fetchAll = async () => {
     setLoading(true);
     const { data: profile } = await supabase
@@ -133,6 +150,19 @@ const Pagamentos = () => {
     setFamilyRules((fRes.data ?? []) as FamilyRule[]);
     setDiscounts((dRes.data ?? []) as StudentDiscount[]);
     setStudents((sRes.data ?? []) as StudentLite[]);
+
+    // Carregar propinas com aluno e educador
+    const studentIds = (sRes.data ?? []).map((s) => s.id);
+    if (studentIds.length > 0) {
+      const { data: feesData } = await supabase
+        .from("student_fees")
+        .select("id, amount_due, due_date, is_paid, month_index, student_id, academic_year_id, student:students(id, full_name, parent_id)")
+        .in("student_id", studentIds)
+        .order("due_date", { ascending: false });
+      setAllFees((feesData ?? []) as unknown as FeeListRow[]);
+    } else {
+      setAllFees([]);
+    }
     setLoading(false);
   };
 
@@ -307,6 +337,73 @@ const Pagamentos = () => {
 
   const totalActiveStudents = students.length;
   const monthlyRevenue = useMemo(() => rules.reduce((s, r) => s + Number(r.monthly_amount), 0), [rules]);
+
+  const filteredFees = useMemo(() => {
+    const now = Date.now();
+    const search = feeSearch.trim().toLowerCase();
+    return allFees.filter((f) => {
+      if (feeYearFilter !== "all" && f.academic_year_id !== feeYearFilter) return false;
+      if (feeFilter === "paid" && !f.is_paid) return false;
+      if (feeFilter === "pending" && f.is_paid) return false;
+      if (feeFilter === "overdue" && (f.is_paid || new Date(f.due_date).getTime() >= now)) return false;
+      if (search && !(f.student?.full_name ?? "").toLowerCase().includes(search)) return false;
+      return true;
+    });
+  }, [allFees, feeFilter, feeYearFilter, feeSearch]);
+
+  const feeStats = useMemo(() => {
+    const now = Date.now();
+    let paid = 0, pending = 0, overdue = 0;
+    allFees.forEach((f) => {
+      if (f.is_paid) paid += Number(f.amount_due);
+      else {
+        pending += Number(f.amount_due);
+        if (new Date(f.due_date).getTime() < now) overdue += Number(f.amount_due);
+      }
+    });
+    return { paid, pending, overdue };
+  }, [allFees]);
+
+  const sendReminder = async (fee: FeeListRow) => {
+    if (!schoolId) return;
+    const parentId = fee.student?.parent_id;
+    if (!parentId) {
+      toast({ title: "Aluno sem encarregado", description: "Não é possível enviar lembrete.", variant: "destructive" });
+      return;
+    }
+    setRemindingFeeId(fee.id);
+    const monthLabel = fee.month_index ? monthNames[fee.month_index - 1] : "";
+    const { error } = await supabase.from("notifications").insert({
+      recipient_id: parentId,
+      school_id: schoolId,
+      title: `Lembrete de propina ${monthLabel}`.trim(),
+      description: `A propina de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      category: "pagamento",
+      link: "/financas",
+    });
+    setRemindingFeeId(null);
+    if (error) toast({ title: "Erro a enviar lembrete", description: error.message, variant: "destructive" });
+    else toast({ title: "Lembrete enviado ao encarregado" });
+  };
+
+  const sendBulkReminders = async () => {
+    const targets = filteredFees.filter((f) => !f.is_paid && f.student?.parent_id);
+    if (targets.length === 0) {
+      toast({ title: "Sem destinatários", description: "Não há propinas em dívida com encarregado associado." });
+      return;
+    }
+    const rows = targets.map((f) => ({
+      recipient_id: f.student!.parent_id!,
+      school_id: schoolId!,
+      title: `Lembrete de propina ${f.month_index ? monthNames[f.month_index - 1] : ""}`.trim(),
+      description: `A propina de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      category: "pagamento",
+      link: "/financas",
+    }));
+    const { error } = await supabase.from("notifications").insert(rows);
+    if (error) toast({ title: "Erro a enviar lembretes", description: error.message, variant: "destructive" });
+    else toast({ title: `${rows.length} lembrete(s) enviado(s)` });
+  };
 
   return (
     <DashboardLayout>
