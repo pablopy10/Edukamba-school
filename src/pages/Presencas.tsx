@@ -196,23 +196,6 @@ const Presencas = () => {
     })();
   }, [schoolId, classroomId, year, month0, weekIdx]);
 
-  const cycleStatus = async (student: Student, date: Date, current: Status | null) => {
-    if (!canEdit || !schoolId) return;
-    const key = `${student.id}__${fmtISO(date)}`;
-    setSavingKey(key);
-
-    // cycle: none → PRESENT → LATE → ABSENT → none
-    const next: Status | null =
-      current === null ? "PRESENT" :
-      current === "PRESENT" ? "LATE" :
-      current === "LATE" ? "ABSENT" :
-      current === "ABSENT" ? null :
-      "PRESENT";
-
-    await applyStatus(student, date, next);
-    setSavingKey(null);
-  };
-
   const applyStatus = async (student: Student, date: Date, next: Status | null) => {
     if (!schoolId) return;
     const key = `${student.id}__${fmtISO(date)}`;
