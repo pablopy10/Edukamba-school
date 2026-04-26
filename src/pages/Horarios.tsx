@@ -223,6 +223,21 @@ const Horarios = () => {
     setOpenForm(true);
   };
 
+  const handleNewAt = (day: number, slot: TimeSlotRow) => {
+    setEditing({
+      classroom_id: classroomFilter !== ALL ? classroomFilter : null,
+      subject_id: subjectFilter !== ALL ? subjectFilter : null,
+      teacher_id: teacherFilter !== ALL ? teacherFilter : null,
+      day_of_week: day,
+      start_time: slot.start_time,
+      end_time: slot.end_time,
+      room: "",
+      shift: shiftView,
+      notes: "",
+    });
+    setOpenForm(true);
+  };
+
   const confirmDelete = async () => {
     if (!deletingId) return;
     const { error } = await supabase.from("schedules").delete().eq("id", deletingId);
@@ -357,6 +372,7 @@ const Horarios = () => {
                       conflicts={conflicts}
                       onEdit={handleEdit}
                       onDelete={(id) => setDeletingId(id)}
+                      onCreate={handleNewAt}
                     />
                   ))}
                 </div>
