@@ -357,8 +357,12 @@ const Notificacoes = () => {
                 return (
                   <li
                     key={n.id}
+                    onClick={() => {
+                      if (n.status === "unread") markRead([n.id], "read");
+                    }}
                     className={cn(
                       "group flex items-start gap-4 px-5 py-4 transition-colors hover:bg-muted/40",
+                      isUnread && "cursor-pointer",
                       isUnread && "bg-pastel-blue/15",
                       isSelected && "bg-pastel-blue/30",
                     )}
@@ -366,6 +370,7 @@ const Notificacoes = () => {
                     <input
                       type="checkbox"
                       checked={isSelected}
+                      onClick={(e) => e.stopPropagation()}
                       onChange={() => toggleSelect(n.id)}
                       className="mt-1.5 h-4 w-4 shrink-0 rounded border-border accent-[hsl(var(--pastel-blue-foreground))]"
                       aria-label={`Seleccionar ${n.title}`}
@@ -384,7 +389,10 @@ const Notificacoes = () => {
                       <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{n.description}</p>
                       <p className="mt-1.5 text-[11px] text-muted-foreground">{n.time}{n.actor ? ` · ${n.actor}` : ""}</p>
                     </div>
-                    <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+                    >
                       {isUnread ? (
                         <button onClick={() => markRead([n.id], "read")} title="Marcar como lida" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground">
                           <Check className="h-4 w-4" strokeWidth={1.75} />
