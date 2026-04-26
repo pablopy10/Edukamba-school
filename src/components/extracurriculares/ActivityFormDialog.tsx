@@ -324,6 +324,39 @@ export function ActivityFormDialog({ open, onOpenChange, schoolId, academicYear,
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
           </div>
+
+          <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+            <Label className="text-sm font-semibold">Inscrição & cobrança</Label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="enrollment_fee">Valor de inscrição (Kz)</Label>
+                <Input
+                  id="enrollment_fee"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.enrollment_fee}
+                  onChange={(e) => setForm({ ...form, enrollment_fee: parseFloat(e.target.value) || 0 })}
+                />
+                <p className="text-[11px] text-muted-foreground">0 = atividade gratuita</p>
+              </div>
+              {form.is_recurring && (
+                <div className="grid gap-2">
+                  <Label>Frequência de cobrança</Label>
+                  <Select
+                    value={form.billing_frequency}
+                    onValueChange={(v) => setForm({ ...form, billing_frequency: v })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unica">Única (uma só cobrança)</SelectItem>
+                      <SelectItem value="mensal">Mensal (durante o período)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         <DialogFooter>
