@@ -61,7 +61,8 @@ const Timesheet = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<EntryStatus | "todos">("todos");
-  const [monthFilter, setMonthFilter] = useState<string>(""); // yyyy-mm
+  const [monthFilter, setMonthFilter] = useState<string>(""); // "1".."12" or ""
+  const [yearFilter, setYearFilter] = useState<string>(""); // "yyyy" or ""
   const [selectedEntry, setSelectedEntry] = useState<TimeEntry | null>(null);
   const [registering, setRegistering] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
@@ -134,10 +135,20 @@ const Timesheet = () => {
         e.employee_name.toLowerCase().includes(search.toLowerCase()) ||
         (e.role ?? "").toLowerCase().includes(search.toLowerCase());
       const matchStatus = statusFilter === "todos" || e.status === statusFilter;
-      const matchMonth = !monthFilter || (e.date && e.date.startsWith(monthFilter));
-      return matchSearch && matchStatus && matchMonth;
+      let matchMonth = true;
+      let matchYear = true;
+      if (e.date) {
+        const [y, m] = e.date.split("-");
+        if (yearFilter) matchYear = y === yearFilter;
+        if (monthFilter) matchMonth = parseInt(m, 10) === parseInt(monthFilter, 10);
+      } else {
+        if (yearFilter || monthFilter) {
+          matchMonth = false;
+        }
+      }
+      return matchSearch && matchStatus && matchMonth && matchYear;
     });
-  }, [entries, search, statusFilter, monthFilter]);
+  }, [entries, search, statusFilter, monthFilter, yearFilter]);
 
   const stats = useMemo(() => {
     const totalHours = entries.reduce((s, e) => s + Number(e.hours_worked || 0), 0);
