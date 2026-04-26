@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Search, MessageSquare, Bell } from "lucide-react";
+import { Search, MessageSquare, Bell, Clock } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +25,7 @@ export const Topbar = () => {
   const [q, setQ] = useState("");
   const { user } = useAuth();
   const [profile, setProfile] = useState<{ full_name: string; role: string | null; avatar_url: string | null } | null>(null);
+  const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
 
   useEffect(() => {
     if (!user?.id) {
@@ -34,11 +35,23 @@ export const Topbar = () => {
     let cancelled = false;
     supabase
       .from("profiles")
-      .select("full_name, role, avatar_url")
+      .select("full_name, role, avatar_url, school_id")
       .eq("id", user.id)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         if (!cancelled && data) setProfile(data);
+        if (!cancelled && data?.school_id) {
+          const { data: school } = await supabase
+            .from("schools")
+            .select("trial_ends_at, subscription_status")
+            .eq("id", data.school_id)
+            .maybeSingle();
+          if (!cancelled && school && school.subscription_status === "trialing") {
+            const ms = new Date(school.trial_ends_at).getTime() - Date.now();
+            const days = Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
+            setTrialDaysLeft(days);
+          }
+        }
       });
     return () => {
       cancelled = true;
@@ -70,6 +83,21 @@ export const Topbar = () => {
       </form>
 
       <div className="flex items-center gap-3">
+        {trialDaysLeft !== null && (
+          <div
+            className={`hidden items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium shadow-soft md:flex ${
+              trialDaysLeft <= 7
+                ? "bg-destructive/10 text-destructive"
+                : "bg-pastel-yellow text-pastel-yellow-foreground"
+            }`}
+            title="Período de avaliação"
+          >
+            <Clock className="h-3.5 w-3.5" />
+            {trialDaysLeft === 0
+              ? "Trial termina hoje"
+              : `${trialDaysLeft} ${trialDaysLeft === 1 ? "dia" : "dias"} de trial`}
+          </div>
+        )}
         <Link
           to="/chat"
           aria-label="Chat"
