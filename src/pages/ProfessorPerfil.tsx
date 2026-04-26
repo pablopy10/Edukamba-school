@@ -105,17 +105,21 @@ const ProfessorPerfil = () => {
   const [classroomsCount, setClassroomsCount] = useState(0);
   const [studentsCount, setStudentsCount] = useState(0);
   const [schoolId, setSchoolId] = useState<string | null>(null);
-  const [classroomOpts, setClassroomOpts] = useState<{ id: string; name: string }[]>([]);
-  const [subjectOpts, setSubjectOpts] = useState<{ id: string; name: string }[]>([]);
-  const [teacherOpts, setTeacherOpts] = useState<{ id: string; name: string }[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [feedbacks, setFeedbacks] = useState<FeedbackRow[]>([]);
+  const [editing, setEditing] = useState<FeedbackRow | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
     const load = async () => {
       setLoading(true);
+      const { data: auth } = await supabase.auth.getUser();
+      if (cancelled) return;
+      setCurrentUserId(auth.user?.id ?? null);
       const { data: t } = await supabase
         .from("teachers")
         .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, is_active, profiles(full_name, phone, avatar_url), subjects(name)")
@@ -157,7 +161,7 @@ const ProfessorPerfil = () => {
           setStudentsCount(0);
         }
 
-        // Load school_id + options for the assessment dialog
+        // Load school_id and current user role + feedbacks for this teacher
         const { data: prof } = await supabase
           .from("profiles")
           .select("school_id")
@@ -166,24 +170,23 @@ const ProfessorPerfil = () => {
         if (cancelled) return;
         const sId = (prof?.school_id as string | null) ?? null;
         setSchoolId(sId);
-        if (sId) {
-          const [crRes, subRes, tcRes] = await Promise.all([
-            supabase.from("classrooms").select("id, name").eq("school_id", sId).order("name"),
-            supabase.from("subjects").select("id, name").eq("school_id", sId).order("name"),
-            supabase
-              .from("teachers")
-              .select("profile_id, profiles(full_name)")
-              .eq("school_id", sId)
-              .not("profile_id", "is", null),
-          ]);
-          if (cancelled) return;
-          setClassroomOpts((crRes.data ?? []) as { id: string; name: string }[]);
-          setSubjectOpts((subRes.data ?? []) as { id: string; name: string }[]);
-          const tOpts = ((tcRes.data ?? []) as Array<{ profile_id: string; profiles: { full_name: string } | null }>)
-            .filter((r) => r.profile_id && r.profiles?.full_name)
-            .map((r) => ({ id: r.profile_id, name: r.profiles!.full_name }));
-          setTeacherOpts(tOpts);
+
+        if (auth.user?.id) {
+          const { data: meProf } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", auth.user.id)
+            .maybeSingle();
+          if (!cancelled) setCurrentUserRole((meProf?.role as string) ?? null);
         }
+
+        const { data: fbData } = await supabase
+          .from("complaints")
+          .select("id, kind, subject, description, severity, status, created_at, reporter_id, reporter:profiles!complaints_reporter_id_fkey(full_name)")
+          .eq("target_profile_id", teacherRow.profile_id)
+          .eq("target_type", "TEACHER")
+          .order("created_at", { ascending: false });
+        if (!cancelled) setFeedbacks((fbData ?? []) as unknown as FeedbackRow[]);
       }
       if (!cancelled) setLoading(false);
     };
