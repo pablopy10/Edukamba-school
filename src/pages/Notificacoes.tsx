@@ -357,8 +357,12 @@ const Notificacoes = () => {
                 return (
                   <li
                     key={n.id}
+                    onClick={() => {
+                      if (n.status === "unread") markRead([n.id], "read");
+                    }}
                     className={cn(
                       "group flex items-start gap-4 px-5 py-4 transition-colors hover:bg-muted/40",
+                      isUnread && "cursor-pointer",
                       isUnread && "bg-pastel-blue/15",
                       isSelected && "bg-pastel-blue/30",
                     )}
@@ -366,6 +370,7 @@ const Notificacoes = () => {
                     <input
                       type="checkbox"
                       checked={isSelected}
+                      onClick={(e) => e.stopPropagation()}
                       onChange={() => toggleSelect(n.id)}
                       className="mt-1.5 h-4 w-4 shrink-0 rounded border-border accent-[hsl(var(--pastel-blue-foreground))]"
                       aria-label={`Seleccionar ${n.title}`}
