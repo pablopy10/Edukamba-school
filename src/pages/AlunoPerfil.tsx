@@ -140,6 +140,13 @@ const AlunoPerfil = () => {
   const [teachers, setTeachers] = useState<{ id: string; full_name: string; subject: string | null; phone: string | null }[]>([]);
   const [fees, setFees] = useState<FeeRow[]>([]);
   const [remindingFeeId, setRemindingFeeId] = useState<string | null>(null);
+  const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [proofDialogFee, setProofDialogFee] = useState<FeeRow | null>(null);
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofMethod, setProofMethod] = useState<string>("transferencia");
+  const [proofNotes, setProofNotes] = useState("");
+  const [proofAmount, setProofAmount] = useState("");
+  const [proofUploading, setProofUploading] = useState(false);
 
   useEffect(() => {
     if (!id) return;
