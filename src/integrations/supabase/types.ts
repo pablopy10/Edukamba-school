@@ -658,6 +658,87 @@ export type Database = {
           },
         ]
       }
+      extracurricular_activities: {
+        Row: {
+          academic_year_id: string | null
+          capacity: number
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          end_date: string | null
+          end_time: string | null
+          id: string
+          is_recurring: boolean
+          location: string | null
+          name: string
+          responsible: string | null
+          school_id: string | null
+          single_date: string | null
+          start_date: string | null
+          start_time: string | null
+          updated_at: string
+          weekdays: number[] | null
+        }
+        Insert: {
+          academic_year_id?: string | null
+          capacity?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          end_time?: string | null
+          id?: string
+          is_recurring?: boolean
+          location?: string | null
+          name: string
+          responsible?: string | null
+          school_id?: string | null
+          single_date?: string | null
+          start_date?: string | null
+          start_time?: string | null
+          updated_at?: string
+          weekdays?: number[] | null
+        }
+        Update: {
+          academic_year_id?: string | null
+          capacity?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          end_time?: string | null
+          id?: string
+          is_recurring?: boolean
+          location?: string | null
+          name?: string
+          responsible?: string | null
+          school_id?: string | null
+          single_date?: string | null
+          start_date?: string | null
+          start_time?: string | null
+          updated_at?: string
+          weekdays?: number[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extracurricular_activities_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extracurricular_activities_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fee_categories: {
         Row: {
           default_amount: number
