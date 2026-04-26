@@ -407,6 +407,100 @@ const Pagamentos = () => {
     return { paid, pending, overdue };
   }, [allFees]);
 
+  const latestPaymentByFee = useMemo(() => {
+    const map = new Map<string, PaymentListRow>();
+    payments.forEach((p) => {
+      if (!p.student_fee_id) return;
+      if (!map.has(p.student_fee_id)) map.set(p.student_fee_id, p);
+    });
+    return map;
+  }, [payments]);
+
+  const pendingValidations = useMemo(() => {
+    return allFees
+      .map((f) => ({ fee: f, payment: latestPaymentByFee.get(f.id) }))
+      .filter((x) => x.payment && x.payment.status === "pendente") as Array<{ fee: FeeListRow; payment: PaymentListRow }>;
+  }, [allFees, latestPaymentByFee]);
+
+  const viewProof = async (path: string) => {
+    const { data, error } = await supabase.storage.from("payment-proofs").createSignedUrl(path, 60);
+    if (error || !data?.signedUrl) {
+      toast({ title: "Erro a abrir comprovativo", description: error?.message ?? "Sem URL", variant: "destructive" });
+      return;
+    }
+    window.open(data.signedUrl, "_blank");
+  };
+
+  const validatePayment = async (fee: FeeListRow, payment: PaymentListRow) => {
+    if (!schoolId) return;
+    setValidatingId(payment.id);
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id ?? null;
+    const { error: payErr } = await supabase
+      .from("payments")
+      .update({ status: "validado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: null })
+      .eq("id", payment.id);
+    if (payErr) {
+      setValidatingId(null);
+      toast({ title: "Erro a validar", description: payErr.message, variant: "destructive" });
+      return;
+    }
+    const { error: feeErr } = await supabase.from("student_fees").update({ is_paid: true }).eq("id", fee.id);
+    if (feeErr) {
+      setValidatingId(null);
+      toast({ title: "Erro a marcar propina", description: feeErr.message, variant: "destructive" });
+      return;
+    }
+    if (fee.student?.parent_id) {
+      const monthLabel = fee.month_index ? monthNames[fee.month_index - 1] : "";
+      await supabase.from("notifications").insert({
+        recipient_id: fee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento validado — ${monthLabel}`.trim(),
+        description: `O pagamento da propina de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
+        category: "pagamento",
+        link: "/financas",
+      });
+    }
+    setValidatingId(null);
+    toast({ title: "Pagamento validado", description: "O encarregado foi notificado." });
+    await fetchAll();
+  };
+
+  const confirmReject = async () => {
+    if (!rejectDialog || !schoolId) return;
+    const payment = rejectDialog;
+    const fee = allFees.find((f) => f.id === payment.student_fee_id);
+    setValidatingId(payment.id);
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id ?? null;
+    const { error } = await supabase
+      .from("payments")
+      .update({ status: "rejeitado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: rejectReason || null })
+      .eq("id", payment.id);
+    if (error) {
+      setValidatingId(null);
+      toast({ title: "Erro a rejeitar", description: error.message, variant: "destructive" });
+      return;
+    }
+    if (fee?.student?.parent_id) {
+      const monthLabel = fee.month_index ? monthNames[fee.month_index - 1] : "";
+      await supabase.from("notifications").insert({
+        recipient_id: fee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento rejeitado — ${monthLabel}`.trim(),
+        description: `O comprovativo de pagamento de ${fee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}.` : ""} Por favor reenvie o comprovativo correto.`,
+        category: "pagamento",
+        link: "/financas",
+      });
+    }
+    setValidatingId(null);
+    setRejectDialog(null);
+    setRejectReason("");
+    toast({ title: "Pagamento rejeitado", description: "O encarregado foi notificado." });
+    await fetchAll();
+  };
+
   const sendReminder = async (fee: FeeListRow) => {
     if (!schoolId) return;
     const parentId = fee.student?.parent_id;
