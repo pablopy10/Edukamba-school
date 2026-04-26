@@ -28,6 +28,8 @@ import Eventos from "./pages/Eventos.tsx";
 import Extracurriculares from "./pages/Extracurriculares.tsx";
 import Pedidos from "./pages/Pedidos.tsx";
 import Material from "./pages/Material.tsx";
+import Pagamentos from "./pages/Pagamentos.tsx";
+import Financas from "./pages/Financas.tsx";
 import Relatorios from "./pages/Relatorios.tsx";
 import Timesheet from "./pages/Timesheet.tsx";
 import Perfil from "./pages/Perfil.tsx";
@@ -72,6 +74,8 @@ const App = () => (
           <Route path="/extracurriculares" element={<ProtectedRoute><Extracurriculares /></ProtectedRoute>} />
           <Route path="/pedidos" element={<ProtectedRoute><Pedidos /></ProtectedRoute>} />
           <Route path="/material" element={<ProtectedRoute><Material /></ProtectedRoute>} />
+          <Route path="/pagamentos" element={<ProtectedRoute><Pagamentos /></ProtectedRoute>} />
+          <Route path="/financas" element={<ProtectedRoute><Financas /></ProtectedRoute>} />
           <Route path="/relatorios" element={<ProtectedRoute><Relatorios /></ProtectedRoute>} />
           <Route path="/timesheet" element={<ProtectedRoute><Timesheet /></ProtectedRoute>} />
           <Route path="/perfil" element={<ProtectedRoute><Perfil /></ProtectedRoute>} />
