@@ -1,7 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
-  Filter,
   Plus,
   Search,
   ChevronLeft,
@@ -15,26 +14,27 @@ import {
   GraduationCap,
   Clock,
   MapPin,
-  MoreHorizontal,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { EventFormDialog, type EventRow } from "@/components/eventos/EventFormDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type EventType = "academico" | "cultural" | "desportivo" | "reuniao" | "comunicado";
 
-type EventItem = {
-  id: string;
-  title: string;
-  type: EventType;
-  date: string; // ISO yyyy-mm-dd
-  startTime: string;
-  endTime: string;
-  location: string;
-  organizer: string;
-  audience: string;
-  description?: string;
-};
-
-const typeMeta: Record<EventType, { label: string; color: string; icon: typeof PartyPopper }> = {
+const typeMeta: Record<string, { label: string; color: string; icon: typeof PartyPopper }> = {
   academico: { label: "Académico", color: "bg-pastel-blue text-pastel-blue-foreground", icon: GraduationCap },
   cultural: { label: "Cultural", color: "bg-pastel-pink text-pastel-pink-foreground", icon: PartyPopper },
   desportivo: { label: "Desportivo", color: "bg-pastel-green text-pastel-green-foreground", icon: Trophy },
@@ -42,41 +42,13 @@ const typeMeta: Record<EventType, { label: string; color: string; icon: typeof P
   comunicado: { label: "Comunicado", color: "bg-pastel-yellow text-pastel-yellow-foreground", icon: Megaphone },
 };
 
-const events: EventItem[] = [
-  { id: "1", title: "Abertura do Ano Letivo", type: "academico", date: "2026-04-27", startTime: "09:00", endTime: "11:00", location: "Auditório Principal", organizer: "Direção", audience: "Toda a escola" },
-  { id: "2", title: "Festival de Música", type: "cultural", date: "2026-04-29", startTime: "18:00", endTime: "22:00", location: "Pátio Central", organizer: "Clube de Música", audience: "Comunidade escolar" },
-  { id: "3", title: "Torneio Inter-turmas de Futebol", type: "desportivo", date: "2026-05-02", startTime: "14:00", endTime: "18:00", location: "Campo Desportivo", organizer: "Departamento de E.F.", audience: "9º ao 12º ano" },
-  { id: "4", title: "Reunião de Pais — 10º A", type: "reuniao", date: "2026-05-05", startTime: "18:30", endTime: "20:00", location: "Sala 12", organizer: "Diretora de Turma", audience: "Encarregados 10º A" },
-  { id: "5", title: "Comunicado: Pausa Letiva", type: "comunicado", date: "2026-05-07", startTime: "08:00", endTime: "08:30", location: "Online", organizer: "Direção", audience: "Toda a escola" },
-  { id: "6", title: "Feira das Ciências", type: "academico", date: "2026-05-09", startTime: "10:00", endTime: "17:00", location: "Pavilhão Multiusos", organizer: "Dep. Ciências", audience: "Toda a escola" },
-  { id: "7", title: "Workshop de Robótica", type: "academico", date: "2026-05-12", startTime: "14:00", endTime: "16:00", location: "Lab 02", organizer: "Clube de Robótica", audience: "9º ao 12º ano" },
-  { id: "8", title: "Concerto de Primavera", type: "cultural", date: "2026-05-14", startTime: "19:30", endTime: "21:30", location: "Auditório Principal", organizer: "Coro da Escola", audience: "Comunidade escolar" },
-  { id: "9", title: "Reunião Pedagógica", type: "reuniao", date: "2026-05-16", startTime: "15:00", endTime: "17:00", location: "Sala de Professores", organizer: "Direção Pedagógica", audience: "Professores" },
-  { id: "10", title: "Olimpíadas de Matemática", type: "academico", date: "2026-05-18", startTime: "09:00", endTime: "12:00", location: "Auditório", organizer: "Dep. Matemática", audience: "10º ao 12º ano" },
-  { id: "11", title: "Maratona Solidária", type: "desportivo", date: "2026-05-21", startTime: "08:00", endTime: "13:00", location: "Estádio Municipal", organizer: "Associação de Estudantes", audience: "Comunidade" },
-  { id: "12", title: "Exposição de Artes", type: "cultural", date: "2026-05-23", startTime: "10:00", endTime: "18:00", location: "Galeria da Escola", organizer: "Dep. Artes", audience: "Toda a escola" },
-  { id: "13", title: "Comunicado: Inscrições", type: "comunicado", date: "2026-05-26", startTime: "09:00", endTime: "09:30", location: "Online", organizer: "Secretaria", audience: "Encarregados" },
-  { id: "14", title: "Reunião de Avaliação", type: "reuniao", date: "2026-05-28", startTime: "14:00", endTime: "18:00", location: "Sala de Reuniões", organizer: "Conselho de Turma", audience: "Professores" },
-];
-
 type View = "calendario" | "lista";
 type TypeFilter = EventType | "all";
 
 const monthNames = [
-  "Janeiro",
-  "Fevereiro",
-  "Março",
-  "Abril",
-  "Maio",
-  "Junho",
-  "Julho",
-  "Agosto",
-  "Setembro",
-  "Outubro",
-  "Novembro",
-  "Dezembro",
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
-
 const weekdayLabels = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
 const formatDateLong = (iso: string) => {
@@ -84,12 +56,62 @@ const formatDateLong = (iso: string) => {
   return `${d.getDate().toString().padStart(2, "0")} ${monthNames[d.getMonth()].slice(0, 3)} ${d.getFullYear()}`;
 };
 
+const formatTime = (t: string | null) => (t ? t.slice(0, 5) : "");
+
 const Eventos = () => {
+  const [schoolId, setSchoolId] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+
   const [view, setView] = useState<View>("calendario");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [search, setSearch] = useState("");
-  const [cursor, setCursor] = useState(() => new Date(2026, 3, 1));
+  const [cursor, setCursor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  const [events, setEvents] = useState<EventRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<EventRow | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const canEdit = role === "ADMIN" || role === "TEACHER";
+  const canDelete = role === "ADMIN";
+
+  const loadEvents = async () => {
+    if (!schoolId) return;
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("events")
+      .select("*")
+      .eq("school_id", schoolId)
+      .order("event_date", { ascending: true });
+    setLoading(false);
+    if (error) {
+      toast.error("Erro ao carregar eventos: " + error.message);
+      return;
+    }
+    setEvents((data ?? []) as EventRow[]);
+  };
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("school_id, role")
+        .eq("id", user.id)
+        .maybeSingle();
+      setSchoolId(profile?.school_id ?? null);
+      setRole(profile?.role ?? null);
+    })();
+  }, []);
+
+  useEffect(() => {
+    loadEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schoolId]);
 
   const filtered = useMemo(() => {
     return events.filter((e) => {
@@ -98,21 +120,41 @@ const Eventos = () => {
       const matchesSearch =
         !q ||
         e.title.toLowerCase().includes(q) ||
-        e.organizer.toLowerCase().includes(q) ||
-        e.audience.toLowerCase().includes(q) ||
-        e.location.toLowerCase().includes(q);
+        (e.organizer ?? "").toLowerCase().includes(q) ||
+        (e.audience ?? "").toLowerCase().includes(q) ||
+        (e.location ?? "").toLowerCase().includes(q);
       return matchesType && matchesSearch;
     });
-  }, [typeFilter, search]);
+  }, [events, typeFilter, search]);
 
-  const stats = useMemo(() => {
-    return {
-      total: filtered.length,
-      academicos: filtered.filter((e) => e.type === "academico").length,
-      culturais: filtered.filter((e) => e.type === "cultural").length,
-      desportivos: filtered.filter((e) => e.type === "desportivo").length,
-    };
-  }, [filtered]);
+  const stats = useMemo(() => ({
+    total: filtered.length,
+    academicos: filtered.filter((e) => e.type === "academico").length,
+    culturais: filtered.filter((e) => e.type === "cultural").length,
+    desportivos: filtered.filter((e) => e.type === "desportivo").length,
+  }), [filtered]);
+
+  const handleNew = () => {
+    setEditing(null);
+    setDialogOpen(true);
+  };
+
+  const handleEdit = (ev: EventRow) => {
+    setEditing(ev);
+    setDialogOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    const { error } = await supabase.from("events").delete().eq("id", deleteId);
+    if (error) {
+      toast.error("Erro ao remover: " + error.message);
+    } else {
+      toast.success("Evento removido.");
+      loadEvents();
+    }
+    setDeleteId(null);
+  };
 
   return (
     <DashboardLayout>
@@ -152,14 +194,15 @@ const Eventos = () => {
               </button>
             </div>
 
-            <button className="flex h-11 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent">
-              <Filter className="h-4 w-4" strokeWidth={1.75} />
-              Filtrar
-            </button>
-            <button className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
-              <Plus className="h-4 w-4" strokeWidth={2.25} />
-              Novo Evento
-            </button>
+            {canEdit && (
+              <button
+                onClick={handleNew}
+                className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
+              >
+                <Plus className="h-4 w-4" strokeWidth={2.25} />
+                Novo Evento
+              </button>
+            )}
           </div>
         </div>
 
@@ -206,18 +249,56 @@ const Eventos = () => {
           </div>
         </div>
 
-        {view === "calendario" ? (
+        {loading ? (
+          <div className="rounded-2xl bg-card p-12 text-center text-sm text-muted-foreground shadow-card">
+            A carregar eventos...
+          </div>
+        ) : view === "calendario" ? (
           <CalendarView
             cursor={cursor}
             setCursor={setCursor}
             events={filtered}
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
+            canEdit={canEdit}
+            canDelete={canDelete}
+            onEdit={handleEdit}
+            onDelete={(id) => setDeleteId(id)}
           />
         ) : (
-          <ListView events={filtered} />
+          <ListView
+            events={filtered}
+            canEdit={canEdit}
+            canDelete={canDelete}
+            onEdit={handleEdit}
+            onDelete={(id) => setDeleteId(id)}
+          />
         )}
       </div>
+
+      <EventFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        schoolId={schoolId}
+        event={editing}
+        defaultDate={selectedDate}
+        onSaved={loadEvents}
+      />
+
+      <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover evento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>Remover</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 };
@@ -251,12 +332,20 @@ const CalendarView = ({
   events: items,
   selectedDate,
   setSelectedDate,
+  canEdit,
+  canDelete,
+  onEdit,
+  onDelete,
 }: {
   cursor: Date;
   setCursor: (d: Date) => void;
-  events: EventItem[];
+  events: EventRow[];
   selectedDate: string | null;
   setSelectedDate: (d: string | null) => void;
+  canEdit: boolean;
+  canDelete: boolean;
+  onEdit: (e: EventRow) => void;
+  onDelete: (id: string) => void;
 }) => {
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -275,11 +364,11 @@ const CalendarView = ({
   while (cells.length % 7 !== 0) cells.push({ date: null, iso: null });
 
   const eventsByDate = useMemo(() => {
-    const map = new Map<string, EventItem[]>();
+    const map = new Map<string, EventRow[]>();
     items.forEach((e) => {
-      const arr = map.get(e.date) ?? [];
+      const arr = map.get(e.event_date) ?? [];
       arr.push(e);
-      map.set(e.date, arr);
+      map.set(e.event_date, arr);
     });
     return map;
   }, [items]);
@@ -371,7 +460,7 @@ const CalendarView = ({
                         key={e.id}
                         className={cn(
                           "truncate rounded-md px-1.5 py-0.5 text-[10px] font-semibold",
-                          typeMeta[e.type].color,
+                          (typeMeta[e.type] ?? typeMeta.academico).color,
                         )}
                       >
                         {e.title}
@@ -408,36 +497,63 @@ const CalendarView = ({
 
         <div className="flex flex-col gap-3">
           {selectedEvents.map((e) => {
-            const Icon = typeMeta[e.type].icon;
+            const meta = typeMeta[e.type] ?? typeMeta.academico;
+            const Icon = meta.icon;
             return (
               <div key={e.id} className="rounded-xl border border-border bg-background p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span className={cn("flex h-8 w-8 items-center justify-center rounded-full", typeMeta[e.type].color)}>
+                    <span className={cn("flex h-8 w-8 items-center justify-center rounded-full", meta.color)}>
                       <Icon className="h-4 w-4" strokeWidth={2} />
                     </span>
                     <div>
                       <p className="text-sm font-bold text-foreground">{e.title}</p>
-                      <p className="text-xs text-muted-foreground">{e.organizer}</p>
+                      {e.organizer && <p className="text-xs text-muted-foreground">{e.organizer}</p>}
                     </div>
                   </div>
-                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", typeMeta[e.type].color)}>
-                    {typeMeta[e.type].label}
+                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", meta.color)}>
+                    {meta.label}
                   </span>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="h-3 w-3" strokeWidth={1.75} />
-                    {e.startTime} – {e.endTime}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <MapPin className="h-3 w-3" strokeWidth={1.75} />
-                    {e.location}
-                  </span>
+                  {(e.start_time || e.end_time) && (
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="h-3 w-3" strokeWidth={1.75} />
+                      {formatTime(e.start_time)}{e.end_time ? ` – ${formatTime(e.end_time)}` : ""}
+                    </span>
+                  )}
+                  {e.location && (
+                    <span className="inline-flex items-center gap-1">
+                      <MapPin className="h-3 w-3" strokeWidth={1.75} />
+                      {e.location}
+                    </span>
+                  )}
                 </div>
-                <p className="mt-2 text-[11px] text-muted-foreground">
-                  Público: <span className="font-medium text-foreground">{e.audience}</span>
-                </p>
+                {e.audience && (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Público: <span className="font-medium text-foreground">{e.audience}</span>
+                  </p>
+                )}
+                {(canEdit || canDelete) && (
+                  <div className="mt-3 flex gap-2">
+                    {canEdit && (
+                      <button
+                        onClick={() => onEdit(e)}
+                        className="inline-flex h-7 items-center gap-1 rounded-full bg-muted px-3 text-[11px] font-medium text-foreground hover:bg-accent"
+                      >
+                        <Pencil className="h-3 w-3" /> Editar
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        onClick={() => onDelete(e.id)}
+                        className="inline-flex h-7 items-center gap-1 rounded-full bg-destructive/10 px-3 text-[11px] font-medium text-destructive hover:bg-destructive/20"
+                      >
+                        <Trash2 className="h-3 w-3" /> Remover
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -448,8 +564,20 @@ const CalendarView = ({
 };
 
 /* ======================= List View ======================= */
-const ListView = ({ events: items }: { events: EventItem[] }) => {
-  const sorted = [...items].sort((a, b) => a.date.localeCompare(b.date));
+const ListView = ({
+  events: items,
+  canEdit,
+  canDelete,
+  onEdit,
+  onDelete,
+}: {
+  events: EventRow[];
+  canEdit: boolean;
+  canDelete: boolean;
+  onEdit: (e: EventRow) => void;
+  onDelete: (id: string) => void;
+}) => {
+  const sorted = [...items].sort((a, b) => a.event_date.localeCompare(b.event_date));
 
   return (
     <div className="overflow-hidden rounded-2xl bg-card shadow-card">
@@ -467,42 +595,62 @@ const ListView = ({ events: items }: { events: EventItem[] }) => {
               <th className="px-6 py-3">Local</th>
               <th className="px-6 py-3">Organizador</th>
               <th className="px-6 py-3">Público</th>
-              <th className="px-6 py-3" />
+              <th className="px-6 py-3 text-right">Ações</th>
             </tr>
           </thead>
           <tbody>
             {sorted.map((e) => {
-              const Icon = typeMeta[e.type].icon;
+              const meta = typeMeta[e.type] ?? typeMeta.academico;
+              const Icon = meta.icon;
               return (
                 <tr key={e.id} className="border-b border-border/60 text-sm transition-colors hover:bg-muted/30">
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
-                      <span className="font-semibold text-foreground">{formatDateLong(e.date)}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {e.startTime} – {e.endTime}
-                      </span>
+                      <span className="font-semibold text-foreground">{formatDateLong(e.event_date)}</span>
+                      {(e.start_time || e.end_time) && (
+                        <span className="text-xs text-muted-foreground">
+                          {formatTime(e.start_time)}{e.end_time ? ` – ${formatTime(e.end_time)}` : ""}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <span className={cn("flex h-9 w-9 items-center justify-center rounded-full", typeMeta[e.type].color)}>
+                      <span className={cn("flex h-9 w-9 items-center justify-center rounded-full", meta.color)}>
                         <Icon className="h-4 w-4" strokeWidth={2} />
                       </span>
                       <p className="font-semibold text-foreground">{e.title}</p>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={cn("rounded-full px-3 py-1 text-xs font-medium", typeMeta[e.type].color)}>
-                      {typeMeta[e.type].label}
+                    <span className={cn("rounded-full px-3 py-1 text-xs font-medium", meta.color)}>
+                      {meta.label}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-muted-foreground">{e.location}</td>
-                  <td className="px-6 py-4 text-muted-foreground">{e.organizer}</td>
-                  <td className="px-6 py-4 text-muted-foreground">{e.audience}</td>
-                  <td className="px-6 py-4 text-right">
-                    <button className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
-                      <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} />
-                    </button>
+                  <td className="px-6 py-4 text-muted-foreground">{e.location ?? "—"}</td>
+                  <td className="px-6 py-4 text-muted-foreground">{e.organizer ?? "—"}</td>
+                  <td className="px-6 py-4 text-muted-foreground">{e.audience ?? "—"}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex justify-end gap-1">
+                      {canEdit && (
+                        <button
+                          onClick={() => onEdit(e)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          title="Editar"
+                        >
+                          <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          onClick={() => onDelete(e.id)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                          title="Remover"
+                        >
+                          <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );

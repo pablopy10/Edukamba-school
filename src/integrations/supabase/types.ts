@@ -599,6 +599,65 @@ export type Database = {
           },
         ]
       }
+      events: {
+        Row: {
+          audience: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          end_time: string | null
+          event_date: string
+          id: string
+          location: string | null
+          organizer: string | null
+          school_id: string | null
+          start_time: string | null
+          title: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          audience?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_time?: string | null
+          event_date: string
+          id?: string
+          location?: string | null
+          organizer?: string | null
+          school_id?: string | null
+          start_time?: string | null
+          title: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          audience?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_time?: string | null
+          event_date?: string
+          id?: string
+          location?: string | null
+          organizer?: string | null
+          school_id?: string | null
+          start_time?: string | null
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fee_categories: {
         Row: {
           default_amount: number
