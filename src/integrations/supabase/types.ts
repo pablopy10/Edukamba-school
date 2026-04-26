@@ -1625,6 +1625,84 @@ export type Database = {
           },
         ]
       }
+      time_entries: {
+        Row: {
+          check_in: string | null
+          check_in_address: string | null
+          check_in_lat: number | null
+          check_in_lng: number | null
+          check_out: string | null
+          check_out_address: string | null
+          check_out_lat: number | null
+          check_out_lng: number | null
+          created_at: string
+          date: string
+          employee_name: string
+          hours_worked: number
+          id: string
+          profile_id: string | null
+          role: string | null
+          school_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          check_in?: string | null
+          check_in_address?: string | null
+          check_in_lat?: number | null
+          check_in_lng?: number | null
+          check_out?: string | null
+          check_out_address?: string | null
+          check_out_lat?: number | null
+          check_out_lng?: number | null
+          created_at?: string
+          date?: string
+          employee_name: string
+          hours_worked?: number
+          id?: string
+          profile_id?: string | null
+          role?: string | null
+          school_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          check_in?: string | null
+          check_in_address?: string | null
+          check_in_lat?: number | null
+          check_in_lng?: number | null
+          check_out?: string | null
+          check_out_address?: string | null
+          check_out_lat?: number | null
+          check_out_lng?: number | null
+          created_at?: string
+          date?: string
+          employee_name?: string
+          hours_worked?: number
+          id?: string
+          profile_id?: string | null
+          role?: string | null
+          school_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_entries_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_entries_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
