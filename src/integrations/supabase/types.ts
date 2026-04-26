@@ -197,31 +197,46 @@ export type Database = {
       }
       attendance: {
         Row: {
+          classroom_id: string | null
+          created_at: string
           date: string
           id: string
           notes: string | null
           schedule_id: string | null
+          school_id: string | null
+          status: Database["public"]["Enums"]["attendance_status"]
           student_id: string | null
           sync_id: string | null
           teacher_id: string | null
+          updated_at: string
         }
         Insert: {
+          classroom_id?: string | null
+          created_at?: string
           date?: string
           id?: string
           notes?: string | null
           schedule_id?: string | null
+          school_id?: string | null
+          status?: Database["public"]["Enums"]["attendance_status"]
           student_id?: string | null
           sync_id?: string | null
           teacher_id?: string | null
+          updated_at?: string
         }
         Update: {
+          classroom_id?: string | null
+          created_at?: string
           date?: string
           id?: string
           notes?: string | null
           schedule_id?: string | null
+          school_id?: string | null
+          status?: Database["public"]["Enums"]["attendance_status"]
           student_id?: string | null
           sync_id?: string | null
           teacher_id?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
