@@ -1,38 +1,18 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Search, Filter, Plus, MoreHorizontal, Mail, Phone, Pencil, Trash2 } from "lucide-react";
+import { Search, Plus, Mail, Pencil, Trash2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { toast } from "@/hooks/use-toast";
+import { GuardianFormDialog, GuardianRow } from "@/components/educadores/GuardianFormDialog";
 
-type Relationship = "Pai" | "Mãe" | "Tio(a)" | "Tutor(a)" | "Avô/Avó";
+type ClassroomOpt = { id: string; name: string };
+type StudentOpt = { id: string; full_name: string; classroom_id: string | null; parent_id: string | null };
 
-type Guardian = {
-  id: string;
-  name: string;
-  email: string;
-  guardianId: string;
-  student: string;
-  studentClass: string;
-  relationship: Relationship;
-  occupation: string;
-  phone: string;
-  initials: string;
-  avatarColor: "lilac" | "blue" | "yellow" | "green" | "pink";
-};
-
-const guardians: Guardian[] = [
-  { id: "1", name: "João Miller", email: "jmiller@gmail.com", guardianId: "EDU-2025-001", student: "Sara Miller", studentClass: "10º A", relationship: "Pai", occupation: "Engenheiro", phone: "(244) 925 101 010", initials: "JM", avatarColor: "blue" },
-  { id: "2", name: "Patrícia Brown", email: "pbrown@gmail.com", guardianId: "EDU-2025-002", student: "Ethan Brown", studentClass: "12º B", relationship: "Mãe", occupation: "Médica", phone: "(244) 925 202 020", initials: "PB", avatarColor: "pink" },
-  { id: "3", name: "Ricardo Smith", email: "rsmith@gmail.com", guardianId: "EDU-2025-003", student: "Olivia Smith", studentClass: "9º B", relationship: "Pai", occupation: "Advogado", phone: "(244) 925 303 030", initials: "RS", avatarColor: "yellow" },
-  { id: "4", name: "Fátima Johnson", email: "fjohnson@gmail.com", guardianId: "EDU-2025-004", student: "Lucas Johnson", studentClass: "11º A", relationship: "Mãe", occupation: "Professora", phone: "(244) 925 404 040", initials: "FJ", avatarColor: "green" },
-  { id: "5", name: "Hugo Williams", email: "hwilliams@gmail.com", guardianId: "EDU-2025-005", student: "Mia Williams", studentClass: "8º B", relationship: "Tutor(a)", occupation: "Empresário", phone: "(244) 925 505 050", initials: "HW", avatarColor: "lilac" },
-  { id: "6", name: "Carla Davis", email: "cdavis@gmail.com", guardianId: "EDU-2025-006", student: "Noah Davis", studentClass: "9º C", relationship: "Mãe", occupation: "Contabilista", phone: "(244) 925 606 060", initials: "CD", avatarColor: "pink" },
-  { id: "7", name: "Manuel Wilson", email: "mwilson@gmail.com", guardianId: "EDU-2025-007", student: "Emma Wilson", studentClass: "7º C", relationship: "Pai", occupation: "Arquitecto", phone: "(244) 925 707 070", initials: "MW", avatarColor: "blue" },
-  { id: "8", name: "Luísa Thompson", email: "lthompson@gmail.com", guardianId: "EDU-2025-008", student: "Liam Thompson", studentClass: "10º B", relationship: "Avô/Avó", occupation: "Reformada", phone: "(244) 925 808 080", initials: "LT", avatarColor: "yellow" },
-  { id: "9", name: "Carlos Garcia", email: "cgarcia@gmail.com", guardianId: "EDU-2025-009", student: "Ava Garcia", studentClass: "11º A", relationship: "Tio(a)", occupation: "Comerciante", phone: "(244) 925 909 090", initials: "CG", avatarColor: "green" },
-  { id: "10", name: "Beatriz Silva", email: "bsilva@gmail.com", guardianId: "EDU-2025-010", student: "Mateus Silva", studentClass: "7º B", relationship: "Mãe", occupation: "Enfermeira", phone: "(244) 925 111 222", initials: "BS", avatarColor: "lilac" },
-];
-
-const avatarStyles: Record<Guardian["avatarColor"], string> = {
+const avatarStyles: Record<string, string> = {
   lilac: "bg-pastel-lilac text-pastel-lilac-foreground",
   blue: "bg-pastel-blue text-pastel-blue-foreground",
   yellow: "bg-pastel-yellow text-pastel-yellow-foreground",
@@ -40,28 +20,107 @@ const avatarStyles: Record<Guardian["avatarColor"], string> = {
   pink: "bg-pastel-pink text-pastel-pink-foreground",
 };
 
-const relationshipStyles: Record<Relationship, string> = {
-  Pai: "bg-pastel-blue text-pastel-blue-foreground",
-  Mãe: "bg-pastel-pink text-pastel-pink-foreground",
-  "Tio(a)": "bg-pastel-yellow text-pastel-yellow-foreground",
-  "Tutor(a)": "bg-pastel-lilac text-pastel-lilac-foreground",
-  "Avô/Avó": "bg-pastel-green text-pastel-green-foreground",
-};
+const palette = ["blue", "pink", "yellow", "green", "lilac"] as const;
+const colorFor = (id: string) => palette[(id.charCodeAt(0) + id.charCodeAt(id.length - 1)) % palette.length];
+const initialsOf = (name: string) =>
+  name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 
 const Educadores = () => {
-  const [selected, setSelected] = useState<string[]>(["2"]);
+  const navigate = useNavigate();
+  const [guardians, setGuardians] = useState<GuardianRow[]>([]);
+  const [classrooms, setClassrooms] = useState<ClassroomOpt[]>([]);
+  const [students, setStudents] = useState<StudentOpt[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterClassroom, setFilterClassroom] = useState<string>("all");
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<GuardianRow | null>(null);
+  const [deleting, setDeleting] = useState<GuardianRow | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    const [{ data: profs, error: pErr }, { data: stus }, { data: clas }] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id, full_name, phone")
+        .eq("role", "PARENT")
+        .order("full_name", { ascending: true }),
+      supabase.from("students").select("id, full_name, classroom_id, parent_id"),
+      supabase.from("classrooms").select("id, name").order("name"),
+    ]);
+    if (pErr) {
+      toast({ title: "Erro a carregar educadores", description: pErr.message, variant: "destructive" });
+    }
+    const studentsArr = (stus ?? []) as StudentOpt[];
+    const classroomsArr = (clas ?? []) as ClassroomOpt[];
+    const rows: GuardianRow[] = (profs ?? []).map((p: any) => {
+      const s = studentsArr.find((st) => st.parent_id === p.id) ?? null;
+      return {
+        profile_id: p.id,
+        full_name: p.full_name,
+        phone: p.phone,
+        student_id: s?.id ?? null,
+        student_name: s?.full_name ?? null,
+        classroom_id: s?.classroom_id ?? null,
+      };
+    });
+    setGuardians(rows);
+    setStudents(studentsArr);
+    setClassrooms(classroomsArr);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const classroomName = (id: string | null) =>
+    classrooms.find((c) => c.id === id)?.name ?? "—";
+
+  const filtered = useMemo(() => {
+    return guardians.filter((g) => {
+      const matchSearch = !search || [g.full_name, g.phone ?? "", g.student_name ?? "", classroomName(g.classroom_id)]
+        .some((f) => f.toLowerCase().includes(search.toLowerCase()));
+      const matchClass = filterClassroom === "all" || g.classroom_id === filterClassroom;
+      return matchSearch && matchClass;
+    });
+  }, [guardians, search, filterClassroom, classrooms]);
 
   const toggle = (id: string) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
-  const allSelected = selected.length === guardians.length;
-  const toggleAll = () => setSelected(allSelected ? [] : guardians.map((g) => g.id));
+  const allSelected = filtered.length > 0 && selected.length === filtered.length;
+  const toggleAll = () => setSelected(allSelected ? [] : filtered.map((g) => g.profile_id));
 
-  const filtered = guardians.filter((g) =>
-    [g.name, g.email, g.guardianId, g.student, g.studentClass].some((f) =>
-      f.toLowerCase().includes(search.toLowerCase()),
-    ),
-  );
+  const handleDelete = async () => {
+    if (!deleting) return;
+    // Unlink any student first
+    if (deleting.student_id) {
+      await supabase.from("students").update({ parent_id: null }).eq("parent_id", deleting.profile_id);
+    }
+    // We can't delete auth users from client; demote profile so it stops appearing as guardian.
+    const { error } = await supabase
+      .from("profiles")
+      .update({ is_active: false })
+      .eq("id", deleting.profile_id);
+    if (error) {
+      toast({ title: "Erro a remover", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Educador removido", description: "A conta foi desactivada." });
+      setDeleting(null);
+      load();
+    }
+  };
+
+  const openChat = (profileId: string) => {
+    navigate(`/chat?to=${profileId}`);
+  };
+
+  const stats = useMemo(() => ({
+    total: guardians.length,
+    withStudent: guardians.filter((g) => g.student_id).length,
+    withoutStudent: guardians.filter((g) => !g.student_id).length,
+    classes: new Set(guardians.map((g) => g.classroom_id).filter(Boolean)).size,
+  }), [guardians]);
 
   return (
     <DashboardLayout>
@@ -71,7 +130,7 @@ const Educadores = () => {
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Educadores</h1>
             <p className="text-sm text-muted-foreground">Faça a gestão dos encarregados de educação dos alunos.</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -82,23 +141,43 @@ const Educadores = () => {
                 className="h-11 w-72 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             </div>
-            <button className="flex h-11 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent">
-              <Filter className="h-4 w-4" strokeWidth={1.75} />
-              Filtrar
-            </button>
-            <button className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
+            <button
+              onClick={() => { setEditing(null); setFormOpen(true); }}
+              className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
               <Plus className="h-4 w-4" strokeWidth={2.25} />
               Novo Educador
             </button>
           </div>
         </div>
 
+        {/* Filters */}
+        <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card">
+          <div className="min-w-[220px] flex-1">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Turma</label>
+            <Select value={filterClassroom} onValueChange={setFilterClassroom}>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as turmas</SelectItem>
+                {classrooms.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {filterClassroom !== "all" && (
+            <button
+              onClick={() => setFilterClassroom("all")}
+              className="h-10 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground hover:bg-muted"
+            >Limpar filtros</button>
+          )}
+        </div>
+
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
-            { label: "Total de Educadores", value: "1.142", color: "bg-pastel-blue text-pastel-blue-foreground" },
-            { label: "Pais", value: "486", color: "bg-pastel-blue text-pastel-blue-foreground" },
-            { label: "Mães", value: "562", color: "bg-pastel-pink text-pastel-pink-foreground" },
-            { label: "Outros Tutores", value: "94", color: "bg-pastel-lilac text-pastel-lilac-foreground" },
+            { label: "Total de Educadores", value: String(stats.total), color: "bg-pastel-blue text-pastel-blue-foreground" },
+            { label: "Com aluno associado", value: String(stats.withStudent), color: "bg-pastel-green text-pastel-green-foreground" },
+            { label: "Sem aluno", value: String(stats.withoutStudent), color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+            { label: "Turmas representadas", value: String(stats.classes), color: "bg-pastel-lilac text-pastel-lilac-foreground" },
           ].map((stat) => (
             <div key={stat.label} className="rounded-2xl bg-card p-5 shadow-card">
               <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", stat.color)}>
@@ -115,9 +194,6 @@ const Educadores = () => {
             {selected.length > 0 && (
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-muted-foreground">{selected.length} selecionados</span>
-                <button className="rounded-full bg-pastel-pink px-3 py-1.5 text-xs font-medium text-pastel-pink-foreground">
-                  Eliminar
-                </button>
               </div>
             )}
           </div>
@@ -135,20 +211,30 @@ const Educadores = () => {
                     />
                   </th>
                   <th className="py-4 pr-4 font-semibold">Nome do Educador</th>
-                  <th className="py-4 pr-4 font-semibold">ID</th>
                   <th className="py-4 pr-4 font-semibold">Aluno</th>
                   <th className="py-4 pr-4 font-semibold">Turma</th>
-                  <th className="py-4 pr-4 font-semibold">Relação</th>
                   <th className="py-4 pr-4 font-semibold">Telefone</th>
                   <th className="py-4 pr-5 font-semibold text-right">Acções</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((g) => {
-                  const isSelected = selected.includes(g.id);
+                {loading && (
+                  <tr><td colSpan={6} className="py-10 text-center text-muted-foreground">
+                    <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                  </td></tr>
+                )}
+                {!loading && filtered.length === 0 && (
+                  <tr><td colSpan={6} className="py-10 text-center text-muted-foreground">
+                    Nenhum educador encontrado.
+                  </td></tr>
+                )}
+                {!loading && filtered.map((g) => {
+                  const isSelected = selected.includes(g.profile_id);
+                  const initials = initialsOf(g.full_name) || "??";
+                  const color = colorFor(g.profile_id);
                   return (
                     <tr
-                      key={g.id}
+                      key={g.profile_id}
                       className={cn(
                         "border-b border-border last:border-0 transition-colors",
                         isSelected ? "bg-pastel-blue/15" : "hover:bg-muted/40",
@@ -158,50 +244,38 @@ const Educadores = () => {
                         <input
                           type="checkbox"
                           checked={isSelected}
-                          onChange={() => toggle(g.id)}
+                          onChange={() => toggle(g.profile_id)}
                           className="h-4 w-4 cursor-pointer rounded border-border accent-pastel-blue-foreground"
                         />
                       </td>
                       <td className="py-4 pr-4">
                         <div className="flex items-center gap-3">
-                          <div className={cn("flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold", avatarStyles[g.avatarColor])}>
-                            {g.initials}
+                          <div className={cn("flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold", avatarStyles[color])}>
+                            {initials}
                           </div>
                           <div>
-                            <p className="font-semibold text-foreground">{g.name}</p>
-                            <p className="text-xs text-muted-foreground">{g.email}</p>
+                            <p className="font-semibold text-foreground">{g.full_name}</p>
+                            <p className="text-xs text-muted-foreground">{g.phone ?? ""}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="py-4 pr-4 text-foreground">{g.guardianId}</td>
-                      <td className="py-4 pr-4 text-foreground">{g.student}</td>
+                      <td className="py-4 pr-4 text-foreground">{g.student_name ?? "—"}</td>
                       <td className="py-4 pr-4">
-                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{g.studentClass}</span>
+                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{classroomName(g.classroom_id)}</span>
                       </td>
                       <td className="py-4 pr-4">
-                        <span className={cn("rounded-full px-3 py-1 text-xs font-medium", relationshipStyles[g.relationship])}>
-                          {g.relationship}
-                        </span>
-                      </td>
-                      <td className="py-4 pr-4">
-                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{g.phone}</span>
+                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{g.phone ?? "—"}</span>
                       </td>
                       <td className="py-4 pr-5">
                         <div className="flex items-center justify-end gap-1">
-                          <button title="Email" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/40 hover:text-pastel-blue-foreground">
+                          <button onClick={() => openChat(g.profile_id)} title="Conversar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/40 hover:text-pastel-blue-foreground">
                             <Mail className="h-4 w-4" strokeWidth={1.75} />
                           </button>
-                          <button title="Telefone" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-green/40 hover:text-pastel-green-foreground">
-                            <Phone className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                          <button title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
+                          <button onClick={() => { setEditing(g); setFormOpen(true); }} title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
                             <Pencil className="h-4 w-4" strokeWidth={1.75} />
                           </button>
-                          <button title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
+                          <button onClick={() => setDeleting(g)} title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
                             <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                          <button title="Mais" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted">
-                            <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} />
                           </button>
                         </div>
                       </td>
@@ -214,28 +288,37 @@ const Educadores = () => {
 
           <div className="flex flex-col items-center justify-between gap-3 border-t border-border p-5 sm:flex-row">
             <p className="text-xs text-muted-foreground">
-              A mostrar 1–{filtered.length} de {guardians.length} educadores
+              A mostrar {filtered.length} de {guardians.length} educadores
             </p>
-            <div className="flex items-center gap-2">
-              <button className="h-9 rounded-full border border-border bg-card px-4 text-xs font-medium text-foreground transition-colors hover:bg-accent">Anterior</button>
-              {[1, 2, 3, 4].map((p) => (
-                <button
-                  key={p}
-                  className={cn(
-                    "h-9 w-9 rounded-full text-xs font-semibold transition-colors",
-                    p === 1
-                      ? "bg-pastel-blue text-pastel-blue-foreground shadow-soft"
-                      : "text-muted-foreground hover:bg-muted",
-                  )}
-                >
-                  {p}
-                </button>
-              ))}
-              <button className="h-9 rounded-full border border-border bg-card px-4 text-xs font-medium text-foreground transition-colors hover:bg-accent">Seguinte</button>
-            </div>
           </div>
         </div>
       </div>
+
+      <GuardianFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        students={students.map((s) => ({ id: s.id, full_name: s.full_name }))}
+        guardian={editing}
+        onSaved={load}
+      />
+
+      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover educador?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem a certeza que quer remover <strong>{deleting?.full_name}</strong>?
+              A conta será desactivada e desassociada do aluno.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 };
