@@ -140,6 +140,10 @@ const Pagamentos = () => {
   const [feeSearch, setFeeSearch] = useState("");
   const [remindingFeeId, setRemindingFeeId] = useState<string | null>(null);
   const [classrooms, setClassrooms] = useState<ClassroomLite[]>([]);
+  const [payments, setPayments] = useState<PaymentListRow[]>([]);
+  const [validatingId, setValidatingId] = useState<string | null>(null);
+  const [rejectDialog, setRejectDialog] = useState<PaymentListRow | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   const fetchAll = async () => {
     setLoading(true);
