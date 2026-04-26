@@ -50,6 +50,7 @@ type StudentDiscount = {
 
 type AcademicYear = { id: string; label: string; is_active: boolean | null };
 type StudentLite = { id: string; full_name: string };
+type ClassroomLite = { id: string; name: string };
 
 type FeeListRow = {
   id: string;
@@ -59,7 +60,13 @@ type FeeListRow = {
   month_index: number | null;
   student_id: string | null;
   academic_year_id: string | null;
-  student?: { id: string; full_name: string; parent_id: string | null } | null;
+  student?: {
+    id: string;
+    full_name: string;
+    parent_id: string | null;
+    classroom_id: string | null;
+    classroom?: { id: string; name: string } | null;
+  } | null;
 };
 
 const fmtAOA = (n: number) =>
@@ -115,8 +122,10 @@ const Pagamentos = () => {
   const [allFees, setAllFees] = useState<FeeListRow[]>([]);
   const [feeFilter, setFeeFilter] = useState<"all" | "paid" | "pending" | "overdue">("pending");
   const [feeYearFilter, setFeeYearFilter] = useState<string>("all");
+  const [feeClassroomFilter, setFeeClassroomFilter] = useState<string>("all");
   const [feeSearch, setFeeSearch] = useState("");
   const [remindingFeeId, setRemindingFeeId] = useState<string | null>(null);
+  const [classrooms, setClassrooms] = useState<ClassroomLite[]>([]);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -129,12 +138,13 @@ const Pagamentos = () => {
     setSchoolId(sId);
     if (!sId) { setLoading(false); return; }
 
-    const [yRes, rRes, fRes, dRes, sRes] = await Promise.all([
+    const [yRes, rRes, fRes, dRes, sRes, cRes] = await Promise.all([
       supabase.from("academic_years").select("id, label, is_active").eq("school_id", sId).order("start_date", { ascending: false }),
       supabase.from("fee_rules").select("*").eq("school_id", sId).order("grade_level"),
       supabase.from("family_discount_rules").select("*").eq("school_id", sId).order("sibling_position"),
       supabase.from("student_discounts").select("*, student:students(full_name)").eq("school_id", sId).order("created_at", { ascending: false }),
       supabase.from("students").select("id, full_name").eq("school_id", sId).order("full_name"),
+      supabase.from("classrooms").select("id, name").eq("school_id", sId).order("name"),
     ]);
 
     if (yRes.error) toast({ title: "Erro a carregar anos letivos", description: yRes.error.message, variant: "destructive" });
@@ -150,15 +160,16 @@ const Pagamentos = () => {
     setFamilyRules((fRes.data ?? []) as FamilyRule[]);
     setDiscounts((dRes.data ?? []) as StudentDiscount[]);
     setStudents((sRes.data ?? []) as StudentLite[]);
+    setClassrooms((cRes.data ?? []) as ClassroomLite[]);
 
     // Carregar propinas com aluno e educador
     const studentIds = (sRes.data ?? []).map((s) => s.id);
     if (studentIds.length > 0) {
       const { data: feesData } = await supabase
         .from("student_fees")
-        .select("id, amount_due, due_date, is_paid, month_index, student_id, academic_year_id, student:students(id, full_name, parent_id)")
+        .select("id, amount_due, due_date, is_paid, month_index, student_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name))")
         .in("student_id", studentIds)
-        .order("due_date", { ascending: false });
+        .order("due_date", { ascending: true });
       setAllFees((feesData ?? []) as unknown as FeeListRow[]);
     } else {
       setAllFees([]);
@@ -343,13 +354,14 @@ const Pagamentos = () => {
     const search = feeSearch.trim().toLowerCase();
     return allFees.filter((f) => {
       if (feeYearFilter !== "all" && f.academic_year_id !== feeYearFilter) return false;
+      if (feeClassroomFilter !== "all" && f.student?.classroom_id !== feeClassroomFilter) return false;
       if (feeFilter === "paid" && !f.is_paid) return false;
       if (feeFilter === "pending" && f.is_paid) return false;
       if (feeFilter === "overdue" && (f.is_paid || new Date(f.due_date).getTime() >= now)) return false;
       if (search && !(f.student?.full_name ?? "").toLowerCase().includes(search)) return false;
       return true;
     });
-  }, [allFees, feeFilter, feeYearFilter, feeSearch]);
+  }, [allFees, feeFilter, feeYearFilter, feeClassroomFilter, feeSearch]);
 
   const feeStats = useMemo(() => {
     const now = Date.now();
@@ -509,6 +521,13 @@ const Pagamentos = () => {
                       {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  <Select value={feeClassroomFilter} onValueChange={setFeeClassroomFilter}>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Turma" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas as turmas</SelectItem>
+                      {classrooms.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {loading ? (
@@ -521,6 +540,7 @@ const Pagamentos = () => {
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
                           <th className="py-2 px-2">Aluno</th>
+                          <th className="py-2 px-2">Turma</th>
                           <th className="py-2 px-2">Mês</th>
                           <th className="py-2 px-2">Vencimento</th>
                           <th className="py-2 px-2">Valor</th>
@@ -534,6 +554,7 @@ const Pagamentos = () => {
                           return (
                             <tr key={f.id} className="border-b hover:bg-muted/30">
                               <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
+                              <td className="py-2 px-2 text-muted-foreground">{f.student?.classroom?.name ?? "—"}</td>
                               <td className="py-2 px-2">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
