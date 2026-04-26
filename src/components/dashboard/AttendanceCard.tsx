@@ -55,17 +55,17 @@ export const AttendanceCard = () => {
     const load = async () => {
       let query = supabase
         .from("attendance")
-        .select("date, notes, schedules(classroom_id)")
+        .select("date, notes, status, classroom_id")
         .gte("date", fmt(yearRange.start))
         .lt("date", fmt(yearRange.end));
 
+      if (classroomId !== "ALL") {
+        query = query.eq("classroom_id", classroomId);
+      }
+
       const { data: rows } = await query;
 
-      const filtered = (rows ?? []).filter((r) => {
-        if (classroomId === "ALL") return true;
-        const sched = (r as { schedules: { classroom_id: string | null } | null }).schedules;
-        return sched?.classroom_id === classroomId;
-      });
+      const filtered = rows ?? [];
 
       // Group into months of the year (Jan..Dez)
       const months: WeekBucket[] = Array.from({ length: 12 }, (_, i) => ({
@@ -77,8 +77,13 @@ export const AttendanceCard = () => {
       filtered.forEach((row) => {
         const d = new Date((row as { date: string }).date);
         const monthIdx = d.getMonth();
+        const status = ((row as { status: string | null }).status ?? "").toUpperCase();
         const notes = ((row as { notes: string | null }).notes ?? "").toUpperCase();
-        const isAbsent = notes.includes("ABSEN") || notes.includes("FALT");
+        const isAbsent =
+          status === "ABSENT" ||
+          status === "JUSTIFIED" ||
+          notes.includes("ABSEN") ||
+          notes.includes("FALT");
         if (isAbsent) months[monthIdx].absent += 1;
         else months[monthIdx].present += 1;
       });
