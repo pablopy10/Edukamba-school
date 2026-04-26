@@ -240,6 +240,43 @@ const Horarios = () => {
     setOpenForm(true);
   };
 
+  const handleDropMove = async (scheduleId: string, day: number, slot: TimeSlotRow) => {
+    const current = schedules.find((s) => s.id === scheduleId);
+    if (!current) return;
+    if (
+      current.day_of_week === day &&
+      current.start_time === slot.start_time &&
+      current.end_time === slot.end_time &&
+      current.shift === shiftView
+    ) {
+      return;
+    }
+    // Optimistic update
+    setSchedules((prev) =>
+      prev.map((s) =>
+        s.id === scheduleId
+          ? { ...s, day_of_week: day, start_time: slot.start_time, end_time: slot.end_time, shift: shiftView }
+          : s,
+      ),
+    );
+    const { error } = await supabase
+      .from("schedules")
+      .update({
+        day_of_week: day,
+        start_time: slot.start_time,
+        end_time: slot.end_time,
+        shift: shiftView,
+      })
+      .eq("id", scheduleId);
+    if (error) {
+      toast({ title: "Erro ao mover aula", description: error.message, variant: "destructive" });
+      void loadAll();
+      return;
+    }
+    toast({ title: "Aula movida" });
+    void loadAll();
+  };
+
   const confirmDelete = async () => {
     if (!deletingId) return;
     const { error } = await supabase.from("schedules").delete().eq("id", deletingId);
