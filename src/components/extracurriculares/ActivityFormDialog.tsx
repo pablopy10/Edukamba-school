@@ -27,6 +27,8 @@ export type ActivityRow = {
   start_date: string | null;
   end_date: string | null;
   single_date: string | null;
+  enrollment_fee: number;
+  billing_frequency: string;
 };
 
 const CATEGORIES = [
@@ -73,6 +75,8 @@ export function ActivityFormDialog({ open, onOpenChange, schoolId, academicYear,
     single_date: "",
     start_date: "",
     end_date: "",
+    enrollment_fee: 0,
+    billing_frequency: "unica",
   });
 
   useEffect(() => {
@@ -92,6 +96,8 @@ export function ActivityFormDialog({ open, onOpenChange, schoolId, academicYear,
         single_date: activity.single_date ?? "",
         start_date: activity.start_date ?? "",
         end_date: activity.end_date ?? "",
+        enrollment_fee: Number(activity.enrollment_fee ?? 0),
+        billing_frequency: activity.billing_frequency ?? "unica",
       });
     } else {
       const today = new Date().toISOString().slice(0, 10);
@@ -109,6 +115,8 @@ export function ActivityFormDialog({ open, onOpenChange, schoolId, academicYear,
         single_date: today,
         start_date: academicYear?.start_date ?? today,
         end_date: academicYear?.end_date ?? today,
+        enrollment_fee: 0,
+        billing_frequency: "unica",
       });
     }
   }, [open, activity, academicYear]);
@@ -160,6 +168,8 @@ export function ActivityFormDialog({ open, onOpenChange, schoolId, academicYear,
       start_date: form.is_recurring ? form.start_date : null,
       end_date: form.is_recurring ? form.end_date : null,
       single_date: form.is_recurring ? null : form.single_date,
+      enrollment_fee: Number(form.enrollment_fee) || 0,
+      billing_frequency: form.is_recurring ? form.billing_frequency : "unica",
     };
 
     const { error } = activity
