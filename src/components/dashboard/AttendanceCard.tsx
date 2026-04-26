@@ -135,6 +135,14 @@ export const AttendanceCard = () => {
                 boxShadow: "var(--shadow-soft)",
                 fontSize: "12px",
               }}
+              formatter={(value: number, name: string) => {
+                const labels: Record<string, string> = {
+                  present: "Presentes",
+                  absent: "Ausentes",
+                };
+                return [value, labels[name] ?? name];
+              }}
+              labelFormatter={(label: string) => label}
             />
             <Bar dataKey="present" fill="hsl(var(--pastel-yellow))" radius={[8, 8, 0, 0]} />
             <Bar dataKey="absent" fill="hsl(var(--pastel-blue))" radius={[8, 8, 0, 0]} />
