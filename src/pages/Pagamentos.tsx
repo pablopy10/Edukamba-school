@@ -50,6 +50,7 @@ type StudentDiscount = {
 
 type AcademicYear = { id: string; label: string; is_active: boolean | null };
 type StudentLite = { id: string; full_name: string };
+type ClassroomLite = { id: string; name: string };
 
 type FeeListRow = {
   id: string;
@@ -59,7 +60,13 @@ type FeeListRow = {
   month_index: number | null;
   student_id: string | null;
   academic_year_id: string | null;
-  student?: { id: string; full_name: string; parent_id: string | null } | null;
+  student?: {
+    id: string;
+    full_name: string;
+    parent_id: string | null;
+    classroom_id: string | null;
+    classroom?: { id: string; name: string } | null;
+  } | null;
 };
 
 const fmtAOA = (n: number) =>
