@@ -585,7 +585,7 @@ const CalendarView = ({
 
 /* ======================= List View ======================= */
 const ListView = ({
-  evaluations, classroomMap, subjectMap, teacherMap, conflictIds, onEdit, onDelete,
+  evaluations, classroomMap, subjectMap, teacherMap, conflictIds, onEdit, onDelete, onOpen,
 }: {
   evaluations: Assessment[];
   classroomMap: Map<string, string>;
@@ -594,6 +594,7 @@ const ListView = ({
   conflictIds: Set<string>;
   onEdit: (a: Assessment) => void;
   onDelete: (id: string) => void;
+  onOpen: (id: string) => void;
 }) => {
   const sorted = [...evaluations].sort((a, b) => a.date.localeCompare(b.date));
 
@@ -625,7 +626,14 @@ const ListView = ({
               const teacher = e.teacher_id ? teacherMap.get(e.teacher_id) : "—";
               const isConflict = conflictIds.has(e.id);
               return (
-                <tr key={e.id} className={cn("border-b border-border/60 text-sm transition-colors hover:bg-muted/30", isConflict && "bg-destructive/5")}>
+                <tr
+                  key={e.id}
+                  onClick={() => onOpen(e.id)}
+                  className={cn(
+                    "cursor-pointer border-b border-border/60 text-sm transition-colors hover:bg-muted/30",
+                    isConflict && "bg-destructive/5"
+                  )}
+                >
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
                       <span className="font-semibold text-foreground">{formatDateLong(e.date)}</span>
@@ -655,10 +663,13 @@ const ListView = ({
                   <td className="px-6 py-4 text-right font-semibold text-foreground">{(e.weight ?? 0)}%</td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-1">
-                      <button onClick={() => onEdit(e)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
+                      <button onClick={(ev) => { ev.stopPropagation(); onOpen(e.id); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/30 hover:text-foreground" title="Atribuir notas">
+                        <GraduationCap className="h-4 w-4" strokeWidth={1.75} />
+                      </button>
+                      <button onClick={(ev) => { ev.stopPropagation(); onEdit(e); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
                         <Pencil className="h-4 w-4" strokeWidth={1.75} />
                       </button>
-                      <button onClick={() => onDelete(e.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Eliminar">
+                      <button onClick={(ev) => { ev.stopPropagation(); onDelete(e.id); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Eliminar">
                         <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                       </button>
                     </div>
