@@ -813,6 +813,148 @@ export type Database = {
           },
         ]
       }
+      material_requests: {
+        Row: {
+          category: string
+          classroom_id: string | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          description: string | null
+          id: string
+          item_name: string
+          material_id: string | null
+          quantity: number
+          recipient: string | null
+          requester_id: string | null
+          school_id: string | null
+          status: string
+          student_id: string | null
+          teacher_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          classroom_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          description?: string | null
+          id?: string
+          item_name: string
+          material_id?: string | null
+          quantity?: number
+          recipient?: string | null
+          requester_id?: string | null
+          school_id?: string | null
+          status?: string
+          student_id?: string | null
+          teacher_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          classroom_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          description?: string | null
+          id?: string
+          item_name?: string
+          material_id?: string | null
+          quantity?: number
+          recipient?: string | null
+          requester_id?: string | null
+          school_id?: string | null
+          status?: string
+          student_id?: string | null
+          teacher_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_requests_classroom_id_fkey"
+            columns: ["classroom_id"]
+            isOneToOne: false
+            referencedRelation: "classrooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_requests_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_requests_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_requests_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      materials: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          id: string
+          location: string | null
+          min_quantity: number
+          name: string
+          quantity: number
+          school_id: string | null
+          sku: string | null
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          location?: string | null
+          min_quantity?: number
+          name: string
+          quantity?: number
+          school_id?: string | null
+          sku?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          location?: string | null
+          min_quantity?: number
+          name?: string
+          quantity?: number
+          school_id?: string | null
+          sku?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "materials_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           content: string
