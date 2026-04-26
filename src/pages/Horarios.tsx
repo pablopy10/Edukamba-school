@@ -65,6 +65,7 @@ const ALL = "__ALL__";
 const Horarios = () => {
   const { user } = useAuth();
   const [schoolId, setSchoolId] = useState<string | null>(null);
+  const [academicYearId, setAcademicYearId] = useState<string | null>(null);
 
   const [classrooms, setClassrooms] = useState<Option[]>([]);
   const [subjects, setSubjects] = useState<Option[]>([]);
@@ -72,7 +73,7 @@ const Horarios = () => {
   const [timeSlots, setTimeSlots] = useState<TimeSlotRow[]>([]);
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
 
-  const [classroomFilter, setClassroomFilter] = useState<string>(ALL);
+  const [classroomFilter, setClassroomFilter] = useState<string>("");
   const [subjectFilter, setSubjectFilter] = useState<string>(ALL);
   const [teacherFilter, setTeacherFilter] = useState<string>(ALL);
   const [shiftView, setShiftView] = useState<"MORNING" | "AFTERNOON" | "EVENING">("MORNING");
@@ -100,7 +101,7 @@ const Horarios = () => {
   const loadAll = useCallback(async () => {
     if (!schoolId) return;
     setLoading(true);
-    const [classroomsRes, subjectsRes, teachersRes, slotsRes, schedulesRes] = await Promise.all([
+    const [classroomsRes, subjectsRes, teachersRes, slotsRes, schedulesRes, yearRes] = await Promise.all([
       supabase.from("classrooms").select("id, name").eq("school_id", schoolId).order("name"),
       supabase.from("subjects").select("id, name").eq("school_id", schoolId).order("name"),
       supabase
@@ -109,9 +110,24 @@ const Horarios = () => {
         .eq("school_id", schoolId),
       supabase.from("school_time_slots").select("*").eq("school_id", schoolId).order("shift").order("position"),
       supabase.from("schedules").select("*").eq("school_id", schoolId),
+      supabase
+        .from("academic_years")
+        .select("id, is_active, start_date")
+        .eq("school_id", schoolId)
+        .order("is_active", { ascending: false })
+        .order("start_date", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
-    setClassrooms((classroomsRes.data ?? []).map((c) => ({ id: c.id, name: c.name })));
+    const classroomList = (classroomsRes.data ?? []).map((c) => ({ id: c.id, name: c.name }));
+    setClassrooms(classroomList);
+    setAcademicYearId(yearRes.data?.id ?? null);
+    // Pre-select first classroom if none selected or current selection is not valid
+    setClassroomFilter((prev) => {
+      if (prev && classroomList.some((c) => c.id === prev)) return prev;
+      return classroomList[0]?.id ?? "";
+    });
     setSubjects((subjectsRes.data ?? []).map((s) => ({ id: s.id, name: s.name })));
     setTeachers(
       (teachersRes.data ?? [])
@@ -163,7 +179,8 @@ const Horarios = () => {
 
   const filteredSchedules = useMemo(() => {
     return schedules.filter((s) => {
-      if (classroomFilter !== ALL && s.classroom_id !== classroomFilter) return false;
+      if (!classroomFilter) return false;
+      if (s.classroom_id !== classroomFilter) return false;
       if (subjectFilter !== ALL && s.subject_id !== subjectFilter) return false;
       if (teacherFilter !== ALL && s.teacher_id !== teacherFilter) return false;
       return true;
@@ -212,7 +229,7 @@ const Horarios = () => {
 
   const handleNew = () => {
     setEditing({
-      classroom_id: classroomFilter !== ALL ? classroomFilter : null,
+      classroom_id: classroomFilter || null,
       subject_id: subjectFilter !== ALL ? subjectFilter : null,
       teacher_id: teacherFilter !== ALL ? teacherFilter : null,
       day_of_week: 1,
@@ -227,7 +244,7 @@ const Horarios = () => {
 
   const handleNewAt = (day: number, slot: TimeSlotRow) => {
     setEditing({
-      classroom_id: classroomFilter !== ALL ? classroomFilter : null,
+      classroom_id: classroomFilter || null,
       subject_id: subjectFilter !== ALL ? subjectFilter : null,
       teacher_id: teacherFilter !== ALL ? teacherFilter : null,
       day_of_week: day,
@@ -266,6 +283,7 @@ const Horarios = () => {
         start_time: slot.start_time,
         end_time: slot.end_time,
         shift: shiftView,
+        ...(academicYearId ? { academic_year_id: academicYearId } : {}),
       })
       .eq("id", scheduleId);
     if (error) {
@@ -316,10 +334,9 @@ const Horarios = () => {
         <div className="grid grid-cols-1 gap-3 rounded-2xl bg-card p-4 shadow-card sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label className="mb-1 block text-xs font-semibold text-muted-foreground">Turma</label>
-            <Select value={classroomFilter} onValueChange={setClassroomFilter}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select value={classroomFilter} onValueChange={setClassroomFilter} disabled={classrooms.length === 0}>
+              <SelectTrigger><SelectValue placeholder="Selecionar turma" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL}>Todas as turmas</SelectItem>
                 {classrooms.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -426,6 +443,7 @@ const Horarios = () => {
         open={openForm}
         onOpenChange={(o) => { setOpenForm(o); if (!o) setEditing(null); }}
         schoolId={schoolId}
+        academicYearId={academicYearId}
         classrooms={classrooms}
         subjects={subjects}
         teachers={teachers}
