@@ -611,7 +611,7 @@ const Timesheet = () => {
                   {employees.length === 0 && <option value="">Sem funcionários</option>}
                   {employees.map((e) => (
                     <option key={e.id} value={e.id}>
-                      {e.name}{e.role ? ` — ${e.role}` : ""}
+                      {e.name}{e.role ? ` — ${translateRole(e.role)}` : ""}
                     </option>
                   ))}
                 </select>
@@ -715,7 +715,7 @@ const Timesheet = () => {
               <div className="flex-1">
                 <h2 className="text-lg font-bold text-foreground">{selectedEntry.employee_name}</h2>
                 <p className="text-xs text-muted-foreground">
-                  {selectedEntry.role} · {selectedEntry.date}
+                  {translateRole(selectedEntry.role)} · {selectedEntry.date}
                 </p>
               </div>
               <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold", statusMeta[selectedEntry.status]?.color)}>
@@ -741,7 +741,7 @@ const Timesheet = () => {
             </div>
 
             <div className="flex flex-col gap-3">
-              {selectedEntry.check_in_lat != null && selectedEntry.check_in_lng != null && (
+              {isAdmin && selectedEntry.check_in_lat != null && selectedEntry.check_in_lng != null && (
                 <LocationCard
                   title="Localização de Entrada"
                   lat={Number(selectedEntry.check_in_lat)}
@@ -750,7 +750,7 @@ const Timesheet = () => {
                   tone="green"
                 />
               )}
-              {selectedEntry.check_out_lat != null && selectedEntry.check_out_lng != null && (
+              {isAdmin && selectedEntry.check_out_lat != null && selectedEntry.check_out_lng != null && (
                 <LocationCard
                   title="Localização de Saída"
                   lat={Number(selectedEntry.check_out_lat)}
