@@ -283,6 +283,7 @@ const Horarios = () => {
         start_time: slot.start_time,
         end_time: slot.end_time,
         shift: shiftView,
+        ...(academicYearId ? { academic_year_id: academicYearId } : {}),
       })
       .eq("id", scheduleId);
     if (error) {
