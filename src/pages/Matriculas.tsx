@@ -1,37 +1,17 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Search, Filter, Plus, MoreHorizontal, FileText, Pencil, Trash2, CheckCircle2 } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, Loader2, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { EnrollmentFormDialog, EnrollmentRow } from "@/components/matriculas/EnrollmentFormDialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { toast } from "@/hooks/use-toast";
 
-type EnrollmentStatus = "Confirmada" | "Pendente" | "Cancelada";
+type Opt = { id: string; name: string };
+type YearOpt = { id: string; label: string; is_active: boolean | null };
 
-type Enrollment = {
-  id: string;
-  studentName: string;
-  studentEmail: string;
-  enrollmentId: string;
-  course: string;
-  class: string;
-  date: string;
-  status: EnrollmentStatus;
-  initials: string;
-  avatarColor: "lilac" | "blue" | "yellow" | "green" | "pink";
-};
-
-const enrollments: Enrollment[] = [
-  { id: "1", studentName: "Sara Miller", studentEmail: "smiller@edukamba.edu", enrollmentId: "MAT-2025-001", course: "Ciências", class: "10A", date: "05/09/2025", status: "Confirmada", initials: "SM", avatarColor: "pink" },
-  { id: "2", studentName: "Ethan Brown", studentEmail: "ebrown@edukamba.edu", enrollmentId: "MAT-2025-002", course: "Letras", class: "12", date: "06/09/2025", status: "Pendente", initials: "EB", avatarColor: "blue" },
-  { id: "3", studentName: "Olivia Smith", studentEmail: "osmith@edukamba.edu", enrollmentId: "MAT-2025-003", course: "Económicas", class: "9B", date: "06/09/2025", status: "Confirmada", initials: "OS", avatarColor: "yellow" },
-  { id: "4", studentName: "Lucas Johnson", studentEmail: "ljohnson@edukamba.edu", enrollmentId: "MAT-2025-004", course: "Ciências", class: "11A", date: "07/09/2025", status: "Cancelada", initials: "LJ", avatarColor: "green" },
-  { id: "5", studentName: "Mia Williams", studentEmail: "mwilliams@edukamba.edu", enrollmentId: "MAT-2025-005", course: "Artes", class: "8B", date: "08/09/2025", status: "Confirmada", initials: "MW", avatarColor: "lilac" },
-  { id: "6", studentName: "Noah Davis", studentEmail: "ndavis@edukamba.edu", enrollmentId: "MAT-2025-006", course: "Letras", class: "9C", date: "09/09/2025", status: "Pendente", initials: "ND", avatarColor: "pink" },
-  { id: "7", studentName: "Emma Wilson", studentEmail: "ewilson@edukamba.edu", enrollmentId: "MAT-2025-007", course: "Ciências", class: "7C", date: "10/09/2025", status: "Confirmada", initials: "EW", avatarColor: "blue" },
-  { id: "8", studentName: "Liam Thompson", studentEmail: "lthomps@edukamba.edu", enrollmentId: "MAT-2025-008", course: "Económicas", class: "10B", date: "11/09/2025", status: "Confirmada", initials: "LT", avatarColor: "yellow" },
-  { id: "9", studentName: "Ava Garcia", studentEmail: "agarcia@edukamba.edu", enrollmentId: "MAT-2025-009", course: "Artes", class: "11A", date: "12/09/2025", status: "Pendente", initials: "AG", avatarColor: "green" },
-  { id: "10", studentName: "Mateus Silva", studentEmail: "msilva@edukamba.edu", enrollmentId: "MAT-2025-010", course: "Ciências", class: "7B", date: "13/09/2025", status: "Confirmada", initials: "MS", avatarColor: "lilac" },
-];
-
-const avatarStyles: Record<Enrollment["avatarColor"], string> = {
+const avatarStyles: Record<string, string> = {
   lilac: "bg-pastel-lilac text-pastel-lilac-foreground",
   blue: "bg-pastel-blue text-pastel-blue-foreground",
   yellow: "bg-pastel-yellow text-pastel-yellow-foreground",
@@ -39,26 +19,95 @@ const avatarStyles: Record<Enrollment["avatarColor"], string> = {
   pink: "bg-pastel-pink text-pastel-pink-foreground",
 };
 
-const statusStyles: Record<EnrollmentStatus, string> = {
-  Confirmada: "bg-pastel-green text-pastel-green-foreground",
-  Pendente: "bg-pastel-yellow text-pastel-yellow-foreground",
-  Cancelada: "bg-pastel-pink text-pastel-pink-foreground",
+const statusStyles: Record<string, string> = {
+  ACTIVE: "bg-pastel-green text-pastel-green-foreground",
+  PENDING: "bg-pastel-yellow text-pastel-yellow-foreground",
+  CANCELLED: "bg-pastel-pink text-pastel-pink-foreground",
 };
 
+const statusLabel = (s: string | null) =>
+  s === "ACTIVE" ? "Confirmada" : s === "PENDING" ? "Pendente" : s === "CANCELLED" ? "Cancelada" : (s ?? "—");
+
+const initialsOf = (name: string) =>
+  name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
+
 const Matriculas = () => {
-  const [selected, setSelected] = useState<string[]>(["2"]);
+  const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([]);
+  const [students, setStudents] = useState<Opt[]>([]);
+  const [classrooms, setClassrooms] = useState<Opt[]>([]);
+  const [years, setYears] = useState<YearOpt[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterClassroom, setFilterClassroom] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterYear, setFilterYear] = useState<string>("all");
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<EnrollmentRow | null>(null);
+  const [deleting, setDeleting] = useState<EnrollmentRow | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    const [{ data: eData, error: eErr }, { data: sData }, { data: cData }, { data: yData }] = await Promise.all([
+      supabase
+        .from("enrollments")
+        .select("id, student_id, classroom_id, academic_year_id, status, enrolled_at, students(id, full_name, email, avatar_color), classrooms(id, name), academic_years(id, label)")
+        .order("enrolled_at", { ascending: false }),
+      supabase.from("students").select("id, full_name").order("full_name"),
+      supabase.from("classrooms").select("id, name").order("name"),
+      supabase.from("academic_years").select("id, label, is_active").order("start_date", { ascending: false }),
+    ]);
+    if (eErr) {
+      toast({ title: "Erro a carregar matrículas", description: eErr.message, variant: "destructive" });
+    }
+    setEnrollments((eData ?? []) as unknown as EnrollmentRow[]);
+    setStudents(((sData ?? []) as { id: string; full_name: string }[]).map((s) => ({ id: s.id, name: s.full_name })));
+    setClassrooms((cData ?? []) as Opt[]);
+    setYears((yData ?? []) as YearOpt[]);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const filtered = useMemo(() => {
+    return enrollments.filter((e) => {
+      const name = e.students?.full_name ?? "";
+      const email = e.students?.email ?? "";
+      const className = e.classrooms?.name ?? "";
+      const matchSearch = !search || [name, email, className, e.id].some((f) => f.toLowerCase().includes(search.toLowerCase()));
+      const matchClass = filterClassroom === "all" || e.classroom_id === filterClassroom;
+      const matchStatus = filterStatus === "all" || (e.status ?? "") === filterStatus;
+      const matchYear = filterYear === "all" || e.academic_year_id === filterYear;
+      return matchSearch && matchClass && matchStatus && matchYear;
+    });
+  }, [enrollments, search, filterClassroom, filterStatus, filterYear]);
 
   const toggle = (id: string) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
-  const allSelected = selected.length === enrollments.length;
-  const toggleAll = () => setSelected(allSelected ? [] : enrollments.map((e) => e.id));
+  const allSelected = filtered.length > 0 && selected.length === filtered.length;
+  const toggleAll = () => setSelected(allSelected ? [] : filtered.map((e) => e.id));
 
-  const filtered = enrollments.filter((e) =>
-    [e.studentName, e.studentEmail, e.enrollmentId, e.course, e.class].some((f) =>
-      f.toLowerCase().includes(search.toLowerCase()),
-    ),
-  );
+  const handleDelete = async () => {
+    if (!deleting) return;
+    const { error } = await supabase.from("enrollments").delete().eq("id", deleting.id);
+    if (error) {
+      toast({ title: "Erro a eliminar", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Matrícula removida" });
+      setDeleting(null);
+      load();
+    }
+  };
+
+  const stats = useMemo(() => ({
+    total: enrollments.length,
+    confirmed: enrollments.filter((e) => e.status === "ACTIVE").length,
+    pending: enrollments.filter((e) => e.status === "PENDING").length,
+    cancelled: enrollments.filter((e) => e.status === "CANCELLED").length,
+  }), [enrollments]);
+
+  const filtersActive = filterClassroom !== "all" || filterStatus !== "all" || filterYear !== "all";
 
   return (
     <DashboardLayout>
@@ -68,7 +117,7 @@ const Matriculas = () => {
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Matrículas</h1>
             <p className="text-sm text-muted-foreground">Faça a gestão das matrículas dos alunos da escola.</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -79,23 +128,67 @@ const Matriculas = () => {
                 className="h-11 w-72 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             </div>
-            <button className="flex h-11 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent">
-              <Filter className="h-4 w-4" strokeWidth={1.75} />
-              Filtrar
-            </button>
-            <button className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
+            <button
+              onClick={() => { setEditing(null); setFormOpen(true); }}
+              className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
               <Plus className="h-4 w-4" strokeWidth={2.25} />
               Nova Matrícula
             </button>
           </div>
         </div>
 
+        {/* Filters */}
+        <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card">
+          <div className="min-w-[180px] flex-1">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Turma</label>
+            <Select value={filterClassroom} onValueChange={setFilterClassroom}>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as turmas</SelectItem>
+                {classrooms.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="min-w-[160px]">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Estado</label>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="ACTIVE">Confirmada</SelectItem>
+                <SelectItem value="PENDING">Pendente</SelectItem>
+                <SelectItem value="CANCELLED">Cancelada</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="min-w-[180px]">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Ano lectivo</label>
+            <Select value={filterYear} onValueChange={setFilterYear}>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {years.map((y) => (
+                  <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {filtersActive && (
+            <button
+              onClick={() => { setFilterClassroom("all"); setFilterStatus("all"); setFilterYear("all"); }}
+              className="h-10 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground hover:bg-muted"
+            >Limpar filtros</button>
+          )}
+        </div>
+
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
-            { label: "Total de Matrículas", value: "1.342", color: "bg-pastel-blue text-pastel-blue-foreground" },
-            { label: "Confirmadas", value: "1.198", color: "bg-pastel-green text-pastel-green-foreground" },
-            { label: "Pendentes", value: "98", color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-            { label: "Canceladas", value: "46", color: "bg-pastel-pink text-pastel-pink-foreground" },
+            { label: "Total de Matrículas", value: String(stats.total), color: "bg-pastel-blue text-pastel-blue-foreground" },
+            { label: "Confirmadas", value: String(stats.confirmed), color: "bg-pastel-green text-pastel-green-foreground" },
+            { label: "Pendentes", value: String(stats.pending), color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+            { label: "Canceladas", value: String(stats.cancelled), color: "bg-pastel-pink text-pastel-pink-foreground" },
           ].map((stat) => (
             <div key={stat.label} className="rounded-2xl bg-card p-5 shadow-card">
               <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", stat.color)}>
@@ -112,9 +205,6 @@ const Matriculas = () => {
             {selected.length > 0 && (
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-muted-foreground">{selected.length} selecionadas</span>
-                <button className="rounded-full bg-pastel-pink px-3 py-1.5 text-xs font-medium text-pastel-pink-foreground">
-                  Eliminar
-                </button>
               </div>
             )}
           </div>
@@ -132,17 +222,30 @@ const Matriculas = () => {
                     />
                   </th>
                   <th className="py-4 pr-4 font-semibold">Aluno</th>
-                  <th className="py-4 pr-4 font-semibold">ID Matrícula</th>
-                  <th className="py-4 pr-4 font-semibold">Curso</th>
                   <th className="py-4 pr-4 font-semibold">Turma</th>
+                  <th className="py-4 pr-4 font-semibold">Ano Lectivo</th>
                   <th className="py-4 pr-4 font-semibold">Data</th>
                   <th className="py-4 pr-4 font-semibold">Estado</th>
                   <th className="py-4 pr-5 font-semibold text-right">Acções</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((e) => {
+                {loading && (
+                  <tr><td colSpan={7} className="py-10 text-center text-muted-foreground">
+                    <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                  </td></tr>
+                )}
+                {!loading && filtered.length === 0 && (
+                  <tr><td colSpan={7} className="py-10 text-center text-muted-foreground">
+                    Nenhuma matrícula encontrada.
+                  </td></tr>
+                )}
+                {!loading && filtered.map((e) => {
                   const isSelected = selected.includes(e.id);
+                  const name = e.students?.full_name ?? "—";
+                  const initials = initialsOf(name) || "??";
+                  const color = (e.students?.avatar_color as string) || "blue";
+                  const st = e.status ?? "ACTIVE";
                   return (
                     <tr
                       key={e.id}
@@ -161,40 +264,35 @@ const Matriculas = () => {
                       </td>
                       <td className="py-4 pr-4">
                         <div className="flex items-center gap-3">
-                          <div className={cn("flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold", avatarStyles[e.avatarColor])}>
-                            {e.initials}
+                          <div className={cn("flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold", avatarStyles[color] ?? avatarStyles.blue)}>
+                            {initials}
                           </div>
                           <div>
-                            <p className="font-semibold text-foreground">{e.studentName}</p>
-                            <p className="text-xs text-muted-foreground">{e.studentEmail}</p>
+                            <p className="font-semibold text-foreground">{name}</p>
+                            <p className="text-xs text-muted-foreground">{e.students?.email ?? ""}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="py-4 pr-4 text-foreground">{e.enrollmentId}</td>
-                      <td className="py-4 pr-4 text-foreground">{e.course}</td>
                       <td className="py-4 pr-4">
-                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{e.class}</span>
+                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{e.classrooms?.name ?? "—"}</span>
                       </td>
-                      <td className="py-4 pr-4 text-muted-foreground">{e.date}</td>
+                      <td className="py-4 pr-4 text-foreground">{e.academic_years?.label ?? "—"}</td>
+                      <td className="py-4 pr-4 text-muted-foreground">
+                        {e.enrolled_at ? new Date(e.enrolled_at).toLocaleDateString("pt-PT") : "—"}
+                      </td>
                       <td className="py-4 pr-4">
-                        <span className={cn("inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium", statusStyles[e.status])}>
+                        <span className={cn("inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium", statusStyles[st] ?? "bg-muted text-foreground")}>
                           <CheckCircle2 className="h-3 w-3" strokeWidth={2} />
-                          {e.status}
+                          {statusLabel(st)}
                         </span>
                       </td>
                       <td className="py-4 pr-5">
                         <div className="flex items-center justify-end gap-1">
-                          <button title="Documento" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/40 hover:text-pastel-blue-foreground">
-                            <FileText className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                          <button title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
+                          <button onClick={() => { setEditing(e); setFormOpen(true); }} title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
                             <Pencil className="h-4 w-4" strokeWidth={1.75} />
                           </button>
-                          <button title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
+                          <button onClick={() => setDeleting(e)} title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
                             <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                          <button title="Mais" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted">
-                            <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} />
                           </button>
                         </div>
                       </td>
@@ -207,28 +305,39 @@ const Matriculas = () => {
 
           <div className="flex flex-col items-center justify-between gap-3 border-t border-border p-5 sm:flex-row">
             <p className="text-xs text-muted-foreground">
-              A mostrar 1–{filtered.length} de {enrollments.length} matrículas
+              A mostrar {filtered.length} de {enrollments.length} matrículas
             </p>
-            <div className="flex items-center gap-2">
-              <button className="h-9 rounded-full border border-border bg-card px-4 text-xs font-medium text-foreground transition-colors hover:bg-accent">Anterior</button>
-              {[1, 2, 3, 4].map((p) => (
-                <button
-                  key={p}
-                  className={cn(
-                    "h-9 w-9 rounded-full text-xs font-semibold transition-colors",
-                    p === 1
-                      ? "bg-pastel-blue text-pastel-blue-foreground shadow-soft"
-                      : "text-muted-foreground hover:bg-muted",
-                  )}
-                >
-                  {p}
-                </button>
-              ))}
-              <button className="h-9 rounded-full border border-border bg-card px-4 text-xs font-medium text-foreground transition-colors hover:bg-accent">Seguinte</button>
-            </div>
           </div>
         </div>
       </div>
+
+      <EnrollmentFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        students={students}
+        classrooms={classrooms}
+        years={years}
+        enrollment={editing}
+        onSaved={load}
+      />
+
+      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover matrícula?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem a certeza que quer remover a matrícula de <strong>{deleting?.students?.full_name}</strong>?
+              Esta acção não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 };
