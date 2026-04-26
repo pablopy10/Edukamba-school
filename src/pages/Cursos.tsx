@@ -1,42 +1,30 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Search, Filter, Plus, MoreHorizontal, Users, Clock, Pencil, Trash2, BookOpen } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, BookOpen, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { CourseFormDialog, CourseRow } from "@/components/cursos/CourseFormDialog";
 
-type CourseLevel = "Básico" | "Médio" | "Avançado";
-
-type Course = {
-  id: string;
-  name: string;
-  code: string;
-  coordinator: string;
-  level: CourseLevel;
-  duration: string;
-  students: number;
-  classes: number;
-  color: "lilac" | "blue" | "yellow" | "green" | "pink";
+type CourseWithStats = CourseRow & {
+  classroomCount: number;
+  studentCount: number;
 };
 
-const courses: Course[] = [
-  { id: "1", name: "Ciências Naturais", code: "CN-2025", coordinator: "Carla Mendes", level: "Médio", duration: "3 anos", students: 184, classes: 6, color: "blue" },
-  { id: "2", name: "Letras Modernas", code: "LM-2025", coordinator: "Helena Costa", level: "Médio", duration: "3 anos", students: 142, classes: 5, color: "pink" },
-  { id: "3", name: "Económicas", code: "EC-2025", coordinator: "Tiago Ferreira", level: "Avançado", duration: "4 anos", students: 98, classes: 4, color: "yellow" },
-  { id: "4", name: "Artes Visuais", code: "AV-2025", coordinator: "Sofia Almeida", level: "Básico", duration: "2 anos", students: 76, classes: 3, color: "lilac" },
-  { id: "5", name: "Informática", code: "IN-2025", coordinator: "André Nunes", level: "Avançado", duration: "4 anos", students: 124, classes: 4, color: "green" },
-  { id: "6", name: "História e Geografia", code: "HG-2025", coordinator: "Bruno Santos", level: "Médio", duration: "3 anos", students: 88, classes: 3, color: "pink" },
-  { id: "7", name: "Línguas Estrangeiras", code: "LE-2025", coordinator: "Marta Dias", level: "Básico", duration: "2 anos", students: 156, classes: 5, color: "blue" },
-  { id: "8", name: "Educação Física", code: "EF-2025", coordinator: "Pedro Lima", level: "Básico", duration: "2 anos", students: 210, classes: 7, color: "yellow" },
-];
-
-const colorStyles: Record<Course["color"], string> = {
+const palette = ["blue", "lilac", "yellow", "green", "pink"] as const;
+const colorStyles: Record<(typeof palette)[number], string> = {
   lilac: "bg-pastel-lilac text-pastel-lilac-foreground",
   blue: "bg-pastel-blue text-pastel-blue-foreground",
   yellow: "bg-pastel-yellow text-pastel-yellow-foreground",
   green: "bg-pastel-green text-pastel-green-foreground",
   pink: "bg-pastel-pink text-pastel-pink-foreground",
 };
-
-const levelStyles: Record<CourseLevel, string> = {
+const levelStyles: Record<string, string> = {
   Básico: "bg-pastel-green text-pastel-green-foreground",
   Médio: "bg-pastel-blue text-pastel-blue-foreground",
   Avançado: "bg-pastel-lilac text-pastel-lilac-foreground",
@@ -45,10 +33,92 @@ const levelStyles: Record<CourseLevel, string> = {
 const Cursos = () => {
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
+  const [levelFilter, setLevelFilter] = useState<string>("all");
+  const [loading, setLoading] = useState(true);
+  const [courses, setCourses] = useState<CourseWithStats[]>([]);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<CourseRow | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const filtered = courses.filter((c) =>
-    [c.name, c.code, c.coordinator].some((f) => f.toLowerCase().includes(search.toLowerCase())),
-  );
+  const load = async () => {
+    setLoading(true);
+    try {
+      const { data: cs, error } = await supabase
+        .from("courses")
+        .select("id, name, type, description, school_id")
+        .order("name", { ascending: true });
+      if (error) throw error;
+
+      const { data: classes } = await supabase
+        .from("classrooms")
+        .select("id, course_id");
+      const { data: students } = await supabase
+        .from("students")
+        .select("id, classroom_id");
+
+      const classroomToCourse = new Map<string, string>();
+      (classes ?? []).forEach((cl) => {
+        if (cl.course_id) classroomToCourse.set(cl.id, cl.course_id);
+      });
+      const classroomCountByCourse = new Map<string, number>();
+      (classes ?? []).forEach((cl) => {
+        if (cl.course_id) {
+          classroomCountByCourse.set(cl.course_id, (classroomCountByCourse.get(cl.course_id) ?? 0) + 1);
+        }
+      });
+      const studentCountByCourse = new Map<string, number>();
+      (students ?? []).forEach((s) => {
+        const courseId = s.classroom_id ? classroomToCourse.get(s.classroom_id) : undefined;
+        if (courseId) {
+          studentCountByCourse.set(courseId, (studentCountByCourse.get(courseId) ?? 0) + 1);
+        }
+      });
+
+      setCourses(
+        (cs ?? []).map((c) => ({
+          ...c,
+          classroomCount: classroomCountByCourse.get(c.id) ?? 0,
+          studentCount: studentCountByCourse.get(c.id) ?? 0,
+        })),
+      );
+    } catch (e: any) {
+      toast({ title: "Erro a carregar cursos", description: e?.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return courses.filter((c) => {
+      if (levelFilter !== "all" && (c.type ?? "") !== levelFilter) return false;
+      if (!q) return true;
+      return [c.name, c.type ?? "", c.description ?? ""].some((f) => f.toLowerCase().includes(q));
+    });
+  }, [courses, search, levelFilter]);
+
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    const { error } = await supabase.from("courses").delete().eq("id", deleteId);
+    if (error) {
+      toast({ title: "Erro a eliminar", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Curso eliminado" });
+      load();
+    }
+    setDeleteId(null);
+  };
+
+  const colorFor = (id: string) => palette[id.charCodeAt(0) % palette.length];
+
+  const stats = useMemo(() => ({
+    total: courses.length,
+    basico: courses.filter((c) => c.type === "Básico").length,
+    medio: courses.filter((c) => c.type === "Médio").length,
+    avancado: courses.filter((c) => c.type === "Avançado").length,
+  }), [courses]);
 
   return (
     <DashboardLayout>
@@ -58,7 +128,7 @@ const Cursos = () => {
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Cursos</h1>
             <p className="text-sm text-muted-foreground">Faça a gestão de todos os cursos oferecidos pela escola.</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -69,11 +139,21 @@ const Cursos = () => {
                 className="h-11 w-72 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             </div>
-            <button className="flex h-11 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent">
-              <Filter className="h-4 w-4" strokeWidth={1.75} />
-              Filtrar
-            </button>
-            <button className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
+            <Select value={levelFilter} onValueChange={setLevelFilter}>
+              <SelectTrigger className="h-11 w-44 rounded-full border-border bg-card shadow-soft">
+                <SelectValue placeholder="Filtrar nível" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os níveis</SelectItem>
+                <SelectItem value="Básico">Básico</SelectItem>
+                <SelectItem value="Médio">Médio</SelectItem>
+                <SelectItem value="Avançado">Avançado</SelectItem>
+              </SelectContent>
+            </Select>
+            <button
+              onClick={() => { setEditing(null); setFormOpen(true); }}
+              className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
+            >
               <Plus className="h-4 w-4" strokeWidth={2.25} />
               Novo Curso
             </button>
@@ -82,10 +162,10 @@ const Cursos = () => {
 
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
-            { label: "Total de Cursos", value: "24", color: "bg-pastel-blue text-pastel-blue-foreground" },
-            { label: "Cursos Activos", value: "21", color: "bg-pastel-green text-pastel-green-foreground" },
-            { label: "Em Planeamento", value: "3", color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-            { label: "Total de Turmas", value: "78", color: "bg-pastel-lilac text-pastel-lilac-foreground" },
+            { label: "Total de Cursos", value: stats.total, color: "bg-pastel-blue text-pastel-blue-foreground" },
+            { label: "Básico", value: stats.basico, color: "bg-pastel-green text-pastel-green-foreground" },
+            { label: "Médio", value: stats.medio, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+            { label: "Avançado", value: stats.avancado, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
           ].map((stat) => (
             <div key={stat.label} className="rounded-2xl bg-card p-5 shadow-card">
               <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", stat.color)}>
@@ -120,42 +200,64 @@ const Cursos = () => {
           </div>
         </div>
 
-        {view === "grid" ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-20 text-muted-foreground">
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> A carregar...
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-2xl bg-card p-10 text-center shadow-card">
+            <p className="text-sm text-muted-foreground">Nenhum curso encontrado.</p>
+          </div>
+        ) : view === "grid" ? (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filtered.map((c) => (
-              <div key={c.id} className="group flex flex-col gap-4 rounded-2xl bg-card p-5 shadow-card transition-transform hover:-translate-y-1">
-                <div className="flex items-start justify-between">
-                  <div className={cn("flex h-12 w-12 items-center justify-center rounded-2xl", colorStyles[c.color])}>
-                    <BookOpen className="h-6 w-6" strokeWidth={1.75} />
+            {filtered.map((c) => {
+              const color = colorFor(c.id);
+              return (
+                <div key={c.id} className="group flex flex-col gap-4 rounded-2xl bg-card p-5 shadow-card transition-transform hover:-translate-y-1">
+                  <div className="flex items-start justify-between">
+                    <div className={cn("flex h-12 w-12 items-center justify-center rounded-2xl", colorStyles[color])}>
+                      <BookOpen className="h-6 w-6" strokeWidth={1.75} />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        title="Editar"
+                        onClick={() => { setEditing(c); setFormOpen(true); }}
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
+                      >
+                        <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                      </button>
+                      <button
+                        title="Eliminar"
+                        onClick={() => setDeleteId(c.id)}
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
+                      >
+                        <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                      </button>
+                    </div>
                   </div>
-                  <button className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted">
-                    <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} />
-                  </button>
-                </div>
 
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">{c.code}</p>
-                  <h3 className="mt-1 text-base font-bold text-foreground">{c.name}</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">Coord. {c.coordinator}</p>
-                </div>
+                  <div>
+                    <h3 className="text-base font-bold text-foreground">{c.name}</h3>
+                    {c.description && (
+                      <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{c.description}</p>
+                    )}
+                  </div>
 
-                <div className="flex items-center gap-2">
-                  <span className={cn("rounded-full px-3 py-1 text-xs font-medium", levelStyles[c.level])}>{c.level}</span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
-                    <Clock className="h-3 w-3" strokeWidth={2} />
-                    {c.duration}
-                  </span>
-                </div>
+                  {c.type && (
+                    <div className="flex items-center gap-2">
+                      <span className={cn("rounded-full px-3 py-1 text-xs font-medium", levelStyles[c.type] ?? "bg-muted text-foreground")}>
+                        {c.type}
+                      </span>
+                    </div>
+                  )}
 
-                <div className="mt-auto flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <Users className="h-3.5 w-3.5" strokeWidth={1.75} />
-                    {c.students} alunos
-                  </span>
-                  <span>{c.classes} turmas</span>
+                  <div className="mt-auto flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground">
+                    <span>{c.studentCount} alunos</span>
+                    <span>{c.classroomCount} turmas</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="rounded-2xl bg-card shadow-card">
@@ -164,55 +266,80 @@ const Cursos = () => {
                 <thead>
                   <tr className="bg-pastel-blue/40 text-left text-xs uppercase tracking-wider text-pastel-blue-foreground">
                     <th className="py-4 pl-5 pr-4 font-semibold">Curso</th>
-                    <th className="py-4 pr-4 font-semibold">Código</th>
-                    <th className="py-4 pr-4 font-semibold">Coordenador</th>
                     <th className="py-4 pr-4 font-semibold">Nível</th>
-                    <th className="py-4 pr-4 font-semibold">Duração</th>
                     <th className="py-4 pr-4 font-semibold">Alunos</th>
                     <th className="py-4 pr-4 font-semibold">Turmas</th>
                     <th className="py-4 pr-5 font-semibold text-right">Acções</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((c) => (
-                    <tr key={c.id} className="border-b border-border last:border-0 transition-colors hover:bg-muted/40">
-                      <td className="py-4 pl-5 pr-4">
-                        <div className="flex items-center gap-3">
-                          <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", colorStyles[c.color])}>
-                            <BookOpen className="h-5 w-5" strokeWidth={1.75} />
+                  {filtered.map((c) => {
+                    const color = colorFor(c.id);
+                    return (
+                      <tr key={c.id} className="border-b border-border last:border-0 transition-colors hover:bg-muted/40">
+                        <td className="py-4 pl-5 pr-4">
+                          <div className="flex items-center gap-3">
+                            <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", colorStyles[color])}>
+                              <BookOpen className="h-5 w-5" strokeWidth={1.75} />
+                            </div>
+                            <p className="font-semibold text-foreground">{c.name}</p>
                           </div>
-                          <p className="font-semibold text-foreground">{c.name}</p>
-                        </div>
-                      </td>
-                      <td className="py-4 pr-4 text-foreground">{c.code}</td>
-                      <td className="py-4 pr-4 text-muted-foreground">{c.coordinator}</td>
-                      <td className="py-4 pr-4">
-                        <span className={cn("rounded-full px-3 py-1 text-xs font-medium", levelStyles[c.level])}>{c.level}</span>
-                      </td>
-                      <td className="py-4 pr-4 text-muted-foreground">{c.duration}</td>
-                      <td className="py-4 pr-4 text-foreground">{c.students}</td>
-                      <td className="py-4 pr-4 text-foreground">{c.classes}</td>
-                      <td className="py-4 pr-5">
-                        <div className="flex items-center justify-end gap-1">
-                          <button title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
-                            <Pencil className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                          <button title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
-                            <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                          <button title="Mais" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted">
-                            <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="py-4 pr-4">
+                          {c.type ? (
+                            <span className={cn("rounded-full px-3 py-1 text-xs font-medium", levelStyles[c.type] ?? "bg-muted text-foreground")}>
+                              {c.type}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="py-4 pr-4 text-foreground">{c.studentCount}</td>
+                        <td className="py-4 pr-4 text-foreground">{c.classroomCount}</td>
+                        <td className="py-4 pr-5">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              title="Editar"
+                              onClick={() => { setEditing(c); setFormOpen(true); }}
+                              className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
+                            >
+                              <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                            </button>
+                            <button
+                              title="Eliminar"
+                              onClick={() => setDeleteId(c.id)}
+                              className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
+                            >
+                              <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           </div>
         )}
       </div>
+
+      <CourseFormDialog open={formOpen} onOpenChange={setFormOpen} course={editing} onSaved={load} />
+
+      <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar curso?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acção não pode ser desfeita. As turmas associadas continuarão existir, mas perderão a referência ao curso.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>Eliminar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 };
