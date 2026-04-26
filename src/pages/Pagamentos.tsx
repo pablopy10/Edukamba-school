@@ -361,7 +361,7 @@ const Pagamentos = () => {
       if (search && !(f.student?.full_name ?? "").toLowerCase().includes(search)) return false;
       return true;
     });
-  }, [allFees, feeFilter, feeYearFilter, feeSearch]);
+  }, [allFees, feeFilter, feeYearFilter, feeClassroomFilter, feeSearch]);
 
   const feeStats = useMemo(() => {
     const now = Date.now();
