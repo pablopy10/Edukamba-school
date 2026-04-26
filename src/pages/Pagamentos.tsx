@@ -521,6 +521,13 @@ const Pagamentos = () => {
                       {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  <Select value={feeClassroomFilter} onValueChange={setFeeClassroomFilter}>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Turma" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas as turmas</SelectItem>
+                      {classrooms.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {loading ? (
@@ -533,6 +540,7 @@ const Pagamentos = () => {
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
                           <th className="py-2 px-2">Aluno</th>
+                          <th className="py-2 px-2">Turma</th>
                           <th className="py-2 px-2">Mês</th>
                           <th className="py-2 px-2">Vencimento</th>
                           <th className="py-2 px-2">Valor</th>
@@ -546,6 +554,7 @@ const Pagamentos = () => {
                           return (
                             <tr key={f.id} className="border-b hover:bg-muted/30">
                               <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
+                              <td className="py-2 px-2 text-muted-foreground">{f.student?.classroom?.name ?? "—"}</td>
                               <td className="py-2 px-2">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
