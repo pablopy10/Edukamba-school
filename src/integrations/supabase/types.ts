@@ -1010,6 +1010,59 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          actor_id: string | null
+          actor_name: string | null
+          category: string
+          created_at: string
+          description: string | null
+          id: string
+          link: string | null
+          recipient_id: string
+          school_id: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_name?: string | null
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          link?: string | null
+          recipient_id: string
+          school_id?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          actor_id?: string | null
+          actor_name?: string | null
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          link?: string | null
+          recipient_id?: string
+          school_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payments: {
         Row: {
           amount_paid: number

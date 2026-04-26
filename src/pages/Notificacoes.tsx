@@ -1,5 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Bell,
   Search,
@@ -30,6 +32,7 @@ type Notification = {
   time: string;
   status: Status;
   actor?: string;
+  created_at?: string;
 };
 
 const categoryMeta: Record<Category, { label: string; icon: typeof Bell; bg: string; text: string }> = {
@@ -40,21 +43,30 @@ const categoryMeta: Record<Category, { label: string; icon: typeof Bell; bg: str
   sistema: { label: "Sistema", icon: Bell, bg: "bg-pastel-pink", text: "text-pastel-pink-foreground" },
 };
 
-const seed: Notification[] = [
-  { id: "n1", category: "academico", title: "Notas publicadas — 10.º A Matemática", description: "Tiago Ferreira publicou as notas do 2.º teste de Matemática.", time: "há 5 min", status: "unread", actor: "Tiago Ferreira" },
-  { id: "n2", category: "administrativo", title: "Nova matrícula pendente de aprovação", description: "Mariana Silva submeteu a matrícula para o 7.º ano.", time: "há 22 min", status: "unread", actor: "Mariana Silva" },
-  { id: "n3", category: "evento", title: "Reunião de pais — sexta-feira", description: "Lembrete: reunião de pais do 3.º ciclo às 18h00 no auditório.", time: "há 1 h", status: "unread" },
-  { id: "n4", category: "mensagem", title: "Mensagem da Coordenação", description: "Carla Mendes enviou: \"Por favor confirmem presença na reunião pedagógica.\"", time: "há 3 h", status: "read", actor: "Carla Mendes" },
-  { id: "n5", category: "academico", title: "Falta justificada aprovada", description: "A justificação do aluno João Almeida foi aprovada.", time: "ontem", status: "read", actor: "João Almeida" },
-  { id: "n6", category: "administrativo", title: "Fatura FA-2026-0119 emitida", description: "A fatura referente a Outubro foi emitida e enviada por email.", time: "ontem", status: "read" },
-  { id: "n7", category: "sistema", title: "Backup automático concluído", description: "O backup diário da base de dados foi concluído com sucesso.", time: "há 2 dias", status: "archived" },
-  { id: "n8", category: "evento", title: "Festa de Natal — inscrições abertas", description: "As inscrições para a festa de Natal já estão disponíveis.", time: "há 3 dias", status: "read" },
-];
+const formatRelative = (iso: string): string => {
+  const date = new Date(iso);
+  const diffMs = Date.now() - date.getTime();
+  const sec = Math.floor(diffMs / 1000);
+  if (sec < 60) return "agora mesmo";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d === 1) return "ontem";
+  if (d < 30) return `há ${d} dias`;
+  return date.toLocaleDateString("pt-PT");
+};
+
+const allowedCategories: Category[] = ["academico", "administrativo", "evento", "mensagem", "sistema"];
+const allowedStatuses: Status[] = ["unread", "read", "archived"];
 
 type FilterTab = "todas" | "nao_lidas" | "arquivadas";
 
 const Notificacoes = () => {
-  const [items, setItems] = useState<Notification[]>(seed);
+  const { user } = useAuth();
+  const [items, setItems] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<FilterTab>("todas");
   const [category, setCategory] = useState<Category | "all">("all");
   const [search, setSearch] = useState("");
@@ -65,6 +77,58 @@ const Notificacoes = () => {
     setToast({ kind, msg });
     window.setTimeout(() => setToast(null), 2200);
   };
+
+  const loadNotifications = async () => {
+    if (!user) return;
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("recipient_id", user.id)
+      .order("created_at", { ascending: false });
+    if (error) {
+      showToast("error", "Erro ao carregar notificações.");
+      setItems([]);
+    } else {
+      const mapped: Notification[] = (data ?? []).map((n: any) => ({
+        id: n.id,
+        category: (allowedCategories.includes(n.category) ? n.category : "sistema") as Category,
+        title: n.title,
+        description: n.description ?? "",
+        time: formatRelative(n.created_at),
+        status: (allowedStatuses.includes(n.status) ? n.status : "unread") as Status,
+        actor: n.actor_name ?? undefined,
+        created_at: n.created_at,
+      }));
+      setItems(mapped);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    loadNotifications();
+
+    // Realtime updates for this user's notifications
+    const channel = supabase
+      .channel(`notifications-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `recipient_id=eq.${user.id}`,
+        },
+        () => loadNotifications(),
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const filtered = useMemo(() => {
     return items
@@ -100,25 +164,37 @@ const Notificacoes = () => {
     else setSelected((prev) => Array.from(new Set([...prev, ...filtered.map((n) => n.id)])));
   };
 
-  const markRead = (ids: string[], status: Status = "read") => {
+  const updateStatus = async (ids: string[], status: Status) => {
+    if (ids.length === 0) return;
     setItems((prev) => prev.map((n) => (ids.includes(n.id) ? { ...n, status } : n)));
     setSelected([]);
-    showToast("success", `${ids.length} notificação(ões) actualizada(s).`);
+    const { error } = await supabase
+      .from("notifications")
+      .update({ status })
+      .in("id", ids);
+    if (error) {
+      showToast("error", "Erro ao actualizar notificações.");
+      loadNotifications();
+    } else {
+      showToast("success", `${ids.length} notificação(ões) actualizada(s).`);
+    }
   };
-  const archive = (ids: string[]) => {
-    setItems((prev) => prev.map((n) => (ids.includes(n.id) ? { ...n, status: "archived" } : n)));
-    setSelected([]);
-    showToast("success", `${ids.length} notificação(ões) arquivada(s).`);
-  };
-  const restore = (ids: string[]) => {
-    setItems((prev) => prev.map((n) => (ids.includes(n.id) ? { ...n, status: "read" } : n)));
-    setSelected([]);
-    showToast("success", `${ids.length} notificação(ões) restaurada(s).`);
-  };
-  const remove = (ids: string[]) => {
+
+  const markRead = (ids: string[], status: Status = "read") => updateStatus(ids, status);
+  const archive = (ids: string[]) => updateStatus(ids, "archived");
+  const restore = (ids: string[]) => updateStatus(ids, "read");
+
+  const remove = async (ids: string[]) => {
+    if (ids.length === 0) return;
     setItems((prev) => prev.filter((n) => !ids.includes(n.id)));
     setSelected([]);
-    showToast("success", `${ids.length} notificação(ões) eliminada(s).`);
+    const { error } = await supabase.from("notifications").delete().in("id", ids);
+    if (error) {
+      showToast("error", "Erro ao eliminar notificações.");
+      loadNotifications();
+    } else {
+      showToast("success", `${ids.length} notificação(ões) eliminada(s).`);
+    }
   };
 
   const tabs: { id: FilterTab; label: string; count: number }[] = [
