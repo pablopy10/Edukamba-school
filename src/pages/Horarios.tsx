@@ -412,6 +412,7 @@ const Horarios = () => {
                       onEdit={handleEdit}
                       onDelete={(id) => setDeletingId(id)}
                       onCreate={handleNewAt}
+                      onDropMove={handleDropMove}
                     />
                   ))}
                 </div>
