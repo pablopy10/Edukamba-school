@@ -824,6 +824,7 @@ export type Database = {
           id: string
           item_name: string
           material_id: string | null
+          needed_date: string | null
           quantity: number
           recipient: string | null
           requester_id: string | null
@@ -843,6 +844,7 @@ export type Database = {
           id?: string
           item_name: string
           material_id?: string | null
+          needed_date?: string | null
           quantity?: number
           recipient?: string | null
           requester_id?: string | null
@@ -862,6 +864,7 @@ export type Database = {
           id?: string
           item_name?: string
           material_id?: string | null
+          needed_date?: string | null
           quantity?: number
           recipient?: string | null
           requester_id?: string | null
