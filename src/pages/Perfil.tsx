@@ -1,19 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { User, Mail, Phone, MapPin, Calendar, Lock, Shield, Bell, Eye, EyeOff, Camera, Check, AlertCircle, Globe, Briefcase, Save } from "lucide-react";
+import {
+  User, Mail, Phone, Lock, Shield, Bell, Eye, EyeOff, Check, AlertCircle,
+  Globe, Save, Loader2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 type Tab = "pessoal" | "credenciais" | "preferencias" | "seguranca";
 
 const profileSchema = z.object({
-  firstName: z.string().trim().min(1, "Nome obrigatório").max(50, "Máx. 50 caracteres"),
-  lastName: z.string().trim().min(1, "Apelido obrigatório").max(50, "Máx. 50 caracteres"),
+  full_name: z.string().trim().min(1, "Nome obrigatório").max(100, "Máx. 100 caracteres"),
   phone: z.string().trim().max(30, "Máx. 30 caracteres").optional().or(z.literal("")),
-  address: z.string().trim().max(200, "Máx. 200 caracteres").optional().or(z.literal("")),
-  bio: z.string().trim().max(500, "Máx. 500 caracteres").optional().or(z.literal("")),
-  dob: z.string().optional().or(z.literal("")),
-  jobTitle: z.string().trim().max(100, "Máx. 100 caracteres").optional().or(z.literal("")),
+  language: z.string().trim().max(10).optional().or(z.literal("")),
 });
 
 const emailSchema = z.object({
@@ -22,7 +23,6 @@ const emailSchema = z.object({
 
 const passwordSchema = z
   .object({
-    currentPassword: z.string().min(1, "Palavra-passe atual obrigatória"),
     newPassword: z
       .string()
       .min(8, "Mínimo 8 caracteres")
@@ -44,103 +44,165 @@ const tabs: { id: Tab; label: string; icon: typeof User }[] = [
   { id: "seguranca", label: "Segurança", icon: Shield },
 ];
 
+const roleLabel = (r: string | null | undefined) => {
+  switch (r) {
+    case "ADMIN": return "Administrador";
+    case "TEACHER": return "Professor";
+    case "PARENT": return "Educador";
+    case "STUDENT": return "Aluno";
+    case "SUPER_ADMIN": return "Super admin";
+    default: return "Funcionário";
+  }
+};
+
+const PREFS_KEY = "perfil:prefs";
+const SECURITY_KEY = "perfil:security";
+
+const defaultPrefs = {
+  emailNotif: true,
+  pushNotif: true,
+  smsNotif: false,
+  weeklyReport: true,
+  eventReminders: true,
+};
+const defaultSecurity = { twoFactor: false, loginAlerts: true };
+
 const Perfil = () => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("pessoal");
   const [toast, setToast] = useState<{ kind: "success" | "error"; msg: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   // Personal info
-  const [profile, setProfile] = useState({
-    firstName: "Ana",
-    lastName: "Cardoso",
-    phone: "(244) 923 000 123",
-    address: "Rua Marechal Brós Tito 22, Luanda",
-    bio: "Coordenadora académica da EduKamba.",
-    dob: "1988-05-14",
-    jobTitle: "Coordenadora Académica",
-    language: "pt-PT",
-  });
+  const [profile, setProfile] = useState({ full_name: "", phone: "", language: "pt-PT", role: "" as string | null });
   const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
 
   // Email
-  const [email, setEmail] = useState("acardoso@edukamba.edu");
-  const [emailDraft, setEmailDraft] = useState(email);
+  const [email, setEmail] = useState("");
+  const [emailDraft, setEmailDraft] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
 
   // Password
-  const [pwd, setPwd] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [pwd, setPwd] = useState({ newPassword: "", confirmPassword: "" });
   const [pwdErrors, setPwdErrors] = useState<Record<string, string>>({});
-  const [showPwd, setShowPwd] = useState({ current: false, next: false, confirm: false });
+  const [showPwd, setShowPwd] = useState({ next: false, confirm: false });
 
-  // Preferences
-  const [prefs, setPrefs] = useState({
-    emailNotif: true,
-    pushNotif: true,
-    smsNotif: false,
-    weeklyReport: true,
-    eventReminders: true,
+  // Preferences (localStorage)
+  const [prefs, setPrefs] = useState(() => {
+    if (typeof window === "undefined") return defaultPrefs;
+    try { return { ...defaultPrefs, ...(JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}")) }; }
+    catch { return defaultPrefs; }
   });
 
-  // Security
-  const [security, setSecurity] = useState({ twoFactor: false, loginAlerts: true });
+  // Security (localStorage)
+  const [security, setSecurity] = useState(() => {
+    if (typeof window === "undefined") return defaultSecurity;
+    try { return { ...defaultSecurity, ...(JSON.parse(localStorage.getItem(SECURITY_KEY) ?? "{}")) }; }
+    catch { return defaultSecurity; }
+  });
 
   const showToast = (kind: "success" | "error", msg: string) => {
     setToast({ kind, msg });
     window.setTimeout(() => setToast(null), 2800);
   };
 
-  const handleSaveProfile = () => {
+  // Load real profile from DB
+  useEffect(() => {
+    if (!user) return;
+    setLoading(true);
+    setEmail(user.email ?? "");
+    setEmailDraft(user.email ?? "");
+    supabase
+      .from("profiles")
+      .select("full_name, phone, language, role")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setProfile({
+            full_name: data.full_name ?? "",
+            phone: data.phone ?? "",
+            language: data.language ?? "pt-PT",
+            role: data.role ?? null,
+          });
+        }
+        setLoading(false);
+      });
+  }, [user?.id]);
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
     const parsed = profileSchema.safeParse(profile);
     if (!parsed.success) {
       const errs: Record<string, string> = {};
-      parsed.error.issues.forEach((i) => {
-        if (i.path[0]) errs[String(i.path[0])] = i.message;
-      });
+      parsed.error.issues.forEach((i) => { if (i.path[0]) errs[String(i.path[0])] = i.message; });
       setProfileErrors(errs);
       showToast("error", "Verifique os campos do formulário.");
       return;
     }
     setProfileErrors({});
+    setSaving(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        full_name: profile.full_name.trim(),
+        phone: profile.phone?.trim() || null,
+        language: profile.language || "pt-PT",
+      })
+      .eq("id", user.id);
+    setSaving(false);
+    if (error) { showToast("error", error.message); return; }
     showToast("success", "Informações pessoais atualizadas.");
   };
 
-  const handleSaveEmail = () => {
+  const handleSaveEmail = async () => {
     const parsed = emailSchema.safeParse({ email: emailDraft });
-    if (!parsed.success) {
-      setEmailError(parsed.error.issues[0]?.message ?? "Email inválido");
-      return;
-    }
+    if (!parsed.success) { setEmailError(parsed.error.issues[0]?.message ?? "Email inválido"); return; }
     setEmailError(null);
-    setEmail(emailDraft);
-    showToast("success", "Email atualizado. Verifique a sua caixa de entrada.");
+    setSaving(true);
+    const { error } = await supabase.auth.updateUser({ email: emailDraft.trim() });
+    setSaving(false);
+    if (error) { showToast("error", error.message); return; }
+    showToast("success", "Email atualizado. Confirme no seu novo endereço.");
   };
 
-  const handleSavePassword = () => {
+  const handleSavePassword = async () => {
     const parsed = passwordSchema.safeParse(pwd);
     if (!parsed.success) {
       const errs: Record<string, string> = {};
-      parsed.error.issues.forEach((i) => {
-        if (i.path[0]) errs[String(i.path[0])] = i.message;
-      });
+      parsed.error.issues.forEach((i) => { if (i.path[0]) errs[String(i.path[0])] = i.message; });
       setPwdErrors(errs);
       return;
     }
     setPwdErrors({});
-    setPwd({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    setSaving(true);
+    const { error } = await supabase.auth.updateUser({ password: pwd.newPassword });
+    setSaving(false);
+    if (error) { showToast("error", error.message); return; }
+    setPwd({ newPassword: "", confirmPassword: "" });
     showToast("success", "Palavra-passe atualizada.");
   };
 
-  const initials = `${profile.firstName[0] ?? ""}${profile.lastName[0] ?? ""}`.toUpperCase();
+  const handleSavePrefs = () => {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+    showToast("success", "Preferências guardadas.");
+  };
+
+  const handleSaveSecurity = () => {
+    localStorage.setItem(SECURITY_KEY, JSON.stringify(security));
+    showToast("success", "Definições de segurança guardadas.");
+  };
+
+  const initials = profile.full_name
+    .split(/\s+/).filter(Boolean).slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("") || "U";
 
   const Field = ({
-    label,
-    children,
-    error,
-    icon: Icon,
+    label, children, error, icon: Icon,
   }: {
-    label: string;
-    children: React.ReactNode;
-    error?: string;
-    icon?: typeof User;
+    label: string; children: React.ReactNode; error?: string; icon?: typeof User;
   }) => (
     <div className="flex flex-col gap-1.5">
       <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
@@ -164,24 +226,35 @@ const Perfil = () => {
         : "border-border focus:border-primary focus:ring-2 focus:ring-primary/20",
     );
 
+  // SAME toggle as Modulos page
   const Toggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => (
     <button
       type="button"
       onClick={() => onChange(!checked)}
       className={cn(
-        "relative h-6 w-11 shrink-0 rounded-full transition-colors",
-        checked ? "bg-pastel-blue-foreground" : "bg-muted",
+        "relative h-6 w-11 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-pastel-blue/40",
+        checked ? "bg-pastel-blue" : "bg-muted",
       )}
       aria-pressed={checked}
     >
       <span
         className={cn(
-          "absolute top-0.5 h-5 w-5 rounded-full bg-card shadow-soft transition-transform",
-          checked ? "translate-x-[22px]" : "translate-x-0.5",
+          "absolute left-0 top-1/2 h-7 w-7 -translate-y-1/2 rounded-full border border-border bg-card shadow-soft transition-transform",
+          checked ? "translate-x-[20px]" : "-translate-x-[4px]",
         )}
       />
     </button>
   );
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -195,30 +268,19 @@ const Perfil = () => {
         {/* Profile summary */}
         <div className="rounded-2xl bg-card p-6 shadow-card">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-            <div className="relative">
-              <div className="flex h-24 w-24 items-center justify-center rounded-3xl bg-pastel-lilac text-3xl font-bold text-pastel-lilac-foreground shadow-soft">
-                {initials || "U"}
-              </div>
-              <button
-                title="Alterar foto"
-                className="absolute -bottom-1 -right-1 flex h-9 w-9 items-center justify-center rounded-full bg-pastel-blue text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
-              >
-                <Camera className="h-4 w-4" strokeWidth={2} />
-              </button>
+            <div className="flex h-24 w-24 items-center justify-center rounded-3xl bg-pastel-lilac text-3xl font-bold text-pastel-lilac-foreground shadow-soft">
+              {initials}
             </div>
             <div className="flex-1">
               <div className="flex flex-wrap items-center gap-3">
-                <h2 className="text-xl font-bold text-foreground">
-                  {profile.firstName} {profile.lastName}
-                </h2>
+                <h2 className="text-xl font-bold text-foreground">{profile.full_name || "Sem nome"}</h2>
                 <span className="rounded-full bg-pastel-green px-3 py-1 text-xs font-semibold text-pastel-green-foreground">
-                  Verificado
+                  {roleLabel(profile.role)}
                 </span>
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">{profile.jobTitle || "Funcionário"}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-pastel-blue/40 px-3 py-1 text-xs font-medium text-pastel-blue-foreground">
-                  <Mail className="h-3.5 w-3.5" strokeWidth={2} /> {email}
+                  <Mail className="h-3.5 w-3.5" strokeWidth={2} /> {email || "—"}
                 </span>
                 {profile.phone && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-pastel-yellow/50 px-3 py-1 text-xs font-medium text-pastel-yellow-foreground">
@@ -253,51 +315,29 @@ const Perfil = () => {
           })}
         </div>
 
-        {/* Tab content */}
+        {/* Personal */}
         {activeTab === "pessoal" && (
           <div className="rounded-2xl bg-card p-6 shadow-card">
             <h2 className="text-lg font-bold text-foreground">Informações Pessoais</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Atualize os seus dados pessoais e profissionais.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Atualize os seus dados pessoais.</p>
 
             <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2">
-              <Field label="Nome" icon={User} error={profileErrors.firstName}>
-                <input
-                  className={inputCls(!!profileErrors.firstName)}
-                  value={profile.firstName}
-                  maxLength={50}
-                  onChange={(e) => setProfile({ ...profile, firstName: e.target.value })}
-                />
-              </Field>
-              <Field label="Apelido" icon={User} error={profileErrors.lastName}>
-                <input
-                  className={inputCls(!!profileErrors.lastName)}
-                  value={profile.lastName}
-                  maxLength={50}
-                  onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
-                />
-              </Field>
+              <div className="md:col-span-2">
+                <Field label="Nome completo" icon={User} error={profileErrors.full_name}>
+                  <input
+                    className={inputCls(!!profileErrors.full_name)}
+                    value={profile.full_name}
+                    maxLength={100}
+                    onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
+                  />
+                </Field>
+              </div>
               <Field label="Telefone" icon={Phone} error={profileErrors.phone}>
                 <input
                   className={inputCls(!!profileErrors.phone)}
                   value={profile.phone}
                   maxLength={30}
                   onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                />
-              </Field>
-              <Field label="Data de Nascimento" icon={Calendar}>
-                <input
-                  type="date"
-                  className={inputCls(false)}
-                  value={profile.dob}
-                  onChange={(e) => setProfile({ ...profile, dob: e.target.value })}
-                />
-              </Field>
-              <Field label="Cargo" icon={Briefcase} error={profileErrors.jobTitle}>
-                <input
-                  className={inputCls(!!profileErrors.jobTitle)}
-                  value={profile.jobTitle}
-                  maxLength={100}
-                  onChange={(e) => setProfile({ ...profile, jobTitle: e.target.value })}
                 />
               </Field>
               <Field label="Idioma" icon={Globe}>
@@ -312,44 +352,27 @@ const Perfil = () => {
                   <option value="fr">Français</option>
                 </select>
               </Field>
-              <div className="md:col-span-2">
-                <Field label="Morada" icon={MapPin} error={profileErrors.address}>
-                  <input
-                    className={inputCls(!!profileErrors.address)}
-                    value={profile.address}
-                    maxLength={200}
-                    onChange={(e) => setProfile({ ...profile, address: e.target.value })}
-                  />
-                </Field>
-              </div>
-              <div className="md:col-span-2">
-                <Field label="Biografia" error={profileErrors.bio}>
-                  <textarea
-                    rows={4}
-                    className={cn(inputCls(!!profileErrors.bio), "h-auto py-3 resize-none")}
-                    value={profile.bio}
-                    maxLength={500}
-                    onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-                  />
-                  <p className="text-right text-[11px] text-muted-foreground">{profile.bio.length}/500</p>
-                </Field>
-              </div>
+              <Field label="Função" icon={Shield}>
+                <input className={cn(inputCls(false), "bg-muted/40")} value={roleLabel(profile.role)} readOnly />
+              </Field>
             </div>
 
             <div className="mt-6 flex justify-end">
               <button
                 onClick={handleSaveProfile}
-                className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
+                disabled={saving}
+                className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:opacity-50"
               >
-                <Save className="h-4 w-4" strokeWidth={2} /> Guardar Alterações
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" strokeWidth={2} />}
+                Guardar Alterações
               </button>
             </div>
           </div>
         )}
 
+        {/* Credenciais */}
         {activeTab === "credenciais" && (
           <div className="flex flex-col gap-6">
-            {/* Email */}
             <div className="rounded-2xl bg-card p-6 shadow-card">
               <h2 className="text-lg font-bold text-foreground">Email de Acesso</h2>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -372,15 +395,15 @@ const Perfil = () => {
               <div className="mt-5 flex justify-end">
                 <button
                   onClick={handleSaveEmail}
-                  disabled={emailDraft === email || !emailDraft}
+                  disabled={emailDraft === email || !emailDraft || saving}
                   className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <Save className="h-4 w-4" strokeWidth={2} /> Atualizar Email
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" strokeWidth={2} />}
+                  Atualizar Email
                 </button>
               </div>
             </div>
 
-            {/* Password */}
             <div className="rounded-2xl bg-card p-6 shadow-card">
               <h2 className="text-lg font-bold text-foreground">Palavra-passe</h2>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -389,7 +412,6 @@ const Perfil = () => {
 
               <div className="mt-5 grid grid-cols-1 gap-5">
                 {([
-                  { key: "currentPassword" as const, label: "Palavra-passe atual", show: showPwd.current, toggle: () => setShowPwd((s) => ({ ...s, current: !s.current })) },
                   { key: "newPassword" as const, label: "Nova palavra-passe", show: showPwd.next, toggle: () => setShowPwd((s) => ({ ...s, next: !s.next })) },
                   { key: "confirmPassword" as const, label: "Confirmar nova palavra-passe", show: showPwd.confirm, toggle: () => setShowPwd((s) => ({ ...s, confirm: !s.confirm })) },
                 ]).map((f) => (
@@ -417,15 +439,18 @@ const Perfil = () => {
               <div className="mt-5 flex justify-end">
                 <button
                   onClick={handleSavePassword}
-                  className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
+                  disabled={saving}
+                  className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:opacity-50"
                 >
-                  <Save className="h-4 w-4" strokeWidth={2} /> Atualizar Palavra-passe
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" strokeWidth={2} />}
+                  Atualizar Palavra-passe
                 </button>
               </div>
             </div>
           </div>
         )}
 
+        {/* Preferências */}
         {activeTab === "preferencias" && (
           <div className="rounded-2xl bg-card p-6 shadow-card">
             <h2 className="text-lg font-bold text-foreground">Preferências</h2>
@@ -451,7 +476,7 @@ const Perfil = () => {
 
             <div className="mt-6 flex justify-end">
               <button
-                onClick={() => showToast("success", "Preferências guardadas.")}
+                onClick={handleSavePrefs}
                 className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
               >
                 <Save className="h-4 w-4" strokeWidth={2} /> Guardar Preferências
@@ -460,6 +485,7 @@ const Perfil = () => {
           </div>
         )}
 
+        {/* Segurança */}
         {activeTab === "seguranca" && (
           <div className="flex flex-col gap-6">
             <div className="rounded-2xl bg-card p-6 shadow-card">
@@ -482,50 +508,13 @@ const Perfil = () => {
                   <Toggle checked={security.loginAlerts} onChange={(v) => setSecurity({ ...security, loginAlerts: v })} />
                 </div>
               </div>
-            </div>
 
-            <div className="rounded-2xl bg-card p-6 shadow-card">
-              <h2 className="text-lg font-bold text-foreground">Sessões Ativas</h2>
-              <div className="mt-4 flex flex-col gap-3">
-                {[
-                  { device: "Chrome · Windows 11", location: "Luanda, AO", time: "Agora", current: true },
-                  { device: "Safari · iPhone 15", location: "Luanda, AO", time: "há 2 horas", current: false },
-                  { device: "Firefox · MacBook Pro", location: "Lisboa, PT", time: "há 3 dias", current: false },
-                ].map((s, i) => (
-                  <div key={i} className="flex items-center justify-between rounded-xl border border-border p-4">
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">
-                        {s.device}{" "}
-                        {s.current && (
-                          <span className="ml-2 rounded-full bg-pastel-green px-2 py-0.5 text-[10px] font-semibold text-pastel-green-foreground">
-                            Atual
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{s.location} · {s.time}</p>
-                    </div>
-                    {!s.current && (
-                      <button
-                        onClick={() => showToast("success", "Sessão terminada.")}
-                        className="rounded-full bg-pastel-pink/60 px-3 py-1.5 text-xs font-medium text-pastel-pink-foreground transition-colors hover:opacity-90"
-                      >
-                        Terminar
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-pastel-pink/60 bg-card p-6 shadow-card">
-              <h2 className="text-lg font-bold text-pastel-pink-foreground">Zona de Perigo</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Estas ações são permanentes e não podem ser desfeitas.</p>
-              <div className="mt-5 flex flex-wrap gap-3">
-                <button className="rounded-full border border-border bg-card px-5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent">
-                  Exportar os meus dados
-                </button>
-                <button className="rounded-full bg-pastel-pink px-5 py-2.5 text-sm font-semibold text-pastel-pink-foreground shadow-soft transition-colors hover:opacity-90">
-                  Eliminar conta
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={handleSaveSecurity}
+                  className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
+                >
+                  <Save className="h-4 w-4" strokeWidth={2} /> Guardar Definições
                 </button>
               </div>
             </div>
