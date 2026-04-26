@@ -399,7 +399,7 @@ const TypeChip = ({
 /* ======================= Calendar View ======================= */
 const CalendarView = ({
   cursor, setCursor, evaluations, selectedDate, setSelectedDate,
-  classroomMap, subjectMap, conflictIds, onEdit, onDelete,
+  classroomMap, subjectMap, conflictIds, onEdit, onDelete, onOpen,
 }: {
   cursor: Date;
   setCursor: (d: Date) => void;
@@ -411,6 +411,7 @@ const CalendarView = ({
   conflictIds: Set<string>;
   onEdit: (a: Assessment) => void;
   onDelete: (id: string) => void;
+  onOpen: (id: string) => void;
 }) => {
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -529,7 +530,17 @@ const CalendarView = ({
             const turma = e.classroom_id ? classroomMap.get(e.classroom_id) : "";
             const subj = e.subject_id ? subjectMap.get(e.subject_id) : "";
             return (
-              <div key={e.id} className={cn("rounded-xl border bg-background p-3", conflictIds.has(e.id) ? "border-destructive/50" : "border-border")}>
+              <div
+                key={e.id}
+                onClick={() => onOpen(e.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onOpen(e.id); } }}
+                className={cn(
+                  "cursor-pointer rounded-xl border bg-background p-3 transition-all hover:-translate-y-0.5 hover:shadow-soft",
+                  conflictIds.has(e.id) ? "border-destructive/50" : "border-border"
+                )}
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span className={cn("flex h-8 w-8 items-center justify-center rounded-full", meta(e.type).color)}>
@@ -553,10 +564,13 @@ const CalendarView = ({
                   </div>
                 )}
                 <div className="mt-3 flex gap-2">
-                  <button onClick={() => onEdit(e)} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground hover:bg-accent">
+                  <button onClick={(ev) => { ev.stopPropagation(); onOpen(e.id); }} className="inline-flex items-center gap-1 rounded-full bg-pastel-blue px-3 py-1 text-xs font-medium text-pastel-blue-foreground hover:opacity-90">
+                    <GraduationCap className="h-3 w-3" /> Notas
+                  </button>
+                  <button onClick={(ev) => { ev.stopPropagation(); onEdit(e); }} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground hover:bg-accent">
                     <Pencil className="h-3 w-3" /> Editar
                   </button>
-                  <button onClick={() => onDelete(e.id)} className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/20">
+                  <button onClick={(ev) => { ev.stopPropagation(); onDelete(e.id); }} className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/20">
                     <Trash2 className="h-3 w-3" /> Eliminar
                   </button>
                 </div>
