@@ -496,6 +496,104 @@ const ProfessorPerfil = () => {
           )}
         </div>
 
+        {/* Teacher feedback (praise / complaints) */}
+        <div className="rounded-2xl bg-card shadow-card">
+          <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <Star className="h-5 w-5 text-pastel-yellow-foreground" strokeWidth={1.75} />
+              <h2 className="text-lg font-bold text-foreground">Avaliações do Professor</h2>
+              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-pastel-green/40 px-2.5 py-1 text-xs font-semibold text-pastel-green-foreground">
+                <ThumbsUp className="h-3 w-3" /> {feedbacks.filter((f) => f.kind === "PRAISE").length}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-pastel-pink/40 px-2.5 py-1 text-xs font-semibold text-pastel-pink-foreground">
+                <AlertTriangle className="h-3 w-3" /> {feedbacks.filter((f) => f.kind === "COMPLAINT").length}
+              </span>
+            </div>
+            <button
+              onClick={() => { setEditing(null); setDialogOpen(true); }}
+              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-pastel-yellow px-4 text-xs font-semibold text-pastel-yellow-foreground shadow-soft transition-opacity hover:opacity-90"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2} /> Avaliar professor
+            </button>
+          </div>
+
+          {feedbacks.length === 0 ? (
+            <div className="p-8 text-center">
+              <p className="text-sm text-muted-foreground">Ainda não há avaliações sobre este professor.</p>
+              <button
+                onClick={() => { setEditing(null); setDialogOpen(true); }}
+                className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-full bg-pastel-yellow px-4 text-xs font-semibold text-pastel-yellow-foreground shadow-soft transition-opacity hover:opacity-90"
+              >
+                <Plus className="h-4 w-4" strokeWidth={2} /> Criar primeira avaliação
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col divide-y divide-border">
+              {feedbacks.map((f) => {
+                const isPraise = f.kind === "PRAISE";
+                const canEdit = f.reporter_id === currentUserId || currentUserRole === "ADMIN";
+                return (
+                  <div key={f.id} className="flex flex-col gap-3 p-5 transition-colors hover:bg-muted/30 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <div className={cn(
+                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                        isPraise ? "bg-pastel-green/40 text-pastel-green-foreground" : "bg-pastel-pink/40 text-pastel-pink-foreground",
+                      )}>
+                        {isPraise ? <ThumbsUp className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-foreground">{f.subject}</p>
+                          <span className={cn(
+                            "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                            isPraise ? "bg-pastel-green text-pastel-green-foreground" : "bg-pastel-pink text-pastel-pink-foreground",
+                          )}>
+                            {isPraise ? "Elogio" : "Reclamação"}
+                          </span>
+                          {!isPraise && (
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                              {f.severity === "HIGH" ? "Alta" : f.severity === "LOW" ? "Baixa" : "Normal"}
+                            </span>
+                          )}
+                        </div>
+                        {f.description && <p className="mt-1 text-sm text-muted-foreground">{f.description}</p>}
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Por {f.reporter?.full_name ?? "—"} · {formatDate(f.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                    {canEdit && (
+                      <div className="flex shrink-0 items-center gap-2">
+                        <button
+                          onClick={() => { setEditing(f); setDialogOpen(true); }}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-muted px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted/70"
+                        >
+                          <Pencil className="h-3.5 w-3.5" /> Editar
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`Apagar este(a) ${isPraise ? "elogio" : "reclamação"}?`)) return;
+                            const { error } = await supabase.from("complaints").delete().eq("id", f.id);
+                            if (error) {
+                              toast({ title: "Erro ao apagar", description: error.message, variant: "destructive" });
+                              return;
+                            }
+                            toast({ title: "Avaliação removida" });
+                            setReloadKey((k) => k + 1);
+                          }}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-pastel-pink/30 px-3 text-xs font-semibold text-pastel-pink-foreground transition-opacity hover:opacity-80"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Apagar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Summary */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="rounded-2xl bg-card p-5 shadow-card">
@@ -524,23 +622,23 @@ const ProfessorPerfil = () => {
           </div>
         </div>
 
-        <AssessmentFormDialog
-          open={dialogOpen}
-          onOpenChange={setDialogOpen}
-          schoolId={schoolId}
-          classrooms={classroomOpts}
-          subjects={subjectOpts}
-          teachers={teacherOpts}
-          initial={
-            teacher?.profile_id
-              ? ({
-                  teacher_id: teacher.profile_id,
-                  subject_id: teacher.subject_id ?? null,
-                } as Partial<AssessmentRecord>)
-              : null
-          }
-          onSaved={() => setReloadKey((k) => k + 1)}
-        />
+        {teacher.profile_id && (
+          <TeacherFeedbackDialog
+            open={dialogOpen}
+            onOpenChange={(o) => { setDialogOpen(o); if (!o) setEditing(null); }}
+            schoolId={schoolId}
+            teacherProfileId={teacher.profile_id}
+            teacherName={fullName}
+            initial={editing ? ({
+              id: editing.id,
+              kind: editing.kind,
+              subject: editing.subject,
+              description: editing.description,
+              severity: editing.severity,
+            } as Partial<TeacherFeedbackRecord>) : null}
+            onSaved={() => setReloadKey((k) => k + 1)}
+          />
+        )}
       </div>
     </DashboardLayout>
   );
