@@ -61,8 +61,8 @@ const Timesheet = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<EntryStatus | "todos">("todos");
-  const [monthFilter, setMonthFilter] = useState<string>(""); // "1".."12" or ""
-  const [yearFilter, setYearFilter] = useState<string>(""); // "yyyy" or ""
+  const [monthFilter, setMonthFilter] = useState<string>(String(new Date().getMonth() + 1)); // "1".."12" or ""
+  const [yearFilter, setYearFilter] = useState<string>(String(new Date().getFullYear())); // "yyyy" or ""
   const [selectedEntry, setSelectedEntry] = useState<TimeEntry | null>(null);
   const [registering, setRegistering] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
