@@ -40,6 +40,19 @@ type TimeEntry = {
 
 type Employee = { id: string; name: string; role: string };
 
+const roleLabels: Record<string, string> = {
+  ADMIN: "Administrador",
+  TEACHER: "Professor",
+  PARENT: "Encarregado de Educação",
+  STUDENT: "Aluno",
+  SUPER_ADMIN: "Super Administrador",
+};
+
+const translateRole = (role: string | null | undefined) => {
+  if (!role) return "";
+  return roleLabels[role] ?? role;
+};
+
 const statusMeta: Record<EntryStatus, { label: string; color: string; icon: typeof CheckCircle2 }> = {
   completo: { label: "Completo", color: "bg-pastel-green text-pastel-green-foreground", icon: CheckCircle2 },
   em_curso: { label: "Em Curso", color: "bg-pastel-blue text-pastel-blue-foreground", icon: Loader2 },
@@ -56,6 +69,7 @@ const Timesheet = () => {
   const { user } = useAuth();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [myProfileId, setMyProfileId] = useState<string | null>(null);
+  const [myRole, setMyRole] = useState<string | null>(null);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,16 +89,19 @@ const Timesheet = () => {
     if (!user) return;
     supabase
       .from("profiles")
-      .select("id, school_id")
+      .select("id, school_id, role")
       .eq("id", user.id)
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
           setSchoolId(data.school_id);
           setMyProfileId(data.id);
+          setMyRole((data as any).role ?? null);
         }
       });
   }, [user]);
+
+  const isAdmin = myRole === "ADMIN" || myRole === "SUPER_ADMIN";
 
   const loadAll = async () => {
     if (!schoolId) return;
