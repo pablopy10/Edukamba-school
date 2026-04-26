@@ -416,6 +416,75 @@ const AlunoPerfil = () => {
           <StatPill label="Disciplinas" value={String(subjectsAvg.length)} color="yellow" />
         </div>
 
+        {/* Propinas */}
+        <div className="rounded-2xl bg-card shadow-card">
+          <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-pastel-yellow-foreground" strokeWidth={1.75} />
+              <h2 className="text-lg font-bold text-foreground">Propinas</h2>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full bg-pastel-green/60 px-3 py-1 font-medium text-pastel-green-foreground">Pago: {fmtAOA(feesSummary.paid)}</span>
+              <span className="rounded-full bg-pastel-yellow/60 px-3 py-1 font-medium text-pastel-yellow-foreground">Em dívida: {fmtAOA(feesSummary.pending)}</span>
+              {feesSummary.overdue > 0 && (
+                <span className="rounded-full bg-pastel-pink/60 px-3 py-1 font-medium text-pastel-pink-foreground">{feesSummary.overdue} em atraso</span>
+              )}
+            </div>
+          </div>
+          {fees.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">Sem propinas geradas para este aluno.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-pastel-yellow/30 text-left text-xs uppercase tracking-wider text-pastel-yellow-foreground">
+                    <th className="py-3 pl-5 pr-4 font-semibold">Mês</th>
+                    <th className="py-3 pr-4 font-semibold">Vencimento</th>
+                    <th className="py-3 pr-4 font-semibold">Valor</th>
+                    <th className="py-3 pr-4 font-semibold">Estado</th>
+                    <th className="py-3 pr-5 text-right font-semibold">Ação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fees.map((f) => {
+                    const overdue = !f.is_paid && new Date(f.due_date) < new Date();
+                    return (
+                      <tr key={f.id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                        <td className="py-3 pl-5 pr-4 font-medium text-foreground">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
+                        <td className="py-3 pr-4 text-muted-foreground">{formatDate(f.due_date)}</td>
+                        <td className="py-3 pr-4 font-semibold text-foreground">{fmtAOA(Number(f.amount_due))}</td>
+                        <td className="py-3 pr-4">
+                          {f.is_paid ? (
+                            <span className="rounded-full bg-pastel-green px-3 py-1 text-xs font-semibold text-pastel-green-foreground">Pago</span>
+                          ) : overdue ? (
+                            <span className="rounded-full bg-pastel-pink px-3 py-1 text-xs font-semibold text-pastel-pink-foreground">Em atraso</span>
+                          ) : (
+                            <span className="rounded-full bg-pastel-yellow px-3 py-1 text-xs font-semibold text-pastel-yellow-foreground">Pendente</span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-5 text-right">
+                          {!f.is_paid && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-2"
+                              onClick={() => sendReminder(f)}
+                              disabled={remindingFeeId === f.id || !student.parent_id}
+                            >
+                              {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                              Cobrar
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
         {/* Schedule + guardian */}
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
           <div className="rounded-2xl bg-card p-5 shadow-card xl:col-span-2">
