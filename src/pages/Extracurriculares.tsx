@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ActivityFormDialog, type ActivityRow } from "@/components/extracurriculares/ActivityFormDialog";
+import { EnrollmentManagerDialog } from "@/components/extracurriculares/EnrollmentManagerDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +37,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { UserPlus, Wallet } from "lucide-react";
 
 type ActivityCategory = "musica" | "desporto" | "arte" | "tecnologia" | "academico" | "teatro";
 
@@ -71,6 +73,8 @@ const Extracurriculares = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ActivityRow | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [enrollOpen, setEnrollOpen] = useState(false);
+  const [enrollActivity, setEnrollActivity] = useState<ActivityRow | null>(null);
 
   const canEdit = role === "ADMIN" || role === "TEACHER";
   const canDelete = role === "ADMIN";
@@ -378,7 +382,24 @@ const Extracurriculares = () => {
 
                   <div className="text-xs">
                     <span className="font-semibold text-foreground">Capacidade: {a.capacity}</span>
+                    {a.enrollment_fee && a.enrollment_fee > 0 ? (
+                      <span className="ml-3 inline-flex items-center gap-1 font-semibold text-foreground">
+                        <Wallet className="h-3.5 w-3.5" />
+                        {Number(a.enrollment_fee).toLocaleString("pt-PT")} Kz
+                        {a.billing_frequency === "mensal" && <span className="text-muted-foreground font-normal">/mês</span>}
+                      </span>
+                    ) : null}
                   </div>
+
+                  {canEdit && (
+                    <button
+                      onClick={() => { setEnrollActivity(a); setEnrollOpen(true); }}
+                      className="mt-1 inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-accent transition-colors"
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      Gerir inscrições
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -472,6 +493,14 @@ const Extracurriculares = () => {
         academicYear={academicYear}
         activity={editing}
         onSaved={loadActivities}
+      />
+
+      <EnrollmentManagerDialog
+        open={enrollOpen}
+        onOpenChange={setEnrollOpen}
+        activity={enrollActivity}
+        schoolId={schoolId}
+        canEdit={canEdit}
       />
 
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
