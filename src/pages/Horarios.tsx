@@ -240,6 +240,43 @@ const Horarios = () => {
     setOpenForm(true);
   };
 
+  const handleDropMove = async (scheduleId: string, day: number, slot: TimeSlotRow) => {
+    const current = schedules.find((s) => s.id === scheduleId);
+    if (!current) return;
+    if (
+      current.day_of_week === day &&
+      current.start_time === slot.start_time &&
+      current.end_time === slot.end_time &&
+      current.shift === shiftView
+    ) {
+      return;
+    }
+    // Optimistic update
+    setSchedules((prev) =>
+      prev.map((s) =>
+        s.id === scheduleId
+          ? { ...s, day_of_week: day, start_time: slot.start_time, end_time: slot.end_time, shift: shiftView }
+          : s,
+      ),
+    );
+    const { error } = await supabase
+      .from("schedules")
+      .update({
+        day_of_week: day,
+        start_time: slot.start_time,
+        end_time: slot.end_time,
+        shift: shiftView,
+      })
+      .eq("id", scheduleId);
+    if (error) {
+      toast({ title: "Erro ao mover aula", description: error.message, variant: "destructive" });
+      void loadAll();
+      return;
+    }
+    toast({ title: "Aula movida" });
+    void loadAll();
+  };
+
   const confirmDelete = async () => {
     if (!deletingId) return;
     const { error } = await supabase.from("schedules").delete().eq("id", deletingId);
@@ -375,6 +412,7 @@ const Horarios = () => {
                       onEdit={handleEdit}
                       onDelete={(id) => setDeletingId(id)}
                       onCreate={handleNewAt}
+                      onDropMove={handleDropMove}
                     />
                   ))}
                 </div>
@@ -430,6 +468,7 @@ const SlotRow = ({
   onEdit,
   onDelete,
   onCreate,
+  onDropMove,
 }: {
   slot: TimeSlotRow;
   schedules: ScheduleRow[];
@@ -441,7 +480,23 @@ const SlotRow = ({
   onEdit: (s: ScheduleRow) => void;
   onDelete: (id: string) => void;
   onCreate: (day: number, slot: TimeSlotRow) => void;
+  onDropMove: (scheduleId: string, day: number, slot: TimeSlotRow) => void;
 }) => {
+  const [dragOver, setDragOver] = useState<number | null>(null);
+
+  const handleDragOver = (e: React.DragEvent, day: number) => {
+    if (e.dataTransfer.types.includes("application/x-schedule-id")) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      setDragOver(day);
+    }
+  };
+  const handleDrop = (e: React.DragEvent, day: number) => {
+    const id = e.dataTransfer.getData("application/x-schedule-id");
+    setDragOver(null);
+    if (id) onDropMove(id, day, slot);
+  };
+
   const cellsByDay = (day: number) =>
     schedules.filter(
       (s) => s.day_of_week === day && s.start_time < slot.end_time && s.end_time > slot.start_time,
@@ -469,13 +524,20 @@ const SlotRow = ({
       </div>
       {DAYS.map((d) => {
         const cells = cellsByDay(d.value);
+        const isOver = dragOver === d.value;
         if (cells.length === 0) {
           return (
             <button
               key={d.value}
               type="button"
               onClick={() => onCreate(d.value, slot)}
-              className="group flex min-h-[100px] items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+              onDragOver={(e) => handleDragOver(e, d.value)}
+              onDragLeave={() => setDragOver(null)}
+              onDrop={(e) => handleDrop(e, d.value)}
+              className={cn(
+                "group flex min-h-[100px] items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary",
+                isOver && "border-primary bg-primary/10 text-primary",
+              )}
               aria-label="Adicionar aula"
             >
               <Plus className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" />
@@ -483,7 +545,16 @@ const SlotRow = ({
           );
         }
         return (
-          <div key={d.value} className="flex min-h-[100px] flex-col gap-1">
+          <div
+            key={d.value}
+            onDragOver={(e) => handleDragOver(e, d.value)}
+            onDragLeave={() => setDragOver(null)}
+            onDrop={(e) => handleDrop(e, d.value)}
+            className={cn(
+              "flex min-h-[100px] flex-col gap-1 rounded-xl transition-colors",
+              isOver && "bg-primary/10 ring-2 ring-primary/40",
+            )}
+          >
             {cells.map((s) => (
               <ScheduleCell
                 key={s.id}
@@ -525,8 +596,13 @@ const ScheduleCell = ({
 }) => {
   return (
     <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("application/x-schedule-id", schedule.id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
       className={cn(
-        "group relative flex flex-1 flex-col justify-between rounded-xl p-3 text-left",
+        "group relative flex flex-1 cursor-grab flex-col justify-between rounded-xl p-3 text-left active:cursor-grabbing",
         colorClass,
         hasConflict && "ring-2 ring-destructive ring-offset-2 ring-offset-card",
       )}
