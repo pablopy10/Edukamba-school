@@ -556,6 +556,9 @@ const AlunoPerfil = () => {
                 <tbody>
                   {fees.map((f) => {
                     const overdue = !f.is_paid && new Date(f.due_date) < new Date();
+                    const pay = latestPaymentByFee.get(f.id);
+                    const pendingValidation = !!pay && pay.status === "pendente";
+                    const rejected = !!pay && pay.status === "rejeitado";
                     return (
                       <tr key={f.id} className="border-b border-border last:border-0 hover:bg-muted/40">
                         <td className="py-3 pl-5 pr-4 font-medium text-foreground">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
@@ -564,6 +567,10 @@ const AlunoPerfil = () => {
                         <td className="py-3 pr-4">
                           {f.is_paid ? (
                             <span className="rounded-full bg-pastel-green px-3 py-1 text-xs font-semibold text-pastel-green-foreground">Pago</span>
+                          ) : pendingValidation ? (
+                            <span className="rounded-full bg-pastel-blue px-3 py-1 text-xs font-semibold text-pastel-blue-foreground">A validar</span>
+                          ) : rejected ? (
+                            <span className="rounded-full bg-pastel-pink px-3 py-1 text-xs font-semibold text-pastel-pink-foreground" title={pay?.rejection_reason ?? undefined}>Rejeitado</span>
                           ) : overdue ? (
                             <span className="rounded-full bg-pastel-pink px-3 py-1 text-xs font-semibold text-pastel-pink-foreground">Em atraso</span>
                           ) : (
@@ -572,16 +579,29 @@ const AlunoPerfil = () => {
                         </td>
                         <td className="py-3 pr-5 text-right">
                           {!f.is_paid && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-2"
-                              onClick={() => sendReminder(f)}
-                              disabled={remindingFeeId === f.id || !student.parent_id}
-                            >
-                              {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                              Cobrar
-                            </Button>
+                            <div className="flex flex-wrap justify-end gap-2">
+                              {!pendingValidation && (
+                                <Button size="sm" variant="outline" className="gap-2" onClick={() => openProofDialog(f)}>
+                                  <Upload className="h-3.5 w-3.5" />
+                                  {rejected ? "Reenviar" : "Comprovativo"}
+                                </Button>
+                              )}
+                              {pendingValidation && (
+                                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Paperclip className="h-3.5 w-3.5" /> Aguarda validação
+                                </span>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-2"
+                                onClick={() => sendReminder(f)}
+                                disabled={remindingFeeId === f.id || !student.parent_id}
+                              >
+                                {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                Cobrar
+                              </Button>
+                            </div>
                           )}
                         </td>
                       </tr>
