@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Search,
   Users,
@@ -15,6 +16,7 @@ import {
   Bell,
   ArrowRight,
   X,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -42,27 +44,21 @@ const typeMeta: Record<ResultType, { label: string; icon: typeof Search; bg: str
   notificacao: { label: "Notificações", icon: Bell, bg: "bg-pastel-pink", text: "text-pastel-pink-foreground" },
 };
 
-const dataset: Result[] = [
-  { id: "a1", type: "aluno", title: "Mariana Silva", subtitle: "10.º A · Nº 12", context: "Aluna · Matriculada em 2025/2026", to: "/alunos" },
-  { id: "a2", type: "aluno", title: "João Almeida", subtitle: "7.º B · Nº 5", context: "Aluno · Justificação de falta aprovada", to: "/alunos" },
-  { id: "a3", type: "aluno", title: "Beatriz Costa", subtitle: "12.º C · Nº 21", context: "Aluna · Encarregada: Helena Costa", to: "/alunos" },
-  { id: "p1", type: "professor", title: "Tiago Ferreira", subtitle: "Matemática", context: "Professor · 10.º A, 10.º B", to: "/professores" },
-  { id: "p2", type: "professor", title: "Helena Costa", subtitle: "Português", context: "Professora · Convidada", to: "/professores" },
-  { id: "p3", type: "professor", title: "Carla Mendes", subtitle: "Coordenadora", context: "Coordenação Pedagógica", to: "/professores" },
-  { id: "m1", type: "matricula", title: "Matrícula #2026-0123", subtitle: "Mariana Silva · 7.º ano", context: "Pendente de aprovação", to: "/matriculas" },
-  { id: "c1", type: "curso", title: "Ensino Secundário — Ciências", subtitle: "10.º ao 12.º ano", context: "Curso · 3 turmas", to: "/cursos" },
-  { id: "c2", type: "curso", title: "Ensino Básico — 3.º ciclo", subtitle: "7.º ao 9.º ano", context: "Curso · 6 turmas", to: "/cursos" },
-  { id: "t1", type: "turma", title: "10.º A", subtitle: "Ciências · 28 alunos", context: "Director de turma: Tiago Ferreira", to: "/turmas" },
-  { id: "t2", type: "turma", title: "7.º B", subtitle: "3.º ciclo · 24 alunos", context: "Director de turma: Helena Costa", to: "/turmas" },
-  { id: "e1", type: "evento", title: "Reunião de pais — 3.º ciclo", subtitle: "Sexta-feira · 18h00", context: "Evento · Auditório principal", to: "/eventos" },
-  { id: "e2", type: "evento", title: "Festa de Natal", subtitle: "20 Dez · inscrições abertas", context: "Evento · Pavilhão", to: "/eventos" },
-  { id: "av1", type: "avaliacao", title: "2.º Teste de Matemática", subtitle: "10.º A · Tiago Ferreira", context: "Notas publicadas", to: "/avaliacoes" },
-  { id: "d1", type: "documento", title: "Regulamento Interno 2025/2026", subtitle: "PDF · 1.4 MB", context: "Documento institucional", to: "/material" },
-  { id: "ms1", type: "mensagem", title: "Carla Mendes", subtitle: "\"Confirmas a reunião pedagógica?\"", context: "Mensagem · há 5 min", to: "/chat" },
-  { id: "n1", type: "notificacao", title: "Nova matrícula pendente", subtitle: "Mariana Silva — 7.º ano", context: "Notificação · há 22 min", to: "/notificacoes" },
-];
-
 type FilterType = "all" | ResultType;
+
+const formatRelative = (iso?: string | null) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const diff = Date.now() - d.getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "agora";
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h} h`;
+  const days = Math.floor(h / 24);
+  if (days < 30) return `há ${days} d`;
+  return d.toLocaleDateString("pt-PT");
+};
 
 const Pesquisa = () => {
   const navigate = useNavigate();
@@ -70,6 +66,8 @@ const Pesquisa = () => {
   const initial = params.get("q") ?? "";
   const [query, setQuery] = useState(initial);
   const [filter, setFilter] = useState<FilterType>("all");
+  const [results, setResults] = useState<Result[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setQuery(params.get("q") ?? "");
@@ -83,15 +81,221 @@ const Pesquisa = () => {
     setParams(next, { replace: true });
   };
 
+  // Live search against Supabase, debounced
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      setResults([]);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    const handle = setTimeout(async () => {
+      try {
+        const like = `%${q}%`;
+        const [
+          studentsRes,
+          teachersRes,
+          coursesRes,
+          classroomsRes,
+          eventsRes,
+          assessmentsRes,
+          materialsRes,
+          notificationsRes,
+          messagesRes,
+          enrollmentsRes,
+        ] = await Promise.all([
+          supabase
+            .from("students")
+            .select("id, full_name, enrollment_number, email, classrooms(name, grade_level)")
+            .or(`full_name.ilike.${like},enrollment_number.ilike.${like},email.ilike.${like}`)
+            .limit(20),
+          supabase
+            .from("teachers")
+            .select("id, employee_id, profile:profiles!teachers_profile_id_fkey(full_name, phone), subject:subjects(name)")
+            .limit(50),
+          supabase
+            .from("courses")
+            .select("id, name, type, description")
+            .or(`name.ilike.${like},description.ilike.${like},type.ilike.${like}`)
+            .limit(20),
+          supabase
+            .from("classrooms")
+            .select("id, name, grade_level, period, courses(name)")
+            .or(`name.ilike.${like},grade_level.ilike.${like},period.ilike.${like}`)
+            .limit(20),
+          supabase
+            .from("events")
+            .select("id, title, type, event_date, location, organizer")
+            .or(`title.ilike.${like},location.ilike.${like},organizer.ilike.${like},type.ilike.${like}`)
+            .limit(20),
+          supabase
+            .from("assessments")
+            .select("id, title, date, type, classrooms(name), subjects(name)")
+            .or(`title.ilike.${like},description.ilike.${like},type.ilike.${like}`)
+            .limit(20),
+          supabase
+            .from("materials")
+            .select("id, name, sku, category, location, quantity, unit")
+            .or(`name.ilike.${like},sku.ilike.${like},category.ilike.${like},location.ilike.${like}`)
+            .limit(20),
+          supabase
+            .from("notifications")
+            .select("id, title, description, category, created_at, link")
+            .or(`title.ilike.${like},description.ilike.${like},category.ilike.${like}`)
+            .order("created_at", { ascending: false })
+            .limit(20),
+          supabase
+            .from("messages")
+            .select("id, content, created_at, sender:profiles!messages_sender_id_fkey(full_name)")
+            .ilike("content", like)
+            .order("created_at", { ascending: false })
+            .limit(20),
+          supabase
+            .from("enrollments")
+            .select("id, status, enrolled_at, students(full_name, enrollment_number), classrooms(name)")
+            .limit(50),
+        ]);
+
+        if (cancelled) return;
+
+        const lower = q.toLowerCase();
+        const out: Result[] = [];
+
+        studentsRes.data?.forEach((s: any) => {
+          const cls = s.classrooms?.name ?? "Sem turma";
+          out.push({
+            id: `student-${s.id}`,
+            type: "aluno",
+            title: s.full_name,
+            subtitle: `${cls}${s.enrollment_number ? ` · Nº ${s.enrollment_number}` : ""}`,
+            context: s.email ?? "Aluno",
+            to: "/alunos",
+          });
+        });
+
+        teachersRes.data?.forEach((t: any) => {
+          const name: string = t.profile?.full_name ?? "Professor";
+          if (!name.toLowerCase().includes(lower) && !(t.employee_id ?? "").toLowerCase().includes(lower) && !(t.subject?.name ?? "").toLowerCase().includes(lower)) return;
+          out.push({
+            id: `teacher-${t.id}`,
+            type: "professor",
+            title: name,
+            subtitle: t.subject?.name ?? "Sem disciplina",
+            context: t.employee_id ? `Professor · Nº ${t.employee_id}` : "Professor",
+            to: "/professores",
+          });
+        });
+
+        coursesRes.data?.forEach((c: any) => {
+          out.push({
+            id: `course-${c.id}`,
+            type: "curso",
+            title: c.name,
+            subtitle: c.type ?? "Curso",
+            context: c.description ?? "Curso",
+            to: "/cursos",
+          });
+        });
+
+        classroomsRes.data?.forEach((c: any) => {
+          out.push({
+            id: `classroom-${c.id}`,
+            type: "turma",
+            title: c.name,
+            subtitle: [c.grade_level, c.period].filter(Boolean).join(" · ") || "Turma",
+            context: c.courses?.name ?? "Turma",
+            to: "/turmas",
+          });
+        });
+
+        eventsRes.data?.forEach((e: any) => {
+          out.push({
+            id: `event-${e.id}`,
+            type: "evento",
+            title: e.title,
+            subtitle: `${new Date(e.event_date).toLocaleDateString("pt-PT")}${e.location ? ` · ${e.location}` : ""}`,
+            context: e.organizer ? `Organizado por ${e.organizer}` : `Evento · ${e.type}`,
+            to: "/eventos",
+          });
+        });
+
+        assessmentsRes.data?.forEach((a: any) => {
+          out.push({
+            id: `assessment-${a.id}`,
+            type: "avaliacao",
+            title: a.title,
+            subtitle: [a.classrooms?.name, a.subjects?.name].filter(Boolean).join(" · ") || "Avaliação",
+            context: `${a.type ?? "Avaliação"} · ${new Date(a.date).toLocaleDateString("pt-PT")}`,
+            to: "/avaliacoes",
+          });
+        });
+
+        materialsRes.data?.forEach((m: any) => {
+          out.push({
+            id: `material-${m.id}`,
+            type: "documento",
+            title: m.name,
+            subtitle: `${m.category}${m.sku ? ` · ${m.sku}` : ""}`,
+            context: `${m.quantity} ${m.unit}${m.location ? ` · ${m.location}` : ""}`,
+            to: "/material",
+          });
+        });
+
+        notificationsRes.data?.forEach((n: any) => {
+          out.push({
+            id: `notification-${n.id}`,
+            type: "notificacao",
+            title: n.title,
+            subtitle: n.description ?? n.category,
+            context: `Notificação · ${formatRelative(n.created_at)}`,
+            to: n.link ?? "/notificacoes",
+          });
+        });
+
+        messagesRes.data?.forEach((m: any) => {
+          out.push({
+            id: `message-${m.id}`,
+            type: "mensagem",
+            title: m.sender?.full_name ?? "Mensagem",
+            subtitle: `"${(m.content ?? "").slice(0, 80)}"`,
+            context: `Mensagem · ${formatRelative(m.created_at)}`,
+            to: "/chat",
+          });
+        });
+
+        enrollmentsRes.data?.forEach((e: any) => {
+          const name = e.students?.full_name ?? "";
+          const num = e.students?.enrollment_number ?? "";
+          if (!name.toLowerCase().includes(lower) && !num.toLowerCase().includes(lower)) return;
+          out.push({
+            id: `enrollment-${e.id}`,
+            type: "matricula",
+            title: `Matrícula${num ? ` Nº ${num}` : ""}`,
+            subtitle: `${name}${e.classrooms?.name ? ` · ${e.classrooms.name}` : ""}`,
+            context: `${e.status ?? "Matrícula"} · ${formatRelative(e.enrolled_at)}`,
+            to: "/matriculas",
+          });
+        });
+
+        setResults(out);
+      } catch (err) {
+        console.error("Erro na pesquisa:", err);
+        if (!cancelled) setResults([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [query]);
+
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [] as Result[];
-    return dataset
-      .filter((r) => (filter === "all" ? true : r.type === filter))
-      .filter((r) =>
-        [r.title, r.subtitle, r.context, typeMeta[r.type].label].some((s) => s.toLowerCase().includes(q)),
-      );
-  }, [query, filter]);
+    if (filter === "all") return results;
+    return results.filter((r) => r.type === filter);
+  }, [results, filter]);
 
   const grouped = useMemo(() => {
     const map = new Map<ResultType, Result[]>();
@@ -104,17 +308,10 @@ const Pesquisa = () => {
   }, [filtered]);
 
   const counts = useMemo(() => {
-    const all = query.trim()
-      ? dataset.filter((r) =>
-          [r.title, r.subtitle, r.context, typeMeta[r.type].label].some((s) =>
-            s.toLowerCase().includes(query.trim().toLowerCase()),
-          ),
-        )
-      : [];
-    const c: Record<FilterType, number> = { all: all.length } as Record<FilterType, number>;
-    (Object.keys(typeMeta) as ResultType[]).forEach((t) => (c[t] = all.filter((r) => r.type === t).length));
+    const c: Record<FilterType, number> = { all: results.length } as Record<FilterType, number>;
+    (Object.keys(typeMeta) as ResultType[]).forEach((t) => (c[t] = results.filter((r) => r.type === t).length));
     return c;
-  }, [query]);
+  }, [results]);
 
   const filterTabs: { id: FilterType; label: string }[] = [
     { id: "all", label: "Todos" },
@@ -187,7 +384,7 @@ const Pesquisa = () => {
             <p className="mt-1 text-xs text-muted-foreground">A pesquisa abrange toda a plataforma — pessoas, registos, conteúdos e comunicações.</p>
 
             <div className="mt-6 flex flex-wrap justify-center gap-2">
-              {["Mariana Silva", "10.º A", "Reunião de pais", "Matemática", "Matrícula"].map((s) => (
+              {["Aluno", "Turma", "Reunião", "Matemática", "Matrícula"].map((s) => (
                 <button
                   key={s}
                   onClick={() => updateQuery(s)}
@@ -197,6 +394,13 @@ const Pesquisa = () => {
                 </button>
               ))}
             </div>
+          </div>
+        ) : loading ? (
+          <div className="rounded-2xl bg-card p-12 text-center shadow-card">
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin" strokeWidth={1.5} />
+            </span>
+            <p className="mt-4 text-sm font-medium text-foreground">A pesquisar…</p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-2xl bg-card p-12 text-center shadow-card">
