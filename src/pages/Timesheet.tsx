@@ -61,7 +61,7 @@ const Timesheet = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<EntryStatus | "todos">("todos");
-  const [dateFilter, setDateFilter] = useState<string>("");
+  const [monthFilter, setMonthFilter] = useState<string>(""); // yyyy-mm
   const [selectedEntry, setSelectedEntry] = useState<TimeEntry | null>(null);
   const [registering, setRegistering] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
@@ -134,10 +134,10 @@ const Timesheet = () => {
         e.employee_name.toLowerCase().includes(search.toLowerCase()) ||
         (e.role ?? "").toLowerCase().includes(search.toLowerCase());
       const matchStatus = statusFilter === "todos" || e.status === statusFilter;
-      const matchDate = !dateFilter || e.date === dateFilter;
-      return matchSearch && matchStatus && matchDate;
+      const matchMonth = !monthFilter || (e.date && e.date.startsWith(monthFilter));
+      return matchSearch && matchStatus && matchMonth;
     });
-  }, [entries, search, statusFilter, dateFilter]);
+  }, [entries, search, statusFilter, monthFilter]);
 
   const stats = useMemo(() => {
     const totalHours = entries.reduce((s, e) => s + Number(e.hours_worked || 0), 0);
@@ -363,9 +363,9 @@ const Timesheet = () => {
             />
           </div>
           <input
-            type="date"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
+            type="month"
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value)}
             className="h-10 rounded-xl border border-border bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
           />
           <select
@@ -378,10 +378,10 @@ const Timesheet = () => {
             <option value="em_curso">Em Curso</option>
             <option value="incompleto">Incompleto</option>
           </select>
-          {(dateFilter || statusFilter !== "todos" || search) && (
+          {(monthFilter || statusFilter !== "todos" || search) && (
             <button
               onClick={() => {
-                setDateFilter("");
+                setMonthFilter("");
                 setStatusFilter("todos");
                 setSearch("");
               }}
