@@ -25,20 +25,21 @@ const monthNames = [
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 
+const monthShort = [
+  "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
+  "Jul", "Ago", "Set", "Out", "Nov", "Dez",
+];
+
 export const AttendanceCard = () => {
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [classroomId, setClassroomId] = useState<string>("ALL");
   const [data, setData] = useState<WeekBucket[]>([]);
 
-  const monthRange = useMemo(() => {
+  const yearRange = useMemo(() => {
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    return {
-      start,
-      end,
-      label: `${monthNames[now.getMonth()]} ${now.getFullYear()}`,
-    };
+    const start = new Date(now.getFullYear(), 0, 1);
+    const end = new Date(now.getFullYear() + 1, 0, 1);
+    return { start, end, year: now.getFullYear() };
   }, []);
 
   useEffect(() => {
@@ -55,8 +56,8 @@ export const AttendanceCard = () => {
       let query = supabase
         .from("attendance")
         .select("date, notes, schedules(classroom_id)")
-        .gte("date", fmt(monthRange.start))
-        .lt("date", fmt(monthRange.end));
+        .gte("date", fmt(yearRange.start))
+        .lt("date", fmt(yearRange.end));
 
       const { data: rows } = await query;
 
@@ -66,28 +67,26 @@ export const AttendanceCard = () => {
         return sched?.classroom_id === classroomId;
       });
 
-      // Group into weeks of the month (W1..W5)
-      const weeks: WeekBucket[] = Array.from({ length: 5 }, (_, i) => ({
-        week: `Sem ${i + 1}`,
+      // Group into months of the year (Jan..Dez)
+      const months: WeekBucket[] = Array.from({ length: 12 }, (_, i) => ({
+        week: monthShort[i],
         present: 0,
         absent: 0,
       }));
 
       filtered.forEach((row) => {
         const d = new Date((row as { date: string }).date);
-        const weekIdx = Math.min(4, Math.floor((d.getDate() - 1) / 7));
+        const monthIdx = d.getMonth();
         const notes = ((row as { notes: string | null }).notes ?? "").toUpperCase();
         const isAbsent = notes.includes("ABSEN") || notes.includes("FALT");
-        if (isAbsent) weeks[weekIdx].absent += 1;
-        else weeks[weekIdx].present += 1;
+        if (isAbsent) months[monthIdx].absent += 1;
+        else months[monthIdx].present += 1;
       });
 
-      // Trim trailing empty weeks if month has 4 weeks
-      const trimmed = weeks.slice(0, new Date(monthRange.end.getTime() - 1).getDate() > 28 ? 5 : 4);
-      setData(trimmed);
+      setData(months);
     };
     load();
-  }, [classroomId, monthRange.start, monthRange.end]);
+  }, [classroomId, yearRange.start, yearRange.end]);
 
   const maxValue = Math.max(10, ...data.flatMap((d) => [d.present, d.absent]));
   const yMax = Math.ceil(maxValue / 5) * 5 || 10;
@@ -96,10 +95,7 @@ export const AttendanceCard = () => {
   return (
     <div className="flex h-full flex-col gap-5 rounded-2xl bg-card p-6 shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-bold text-foreground">Frequência</h3>
-          <p className="text-xs text-muted-foreground">{monthRange.label}</p>
-        </div>
+        <h3 className="text-lg font-bold text-foreground">Frequência</h3>
         <Select value={classroomId} onValueChange={setClassroomId}>
           <SelectTrigger className="h-8 w-auto min-w-[140px] rounded-full border-border bg-background px-3 text-xs font-medium">
             <SelectValue placeholder="Turma" />
