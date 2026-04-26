@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
   Plus,
@@ -78,6 +79,7 @@ const formatDateLong = (iso: string) => {
 const tt = (t?: string | null) => (t ? t.slice(0, 5) : "");
 
 const Avaliacoes = () => {
+  const navigate = useNavigate();
   const [view, setView] = useState<View>("calendario");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
@@ -337,6 +339,7 @@ const Avaliacoes = () => {
             conflictIds={conflictIds}
             onEdit={openEdit}
             onDelete={(id) => setDeleteId(id)}
+            onOpen={(id) => navigate(`/avaliacoes/${id}/notas`)}
           />
         ) : (
           <ListView
@@ -347,6 +350,7 @@ const Avaliacoes = () => {
             conflictIds={conflictIds}
             onEdit={openEdit}
             onDelete={(id) => setDeleteId(id)}
+            onOpen={(id) => navigate(`/avaliacoes/${id}/notas`)}
           />
         )}
       </div>
@@ -395,7 +399,7 @@ const TypeChip = ({
 /* ======================= Calendar View ======================= */
 const CalendarView = ({
   cursor, setCursor, evaluations, selectedDate, setSelectedDate,
-  classroomMap, subjectMap, conflictIds, onEdit, onDelete,
+  classroomMap, subjectMap, conflictIds, onEdit, onDelete, onOpen,
 }: {
   cursor: Date;
   setCursor: (d: Date) => void;
@@ -407,6 +411,7 @@ const CalendarView = ({
   conflictIds: Set<string>;
   onEdit: (a: Assessment) => void;
   onDelete: (id: string) => void;
+  onOpen: (id: string) => void;
 }) => {
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -525,7 +530,17 @@ const CalendarView = ({
             const turma = e.classroom_id ? classroomMap.get(e.classroom_id) : "";
             const subj = e.subject_id ? subjectMap.get(e.subject_id) : "";
             return (
-              <div key={e.id} className={cn("rounded-xl border bg-background p-3", conflictIds.has(e.id) ? "border-destructive/50" : "border-border")}>
+              <div
+                key={e.id}
+                onClick={() => onOpen(e.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onOpen(e.id); } }}
+                className={cn(
+                  "cursor-pointer rounded-xl border bg-background p-3 transition-all hover:-translate-y-0.5 hover:shadow-soft",
+                  conflictIds.has(e.id) ? "border-destructive/50" : "border-border"
+                )}
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span className={cn("flex h-8 w-8 items-center justify-center rounded-full", meta(e.type).color)}>
@@ -549,10 +564,13 @@ const CalendarView = ({
                   </div>
                 )}
                 <div className="mt-3 flex gap-2">
-                  <button onClick={() => onEdit(e)} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground hover:bg-accent">
+                  <button onClick={(ev) => { ev.stopPropagation(); onOpen(e.id); }} className="inline-flex items-center gap-1 rounded-full bg-pastel-blue px-3 py-1 text-xs font-medium text-pastel-blue-foreground hover:opacity-90">
+                    <GraduationCap className="h-3 w-3" /> Notas
+                  </button>
+                  <button onClick={(ev) => { ev.stopPropagation(); onEdit(e); }} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground hover:bg-accent">
                     <Pencil className="h-3 w-3" /> Editar
                   </button>
-                  <button onClick={() => onDelete(e.id)} className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/20">
+                  <button onClick={(ev) => { ev.stopPropagation(); onDelete(e.id); }} className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/20">
                     <Trash2 className="h-3 w-3" /> Eliminar
                   </button>
                 </div>
@@ -567,7 +585,7 @@ const CalendarView = ({
 
 /* ======================= List View ======================= */
 const ListView = ({
-  evaluations, classroomMap, subjectMap, teacherMap, conflictIds, onEdit, onDelete,
+  evaluations, classroomMap, subjectMap, teacherMap, conflictIds, onEdit, onDelete, onOpen,
 }: {
   evaluations: Assessment[];
   classroomMap: Map<string, string>;
@@ -576,6 +594,7 @@ const ListView = ({
   conflictIds: Set<string>;
   onEdit: (a: Assessment) => void;
   onDelete: (id: string) => void;
+  onOpen: (id: string) => void;
 }) => {
   const sorted = [...evaluations].sort((a, b) => a.date.localeCompare(b.date));
 
@@ -607,7 +626,14 @@ const ListView = ({
               const teacher = e.teacher_id ? teacherMap.get(e.teacher_id) : "—";
               const isConflict = conflictIds.has(e.id);
               return (
-                <tr key={e.id} className={cn("border-b border-border/60 text-sm transition-colors hover:bg-muted/30", isConflict && "bg-destructive/5")}>
+                <tr
+                  key={e.id}
+                  onClick={() => onOpen(e.id)}
+                  className={cn(
+                    "cursor-pointer border-b border-border/60 text-sm transition-colors hover:bg-muted/30",
+                    isConflict && "bg-destructive/5"
+                  )}
+                >
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
                       <span className="font-semibold text-foreground">{formatDateLong(e.date)}</span>
@@ -637,10 +663,13 @@ const ListView = ({
                   <td className="px-6 py-4 text-right font-semibold text-foreground">{(e.weight ?? 0)}%</td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-1">
-                      <button onClick={() => onEdit(e)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
+                      <button onClick={(ev) => { ev.stopPropagation(); onOpen(e.id); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/30 hover:text-foreground" title="Atribuir notas">
+                        <GraduationCap className="h-4 w-4" strokeWidth={1.75} />
+                      </button>
+                      <button onClick={(ev) => { ev.stopPropagation(); onEdit(e); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
                         <Pencil className="h-4 w-4" strokeWidth={1.75} />
                       </button>
-                      <button onClick={() => onDelete(e.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Eliminar">
+                      <button onClick={(ev) => { ev.stopPropagation(); onDelete(e.id); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Eliminar">
                         <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                       </button>
                     </div>
