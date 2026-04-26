@@ -1319,33 +1319,55 @@ export type Database = {
           amount_paid: number
           id: string
           method: string | null
+          notes: string | null
           payment_date: string | null
           proof_url: string | null
           rejection_reason: string | null
+          school_id: string | null
+          status: string
           student_fee_id: string | null
+          submitted_by: string | null
+          validated_at: string | null
           validated_by: string | null
         }
         Insert: {
           amount_paid: number
           id?: string
           method?: string | null
+          notes?: string | null
           payment_date?: string | null
           proof_url?: string | null
           rejection_reason?: string | null
+          school_id?: string | null
+          status?: string
           student_fee_id?: string | null
+          submitted_by?: string | null
+          validated_at?: string | null
           validated_by?: string | null
         }
         Update: {
           amount_paid?: number
           id?: string
           method?: string | null
+          notes?: string | null
           payment_date?: string | null
           proof_url?: string | null
           rejection_reason?: string | null
+          school_id?: string | null
+          status?: string
           student_fee_id?: string | null
+          submitted_by?: string | null
+          validated_at?: string | null
           validated_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "payments_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "payments_student_fee_id_fkey"
             columns: ["student_fee_id"]
