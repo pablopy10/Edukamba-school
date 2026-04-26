@@ -465,11 +465,11 @@ const Pagamentos = () => {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Card>
                 <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total recebido</CardTitle></CardHeader>
-                <CardContent><p className="text-2xl font-bold text-emerald-600">{fmtAOA(feeStats.paid)}</p></CardContent>
+                <CardContent><p className="text-2xl font-bold text-pastel-green-foreground">{fmtAOA(feeStats.paid)}</p></CardContent>
               </Card>
               <Card>
                 <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em dívida</CardTitle></CardHeader>
-                <CardContent><p className="text-2xl font-bold text-amber-600">{fmtAOA(feeStats.pending)}</p></CardContent>
+                <CardContent><p className="text-2xl font-bold text-pastel-yellow-foreground">{fmtAOA(feeStats.pending)}</p></CardContent>
               </Card>
               <Card>
                 <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em atraso</CardTitle></CardHeader>
@@ -539,7 +539,7 @@ const Pagamentos = () => {
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
-                                  <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Pago</Badge>
+                                  <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">Pago</Badge>
                                 ) : overdue ? (
                                   <Badge variant="destructive">Em atraso</Badge>
                                 ) : (
