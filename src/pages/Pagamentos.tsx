@@ -189,8 +189,21 @@ const Pagamentos = () => {
         .in("student_id", studentIds)
         .order("due_date", { ascending: true });
       setAllFees((feesData ?? []) as unknown as FeeListRow[]);
+
+      const feeIds = (feesData ?? []).map((f) => f.id);
+      if (feeIds.length > 0) {
+        const { data: payRows } = await supabase
+          .from("payments")
+          .select("id, student_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+          .in("student_fee_id", feeIds)
+          .order("payment_date", { ascending: false });
+        setPayments((payRows ?? []) as PaymentListRow[]);
+      } else {
+        setPayments([]);
+      }
     } else {
       setAllFees([]);
+      setPayments([]);
     }
     setLoading(false);
   };
