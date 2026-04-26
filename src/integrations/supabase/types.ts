@@ -449,6 +449,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          kind: string
           reporter_id: string | null
           school_id: string | null
           severity: string
@@ -463,6 +464,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          kind?: string
           reporter_id?: string | null
           school_id?: string | null
           severity?: string
@@ -477,6 +479,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          kind?: string
           reporter_id?: string | null
           school_id?: string | null
           severity?: string
