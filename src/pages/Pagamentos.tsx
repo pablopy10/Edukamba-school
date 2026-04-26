@@ -122,8 +122,10 @@ const Pagamentos = () => {
   const [allFees, setAllFees] = useState<FeeListRow[]>([]);
   const [feeFilter, setFeeFilter] = useState<"all" | "paid" | "pending" | "overdue">("pending");
   const [feeYearFilter, setFeeYearFilter] = useState<string>("all");
+  const [feeClassroomFilter, setFeeClassroomFilter] = useState<string>("all");
   const [feeSearch, setFeeSearch] = useState("");
   const [remindingFeeId, setRemindingFeeId] = useState<string | null>(null);
+  const [classrooms, setClassrooms] = useState<ClassroomLite[]>([]);
 
   const fetchAll = async () => {
     setLoading(true);
