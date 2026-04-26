@@ -1,35 +1,17 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Search, Filter, Plus, MoreHorizontal, Mail, Phone, Pencil, Trash2 } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { StudentFormDialog, StudentRow } from "@/components/alunos/StudentFormDialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { toast } from "@/hooks/use-toast";
 
-type Student = {
-  id: string;
-  name: string;
-  email: string;
-  studentId: string;
-  class: string;
-  dob: string;
-  phone: string;
-  initials: string;
-  avatarColor: "lilac" | "blue" | "yellow" | "green" | "pink";
-};
+type ClassroomOpt = { id: string; name: string };
 
-const students: Student[] = [
-  { id: "1", name: "Sara Miller", email: "smiller@edukamba.edu", studentId: "2016-01-001", class: "10A", dob: "18/04/2008", phone: "(244) 923 101 010", initials: "SM", avatarColor: "pink" },
-  { id: "2", name: "Ethan Brown", email: "ebrown@edukamba.edu", studentId: "2014-02-002", class: "12", dob: "22/07/2006", phone: "(244) 923 202 020", initials: "EB", avatarColor: "blue" },
-  { id: "3", name: "Olivia Smith", email: "osmith@edukamba.edu", studentId: "2017-03-003", class: "9B", dob: "29/09/2010", phone: "(244) 923 303 030", initials: "OS", avatarColor: "yellow" },
-  { id: "4", name: "Lucas Johnson", email: "ljohnson@edukamba.edu", studentId: "2015-01-004", class: "11A", dob: "03/11/2009", phone: "(244) 923 404 040", initials: "LJ", avatarColor: "green" },
-  { id: "5", name: "Mia Williams", email: "mwilliams@edukamba.edu", studentId: "2018-02-005", class: "8B", dob: "19/01/2007", phone: "(244) 923 505 050", initials: "MW", avatarColor: "lilac" },
-  { id: "6", name: "Noah Davis", email: "ndavis@edukamba.edu", studentId: "2015-03-006", class: "9C", dob: "05/05/2010", phone: "(244) 923 606 060", initials: "ND", avatarColor: "pink" },
-  { id: "7", name: "Emma Wilson", email: "ewilson@edukamba.edu", studentId: "2019-01-007", class: "7C", dob: "20/02/2007", phone: "(244) 923 707 070", initials: "EW", avatarColor: "blue" },
-  { id: "8", name: "Liam Thompson", email: "lthomps@edukamba.edu", studentId: "2017-02-008", class: "10B", dob: "28/08/2011", phone: "(244) 923 808 080", initials: "LT", avatarColor: "yellow" },
-  { id: "9", name: "Ava Garcia", email: "agarcia@edukamba.edu", studentId: "2016-03-009", class: "11A", dob: "15/03/2009", phone: "(244) 923 909 090", initials: "AG", avatarColor: "green" },
-  { id: "10", name: "Mateus Silva", email: "msilva@edukamba.edu", studentId: "2019-01-010", class: "7B", dob: "12/12/2008", phone: "(244) 923 111 222", initials: "MS", avatarColor: "lilac" },
-];
-
-const avatarStyles: Record<Student["avatarColor"], string> = {
+const avatarStyles: Record<string, string> = {
   lilac: "bg-pastel-lilac text-pastel-lilac-foreground",
   blue: "bg-pastel-blue text-pastel-blue-foreground",
   yellow: "bg-pastel-yellow text-pastel-yellow-foreground",
@@ -37,18 +19,80 @@ const avatarStyles: Record<Student["avatarColor"], string> = {
   pink: "bg-pastel-pink text-pastel-pink-foreground",
 };
 
+const initialsOf = (name: string) =>
+  name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
+
 const Alunos = () => {
-  const [selected, setSelected] = useState<string[]>(["2", "3"]);
+  const [students, setStudents] = useState<StudentRow[]>([]);
+  const [classrooms, setClassrooms] = useState<ClassroomOpt[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterClassroom, setFilterClassroom] = useState<string>("all");
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<StudentRow | null>(null);
+  const [deleting, setDeleting] = useState<StudentRow | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    const [{ data: sData, error: sErr }, { data: cData }] = await Promise.all([
+      supabase
+        .from("students")
+        .select("id, full_name, email, phone, birth_date, gender, enrollment_number, classroom_id, avatar_color, school_id, classrooms(id, name)")
+        .order("created_at", { ascending: false }),
+      supabase.from("classrooms").select("id, name").order("name"),
+    ]);
+    if (sErr) {
+      toast({ title: "Erro a carregar alunos", description: sErr.message, variant: "destructive" });
+    }
+    setStudents((sData ?? []) as unknown as StudentRow[]);
+    setClassrooms((cData ?? []) as ClassroomOpt[]);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const classroomName = (id: string | null) => classrooms.find((c) => c.id === id)?.name ?? "—";
+
+  const filtered = useMemo(() => {
+    return students.filter((s) => {
+      const matchSearch = !search || [s.full_name, s.email ?? "", s.enrollment_number ?? "", classroomName(s.classroom_id)]
+        .some((f) => f.toLowerCase().includes(search.toLowerCase()));
+      const matchClass = filterClassroom === "all" || s.classroom_id === filterClassroom;
+      return matchSearch && matchClass;
+    });
+  }, [students, search, filterClassroom, classrooms]);
 
   const toggle = (id: string) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
-  const allSelected = selected.length === students.length;
-  const toggleAll = () => setSelected(allSelected ? [] : students.map((s) => s.id));
+  const allSelected = filtered.length > 0 && selected.length === filtered.length;
+  const toggleAll = () => setSelected(allSelected ? [] : filtered.map((s) => s.id));
 
-  const filtered = students.filter((s) =>
-    [s.name, s.email, s.studentId, s.class].some((f) => f.toLowerCase().includes(search.toLowerCase())),
-  );
+  const handleDelete = async () => {
+    if (!deleting) return;
+    const { error } = await supabase.from("students").delete().eq("id", deleting.id);
+    if (error) {
+      toast({ title: "Erro a eliminar", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Aluno removido" });
+      setDeleting(null);
+      load();
+    }
+  };
+
+  const stats = useMemo(() => {
+    const now = new Date();
+    return {
+      total: students.length,
+      active: students.length,
+      newThisMonth: students.filter((s) => {
+        // approximate: based on enrollment_number prefix or skip; use 0
+        return false;
+      }).length,
+      inactive: 0,
+    };
+  }, [students]);
 
   return (
     <DashboardLayout>
@@ -59,7 +103,7 @@ const Alunos = () => {
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Alunos</h1>
             <p className="text-sm text-muted-foreground">Faça a gestão e acompanhe todos os alunos da escola.</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -70,24 +114,44 @@ const Alunos = () => {
                 className="h-11 w-72 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             </div>
-            <button className="flex h-11 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent">
-              <Filter className="h-4 w-4" strokeWidth={1.75} />
-              Filtrar
-            </button>
-            <button className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
+            <button
+              onClick={() => { setEditing(null); setFormOpen(true); }}
+              className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
               <Plus className="h-4 w-4" strokeWidth={2.25} />
               Novo Aluno
             </button>
           </div>
         </div>
 
+        {/* Filters row */}
+        <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card">
+          <div className="min-w-[200px] flex-1">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Turma</label>
+            <Select value={filterClassroom} onValueChange={setFilterClassroom}>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as turmas</SelectItem>
+                {classrooms.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {filterClassroom !== "all" && (
+            <button
+              onClick={() => setFilterClassroom("all")}
+              className="h-10 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground hover:bg-muted"
+            >Limpar filtros</button>
+          )}
+        </div>
+
         {/* Stats row */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
-            { label: "Total de Alunos", value: "1.284", color: "bg-pastel-blue text-pastel-blue-foreground" },
-            { label: "Alunos Activos", value: "1.198", color: "bg-pastel-green text-pastel-green-foreground" },
-            { label: "Novos este mês", value: "47", color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-            { label: "Inactivos", value: "86", color: "bg-pastel-pink text-pastel-pink-foreground" },
+            { label: "Total de Alunos", value: String(stats.total), color: "bg-pastel-blue text-pastel-blue-foreground" },
+            { label: "Alunos Activos", value: String(stats.active), color: "bg-pastel-green text-pastel-green-foreground" },
+            { label: "Novos este mês", value: String(stats.newThisMonth), color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+            { label: "Inactivos", value: String(stats.inactive), color: "bg-pastel-pink text-pastel-pink-foreground" },
           ].map((stat) => (
             <div key={stat.label} className="rounded-2xl bg-card p-5 shadow-card">
               <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", stat.color)}>
@@ -105,9 +169,6 @@ const Alunos = () => {
             {selected.length > 0 && (
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-muted-foreground">{selected.length} selecionados</span>
-                <button className="rounded-full bg-pastel-pink px-3 py-1.5 text-xs font-medium text-pastel-pink-foreground">
-                  Eliminar
-                </button>
               </div>
             )}
           </div>
@@ -128,13 +189,24 @@ const Alunos = () => {
                   <th className="py-4 pr-4 font-semibold">ID Aluno</th>
                   <th className="py-4 pr-4 font-semibold">Turma</th>
                   <th className="py-4 pr-4 font-semibold">Data Nasc.</th>
-                  <th className="py-4 pr-4 font-semibold">Telefone</th>
                   <th className="py-4 pr-5 font-semibold text-right">Acções</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((s) => {
+                {loading && (
+                  <tr><td colSpan={6} className="py-10 text-center text-muted-foreground">
+                    <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                  </td></tr>
+                )}
+                {!loading && filtered.length === 0 && (
+                  <tr><td colSpan={6} className="py-10 text-center text-muted-foreground">
+                    Nenhum aluno encontrado.
+                  </td></tr>
+                )}
+                {!loading && filtered.map((s) => {
                   const isSelected = selected.includes(s.id);
+                  const initials = initialsOf(s.full_name) || "??";
+                  const color = (s.avatar_color as string) || "blue";
                   return (
                     <tr
                       key={s.id}
@@ -153,41 +225,31 @@ const Alunos = () => {
                       </td>
                       <td className="py-4 pr-4">
                         <div className="flex items-center gap-3">
-                          <div className={cn("flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold", avatarStyles[s.avatarColor])}>
-                            {s.initials}
+                          <div className={cn("flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold", avatarStyles[color] ?? avatarStyles.blue)}>
+                            {initials}
                           </div>
                           <div>
                             <Link to={`/alunos/${s.id}`} className="font-semibold text-foreground transition-colors hover:text-pastel-blue-foreground hover:underline">
-                              {s.name}
+                              {s.full_name}
                             </Link>
-                            <p className="text-xs text-muted-foreground">{s.email}</p>
+                            <p className="text-xs text-muted-foreground">{s.email ?? ""}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="py-4 pr-4 text-foreground">{s.studentId}</td>
+                      <td className="py-4 pr-4 text-foreground">{s.enrollment_number ?? "—"}</td>
                       <td className="py-4 pr-4">
-                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{s.class}</span>
+                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{classroomName(s.classroom_id)}</span>
                       </td>
-                      <td className="py-4 pr-4 text-muted-foreground">{s.dob}</td>
-                      <td className="py-4 pr-4">
-                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{s.phone}</span>
+                      <td className="py-4 pr-4 text-muted-foreground">
+                        {s.birth_date ? new Date(s.birth_date).toLocaleDateString("pt-PT") : "—"}
                       </td>
                       <td className="py-4 pr-5">
                         <div className="flex items-center justify-end gap-1">
-                          <button title="Email" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/40 hover:text-pastel-blue-foreground">
-                            <Mail className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                          <button title="Telefone" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-green/40 hover:text-pastel-green-foreground">
-                            <Phone className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                          <button title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
+                          <button onClick={() => { setEditing(s); setFormOpen(true); }} title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
                             <Pencil className="h-4 w-4" strokeWidth={1.75} />
                           </button>
-                          <button title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
+                          <button onClick={() => setDeleting(s)} title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
                             <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                          <button title="Mais" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted">
-                            <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} />
                           </button>
                         </div>
                       </td>
@@ -201,28 +263,37 @@ const Alunos = () => {
           {/* Pagination */}
           <div className="flex flex-col items-center justify-between gap-3 border-t border-border p-5 sm:flex-row">
             <p className="text-xs text-muted-foreground">
-              A mostrar 1–{filtered.length} de {students.length} alunos
+              A mostrar {filtered.length} de {students.length} alunos
             </p>
-            <div className="flex items-center gap-2">
-              <button className="h-9 rounded-full border border-border bg-card px-4 text-xs font-medium text-foreground transition-colors hover:bg-accent">Anterior</button>
-              {[1, 2, 3, 4].map((p) => (
-                <button
-                  key={p}
-                  className={cn(
-                    "h-9 w-9 rounded-full text-xs font-semibold transition-colors",
-                    p === 1
-                      ? "bg-pastel-blue text-pastel-blue-foreground shadow-soft"
-                      : "text-muted-foreground hover:bg-muted",
-                  )}
-                >
-                  {p}
-                </button>
-              ))}
-              <button className="h-9 rounded-full border border-border bg-card px-4 text-xs font-medium text-foreground transition-colors hover:bg-accent">Seguinte</button>
-            </div>
           </div>
         </div>
       </div>
+
+      <StudentFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        classrooms={classrooms}
+        student={editing}
+        onSaved={load}
+      />
+
+      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover aluno?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem a certeza que quer remover <strong>{deleting?.full_name}</strong>?
+              Esta acção não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 };
