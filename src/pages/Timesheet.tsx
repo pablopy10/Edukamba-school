@@ -373,12 +373,40 @@ const Timesheet = () => {
               className="h-10 w-full rounded-xl border border-border bg-card pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
-          <input
-            type="month"
+          <select
             value={monthFilter}
             onChange={(e) => setMonthFilter(e.target.value)}
             className="h-10 rounded-xl border border-border bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-          />
+          >
+            <option value="">Todos os meses</option>
+            {[
+              "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+              "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro",
+            ].map((label, i) => (
+              <option key={i + 1} value={String(i + 1)}>{label}</option>
+            ))}
+          </select>
+          <select
+            value={yearFilter}
+            onChange={(e) => setYearFilter(e.target.value)}
+            className="h-10 rounded-xl border border-border bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">Todos os anos</option>
+            {(() => {
+              const current = new Date().getFullYear();
+              const years = new Set<number>();
+              for (let y = current - 4; y <= current + 1; y++) years.add(y);
+              entries.forEach((e) => {
+                if (e.date) years.add(parseInt(e.date.split("-")[0], 10));
+              });
+              return Array.from(years)
+                .filter((y) => !Number.isNaN(y))
+                .sort((a, b) => b - a)
+                .map((y) => (
+                  <option key={y} value={String(y)}>{y}</option>
+                ));
+            })()}
+          </select>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as EntryStatus | "todos")}
@@ -389,10 +417,11 @@ const Timesheet = () => {
             <option value="em_curso">Em Curso</option>
             <option value="incompleto">Incompleto</option>
           </select>
-          {(monthFilter || statusFilter !== "todos" || search) && (
+          {(monthFilter || yearFilter || statusFilter !== "todos" || search) && (
             <button
               onClick={() => {
                 setMonthFilter("");
+                setYearFilter("");
                 setStatusFilter("todos");
                 setSearch("");
               }}
