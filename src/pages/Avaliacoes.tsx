@@ -161,7 +161,7 @@ const Avaliacoes = () => {
     trabalhos: filtered.filter((e) => e.type === "trabalho").length,
   }), [filtered]);
 
-  // Detect conflicts among current filtered set (same date overlap + shared turma/disciplina/professor)
+  // Detect conflicts among current filtered set (same date overlap + same turma or same sala)
   const conflictIds = useMemo(() => {
     const ids = new Set<string>();
     const byDate = new Map<string, Assessment[]>();
@@ -178,10 +178,11 @@ const Avaliacoes = () => {
           const bS = tt(b.start_time), bE = tt(b.end_time);
           if (!aS || !aE || !bS || !bE) continue;
           if (!(aS < bE && aE > bS)) continue;
+          const aRoom = (a.room ?? "").trim().toLowerCase();
+          const bRoom = (b.room ?? "").trim().toLowerCase();
           const shares =
             (a.classroom_id && a.classroom_id === b.classroom_id) ||
-            (a.subject_id && a.subject_id === b.subject_id) ||
-            (a.teacher_id && a.teacher_id === b.teacher_id);
+            (aRoom && bRoom && aRoom === bRoom);
           if (shares) { ids.add(a.id); ids.add(b.id); }
         }
       }
