@@ -34,7 +34,11 @@ interface Props {
   onSaved: () => void;
 }
 
-const STATUSES = ["ACTIVE", "PENDING", "CANCELLED"];
+const STATUSES: { value: string; label: string }[] = [
+  { value: "ACTIVE", label: "Confirmada" },
+  { value: "PENDING", label: "Pendente" },
+  { value: "CANCELLED", label: "Cancelada" },
+];
 
 export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms, years, enrollment, onSaved }: Props) => {
   const isEdit = !!enrollment;
@@ -243,7 +247,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {STATUSES.map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
