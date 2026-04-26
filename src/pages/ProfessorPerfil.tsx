@@ -77,6 +77,18 @@ interface AssessmentRow {
   subjects: { name: string } | null;
 }
 
+interface FeedbackRow {
+  id: string;
+  kind: "PRAISE" | "COMPLAINT";
+  subject: string;
+  description: string | null;
+  severity: "LOW" | "NORMAL" | "HIGH";
+  status: string;
+  created_at: string;
+  reporter_id: string | null;
+  reporter: { full_name: string } | null;
+}
+
 const StatPill = ({ label, value, color }: { label: string; value: string; color: AvatarColor }) => (
   <div className="rounded-2xl bg-card p-5 shadow-card">
     <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", avatarStyles[color])}>{label}</span>
