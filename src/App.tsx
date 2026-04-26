@@ -23,6 +23,7 @@ import Educadores from "./pages/Educadores.tsx";
 import Presencas from "./pages/Presencas.tsx";
 import Horarios from "./pages/Horarios.tsx";
 import Avaliacoes from "./pages/Avaliacoes.tsx";
+import AvaliacaoNotas from "./pages/AvaliacaoNotas.tsx";
 import Eventos from "./pages/Eventos.tsx";
 import Extracurriculares from "./pages/Extracurriculares.tsx";
 import Pedidos from "./pages/Pedidos.tsx";
@@ -66,6 +67,7 @@ const App = () => (
           <Route path="/horario" element={<ProtectedRoute><Horarios /></ProtectedRoute>} />
           <Route path="/horarios" element={<ProtectedRoute><Horarios /></ProtectedRoute>} />
           <Route path="/avaliacoes" element={<ProtectedRoute><Avaliacoes /></ProtectedRoute>} />
+          <Route path="/avaliacoes/:id/notas" element={<ProtectedRoute><AvaliacaoNotas /></ProtectedRoute>} />
           <Route path="/eventos" element={<ProtectedRoute><Eventos /></ProtectedRoute>} />
           <Route path="/extracurriculares" element={<ProtectedRoute><Extracurriculares /></ProtectedRoute>} />
           <Route path="/pedidos" element={<ProtectedRoute><Pedidos /></ProtectedRoute>} />
