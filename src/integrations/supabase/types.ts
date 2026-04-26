@@ -1194,28 +1194,49 @@ export type Database = {
       }
       staff_absences: {
         Row: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
           description: string | null
           end_date: string
           id: string
           profile_id: string | null
+          reason: string
+          requester_id: string | null
+          school_id: string | null
           start_date: string
           status: string | null
+          updated_at: string
         }
         Insert: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
           description?: string | null
           end_date: string
           id?: string
           profile_id?: string | null
+          reason?: string
+          requester_id?: string | null
+          school_id?: string | null
           start_date: string
           status?: string | null
+          updated_at?: string
         }
         Update: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
           description?: string | null
           end_date?: string
           id?: string
           profile_id?: string | null
+          reason?: string
+          requester_id?: string | null
+          school_id?: string | null
           start_date?: string
           status?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
@@ -1223,6 +1244,13 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_absences_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
             referencedColumns: ["id"]
           },
         ]
