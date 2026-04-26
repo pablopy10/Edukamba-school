@@ -442,6 +442,7 @@ const Horarios = () => {
         open={openForm}
         onOpenChange={(o) => { setOpenForm(o); if (!o) setEditing(null); }}
         schoolId={schoolId}
+        academicYearId={academicYearId}
         classrooms={classrooms}
         subjects={subjects}
         teachers={teachers}
