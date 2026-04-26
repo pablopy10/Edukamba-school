@@ -1514,6 +1514,9 @@ export type Database = {
           primary_color: string | null
           secondary_color: string | null
           settings: Json | null
+          subscription_status: string
+          trial_ends_at: string
+          trial_started_at: string
         }
         Insert: {
           address?: string | null
@@ -1526,6 +1529,9 @@ export type Database = {
           primary_color?: string | null
           secondary_color?: string | null
           settings?: Json | null
+          subscription_status?: string
+          trial_ends_at?: string
+          trial_started_at?: string
         }
         Update: {
           address?: string | null
@@ -1538,6 +1544,9 @@ export type Database = {
           primary_color?: string | null
           secondary_color?: string | null
           settings?: Json | null
+          subscription_status?: string
+          trial_ends_at?: string
+          trial_started_at?: string
         }
         Relationships: []
       }
@@ -1979,6 +1988,7 @@ export type Database = {
         Returns: Database["public"]["Enums"]["user_role"]
       }
       get_my_school: { Args: never; Returns: string }
+      is_school_active: { Args: { _school_id: string }; Returns: boolean }
       seed_default_time_slots: {
         Args: { _school_id: string }
         Returns: undefined
