@@ -1,23 +1,41 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
   Users,
-  Receipt,
+  CalendarDays,
   GraduationCap,
   ClipboardList,
   UserCheck,
-  BookOpen,
+  Boxes,
+  Package,
+  School,
+  Activity,
   Download,
   Filter,
   Search,
   FileSpreadsheet,
   FileText,
   Calendar,
+  ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
-type ReportKey = "alunos" | "matriculas" | "notas" | "testes" | "presencas" | "cursos";
+type ReportKey =
+  | "alunos"
+  | "presencas"
+  | "notas"
+  | "professores"
+  | "pedidos_ausencia"
+  | "pedidos_material"
+  | "stock"
+  | "eventos"
+  | "atividades";
 
 type ReportMeta = {
   key: ReportKey;
@@ -28,229 +46,445 @@ type ReportMeta = {
 };
 
 const reports: ReportMeta[] = [
-  {
-    key: "alunos",
-    label: "Alunos",
-    description: "Lista completa de alunos matriculados",
-    icon: Users,
-    color: "bg-pastel-blue text-pastel-blue-foreground",
-  },
-  {
-    key: "matriculas",
-    label: "Matrículas",
-    description: "Histórico de matrículas e renovações",
-    icon: Receipt,
-    color: "bg-pastel-lilac text-pastel-lilac-foreground",
-  },
-  {
-    key: "notas",
-    label: "Notas",
-    description: "Pautas e médias por disciplina",
-    icon: GraduationCap,
-    color: "bg-pastel-yellow text-pastel-yellow-foreground",
-  },
-  {
-    key: "testes",
-    label: "Testes",
-    description: "Resultados de testes e avaliações",
-    icon: ClipboardList,
-    color: "bg-pastel-pink text-pastel-pink-foreground",
-  },
-  {
-    key: "presencas",
-    label: "Presenças",
-    description: "Registo de presenças e faltas",
-    icon: UserCheck,
-    color: "bg-pastel-green text-pastel-green-foreground",
-  },
-  {
-    key: "cursos",
-    label: "Cursos",
-    description: "Cursos, turmas e ocupação",
-    icon: BookOpen,
-    color: "bg-pastel-blue text-pastel-blue-foreground",
-  },
+  { key: "alunos", label: "Alunos", description: "Lista de alunos por turma e curso", icon: Users, color: "bg-pastel-blue text-pastel-blue-foreground" },
+  { key: "presencas", label: "Presenças", description: "Registos de presenças e faltas", icon: UserCheck, color: "bg-pastel-green text-pastel-green-foreground" },
+  { key: "notas", label: "Notas", description: "Notas por aluno e avaliação", icon: GraduationCap, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+  { key: "professores", label: "Professores", description: "Lista de professores", icon: School, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
+  { key: "pedidos_ausencia", label: "Pedidos de Ausência", description: "Pedidos de staff", icon: ClipboardList, color: "bg-pastel-pink text-pastel-pink-foreground" },
+  { key: "pedidos_material", label: "Pedidos de Material", description: "Pedidos por professor/turma", icon: Package, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+  { key: "stock", label: "Stock de Material", description: "Inventário e stock baixo", icon: Boxes, color: "bg-pastel-blue text-pastel-blue-foreground" },
+  { key: "eventos", label: "Eventos", description: "Eventos da escola", icon: CalendarDays, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
+  { key: "atividades", label: "Atividades Extracurriculares", description: "Atividades e clubes", icon: Activity, color: "bg-pastel-green text-pastel-green-foreground" },
 ];
 
-// --- Mock data per report ---
-
-const alunosData = [
-  { nome: "Maria Silva", turma: "10ºA", curso: "Ciências", idade: 16, encarregado: "João Silva", estado: "Ativo" },
-  { nome: "Pedro Santos", turma: "11ºB", curso: "Humanidades", idade: 17, encarregado: "Ana Santos", estado: "Ativo" },
-  { nome: "Ana Costa", turma: "12ºC", curso: "Artes", idade: 18, encarregado: "Rui Costa", estado: "Ativo" },
-  { nome: "Tiago Mendes", turma: "10ºA", curso: "Ciências", idade: 16, encarregado: "Marta Mendes", estado: "Inativo" },
-  { nome: "Sofia Lopes", turma: "11ºB", curso: "Humanidades", idade: 17, encarregado: "Paulo Lopes", estado: "Ativo" },
-];
-
-const matriculasData = [
-  { aluno: "Maria Silva", curso: "Ciências", anoLetivo: "2024/25", data: "2024-09-01", valor: "85.000 Kz", estado: "Paga" },
-  { aluno: "Pedro Santos", curso: "Humanidades", anoLetivo: "2024/25", data: "2024-09-03", valor: "85.000 Kz", estado: "Paga" },
-  { aluno: "Ana Costa", curso: "Artes", anoLetivo: "2024/25", data: "2024-09-05", valor: "90.000 Kz", estado: "Pendente" },
-  { aluno: "Sofia Lopes", curso: "Humanidades", anoLetivo: "2024/25", data: "2024-09-07", valor: "85.000 Kz", estado: "Paga" },
-];
-
-const notasData = [
-  { aluno: "Maria Silva", turma: "10ºA", disciplina: "Matemática", trimestre: "1º", nota: 16, estado: "Aprovado" },
-  { aluno: "Pedro Santos", turma: "11ºB", disciplina: "Português", trimestre: "1º", nota: 14, estado: "Aprovado" },
-  { aluno: "Ana Costa", turma: "12ºC", disciplina: "História", trimestre: "1º", nota: 18, estado: "Aprovado" },
-  { aluno: "Tiago Mendes", turma: "10ºA", disciplina: "Matemática", trimestre: "1º", nota: 8, estado: "Reprovado" },
-  { aluno: "Sofia Lopes", turma: "11ºB", disciplina: "Filosofia", trimestre: "1º", nota: 13, estado: "Aprovado" },
-];
-
-const testesData = [
-  { titulo: "Teste Funções", disciplina: "Matemática", turma: "10ºA", data: "2025-04-10", media: 13.5, aprovados: "82%" },
-  { titulo: "Exame Português", disciplina: "Português", turma: "11ºB", data: "2025-04-12", media: 14.2, aprovados: "88%" },
-  { titulo: "Trabalho Grupo", disciplina: "História", turma: "12ºC", data: "2025-04-15", media: 16.0, aprovados: "95%" },
-  { titulo: "Oral Filosofia", disciplina: "Filosofia", turma: "11ºB", data: "2025-04-18", media: 12.8, aprovados: "76%" },
-];
-
-const presencasData = [
-  { aluno: "Maria Silva", turma: "10ºA", presencas: 58, faltas: 2, atrasos: 1, percent: "96%" },
-  { aluno: "Pedro Santos", turma: "11ºB", presencas: 55, faltas: 5, atrasos: 0, percent: "92%" },
-  { aluno: "Ana Costa", turma: "12ºC", presencas: 60, faltas: 0, atrasos: 0, percent: "100%" },
-  { aluno: "Tiago Mendes", turma: "10ºA", presencas: 45, faltas: 12, atrasos: 3, percent: "75%" },
-  { aluno: "Sofia Lopes", turma: "11ºB", presencas: 57, faltas: 3, atrasos: 0, percent: "95%" },
-];
-
-const cursosData = [
-  { nome: "Ciências", turmas: 4, alunos: 92, professores: 12, ocupacao: "85%" },
-  { nome: "Humanidades", turmas: 3, alunos: 70, professores: 9, ocupacao: "78%" },
-  { nome: "Artes", turmas: 2, alunos: 38, professores: 6, ocupacao: "62%" },
-  { nome: "Tecnologias", turmas: 3, alunos: 65, professores: 8, ocupacao: "72%" },
-];
-
-const turmasOptions = ["Todas", "10ºA", "11ºB", "12ºC"];
-const cursosOptions = ["Todos", "Ciências", "Humanidades", "Artes", "Tecnologias"];
-const estadoOptions = ["Todos", "Ativo", "Inativo", "Paga", "Pendente", "Aprovado", "Reprovado"];
+const fmtDate = (d: string | null | undefined) =>
+  d ? new Date(d).toLocaleDateString("pt-PT") : "—";
 
 const Relatorios = () => {
+  const { user } = useAuth();
+  const [schoolId, setSchoolId] = useState<string | null>(null);
+  const [schoolName, setSchoolName] = useState<string>("");
+  const [role, setRole] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
   const [active, setActive] = useState<ReportKey>("alunos");
   const [search, setSearch] = useState("");
-  const [turma, setTurma] = useState("Todas");
-  const [curso, setCurso] = useState("Todos");
-  const [estado, setEstado] = useState("Todos");
+  const [turma, setTurma] = useState("all");
+  const [curso, setCurso] = useState("all");
+  const [estado, setEstado] = useState("all");
+  const [professorFilter, setProfessorFilter] = useState("all");
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
 
+  // Raw data
+  const [students, setStudents] = useState<any[]>([]);
+  const [classrooms, setClassrooms] = useState<any[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
+  const [profilesMap, setProfilesMap] = useState<Map<string, string>>(new Map());
+  const [attendance, setAttendance] = useState<any[]>([]);
+  const [grades, setGrades] = useState<any[]>([]);
+  const [assessments, setAssessments] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<any[]>([]);
+  const [teachers, setTeachers] = useState<any[]>([]);
+  const [absences, setAbsences] = useState<any[]>([]);
+  const [matRequests, setMatRequests] = useState<any[]>([]);
+  const [materials, setMaterials] = useState<any[]>([]);
+  const [events, setEvents] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("school_id, role")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (!profile?.school_id) { setLoading(false); return; }
+      setSchoolId(profile.school_id);
+      setRole(profile.role);
+
+      const sid = profile.school_id;
+      const [school, st, cls, crs, prof, att, gr, asm, sub, tch, abs, mr, mat, ev, act] = await Promise.all([
+        supabase.from("schools").select("name").eq("id", sid).maybeSingle(),
+        supabase.from("students").select("*").eq("school_id", sid),
+        supabase.from("classrooms").select("id, name, course_id").eq("school_id", sid),
+        supabase.from("courses").select("id, name").eq("school_id", sid),
+        supabase.from("profiles").select("id, full_name").eq("school_id", sid),
+        supabase.from("attendance").select("*").eq("school_id", sid),
+        supabase.from("grades").select("*"),
+        supabase.from("assessments").select("*").eq("school_id", sid),
+        supabase.from("subjects").select("id, name").eq("school_id", sid),
+        supabase.from("teachers").select("*").eq("school_id", sid),
+        supabase.from("staff_absences").select("*").eq("school_id", sid),
+        supabase.from("material_requests").select("*").eq("school_id", sid),
+        supabase.from("materials").select("*").eq("school_id", sid),
+        supabase.from("events").select("*").eq("school_id", sid),
+        supabase.from("extracurricular_activities").select("*").eq("school_id", sid),
+      ]);
+      setSchoolName(school.data?.name ?? "");
+      setStudents(st.data ?? []);
+      setClassrooms(cls.data ?? []);
+      setCourses(crs.data ?? []);
+      const pm = new Map<string, string>();
+      (prof.data ?? []).forEach((p: any) => pm.set(p.id, p.full_name));
+      setProfilesMap(pm);
+      setAttendance(att.data ?? []);
+      setGrades(gr.data ?? []);
+      setAssessments(asm.data ?? []);
+      setSubjects(sub.data ?? []);
+      setTeachers(tch.data ?? []);
+      setAbsences(abs.data ?? []);
+      setMatRequests(mr.data ?? []);
+      setMaterials(mat.data ?? []);
+      setEvents(ev.data ?? []);
+      setActivities(act.data ?? []);
+      setLoading(false);
+    };
+    load();
+  }, [user?.id]);
+
+  const isAdmin = role === "ADMIN";
+
   const meta = reports.find((r) => r.key === active)!;
 
+  // Lookup helpers
+  const classroomName = (id: string | null) => classrooms.find((c) => c.id === id)?.name ?? "—";
+  const courseName = (id: string | null) => courses.find((c) => c.id === id)?.name ?? "—";
+  const subjectName = (id: string | null) => subjects.find((s) => s.id === id)?.name ?? "—";
+  const studentName = (id: string | null) => students.find((s) => s.id === id)?.full_name ?? "—";
+  const profileName = (id: string | null) => (id ? profilesMap.get(id) ?? "—" : "—");
+
+  // Estado options per report
+  const estadoOptionsByReport: Record<ReportKey, { value: string; label: string }[]> = {
+    alunos: [],
+    presencas: [
+      { value: "PRESENT", label: "Presente" },
+      { value: "ABSENT", label: "Ausente" },
+      { value: "LATE", label: "Atrasado" },
+      { value: "JUSTIFIED", label: "Justificado" },
+    ],
+    notas: [],
+    professores: [
+      { value: "active", label: "Ativos" },
+      { value: "inactive", label: "Inativos" },
+    ],
+    pedidos_ausencia: [
+      { value: "PENDING", label: "Pendente" },
+      { value: "APPROVED", label: "Aprovado" },
+      { value: "REJECTED", label: "Rejeitado" },
+    ],
+    pedidos_material: [
+      { value: "pendente", label: "Pendente" },
+      { value: "aprovado", label: "Aprovado" },
+      { value: "rejeitado", label: "Rejeitado" },
+      { value: "entregue", label: "Entregue" },
+    ],
+    stock: [
+      { value: "low", label: "Stock baixo" },
+    ],
+    eventos: [],
+    atividades: [],
+  };
+
+  const teacherOptions = useMemo(() => {
+    return teachers
+      .map((t) => ({ id: t.profile_id, name: profilesMap.get(t.profile_id) ?? "—" }))
+      .filter((t) => t.id);
+  }, [teachers, profilesMap]);
+
+  const inDate = (d: string | null | undefined) => {
+    if (!d) return !dataInicio && !dataFim;
+    if (dataInicio && d < dataInicio) return false;
+    if (dataFim && d > dataFim) return false;
+    return true;
+  };
+
   const { columns, rows } = useMemo(() => {
-    const matchSearch = (row: Record<string, unknown>) => {
-      if (!search.trim()) return true;
-      return Object.values(row).some((v) => String(v).toLowerCase().includes(search.toLowerCase()));
-    };
-    const matchTurma = (v: string) => turma === "Todas" || v === turma;
-    const matchCurso = (v: string) => curso === "Todos" || v === curso;
-    const matchEstado = (v: string) => estado === "Todos" || v === estado;
-    const matchDate = (d: string) => {
-      if (!dataInicio && !dataFim) return true;
-      if (dataInicio && d < dataInicio) return false;
-      if (dataFim && d > dataFim) return false;
-      return true;
-    };
+    const q = search.trim().toLowerCase();
+    const matchText = (...parts: (string | number | null | undefined)[]) =>
+      !q || parts.some((p) => String(p ?? "").toLowerCase().includes(q));
 
     switch (active) {
-      case "alunos":
+      case "alunos": {
+        const data = students.filter((s) => {
+          if (turma !== "all" && s.classroom_id !== turma) return false;
+          if (curso !== "all") {
+            const cls = classrooms.find((c) => c.id === s.classroom_id);
+            if (cls?.course_id !== curso) return false;
+          }
+          return matchText(s.full_name, s.email, s.phone, s.enrollment_number);
+        });
         return {
-          columns: ["Nome", "Turma", "Curso", "Idade", "Encarregado", "Estado"],
-          rows: alunosData
-            .filter((r) => matchTurma(r.turma) && matchCurso(r.curso) && matchEstado(r.estado) && matchSearch(r))
-            .map((r) => [r.nome, r.turma, r.curso, r.idade, r.encarregado, r.estado]),
+          columns: ["Nº", "Nome", "Turma", "Curso", "Data Nasc.", "Email", "Telefone", "Encarregado"],
+          rows: data.map((s) => {
+            const cls = classrooms.find((c) => c.id === s.classroom_id);
+            return [
+              s.enrollment_number ?? "—",
+              s.full_name,
+              cls?.name ?? "—",
+              cls ? courseName(cls.course_id) : "—",
+              fmtDate(s.birth_date),
+              s.email ?? "—",
+              s.phone ?? "—",
+              profileName(s.parent_id),
+            ];
+          }),
         };
-      case "matriculas":
+      }
+      case "presencas": {
+        const data = attendance.filter((a) => {
+          if (turma !== "all" && a.classroom_id !== turma) return false;
+          if (estado !== "all" && a.status !== estado) return false;
+          if (!inDate(a.date)) return false;
+          const sName = studentName(a.student_id);
+          return matchText(sName, a.notes);
+        });
         return {
-          columns: ["Aluno", "Curso", "Ano Letivo", "Data", "Valor", "Estado"],
-          rows: matriculasData
-            .filter((r) => matchCurso(r.curso) && matchEstado(r.estado) && matchDate(r.data) && matchSearch(r))
-            .map((r) => [r.aluno, r.curso, r.anoLetivo, r.data, r.valor, r.estado]),
+          columns: ["Data", "Aluno", "Turma", "Estado", "Professor", "Notas"],
+          rows: data.map((a) => [
+            fmtDate(a.date),
+            studentName(a.student_id),
+            classroomName(a.classroom_id),
+            ({ PRESENT: "Presente", ABSENT: "Ausente", LATE: "Atrasado", JUSTIFIED: "Justificado" } as any)[a.status] ?? a.status,
+            profileName(a.teacher_id),
+            a.notes ?? "—",
+          ]),
         };
-      case "notas":
+      }
+      case "notas": {
+        const data = grades.filter((g) => {
+          const a = assessments.find((x) => x.id === g.assessment_id);
+          if (!a) return false;
+          if (turma !== "all" && a.classroom_id !== turma) return false;
+          if (!inDate(a.date)) return false;
+          const sName = studentName(g.student_id);
+          return matchText(sName, a.title, subjectName(a.subject_id));
+        });
         return {
-          columns: ["Aluno", "Turma", "Disciplina", "Trimestre", "Nota", "Estado"],
-          rows: notasData
-            .filter((r) => matchTurma(r.turma) && matchEstado(r.estado) && matchSearch(r))
-            .map((r) => [r.aluno, r.turma, r.disciplina, r.trimestre, r.nota, r.estado]),
+          columns: ["Data", "Aluno", "Turma", "Disciplina", "Avaliação", "Nota"],
+          rows: data.map((g) => {
+            const a = assessments.find((x) => x.id === g.assessment_id);
+            return [
+              fmtDate(a?.date),
+              studentName(g.student_id),
+              classroomName(a?.classroom_id ?? null),
+              subjectName(a?.subject_id ?? null),
+              a?.title ?? "—",
+              g.score,
+            ];
+          }),
         };
-      case "testes":
+      }
+      case "professores": {
+        const data = teachers.filter((t) => {
+          if (estado === "active" && !t.is_active) return false;
+          if (estado === "inactive" && t.is_active) return false;
+          return matchText(profileName(t.profile_id), t.employee_id, subjectName(t.subject_id));
+        });
         return {
-          columns: ["Título", "Disciplina", "Turma", "Data", "Média", "Aprovados"],
-          rows: testesData
-            .filter((r) => matchTurma(r.turma) && matchDate(r.data) && matchSearch(r))
-            .map((r) => [r.titulo, r.disciplina, r.turma, r.data, r.media, r.aprovados]),
+          columns: ["Nome", "Nº Funcionário", "Disciplina", "Data Contratação", "Estado"],
+          rows: data.map((t) => [
+            profileName(t.profile_id),
+            t.employee_id ?? "—",
+            subjectName(t.subject_id),
+            fmtDate(t.hire_date),
+            t.is_active ? "Ativo" : "Inativo",
+          ]),
         };
-      case "presencas":
+      }
+      case "pedidos_ausencia": {
+        const data = absences.filter((a) => {
+          if (estado !== "all" && a.status !== estado) return false;
+          if (dataInicio && a.end_date < dataInicio) return false;
+          if (dataFim && a.start_date > dataFim) return false;
+          return matchText(profileName(a.profile_id ?? a.requester_id), a.reason, a.description);
+        });
         return {
-          columns: ["Aluno", "Turma", "Presenças", "Faltas", "Atrasos", "% Presença"],
-          rows: presencasData
-            .filter((r) => matchTurma(r.turma) && matchSearch(r))
-            .map((r) => [r.aluno, r.turma, r.presencas, r.faltas, r.atrasos, r.percent]),
+          columns: ["Funcionário", "Motivo", "Início", "Fim", "Estado", "Descrição"],
+          rows: data.map((a) => [
+            profileName(a.profile_id ?? a.requester_id),
+            a.reason,
+            fmtDate(a.start_date),
+            fmtDate(a.end_date),
+            a.status,
+            a.description ?? "—",
+          ]),
         };
-      case "cursos":
+      }
+      case "pedidos_material": {
+        const data = matRequests.filter((r) => {
+          if (estado !== "all" && r.status !== estado) return false;
+          if (professorFilter !== "all" && r.requester_id !== professorFilter) return false;
+          if (turma !== "all" && r.classroom_id !== turma) return false;
+          if (!inDate(r.needed_date)) return false;
+          return matchText(r.item_name, r.teacher_name, r.recipient, r.description);
+        });
         return {
-          columns: ["Nome", "Turmas", "Alunos", "Professores", "Ocupação"],
-          rows: cursosData
-            .filter((r) => matchCurso(r.nome) && matchSearch(r))
-            .map((r) => [r.nome, r.turmas, r.alunos, r.professores, r.ocupacao]),
+          columns: ["Material", "Qtd", "Professor", "Turma", "Aluno", "Dia", "Estado"],
+          rows: data.map((r) => [
+            r.item_name,
+            r.quantity,
+            r.teacher_name ?? profileName(r.requester_id),
+            classroomName(r.classroom_id),
+            r.student_id ? studentName(r.student_id) : "—",
+            fmtDate(r.needed_date),
+            r.status,
+          ]),
         };
+      }
+      case "stock": {
+        const data = materials.filter((m) => {
+          if (estado === "low" && !(m.quantity < m.min_quantity)) return false;
+          return matchText(m.name, m.sku, m.category, m.location);
+        });
+        return {
+          columns: ["Nome", "Categoria", "SKU", "Quantidade", "Mínimo", "Unidade", "Localização"],
+          rows: data.map((m) => [m.name, m.category, m.sku ?? "—", m.quantity, m.min_quantity, m.unit, m.location ?? "—"]),
+        };
+      }
+      case "eventos": {
+        const data = events.filter((e) => {
+          if (!inDate(e.event_date)) return false;
+          return matchText(e.title, e.type, e.location, e.organizer);
+        });
+        return {
+          columns: ["Data", "Título", "Tipo", "Localização", "Organizador", "Audiência"],
+          rows: data.map((e) => [fmtDate(e.event_date), e.title, e.type, e.location ?? "—", e.organizer ?? "—", e.audience ?? "—"]),
+        };
+      }
+      case "atividades": {
+        const data = activities.filter((a) => {
+          return matchText(a.name, a.category, a.responsible, a.location);
+        });
+        return {
+          columns: ["Nome", "Categoria", "Responsável", "Localização", "Capacidade", "Recorrente"],
+          rows: data.map((a) => [a.name, a.category, a.responsible ?? "—", a.location ?? "—", a.capacity, a.is_recurring ? "Sim" : "Não"]),
+        };
+      }
     }
-  }, [active, search, turma, curso, estado, dataInicio, dataFim]);
+  }, [active, search, turma, curso, estado, professorFilter, dataInicio, dataFim, students, classrooms, courses, attendance, grades, assessments, subjects, teachers, absences, matRequests, materials, events, activities, profilesMap]);
 
-  const exportCSV = () => {
-    const header = columns.join(",");
-    const body = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const csv = `${header}\n${body}`;
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `relatorio-${active}-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast({ title: "Relatório exportado", description: `${meta.label} • ${rows.length} registos` });
+  const filtersSummary = useMemo(() => {
+    const parts: string[] = [];
+    if (search) parts.push(`Pesquisa: "${search}"`);
+    if (turma !== "all") parts.push(`Turma: ${classroomName(turma)}`);
+    if (curso !== "all") parts.push(`Curso: ${courseName(curso)}`);
+    if (estado !== "all") parts.push(`Estado: ${estado}`);
+    if (professorFilter !== "all") parts.push(`Professor: ${profileName(professorFilter)}`);
+    if (dataInicio) parts.push(`De: ${fmtDate(dataInicio)}`);
+    if (dataFim) parts.push(`Até: ${fmtDate(dataFim)}`);
+    return parts;
+  }, [search, turma, curso, estado, professorFilter, dataInicio, dataFim, classrooms, courses, profilesMap]);
+
+  const exportXLSX = () => {
+    const ws = XLSX.utils.aoa_to_sheet([columns, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, meta.label.slice(0, 31));
+    const filename = `relatorio-${active}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, filename);
+    toast({ title: "Excel exportado", description: `${meta.label} • ${rows.length} registos` });
   };
 
   const exportPDF = () => {
-    toast({ title: "A preparar PDF", description: `${meta.label} • ${rows.length} registos` });
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text(schoolName || "Relatório", 40, 40);
+
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Relatório de ${meta.label}`, 40, 58);
+
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text(`Gerado em ${new Date().toLocaleString("pt-PT")}`, pageWidth - 40, 40, { align: "right" });
+    doc.text(`${rows.length} registos`, pageWidth - 40, 54, { align: "right" });
+
+    if (filtersSummary.length) {
+      doc.setFontSize(8);
+      doc.setTextColor(80);
+      doc.text(`Filtros: ${filtersSummary.join(" · ")}`, 40, 75, { maxWidth: pageWidth - 80 });
+    }
+
+    autoTable(doc, {
+      head: [columns],
+      body: rows.map((r) => r.map((c) => (c == null ? "—" : String(c)))),
+      startY: filtersSummary.length ? 90 : 75,
+      styles: { fontSize: 8, cellPadding: 4 },
+      headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [245, 247, 250] },
+      margin: { left: 40, right: 40 },
+    });
+
+    const filename = `relatorio-${active}-${new Date().toISOString().slice(0, 10)}.pdf`;
+    doc.save(filename);
+    toast({ title: "PDF exportado", description: `${meta.label} • ${rows.length} registos` });
   };
 
-  const showTurma = ["alunos", "notas", "testes", "presencas"].includes(active);
-  const showCurso = ["alunos", "matriculas", "cursos"].includes(active);
-  const showEstado = ["alunos", "matriculas", "notas"].includes(active);
-  const showDate = ["matriculas", "testes"].includes(active);
+  // Visibility of filters per report
+  const showTurma = ["alunos", "presencas", "notas", "pedidos_material"].includes(active);
+  const showCurso = active === "alunos";
+  const showEstado = (estadoOptionsByReport[active] ?? []).length > 0;
+  const showProfessor = active === "pedidos_material";
+  const showDate = ["presencas", "notas", "pedidos_ausencia", "pedidos_material", "eventos"].includes(active);
+
+  if (!loading && !isAdmin) {
+    return (
+      <DashboardLayout>
+        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-center">
+          <ShieldAlert className="h-10 w-10 text-muted-foreground" />
+          <h1 className="text-xl font-bold text-foreground">Acesso restrito</h1>
+          <p className="text-sm text-muted-foreground">Apenas administradores podem aceder aos relatórios.</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
+      <div className="flex flex-col gap-6">
       {/* Header */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Relatórios</h1>
-          <p className="text-sm text-muted-foreground">Extraia listas detalhadas com filtros personalizados</p>
+          <p className="text-sm text-muted-foreground">Filtre os dados da escola e exporte para Excel ou PDF</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={exportPDF}
+            disabled={loading || rows.length === 0}
             className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition-[var(--transition-smooth)]"
           >
             <FileText className="h-4 w-4" /> PDF
           </button>
           <button
-            onClick={exportCSV}
+            onClick={exportXLSX}
+            disabled={loading || rows.length === 0}
             className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-soft hover:opacity-90 transition-[var(--transition-smooth)]"
           >
-            <FileSpreadsheet className="h-4 w-4" /> Exportar CSV
+            <FileSpreadsheet className="h-4 w-4" /> Exportar Excel
           </button>
         </div>
       </div>
 
       {/* Report selector cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-5">
         {reports.map((r) => {
           const Icon = r.icon;
           const isActive = active === r.key;
           return (
             <button
               key={r.key}
-              onClick={() => setActive(r.key)}
+              onClick={() => {
+                setActive(r.key);
+                setEstado("all");
+                setTurma("all");
+                setCurso("all");
+                setProfessorFilter("all");
+              }}
               className={cn(
                 "group flex flex-col items-start gap-2 rounded-2xl border p-4 text-left transition-[var(--transition-smooth)]",
                 isActive
@@ -292,9 +526,8 @@ const Relatorios = () => {
               onChange={(e) => setTurma(e.target.value)}
               className="h-10 rounded-xl border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {turmasOptions.map((o) => (
-                <option key={o}>{o}</option>
-              ))}
+              <option value="all">Todas as turmas</option>
+              {classrooms.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           )}
 
@@ -304,9 +537,8 @@ const Relatorios = () => {
               onChange={(e) => setCurso(e.target.value)}
               className="h-10 rounded-xl border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {cursosOptions.map((o) => (
-                <option key={o}>{o}</option>
-              ))}
+              <option value="all">Todos os cursos</option>
+              {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           )}
 
@@ -316,9 +548,19 @@ const Relatorios = () => {
               onChange={(e) => setEstado(e.target.value)}
               className="h-10 rounded-xl border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {estadoOptions.map((o) => (
-                <option key={o}>{o}</option>
-              ))}
+              <option value="all">Todos os estados</option>
+              {estadoOptionsByReport[active].map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          )}
+
+          {showProfessor && (
+            <select
+              value={professorFilter}
+              onChange={(e) => setProfessorFilter(e.target.value)}
+              className="h-10 rounded-xl border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="all">Todos os professores</option>
+              {teacherOptions.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           )}
 
@@ -356,11 +598,12 @@ const Relatorios = () => {
             </span>
             <div>
               <h2 className="text-base font-semibold text-foreground">Relatório de {meta.label}</h2>
-              <p className="text-xs text-muted-foreground">{rows.length} registos encontrados</p>
+              <p className="text-xs text-muted-foreground">{loading ? "A carregar..." : `${rows.length} registos encontrados`}</p>
             </div>
           </div>
           <button
-            onClick={exportCSV}
+            onClick={exportXLSX}
+            disabled={loading || rows.length === 0}
             className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground hover:bg-muted transition-[var(--transition-smooth)]"
           >
             <Download className="h-3.5 w-3.5" /> Descarregar
@@ -368,7 +611,7 @@ const Relatorios = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[800px] text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40">
                 {columns.map((c) => (
@@ -379,7 +622,13 @@ const Relatorios = () => {
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={columns.length} className="px-5 py-12 text-center text-sm text-muted-foreground">
+                    A carregar dados...
+                  </td>
+                </tr>
+              ) : rows.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length} className="px-5 py-12 text-center text-sm text-muted-foreground">
                     Sem resultados para os filtros selecionados.
@@ -390,7 +639,7 @@ const Relatorios = () => {
                   <tr key={i} className="border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors">
                     {row.map((cell, j) => (
                       <td key={j} className="px-5 py-3 text-foreground">
-                        {cell}
+                        {cell == null || cell === "" ? "—" : String(cell)}
                       </td>
                     ))}
                   </tr>
@@ -399,6 +648,7 @@ const Relatorios = () => {
             </tbody>
           </table>
         </div>
+      </div>
       </div>
     </DashboardLayout>
   );
