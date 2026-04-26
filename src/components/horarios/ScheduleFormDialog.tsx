@@ -156,12 +156,12 @@ export const ScheduleFormDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col">
         <DialogHeader>
           <DialogTitle>{form.id ? "Editar aula" : "Nova aula"}</DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto pr-1 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>Turma *</Label>
             <Select value={form.classroom_id ?? ""} onValueChange={(v) => update("classroom_id", v)}>
@@ -260,12 +260,12 @@ export const ScheduleFormDialog = ({
           </div>
         </div>
 
-        <div className="flex items-start gap-2 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
+        <div className="flex shrink-0 items-start gap-2 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>O sistema deteta automaticamente conflitos de turma, professor e sala.</span>
         </div>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="shrink-0 gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
