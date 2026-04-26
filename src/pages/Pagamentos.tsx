@@ -454,10 +454,119 @@ const Pagamentos = () => {
 
         <Tabs defaultValue="rules" className="w-full">
           <TabsList>
+            <TabsTrigger value="fees">Propinas</TabsTrigger>
             <TabsTrigger value="rules">Regras de propina</TabsTrigger>
             <TabsTrigger value="family">Descontos por irmão</TabsTrigger>
             <TabsTrigger value="overrides">Descontos por aluno</TabsTrigger>
           </TabsList>
+
+          {/* FEES TAB */}
+          <TabsContent value="fees" className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total recebido</CardTitle></CardHeader>
+                <CardContent><p className="text-2xl font-bold text-emerald-600">{fmtAOA(feeStats.paid)}</p></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em dívida</CardTitle></CardHeader>
+                <CardContent><p className="text-2xl font-bold text-amber-600">{fmtAOA(feeStats.pending)}</p></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em atraso</CardTitle></CardHeader>
+                <CardContent><p className="text-2xl font-bold text-destructive">{fmtAOA(feeStats.overdue)}</p></CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <CardTitle>Lista de propinas</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">Controla o estado das propinas e envia lembretes aos encarregados.</p>
+                </div>
+                <Button onClick={sendBulkReminders} size="sm" variant="outline" className="gap-2">
+                  <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input className="pl-9" placeholder="Pesquisar aluno..." value={feeSearch} onChange={(e) => setFeeSearch(e.target.value)} />
+                  </div>
+                  <Select value={feeFilter} onValueChange={(v) => setFeeFilter(v as typeof feeFilter)}>
+                    <SelectTrigger className="md:w-44"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="pending">Não pagas</SelectItem>
+                      <SelectItem value="overdue">Em atraso</SelectItem>
+                      <SelectItem value="paid">Pagas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={feeYearFilter} onValueChange={setFeeYearFilter}>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Ano letivo" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os anos</SelectItem>
+                      {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {loading ? (
+                  <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                ) : filteredFees.length === 0 ? (
+                  <p className="text-center py-10 text-muted-foreground">Sem propinas a apresentar.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="py-2 px-2">Aluno</th>
+                          <th className="py-2 px-2">Mês</th>
+                          <th className="py-2 px-2">Vencimento</th>
+                          <th className="py-2 px-2">Valor</th>
+                          <th className="py-2 px-2">Estado</th>
+                          <th className="py-2 px-2 text-right">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredFees.slice(0, 200).map((f) => {
+                          const overdue = !f.is_paid && new Date(f.due_date).getTime() < Date.now();
+                          return (
+                            <tr key={f.id} className="border-b hover:bg-muted/30">
+                              <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
+                              <td className="py-2 px-2">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
+                              <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
+                              <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
+                              <td className="py-2 px-2">
+                                {f.is_paid ? (
+                                  <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Pago</Badge>
+                                ) : overdue ? (
+                                  <Badge variant="destructive">Em atraso</Badge>
+                                ) : (
+                                  <Badge variant="secondary">Pendente</Badge>
+                                )}
+                              </td>
+                              <td className="py-2 px-2 text-right">
+                                {!f.is_paid && (
+                                  <Button size="sm" variant="outline" className="gap-2" onClick={() => sendReminder(f)} disabled={remindingFeeId === f.id || !f.student?.parent_id}>
+                                    {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                    Cobrar
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {filteredFees.length > 200 && (
+                      <p className="text-xs text-muted-foreground text-center py-3">A mostrar 200 de {filteredFees.length}. Refina os filtros para ver as restantes.</p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* RULES TAB */}
           <TabsContent value="rules" className="space-y-4">
