@@ -43,6 +43,15 @@ const formatDateLong = (iso: string) => {
   return `${d.getDate().toString().padStart(2, "0")} ${monthNames[d.getMonth()].slice(0, 3)} ${d.getFullYear()}`;
 };
 
+const avatarColorMap: Record<string, string> = {
+  blue: "bg-pastel-blue text-pastel-blue-foreground",
+  pink: "bg-pastel-pink text-pastel-pink-foreground",
+  green: "bg-pastel-green text-pastel-green-foreground",
+  yellow: "bg-pastel-yellow text-pastel-yellow-foreground",
+  lilac: "bg-pastel-lilac text-pastel-lilac-foreground",
+};
+const avatarClass = (c?: string | null) => avatarColorMap[c ?? "blue"] ?? avatarColorMap.blue;
+
 const AvaliacaoNotas = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -338,7 +347,7 @@ const AvaliacaoNotas = () => {
                         <td className="px-6 py-4 text-muted-foreground">{idx + 1}</td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <span className={cn("flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold", `bg-pastel-${s.avatar_color ?? "blue"} text-pastel-${s.avatar_color ?? "blue"}-foreground`)}>
+                            <span className={cn("flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold", avatarClass(s.avatar_color))}>
                               {initials}
                             </span>
                             <span className="font-semibold text-foreground">{s.full_name}</span>
