@@ -22,9 +22,9 @@ export type RequestRow = {
   recipient: string | null;
   description: string | null;
   status: string;
+  needed_date: string | null;
 };
 
-type MaterialOpt = { id: string; name: string; category: string };
 type ClassroomOpt = { id: string; name: string };
 type StudentOpt = { id: string; full_name: string; classroom_id: string | null };
 
@@ -35,7 +35,6 @@ interface Props {
   userId: string | null;
   userName: string;
   request: RequestRow | null;
-  materials: MaterialOpt[];
   classrooms: ClassroomOpt[];
   students: StudentOpt[];
   onSaved: () => void;
@@ -44,13 +43,12 @@ interface Props {
 type Target = "turma" | "aluno";
 
 export const MaterialRequestFormDialog = ({
-  open, onOpenChange, schoolId, userId, userName, request, materials, classrooms, students, onSaved,
+  open, onOpenChange, schoolId, userId, userName, request, classrooms, students, onSaved,
 }: Props) => {
   const isEdit = !!request;
   const [saving, setSaving] = useState(false);
   const [target, setTarget] = useState<Target>("turma");
   const [form, setForm] = useState({
-    material_id: "" as string,
     item_name: "",
     category: "papelaria",
     quantity: 1,
@@ -58,6 +56,7 @@ export const MaterialRequestFormDialog = ({
     student_id: "" as string,
     recipient: "",
     description: "",
+    needed_date: "",
   });
 
   useEffect(() => {
@@ -65,7 +64,6 @@ export const MaterialRequestFormDialog = ({
       const t: Target = request?.student_id ? "aluno" : "turma";
       setTarget(t);
       setForm({
-        material_id: request?.material_id ?? "",
         item_name: request?.item_name ?? "",
         category: request?.category ?? "papelaria",
         quantity: request?.quantity ?? 1,
@@ -73,23 +71,18 @@ export const MaterialRequestFormDialog = ({
         student_id: request?.student_id ?? "",
         recipient: request?.recipient ?? "",
         description: request?.description ?? "",
+        needed_date: request?.needed_date ?? "",
       });
     }
   }, [open, request]);
 
-  const onPickMaterial = (id: string) => {
-    const m = materials.find((x) => x.id === id);
-    setForm((f) => ({
-      ...f,
-      material_id: id,
-      item_name: m?.name ?? f.item_name,
-      category: m?.category ?? f.category,
-    }));
-  };
-
   const submit = async () => {
     if (!form.item_name.trim()) {
-      toast({ title: "Selecione um material", variant: "destructive" });
+      toast({ title: "Indique o material", variant: "destructive" });
+      return;
+    }
+    if (!form.needed_date) {
+      toast({ title: "Indique o dia em que o aluno deve trazer o material", variant: "destructive" });
       return;
     }
     if (target === "turma" && !form.classroom_id) {
@@ -107,7 +100,7 @@ export const MaterialRequestFormDialog = ({
     setSaving(true);
     const payload = {
       school_id: schoolId,
-      material_id: form.material_id || null,
+      material_id: null,
       item_name: form.item_name.trim(),
       category: form.category,
       quantity: Number(form.quantity) || 1,
@@ -117,6 +110,7 @@ export const MaterialRequestFormDialog = ({
       student_id: target === "aluno" ? form.student_id : null,
       recipient: form.recipient.trim() || null,
       description: form.description.trim() || null,
+      needed_date: form.needed_date,
     };
     const { error } = isEdit
       ? await supabase.from("material_requests").update(payload).eq("id", request!.id)
@@ -143,17 +137,38 @@ export const MaterialRequestFormDialog = ({
         </DialogHeader>
         <div className="grid gap-4 py-2 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <Label>Material *</Label>
-            <Select value={form.material_id} onValueChange={onPickMaterial}>
-              <SelectTrigger><SelectValue placeholder="Selecionar do stock..." /></SelectTrigger>
+            <Label>Material a trazer *</Label>
+            <Input
+              value={form.item_name}
+              onChange={(e) => setForm({ ...form, item_name: e.target.value })}
+              placeholder="Ex: Régua de 30cm, livro de Matemática..."
+            />
+          </div>
+          <div>
+            <Label>Categoria</Label>
+            <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {materials.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+                <SelectItem value="papelaria">Papelaria</SelectItem>
+                <SelectItem value="laboratorio">Laboratório</SelectItem>
+                <SelectItem value="artes">Artes</SelectItem>
+                <SelectItem value="desporto">Desporto</SelectItem>
+                <SelectItem value="tecnologia">Tecnologia</SelectItem>
+                <SelectItem value="outro">Outro</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div>
             <Label>Quantidade *</Label>
             <Input type="number" min={1} value={form.quantity} onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) })} />
+          </div>
+          <div>
+            <Label>Dia para trazer *</Label>
+            <Input
+              type="date"
+              value={form.needed_date}
+              onChange={(e) => setForm({ ...form, needed_date: e.target.value })}
+            />
           </div>
           <div>
             <Label>Destinatário (Educador)</Label>

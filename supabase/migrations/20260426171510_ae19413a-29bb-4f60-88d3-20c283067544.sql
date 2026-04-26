@@ -1,0 +1,1 @@
+ALTER TABLE public.material_requests ADD COLUMN IF NOT EXISTS needed_date date;
