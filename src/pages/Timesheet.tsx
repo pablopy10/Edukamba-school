@@ -468,14 +468,16 @@ const Timesheet = () => {
                   <th className="px-4 py-3 text-left font-semibold">Entrada</th>
                   <th className="px-4 py-3 text-left font-semibold">Saída</th>
                   <th className="px-4 py-3 text-left font-semibold">Horas</th>
-                  <th className="px-4 py-3 text-left font-semibold">Localização</th>
+                  {isAdmin && (
+                    <th className="px-4 py-3 text-left font-semibold">Localização</th>
+                  )}
                   <th className="px-4 py-3 text-left font-semibold">Estado</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                    <td colSpan={isAdmin ? 7 : 6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                       <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                     </td>
                   </tr>
@@ -502,7 +504,7 @@ const Timesheet = () => {
                           </div>
                           <div>
                             <p className="font-semibold text-foreground">{e.employee_name}</p>
-                            <p className="text-xs text-muted-foreground">{e.role}</p>
+                            <p className="text-xs text-muted-foreground">{translateRole(e.role)}</p>
                           </div>
                         </div>
                       </td>
@@ -530,16 +532,18 @@ const Timesheet = () => {
                       <td className="px-4 py-3 font-semibold text-foreground">
                         {Number(e.hours_worked) > 0 ? `${Number(e.hours_worked).toFixed(2)}h` : "—"}
                       </td>
-                      <td className="px-4 py-3">
-                        {e.check_in_lat != null && e.check_in_lng != null ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                            <MapPin className="h-3.5 w-3.5" />
-                            {Number(e.check_in_lat).toFixed(4)}, {Number(e.check_in_lng).toFixed(4)}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
+                      {isAdmin && (
+                        <td className="px-4 py-3">
+                          {e.check_in_lat != null && e.check_in_lng != null ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              <MapPin className="h-3.5 w-3.5" />
+                              {Number(e.check_in_lat).toFixed(4)}, {Number(e.check_in_lng).toFixed(4)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                      )}
                       <td className="px-4 py-3">
                         <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold", meta.color)}>
                           <Icon className={cn("h-3 w-3", e.status === "em_curso" && "animate-spin")} />
@@ -551,7 +555,7 @@ const Timesheet = () => {
                 })}
                 {!loading && filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                    <td colSpan={isAdmin ? 7 : 6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                       Nenhum registo encontrado.
                     </td>
                   </tr>
