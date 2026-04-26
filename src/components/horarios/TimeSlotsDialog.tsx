@@ -156,18 +156,18 @@ export const TimeSlotsDialog = ({ open, onOpenChange, schoolId, onSaved }: Props
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="flex max-h-[85vh] max-w-3xl flex-col">
         <DialogHeader>
           <DialogTitle>Configurar blocos horários da escola</DialogTitle>
         </DialogHeader>
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as TimeSlot["shift"])}>
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as TimeSlot["shift"])} className="flex min-h-0 flex-1 flex-col">
+          <TabsList className="grid w-full shrink-0 grid-cols-3">
             {SHIFTS.map((s) => <TabsTrigger key={s.value} value={s.value}>{s.label}</TabsTrigger>)}
           </TabsList>
 
           {SHIFTS.map((s) => (
-            <TabsContent key={s.value} value={s.value} className="space-y-3">
+            <TabsContent key={s.value} value={s.value} className="mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
               {loading ? (
                 <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin" /></div>
               ) : (
@@ -209,7 +209,7 @@ export const TimeSlotsDialog = ({ open, onOpenChange, schoolId, onSaved }: Props
           ))}
         </Tabs>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="shrink-0 gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
           <Button onClick={handleSave} disabled={saving || loading}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
