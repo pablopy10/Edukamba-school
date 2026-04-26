@@ -661,6 +661,105 @@ export type Database = {
           },
         ]
       }
+      expense_categories: {
+        Row: {
+          color: string | null
+          created_at: string
+          id: string
+          name: string
+          school_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          school_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          school_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_categories_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expenses: {
+        Row: {
+          amount: number
+          category_id: string | null
+          created_at: string
+          created_by: string | null
+          description: string
+          expense_date: string
+          id: string
+          notes: string | null
+          payment_method: string | null
+          receipt_url: string | null
+          school_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          category_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description: string
+          expense_date?: string
+          id?: string
+          notes?: string | null
+          payment_method?: string | null
+          receipt_url?: string | null
+          school_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          category_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          expense_date?: string
+          id?: string
+          notes?: string | null
+          payment_method?: string | null
+          receipt_url?: string | null
+          school_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "expense_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       extracurricular_activities: {
         Row: {
           academic_year_id: string | null
@@ -742,6 +841,41 @@ export type Database = {
           },
         ]
       }
+      family_discount_rules: {
+        Row: {
+          created_at: string
+          discount_percentage: number
+          id: string
+          school_id: string
+          sibling_position: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          discount_percentage?: number
+          id?: string
+          school_id: string
+          sibling_position: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          discount_percentage?: number
+          id?: string
+          school_id?: string
+          sibling_position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "family_discount_rules_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fee_categories: {
         Row: {
           default_amount: number
@@ -767,6 +901,63 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "fee_categories_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fee_rules: {
+        Row: {
+          academic_year_id: string | null
+          created_at: string
+          due_day: number
+          grade_level: string
+          id: string
+          monthly_amount: number
+          months_count: number
+          notes: string | null
+          school_id: string
+          start_month: number
+          updated_at: string
+        }
+        Insert: {
+          academic_year_id?: string | null
+          created_at?: string
+          due_day?: number
+          grade_level: string
+          id?: string
+          monthly_amount?: number
+          months_count?: number
+          notes?: string | null
+          school_id: string
+          start_month?: number
+          updated_at?: string
+        }
+        Update: {
+          academic_year_id?: string | null
+          created_at?: string
+          due_day?: number
+          grade_level?: string
+          id?: string
+          monthly_amount?: number
+          months_count?: number
+          notes?: string | null
+          school_id?: string
+          start_month?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fee_rules_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fee_rules_school_id_fkey"
             columns: ["school_id"]
             isOneToOne: false
             referencedRelation: "schools"
@@ -1616,6 +1807,67 @@ export type Database = {
           },
         ]
       }
+      student_discounts: {
+        Row: {
+          academic_year_id: string | null
+          created_at: string
+          discount_fixed_amount: number | null
+          discount_percentage: number | null
+          id: string
+          is_active: boolean
+          reason: string | null
+          school_id: string
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          academic_year_id?: string | null
+          created_at?: string
+          discount_fixed_amount?: number | null
+          discount_percentage?: number | null
+          id?: string
+          is_active?: boolean
+          reason?: string | null
+          school_id: string
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          academic_year_id?: string | null
+          created_at?: string
+          discount_fixed_amount?: number | null
+          discount_percentage?: number | null
+          id?: string
+          is_active?: boolean
+          reason?: string | null
+          school_id?: string
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_discounts_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_discounts_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_discounts_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_fees: {
         Row: {
           academic_year_id: string | null
@@ -1985,6 +2237,10 @@ export type Database = {
           _year_start: string
         }
         Returns: string
+      }
+      generate_student_fees_for_year: {
+        Args: { _academic_year_id: string; _student_id: string }
+        Returns: number
       }
       get_auth_role: {
         Args: never
