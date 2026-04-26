@@ -277,6 +277,77 @@ const AlunoPerfil = () => {
     else toast({ title: "Lembrete enviado ao encarregado" });
   };
 
+  const latestPaymentByFee = useMemo(() => {
+    const map = new Map<string, PaymentRow>();
+    payments.forEach((p) => {
+      if (!p.student_fee_id) return;
+      if (!map.has(p.student_fee_id)) map.set(p.student_fee_id, p);
+    });
+    return map;
+  }, [payments]);
+
+  const openProofDialog = (fee: FeeRow) => {
+    setProofDialogFee(fee);
+    setProofFile(null);
+    setProofMethod("transferencia");
+    setProofNotes("");
+    setProofAmount(String(fee.amount_due));
+  };
+
+  const submitProof = async () => {
+    if (!student || !proofDialogFee) return;
+    if (!proofFile) {
+      toast({ title: "Selecione um ficheiro", description: "É necessário anexar o comprovativo.", variant: "destructive" });
+      return;
+    }
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id;
+    if (!userId) {
+      toast({ title: "Sessão expirada", variant: "destructive" });
+      return;
+    }
+    const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", userId).maybeSingle();
+    const schoolId = profile?.school_id;
+    if (!schoolId) {
+      toast({ title: "Escola não encontrada", variant: "destructive" });
+      return;
+    }
+    setProofUploading(true);
+    const ext = proofFile.name.split(".").pop() || "bin";
+    const path = `${schoolId}/${student.id}/${proofDialogFee.id}-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from("payment-proofs").upload(path, proofFile, { upsert: false });
+    if (upErr) {
+      setProofUploading(false);
+      toast({ title: "Erro a enviar ficheiro", description: upErr.message, variant: "destructive" });
+      return;
+    }
+    const amount = Number(proofAmount) || Number(proofDialogFee.amount_due);
+    const { error: insErr } = await supabase.from("payments").insert({
+      student_fee_id: proofDialogFee.id,
+      amount_paid: amount,
+      method: proofMethod,
+      proof_url: path,
+      status: "pendente",
+      submitted_by: userId,
+      school_id: schoolId,
+      notes: proofNotes || null,
+    });
+    setProofUploading(false);
+    if (insErr) {
+      toast({ title: "Erro a registar pagamento", description: insErr.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Comprovativo enviado", description: "A escola será notificada para validar." });
+    setProofDialogFee(null);
+    // Reload payments
+    const { data: payRows } = await supabase
+      .from("payments")
+      .select("id, student_fee_id, amount_paid, method, status, proof_url, payment_date, rejection_reason")
+      .in("student_fee_id", fees.map((f) => f.id))
+      .order("payment_date", { ascending: false });
+    setPayments((payRows ?? []) as PaymentRow[]);
+  };
+
   const subjectsAvg = useMemo(() => {
     const map = new Map<string, { sum: number; n: number }>();
     grades.forEach((g) => {
