@@ -53,7 +53,9 @@ const formatTime = (iso: string | null) => {
 };
 
 const Timesheet = () => {
-  const { profile } = useAuth();
+  const { user } = useAuth();
+  const [schoolId, setSchoolId] = useState<string | null>(null);
+  const [myProfileId, setMyProfileId] = useState<string | null>(null);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +70,20 @@ const Timesheet = () => {
   const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const schoolId = profile?.school_id;
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("profiles")
+      .select("id, school_id")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setSchoolId(data.school_id);
+          setMyProfileId(data.id);
+        }
+      });
+  }, [user]);
 
   const loadAll = async () => {
     if (!schoolId) return;
@@ -100,7 +115,7 @@ const Timesheet = () => {
         role: p.role ?? "",
       }));
       setEmployees(list);
-      if (!selectedEmployeeId && profile?.id) setSelectedEmployeeId(profile.id);
+      if (!selectedEmployeeId && myProfileId) setSelectedEmployeeId(myProfileId);
       else if (!selectedEmployeeId && list[0]) setSelectedEmployeeId(list[0].id);
     }
 
