@@ -462,26 +462,10 @@ const ProfessorPerfil = () => {
               <FileText className="h-5 w-5 text-pastel-lilac-foreground" strokeWidth={1.75} />
               <h2 className="text-lg font-bold text-foreground">Avaliações Criadas</h2>
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setDialogOpen(true)}
-                className="inline-flex h-9 items-center gap-1.5 rounded-full bg-pastel-lilac px-4 text-xs font-semibold text-pastel-lilac-foreground shadow-soft transition-opacity hover:opacity-90"
-              >
-                <Plus className="h-4 w-4" strokeWidth={2} /> Nova avaliação
-              </button>
-              <Link to="/avaliacoes" className="text-xs font-medium text-pastel-lilac-foreground hover:underline">Ver todas</Link>
-            </div>
+            <Link to="/avaliacoes" className="text-xs font-medium text-pastel-lilac-foreground hover:underline">Ver todas</Link>
           </div>
           {assessments.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="text-sm text-muted-foreground">Sem avaliações criadas.</p>
-              <button
-                onClick={() => setDialogOpen(true)}
-                className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-full bg-pastel-lilac px-4 text-xs font-semibold text-pastel-lilac-foreground shadow-soft transition-opacity hover:opacity-90"
-              >
-                <Plus className="h-4 w-4" strokeWidth={2} /> Criar primeira avaliação
-              </button>
-            </div>
+            <p className="p-8 text-center text-sm text-muted-foreground">Sem avaliações criadas.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
