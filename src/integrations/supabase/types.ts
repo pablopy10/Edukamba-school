@@ -853,38 +853,73 @@ export type Database = {
       }
       schedules: {
         Row: {
+          academic_year_id: string | null
           classroom_id: string | null
+          created_at: string
           day_of_week: number
           end_time: string
           id: string
+          notes: string | null
+          room: string | null
+          school_id: string | null
+          shift: string | null
           start_time: string
           subject_id: string | null
           teacher_id: string | null
+          updated_at: string
         }
         Insert: {
+          academic_year_id?: string | null
           classroom_id?: string | null
+          created_at?: string
           day_of_week: number
           end_time: string
           id?: string
+          notes?: string | null
+          room?: string | null
+          school_id?: string | null
+          shift?: string | null
           start_time: string
           subject_id?: string | null
           teacher_id?: string | null
+          updated_at?: string
         }
         Update: {
+          academic_year_id?: string | null
           classroom_id?: string | null
+          created_at?: string
           day_of_week?: number
           end_time?: string
           id?: string
+          notes?: string | null
+          room?: string | null
+          school_id?: string | null
+          shift?: string | null
           start_time?: string
           subject_id?: string | null
           teacher_id?: string | null
+          updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "schedules_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "schedules_classroom_id_fkey"
             columns: ["classroom_id"]
             isOneToOne: false
             referencedRelation: "classrooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedules_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
             referencedColumns: ["id"]
           },
           {
@@ -899,6 +934,50 @@ export type Database = {
             columns: ["teacher_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      school_time_slots: {
+        Row: {
+          created_at: string
+          end_time: string
+          id: string
+          is_break: boolean
+          label: string | null
+          position: number
+          school_id: string
+          shift: string
+          start_time: string
+        }
+        Insert: {
+          created_at?: string
+          end_time: string
+          id?: string
+          is_break?: boolean
+          label?: string | null
+          position?: number
+          school_id: string
+          shift: string
+          start_time: string
+        }
+        Update: {
+          created_at?: string
+          end_time?: string
+          id?: string
+          is_break?: boolean
+          label?: string | null
+          position?: number
+          school_id?: string
+          shift?: string
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "school_time_slots_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
             referencedColumns: ["id"]
           },
         ]
@@ -1226,6 +1305,10 @@ export type Database = {
         Returns: Database["public"]["Enums"]["user_role"]
       }
       get_my_school: { Args: never; Returns: string }
+      seed_default_time_slots: {
+        Args: { _school_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       absence_reason: "SICKNESS" | "PERSONAL" | "FAMILY" | "OTHER"
