@@ -960,28 +960,43 @@ export type Database = {
       }
       messages: {
         Row: {
-          content: string
+          content: string | null
           created_at: string | null
+          file_name: string | null
+          file_size: number | null
+          file_type: string | null
+          file_url: string | null
           id: string
           is_read: boolean | null
+          message_type: string
           receiver_id: string | null
           school_id: string | null
           sender_id: string | null
         }
         Insert: {
-          content: string
+          content?: string | null
           created_at?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          file_url?: string | null
           id?: string
           is_read?: boolean | null
+          message_type?: string
           receiver_id?: string | null
           school_id?: string | null
           sender_id?: string | null
         }
         Update: {
-          content?: string
+          content?: string | null
           created_at?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          file_url?: string | null
           id?: string
           is_read?: boolean | null
+          message_type?: string
           receiver_id?: string | null
           school_id?: string | null
           sender_id?: string | null
