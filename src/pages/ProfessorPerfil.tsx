@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { ArrowLeft, Mail, Phone, Calendar, GraduationCap, BookOpen, Clock, FileText, Pencil, Award, Users, Briefcase, TrendingUp, Loader2, Plus } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Calendar, GraduationCap, BookOpen, Clock, FileText, Pencil, Award, Users, Briefcase, TrendingUp, Loader2, Plus, ThumbsUp, AlertTriangle, Trash2, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { AssessmentFormDialog, type AssessmentRecord } from "@/components/avaliacoes/AssessmentFormDialog";
+import { TeacherFeedbackDialog, type TeacherFeedbackRecord } from "@/components/professores/TeacherFeedbackDialog";
+import { toast } from "@/hooks/use-toast";
 
 type AvatarColor = "lilac" | "blue" | "yellow" | "green" | "pink";
 
@@ -76,6 +77,18 @@ interface AssessmentRow {
   subjects: { name: string } | null;
 }
 
+interface FeedbackRow {
+  id: string;
+  kind: "PRAISE" | "COMPLAINT";
+  subject: string;
+  description: string | null;
+  severity: "LOW" | "NORMAL" | "HIGH";
+  status: string;
+  created_at: string;
+  reporter_id: string | null;
+  reporter: { full_name: string } | null;
+}
+
 const StatPill = ({ label, value, color }: { label: string; value: string; color: AvatarColor }) => (
   <div className="rounded-2xl bg-card p-5 shadow-card">
     <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", avatarStyles[color])}>{label}</span>
@@ -92,17 +105,21 @@ const ProfessorPerfil = () => {
   const [classroomsCount, setClassroomsCount] = useState(0);
   const [studentsCount, setStudentsCount] = useState(0);
   const [schoolId, setSchoolId] = useState<string | null>(null);
-  const [classroomOpts, setClassroomOpts] = useState<{ id: string; name: string }[]>([]);
-  const [subjectOpts, setSubjectOpts] = useState<{ id: string; name: string }[]>([]);
-  const [teacherOpts, setTeacherOpts] = useState<{ id: string; name: string }[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [feedbacks, setFeedbacks] = useState<FeedbackRow[]>([]);
+  const [editing, setEditing] = useState<FeedbackRow | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
     const load = async () => {
       setLoading(true);
+      const { data: auth } = await supabase.auth.getUser();
+      if (cancelled) return;
+      setCurrentUserId(auth.user?.id ?? null);
       const { data: t } = await supabase
         .from("teachers")
         .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, is_active, profiles(full_name, phone, avatar_url), subjects(name)")
@@ -144,7 +161,7 @@ const ProfessorPerfil = () => {
           setStudentsCount(0);
         }
 
-        // Load school_id + options for the assessment dialog
+        // Load school_id and current user role + feedbacks for this teacher
         const { data: prof } = await supabase
           .from("profiles")
           .select("school_id")
@@ -153,24 +170,23 @@ const ProfessorPerfil = () => {
         if (cancelled) return;
         const sId = (prof?.school_id as string | null) ?? null;
         setSchoolId(sId);
-        if (sId) {
-          const [crRes, subRes, tcRes] = await Promise.all([
-            supabase.from("classrooms").select("id, name").eq("school_id", sId).order("name"),
-            supabase.from("subjects").select("id, name").eq("school_id", sId).order("name"),
-            supabase
-              .from("teachers")
-              .select("profile_id, profiles(full_name)")
-              .eq("school_id", sId)
-              .not("profile_id", "is", null),
-          ]);
-          if (cancelled) return;
-          setClassroomOpts((crRes.data ?? []) as { id: string; name: string }[]);
-          setSubjectOpts((subRes.data ?? []) as { id: string; name: string }[]);
-          const tOpts = ((tcRes.data ?? []) as Array<{ profile_id: string; profiles: { full_name: string } | null }>)
-            .filter((r) => r.profile_id && r.profiles?.full_name)
-            .map((r) => ({ id: r.profile_id, name: r.profiles!.full_name }));
-          setTeacherOpts(tOpts);
+
+        if (auth.user?.id) {
+          const { data: meProf } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", auth.user.id)
+            .maybeSingle();
+          if (!cancelled) setCurrentUserRole((meProf?.role as string) ?? null);
         }
+
+        const { data: fbData } = await supabase
+          .from("complaints")
+          .select("id, kind, subject, description, severity, status, created_at, reporter_id, reporter:profiles!complaints_reporter_id_fkey(full_name)")
+          .eq("target_profile_id", teacherRow.profile_id)
+          .eq("target_type", "TEACHER")
+          .order("created_at", { ascending: false });
+        if (!cancelled) setFeedbacks((fbData ?? []) as unknown as FeedbackRow[]);
       }
       if (!cancelled) setLoading(false);
     };
@@ -446,26 +462,10 @@ const ProfessorPerfil = () => {
               <FileText className="h-5 w-5 text-pastel-lilac-foreground" strokeWidth={1.75} />
               <h2 className="text-lg font-bold text-foreground">Avaliações Criadas</h2>
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setDialogOpen(true)}
-                className="inline-flex h-9 items-center gap-1.5 rounded-full bg-pastel-lilac px-4 text-xs font-semibold text-pastel-lilac-foreground shadow-soft transition-opacity hover:opacity-90"
-              >
-                <Plus className="h-4 w-4" strokeWidth={2} /> Nova avaliação
-              </button>
-              <Link to="/avaliacoes" className="text-xs font-medium text-pastel-lilac-foreground hover:underline">Ver todas</Link>
-            </div>
+            <Link to="/avaliacoes" className="text-xs font-medium text-pastel-lilac-foreground hover:underline">Ver todas</Link>
           </div>
           {assessments.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="text-sm text-muted-foreground">Sem avaliações criadas.</p>
-              <button
-                onClick={() => setDialogOpen(true)}
-                className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-full bg-pastel-lilac px-4 text-xs font-semibold text-pastel-lilac-foreground shadow-soft transition-opacity hover:opacity-90"
-              >
-                <Plus className="h-4 w-4" strokeWidth={2} /> Criar primeira avaliação
-              </button>
-            </div>
+            <p className="p-8 text-center text-sm text-muted-foreground">Sem avaliações criadas.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -492,6 +492,104 @@ const ProfessorPerfil = () => {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+
+        {/* Teacher feedback (praise / complaints) */}
+        <div className="rounded-2xl bg-card shadow-card">
+          <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <Star className="h-5 w-5 text-pastel-yellow-foreground" strokeWidth={1.75} />
+              <h2 className="text-lg font-bold text-foreground">Avaliações do Professor</h2>
+              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-pastel-green/40 px-2.5 py-1 text-xs font-semibold text-pastel-green-foreground">
+                <ThumbsUp className="h-3 w-3" /> {feedbacks.filter((f) => f.kind === "PRAISE").length}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-pastel-pink/40 px-2.5 py-1 text-xs font-semibold text-pastel-pink-foreground">
+                <AlertTriangle className="h-3 w-3" /> {feedbacks.filter((f) => f.kind === "COMPLAINT").length}
+              </span>
+            </div>
+            <button
+              onClick={() => { setEditing(null); setDialogOpen(true); }}
+              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-pastel-yellow px-4 text-xs font-semibold text-pastel-yellow-foreground shadow-soft transition-opacity hover:opacity-90"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2} /> Avaliar professor
+            </button>
+          </div>
+
+          {feedbacks.length === 0 ? (
+            <div className="p-8 text-center">
+              <p className="text-sm text-muted-foreground">Ainda não há avaliações sobre este professor.</p>
+              <button
+                onClick={() => { setEditing(null); setDialogOpen(true); }}
+                className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-full bg-pastel-yellow px-4 text-xs font-semibold text-pastel-yellow-foreground shadow-soft transition-opacity hover:opacity-90"
+              >
+                <Plus className="h-4 w-4" strokeWidth={2} /> Criar primeira avaliação
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col divide-y divide-border">
+              {feedbacks.map((f) => {
+                const isPraise = f.kind === "PRAISE";
+                const canEdit = f.reporter_id === currentUserId || currentUserRole === "ADMIN";
+                return (
+                  <div key={f.id} className="flex flex-col gap-3 p-5 transition-colors hover:bg-muted/30 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <div className={cn(
+                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                        isPraise ? "bg-pastel-green/40 text-pastel-green-foreground" : "bg-pastel-pink/40 text-pastel-pink-foreground",
+                      )}>
+                        {isPraise ? <ThumbsUp className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-foreground">{f.subject}</p>
+                          <span className={cn(
+                            "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                            isPraise ? "bg-pastel-green text-pastel-green-foreground" : "bg-pastel-pink text-pastel-pink-foreground",
+                          )}>
+                            {isPraise ? "Elogio" : "Reclamação"}
+                          </span>
+                          {!isPraise && (
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                              {f.severity === "HIGH" ? "Alta" : f.severity === "LOW" ? "Baixa" : "Normal"}
+                            </span>
+                          )}
+                        </div>
+                        {f.description && <p className="mt-1 text-sm text-muted-foreground">{f.description}</p>}
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Por {f.reporter?.full_name ?? "—"} · {formatDate(f.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                    {canEdit && (
+                      <div className="flex shrink-0 items-center gap-2">
+                        <button
+                          onClick={() => { setEditing(f); setDialogOpen(true); }}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-muted px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted/70"
+                        >
+                          <Pencil className="h-3.5 w-3.5" /> Editar
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`Apagar este(a) ${isPraise ? "elogio" : "reclamação"}?`)) return;
+                            const { error } = await supabase.from("complaints").delete().eq("id", f.id);
+                            if (error) {
+                              toast({ title: "Erro ao apagar", description: error.message, variant: "destructive" });
+                              return;
+                            }
+                            toast({ title: "Avaliação removida" });
+                            setReloadKey((k) => k + 1);
+                          }}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-pastel-pink/30 px-3 text-xs font-semibold text-pastel-pink-foreground transition-opacity hover:opacity-80"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Apagar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -524,23 +622,23 @@ const ProfessorPerfil = () => {
           </div>
         </div>
 
-        <AssessmentFormDialog
-          open={dialogOpen}
-          onOpenChange={setDialogOpen}
-          schoolId={schoolId}
-          classrooms={classroomOpts}
-          subjects={subjectOpts}
-          teachers={teacherOpts}
-          initial={
-            teacher?.profile_id
-              ? ({
-                  teacher_id: teacher.profile_id,
-                  subject_id: teacher.subject_id ?? null,
-                } as Partial<AssessmentRecord>)
-              : null
-          }
-          onSaved={() => setReloadKey((k) => k + 1)}
-        />
+        {teacher.profile_id && (
+          <TeacherFeedbackDialog
+            open={dialogOpen}
+            onOpenChange={(o) => { setDialogOpen(o); if (!o) setEditing(null); }}
+            schoolId={schoolId}
+            teacherProfileId={teacher.profile_id}
+            teacherName={fullName}
+            initial={editing ? ({
+              id: editing.id,
+              kind: editing.kind,
+              subject: editing.subject,
+              description: editing.description,
+              severity: editing.severity,
+            } as Partial<TeacherFeedbackRecord>) : null}
+            onSaved={() => setReloadKey((k) => k + 1)}
+          />
+        )}
       </div>
     </DashboardLayout>
   );
