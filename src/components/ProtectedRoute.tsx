@@ -8,6 +8,7 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const [schoolChecked, setSchoolChecked] = useState(false);
   const [hasSchool, setHasSchool] = useState<boolean>(false);
+  const [isActive, setIsActive] = useState<boolean>(true);
   const checkedForUserRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -28,12 +29,13 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
       for (let i = 0; i < 5; i++) {
         const { data } = await supabase
           .from("profiles")
-          .select("school_id")
+          .select("school_id, is_active")
           .eq("id", user.id)
           .maybeSingle();
         if (cancelled) return;
         if (data) {
           setHasSchool(!!data.school_id);
+          setIsActive(data.is_active !== false);
           setSchoolChecked(true);
           return;
         }
@@ -60,6 +62,12 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   if (!session) {
     return <Navigate to="/auth" state={{ from: location }} replace />;
+  }
+
+  // Inactive / removed users → force sign-out
+  if (!isActive) {
+    void supabase.auth.signOut();
+    return <Navigate to="/auth" replace />;
   }
 
   // User signed in but has no school → force onboarding
