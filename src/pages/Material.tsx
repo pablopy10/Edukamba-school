@@ -447,6 +447,7 @@ const RequestsTable = ({
                 <th className="px-6 py-3">Material</th>
                 <th className="px-6 py-3">Professor</th>
                 <th className="px-6 py-3">Destino</th>
+                <th className="px-6 py-3">Data</th>
                 <th className="px-6 py-3">Educador</th>
                 <th className="px-6 py-3">Estado</th>
                 <th className="px-6 py-3 text-right">Ações</th>
@@ -488,6 +489,11 @@ const RequestsTable = ({
                           <p className="text-xs text-muted-foreground">Turma inteira</p>
                         </div>
                       )}
+                    </td>
+                    <td className="px-6 py-4 text-foreground">
+                      {r.needed_date
+                        ? new Date(r.needed_date).toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric" })
+                        : "—"}
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">{r.recipient ?? "—"}</td>
                     <td className="px-6 py-4">
