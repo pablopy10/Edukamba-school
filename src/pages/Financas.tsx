@@ -176,7 +176,7 @@ const Financas = () => {
       receiptUrl = path;
     }
 
-    const payload: Record<string, unknown> = {
+    const basePayload = {
       school_id: schoolId,
       description: expForm.description.trim(),
       amount: Number(expForm.amount) || 0,
@@ -184,16 +184,16 @@ const Financas = () => {
       category_id: expForm.category_id || null,
       payment_method: expForm.payment_method.trim() || null,
       notes: expForm.notes.trim() || null,
+      ...(receiptUrl !== undefined ? { receipt_url: receiptUrl } : {}),
     };
-    if (receiptUrl !== undefined) payload.receipt_url = receiptUrl;
-    if (!editingExp) {
-      const { data: { user } } = await supabase.auth.getUser();
-      payload.created_by = user?.id ?? null;
-    }
 
-    const { error } = editingExp
-      ? await supabase.from("expenses").update(payload).eq("id", editingExp.id)
-      : await supabase.from("expenses").insert(payload);
+    let error;
+    if (editingExp) {
+      ({ error } = await supabase.from("expenses").update(basePayload).eq("id", editingExp.id));
+    } else {
+      const { data: { user } } = await supabase.auth.getUser();
+      ({ error } = await supabase.from("expenses").insert({ ...basePayload, created_by: user?.id ?? null }));
+    }
     if (error) { toast({ title: "Erro a guardar", description: error.message, variant: "destructive" }); return; }
     toast({ title: editingExp ? "Despesa atualizada" : "Despesa criada" });
     setExpDialog(false);
