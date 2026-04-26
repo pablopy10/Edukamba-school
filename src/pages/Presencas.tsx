@@ -420,42 +420,13 @@ const Presencas = () => {
                             )}
                           >
                             {canEdit && !isWk ? (
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <button
-                                    type="button"
-                                    className="flex w-full justify-center rounded-md py-1 transition-colors hover:bg-accent"
-                                    aria-label="Alterar presença"
-                                  >
-                                    {cellInner}
-                                  </button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-44 p-2" align="center">
-                                  <p className="px-2 pb-2 text-xs font-medium text-muted-foreground">
-                                    {s.full_name.split(" ")[0]} · {String(d.getDate()).padStart(2, "0")}/{String(d.getMonth() + 1).padStart(2, "0")}
-                                  </p>
-                                  <div className="flex flex-col gap-1">
-                                    <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={() => applyStatus(s, d, "PRESENT")}>
-                                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-pastel-blue text-pastel-blue-foreground"><Check className="h-3 w-3" strokeWidth={3} /></span>
-                                      Presente
-                                    </Button>
-                                    <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={() => applyStatus(s, d, "LATE")}>
-                                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-pastel-yellow text-pastel-yellow-foreground"><Clock className="h-3 w-3" strokeWidth={3} /></span>
-                                      Atrasado
-                                    </Button>
-                                    <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={() => applyStatus(s, d, "ABSENT")}>
-                                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-white"><X className="h-3 w-3" strokeWidth={3} /></span>
-                                      Falta
-                                    </Button>
-                                    {status && (
-                                      <Button variant="ghost" size="sm" className="justify-start gap-2 text-muted-foreground" onClick={() => applyStatus(s, d, null)}>
-                                        <MinusCircle className="h-4 w-4" />
-                                        Remover
-                                      </Button>
-                                    )}
-                                  </div>
-                                </PopoverContent>
-                              </Popover>
+                              <AttendancePopover
+                                student={s}
+                                date={d}
+                                status={status}
+                                cellInner={cellInner}
+                                onSelect={(next) => applyStatus(s, d, next)}
+                              />
                             ) : (
                               cellInner
                             )}
