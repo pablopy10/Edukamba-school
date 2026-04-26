@@ -113,7 +113,7 @@ export const AssessmentFormDialog = ({
     const timer = setTimeout(async () => {
       const { data } = await supabase
         .from("assessments")
-        .select("id, title, classroom_id, subject_id, teacher_id, start_time, end_time")
+        .select("id, title, classroom_id, room, start_time, end_time")
         .eq("school_id", schoolId)
         .eq("date", form.date);
 
@@ -130,8 +130,9 @@ export const AssessmentFormDialog = ({
 
         const reasons: string[] = [];
         if (form.classroom_id && a.classroom_id === form.classroom_id) reasons.push("turma");
-        if (form.subject_id && a.subject_id === form.subject_id) reasons.push("disciplina");
-        if (form.teacher_id && a.teacher_id === form.teacher_id) reasons.push("professor");
+        const formRoom = (form.room ?? "").trim().toLowerCase();
+        const aRoom = ((a.room as any) ?? "").trim().toLowerCase();
+        if (formRoom && aRoom && formRoom === aRoom) reasons.push("sala");
         if (reasons.length > 0) {
           found.push({ id: a.id, title: a.title, reason: reasons.join(", ") });
         }
@@ -150,8 +151,7 @@ export const AssessmentFormDialog = ({
     form.start_time,
     form.end_time,
     form.classroom_id,
-    form.subject_id,
-    form.teacher_id,
+    form.room,
   ]);
 
   const handleSave = async () => {
