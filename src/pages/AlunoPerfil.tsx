@@ -110,6 +110,17 @@ interface FeeRow {
   month_index: number | null;
 }
 
+interface PaymentRow {
+  id: string;
+  student_fee_id: string | null;
+  amount_paid: number;
+  method: string | null;
+  status: string;
+  proof_url: string | null;
+  payment_date: string | null;
+  rejection_reason: string | null;
+}
+
 const StatPill = ({ label, value, color }: { label: string; value: string; color: AvatarColor }) => (
   <div className="rounded-2xl bg-card p-5 shadow-card">
     <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", avatarStyles[color])}>{label}</span>
