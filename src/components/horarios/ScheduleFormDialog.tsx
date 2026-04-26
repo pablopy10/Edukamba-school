@@ -47,6 +47,7 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   schoolId: string | null;
+  academicYearId?: string | null;
   classrooms: Option[];
   subjects: Option[];
   teachers: Option[];
@@ -59,6 +60,7 @@ export const ScheduleFormDialog = ({
   open,
   onOpenChange,
   schoolId,
+  academicYearId,
   classrooms,
   subjects,
   teachers,
@@ -124,6 +126,7 @@ export const ScheduleFormDialog = ({
     setSaving(true);
     const payload = {
       school_id: schoolId,
+      academic_year_id: academicYearId ?? null,
       classroom_id: form.classroom_id,
       subject_id: form.subject_id,
       teacher_id: form.teacher_id,
