@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
   Search,
@@ -16,30 +16,30 @@ import {
   Users,
   Clock,
   MapPin,
-  UserPlus,
   Filter,
+  Pencil,
+  Trash2,
+  Repeat,
+  CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { ActivityFormDialog, type ActivityRow } from "@/components/extracurriculares/ActivityFormDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type ActivityCategory = "musica" | "desporto" | "arte" | "tecnologia" | "academico" | "teatro";
 
-type Weekday = 1 | 2 | 3 | 4 | 5 | 6 | 0;
-
-type Activity = {
-  id: string;
-  name: string;
-  category: ActivityCategory;
-  responsible: string;
-  location: string;
-  weekdays: Weekday[]; // recurring days
-  startTime: string;
-  endTime: string;
-  capacity: number;
-  enrolled: string[]; // student names
-  description?: string;
-};
-
-const categoryMeta: Record<ActivityCategory, { label: string; color: string; icon: typeof Music2 }> = {
+const categoryMeta: Record<string, { label: string; color: string; icon: typeof Music2 }> = {
   musica: { label: "Música", color: "bg-pastel-pink text-pastel-pink-foreground", icon: Music2 },
   desporto: { label: "Desporto", color: "bg-pastel-green text-pastel-green-foreground", icon: Trophy },
   arte: { label: "Arte", color: "bg-pastel-yellow text-pastel-yellow-foreground", icon: Palette },
@@ -50,134 +50,93 @@ const categoryMeta: Record<ActivityCategory, { label: string; color: string; ico
 
 const weekdayNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const weekdayFull = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
-
-const initialActivities: Activity[] = [
-  {
-    id: "a1",
-    name: "Coro Escolar",
-    category: "musica",
-    responsible: "Prof. Mariana Costa",
-    location: "Sala de Música",
-    weekdays: [2, 4],
-    startTime: "15:30",
-    endTime: "17:00",
-    capacity: 25,
-    enrolled: ["Ana Silva", "João Pereira", "Beatriz Lopes", "Carlos Mendes"],
-  },
-  {
-    id: "a2",
-    name: "Clube de Futebol",
-    category: "desporto",
-    responsible: "Prof. Ricardo Alves",
-    location: "Campo Desportivo",
-    weekdays: [1, 3, 5],
-    startTime: "16:00",
-    endTime: "17:30",
-    capacity: 30,
-    enrolled: ["Pedro Santos", "Miguel Rocha", "Tiago Nunes", "Diogo Sousa", "Rui Martins"],
-  },
-  {
-    id: "a3",
-    name: "Atelier de Pintura",
-    category: "arte",
-    responsible: "Prof. Helena Rodrigues",
-    location: "Sala de Artes",
-    weekdays: [3],
-    startTime: "14:00",
-    endTime: "16:00",
-    capacity: 20,
-    enrolled: ["Sofia Almeida", "Inês Carvalho"],
-  },
-  {
-    id: "a4",
-    name: "Robótica & Programação",
-    category: "tecnologia",
-    responsible: "Prof. André Ferreira",
-    location: "Laboratório TIC",
-    weekdays: [2, 5],
-    startTime: "15:00",
-    endTime: "17:00",
-    capacity: 18,
-    enrolled: ["Lucas Oliveira", "Mateus Dias", "Rafael Gomes"],
-  },
-  {
-    id: "a5",
-    name: "Clube de Leitura",
-    category: "academico",
-    responsible: "Prof. Teresa Pinto",
-    location: "Biblioteca",
-    weekdays: [4],
-    startTime: "13:30",
-    endTime: "14:30",
-    capacity: 15,
-    enrolled: ["Mariana Reis", "Catarina Vieira"],
-  },
-  {
-    id: "a6",
-    name: "Grupo de Teatro",
-    category: "teatro",
-    responsible: "Prof. Vasco Lima",
-    location: "Auditório",
-    weekdays: [1, 4],
-    startTime: "16:30",
-    endTime: "18:30",
-    capacity: 22,
-    enrolled: ["Leonor Brito", "Francisco Tavares", "Margarida Sá"],
-  },
-  {
-    id: "a7",
-    name: "Basquetebol",
-    category: "desporto",
-    responsible: "Prof. Sandra Moreira",
-    location: "Pavilhão",
-    weekdays: [2, 5],
-    startTime: "17:00",
-    endTime: "18:30",
-    capacity: 24,
-    enrolled: ["Hugo Castro", "Bruno Faria"],
-  },
-];
-
 const monthsPt = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
+const formatTime = (t: string | null) => (t ? t.slice(0, 5) : "");
+const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
 const Extracurriculares = () => {
-  const [activities, setActivities] = useState<Activity[]>(initialActivities);
+  const [schoolId, setSchoolId] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+  const [academicYear, setAcademicYear] = useState<{ id: string; start_date: string; end_date: string } | null>(null);
+
+  const [activities, setActivities] = useState<ActivityRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const [view, setView] = useState<"lista" | "calendario">("lista");
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<ActivityCategory | "todas">("todas");
   const [cursor, setCursor] = useState(new Date());
-  const [enrollOpen, setEnrollOpen] = useState<string | null>(null);
-  const [studentName, setStudentName] = useState("");
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<ActivityRow | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const canEdit = role === "ADMIN" || role === "TEACHER";
+  const canDelete = role === "ADMIN";
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("school_id, role")
+        .eq("id", user.id)
+        .maybeSingle();
+      const sid = profile?.school_id ?? null;
+      setSchoolId(sid);
+      setRole(profile?.role ?? null);
+      if (sid) {
+        const { data: yr } = await supabase
+          .from("academic_years")
+          .select("id, start_date, end_date")
+          .eq("school_id", sid)
+          .eq("is_active", true)
+          .maybeSingle();
+        if (yr) setAcademicYear(yr);
+      }
+    })();
+  }, []);
+
+  const loadActivities = async () => {
+    if (!schoolId) return;
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("extracurricular_activities")
+      .select("*")
+      .eq("school_id", schoolId)
+      .order("name");
+    setLoading(false);
+    if (error) {
+      toast.error("Erro ao carregar: " + error.message);
+      return;
+    }
+    setActivities((data ?? []) as ActivityRow[]);
+  };
+
+  useEffect(() => {
+    loadActivities();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schoolId]);
 
   const filtered = useMemo(() => {
     return activities.filter((a) => {
+      const q = search.trim().toLowerCase();
       const matchSearch =
-        !search ||
-        a.name.toLowerCase().includes(search.toLowerCase()) ||
-        a.responsible.toLowerCase().includes(search.toLowerCase()) ||
-        a.location.toLowerCase().includes(search.toLowerCase());
+        !q ||
+        a.name.toLowerCase().includes(q) ||
+        (a.responsible ?? "").toLowerCase().includes(q) ||
+        (a.location ?? "").toLowerCase().includes(q);
       const matchCategory = categoryFilter === "todas" || a.category === categoryFilter;
       return matchSearch && matchCategory;
     });
   }, [activities, search, categoryFilter]);
 
-  const totalEnrolled = activities.reduce((sum, a) => sum + a.enrolled.length, 0);
-  const totalCapacity = activities.reduce((sum, a) => sum + a.capacity, 0);
+  const totalCapacity = activities.reduce((sum, a) => sum + (a.capacity || 0), 0);
+  const recurringCount = activities.filter((a) => a.is_recurring).length;
 
-  const enroll = (id: string) => {
-    if (!studentName.trim()) return;
-    setActivities((prev) =>
-      prev.map((a) =>
-        a.id === id && a.enrolled.length < a.capacity && !a.enrolled.includes(studentName.trim())
-          ? { ...a, enrolled: [...a.enrolled, studentName.trim()] }
-          : a,
-      ),
-    );
-    setStudentName("");
-    setEnrollOpen(null);
-  };
-
-  // Calendar grid
+  // Calendar
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
   const firstDay = new Date(year, month, 1);
@@ -189,52 +148,80 @@ const Extracurriculares = () => {
   while (cells.length % 7 !== 0) cells.push(null);
 
   const activitiesForDay = (date: Date) => {
-    const wd = date.getDay() as Weekday;
-    return filtered.filter((a) => a.weekdays.includes(wd));
+    const wd = date.getDay();
+    const iso = isoDay(date);
+    return filtered.filter((a) => {
+      if (a.is_recurring) {
+        if (!a.weekdays?.includes(wd)) return false;
+        if (a.start_date && iso < a.start_date) return false;
+        if (a.end_date && iso > a.end_date) return false;
+        return true;
+      }
+      return a.single_date === iso;
+    });
   };
 
   const today = new Date();
   const isSameDay = (a: Date, b: Date) =>
     a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
+  const handleNew = () => {
+    setEditing(null);
+    setDialogOpen(true);
+  };
+  const handleEdit = (a: ActivityRow) => {
+    setEditing(a);
+    setDialogOpen(true);
+  };
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    const { error } = await supabase.from("extracurricular_activities").delete().eq("id", deleteId);
+    if (error) toast.error("Erro: " + error.message);
+    else {
+      toast.success("Atividade removida.");
+      loadActivities();
+    }
+    setDeleteId(null);
+  };
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
-        {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Extracurriculares</h1>
-            <p className="text-sm text-muted-foreground">Gerir atividades recorrentes e inscrições de alunos</p>
+            <p className="text-sm text-muted-foreground">Gerir atividades recorrentes e pontuais</p>
           </div>
-          <button className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-soft hover:opacity-90 transition-[var(--transition-smooth)]">
-            <Plus className="h-4 w-4" />
-            Nova Atividade
-          </button>
+          {canEdit && (
+            <button
+              onClick={handleNew}
+              className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-soft hover:opacity-90 transition-[var(--transition-smooth)]"
+            >
+              <Plus className="h-4 w-4" />
+              Nova Atividade
+            </button>
+          )}
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
             <p className="text-xs font-medium text-muted-foreground">Atividades</p>
             <p className="mt-1 text-2xl font-bold text-foreground">{activities.length}</p>
           </div>
           <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
-            <p className="text-xs font-medium text-muted-foreground">Alunos Inscritos</p>
-            <p className="mt-1 text-2xl font-bold text-foreground">{totalEnrolled}</p>
+            <p className="text-xs font-medium text-muted-foreground">Recorrentes</p>
+            <p className="mt-1 text-2xl font-bold text-foreground">{recurringCount}</p>
           </div>
           <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
-            <p className="text-xs font-medium text-muted-foreground">Capacidade Total</p>
+            <p className="text-xs font-medium text-muted-foreground">Pontuais</p>
+            <p className="mt-1 text-2xl font-bold text-foreground">{activities.length - recurringCount}</p>
+          </div>
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
+            <p className="text-xs font-medium text-muted-foreground">Capacidade total</p>
             <p className="mt-1 text-2xl font-bold text-foreground">{totalCapacity}</p>
-          </div>
-          <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
-            <p className="text-xs font-medium text-muted-foreground">Ocupação</p>
-            <p className="mt-1 text-2xl font-bold text-foreground">
-              {totalCapacity ? Math.round((totalEnrolled / totalCapacity) * 100) : 0}%
-            </p>
           </div>
         </div>
 
-        {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[220px]">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -267,7 +254,6 @@ const Extracurriculares = () => {
           </div>
         </div>
 
-        {/* Category chips */}
         <div className="flex flex-wrap items-center gap-2">
           <Filter className="h-4 w-4 text-muted-foreground" />
           <button
@@ -299,12 +285,15 @@ const Extracurriculares = () => {
           })}
         </div>
 
-        {view === "lista" ? (
+        {loading ? (
+          <div className="rounded-2xl bg-card p-12 text-center text-sm text-muted-foreground shadow-card">
+            A carregar...
+          </div>
+        ) : view === "lista" ? (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {filtered.map((a) => {
-              const meta = categoryMeta[a.category];
+              const meta = categoryMeta[a.category] ?? categoryMeta.academico;
               const Icon = meta.icon;
-              const occupancy = Math.round((a.enrolled.length / a.capacity) * 100);
               return (
                 <div key={a.id} className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-card">
                   <div className="flex items-start justify-between gap-3">
@@ -319,105 +308,77 @@ const Extracurriculares = () => {
                         </span>
                       </div>
                     </div>
+                    {(canEdit || canDelete) && (
+                      <div className="flex gap-1">
+                        {canEdit && (
+                          <button
+                            onClick={() => handleEdit(a)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                            title="Editar"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            onClick={() => setDeleteId(a.id)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            title="Remover"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-col gap-2 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-3.5 w-3.5" />
-                      <span>{a.responsible}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-3.5 w-3.5" />
-                      <span>{a.location}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-3.5 w-3.5" />
-                      <span>
-                        {a.startTime} – {a.endTime}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1 pt-1">
-                      {a.weekdays.map((wd) => (
-                        <span key={wd} className="rounded-md bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-foreground">
-                          {weekdayNames[wd]}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-foreground">
-                        {a.enrolled.length}/{a.capacity} inscritos
-                      </span>
-                      <span className="text-muted-foreground">{occupancy}%</span>
-                    </div>
-                    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all"
-                        style={{ width: `${Math.min(occupancy, 100)}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {enrollOpen === a.id ? (
-                    <div className="flex flex-col gap-2 rounded-xl border border-border bg-muted/40 p-3">
-                      <input
-                        autoFocus
-                        value={studentName}
-                        onChange={(e) => setStudentName(e.target.value)}
-                        placeholder="Nome do aluno"
-                        className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-                        onKeyDown={(e) => e.key === "Enter" && enroll(a.id)}
-                      />
+                    {a.responsible && (
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => enroll(a.id)}
-                          className="flex-1 rounded-lg bg-primary py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90"
-                        >
-                          Confirmar
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEnrollOpen(null);
-                            setStudentName("");
-                          }}
-                          className="flex-1 rounded-lg bg-secondary py-1.5 text-xs font-semibold text-foreground hover:opacity-90"
-                        >
-                          Cancelar
-                        </button>
+                        <Users className="h-3.5 w-3.5" />
+                        <span>{a.responsible}</span>
                       </div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setEnrollOpen(a.id)}
-                      disabled={a.enrolled.length >= a.capacity}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-pastel-lilac px-3 py-2 text-xs font-semibold text-pastel-lilac-foreground hover:opacity-90 transition-[var(--transition-smooth)] disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <UserPlus className="h-3.5 w-3.5" />
-                      {a.enrolled.length >= a.capacity ? "Lotada" : "Inscrever Aluno"}
-                    </button>
-                  )}
-
-                  {a.enrolled.length > 0 && (
-                    <div className="border-t border-border pt-3">
-                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Inscritos
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {a.enrolled.slice(0, 5).map((s) => (
-                          <span key={s} className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-foreground">
-                            {s}
+                    )}
+                    {a.location && (
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-3.5 w-3.5" />
+                        <span>{a.location}</span>
+                      </div>
+                    )}
+                    {(a.start_time || a.end_time) && (
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-3.5 w-3.5" />
+                        <span>{formatTime(a.start_time)}{a.end_time ? ` – ${formatTime(a.end_time)}` : ""}</span>
+                      </div>
+                    )}
+                    {a.is_recurring ? (
+                      <div className="flex items-center gap-2">
+                        <Repeat className="h-3.5 w-3.5" />
+                        <span>
+                          Recorrente
+                          {a.end_date && ` até ${a.end_date.split("-").reverse().join("/")}`}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <CalendarClock className="h-3.5 w-3.5" />
+                        <span>{a.single_date?.split("-").reverse().join("/") ?? "Sem data"}</span>
+                      </div>
+                    )}
+                    {a.is_recurring && a.weekdays && a.weekdays.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1 pt-1">
+                        {a.weekdays.map((wd) => (
+                          <span key={wd} className="rounded-md bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-foreground">
+                            {weekdayNames[wd]}
                           </span>
                         ))}
-                        {a.enrolled.length > 5 && (
-                          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                            +{a.enrolled.length - 5}
-                          </span>
-                        )}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+
+                  <div className="text-xs">
+                    <span className="font-semibold text-foreground">Capacidade: {a.capacity}</span>
+                  </div>
                 </div>
               );
             })}
@@ -481,14 +442,14 @@ const Extracurriculares = () => {
                     </div>
                     <div className="flex flex-col gap-0.5">
                       {dayActs.slice(0, 3).map((a) => {
-                        const meta = categoryMeta[a.category];
+                        const meta = categoryMeta[a.category] ?? categoryMeta.academico;
                         return (
                           <div
                             key={a.id}
                             className={cn("truncate rounded px-1.5 py-0.5 text-[10px] font-semibold", meta.color)}
-                            title={`${a.name} • ${a.startTime}-${a.endTime}`}
+                            title={`${a.name}${a.start_time ? ` • ${formatTime(a.start_time)}` : ""}`}
                           >
-                            {a.startTime} {a.name}
+                            {a.start_time ? `${formatTime(a.start_time)} ` : ""}{a.name}
                           </div>
                         );
                       })}
@@ -503,6 +464,28 @@ const Extracurriculares = () => {
           </div>
         )}
       </div>
+
+      <ActivityFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        schoolId={schoolId}
+        academicYear={academicYear}
+        activity={editing}
+        onSaved={loadActivities}
+      />
+
+      <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover atividade?</AlertDialogTitle>
+            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>Remover</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 };
