@@ -52,6 +52,87 @@ export type Database = {
           },
         ]
       }
+      activity_fees: {
+        Row: {
+          academic_year_id: string | null
+          activity_id: string
+          amount_due: number
+          created_at: string
+          due_date: string
+          enrollment_id: string
+          id: string
+          is_paid: boolean
+          month_index: number | null
+          school_id: string
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          academic_year_id?: string | null
+          activity_id: string
+          amount_due?: number
+          created_at?: string
+          due_date: string
+          enrollment_id: string
+          id?: string
+          is_paid?: boolean
+          month_index?: number | null
+          school_id: string
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          academic_year_id?: string | null
+          activity_id?: string
+          amount_due?: number
+          created_at?: string
+          due_date?: string
+          enrollment_id?: string
+          id?: string
+          is_paid?: boolean
+          month_index?: number | null
+          school_id?: string
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_fees_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_fees_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "extracurricular_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_fees_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "extracurricular_enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_fees_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_fees_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       announcements: {
         Row: {
           author_id: string | null
@@ -763,6 +844,7 @@ export type Database = {
       extracurricular_activities: {
         Row: {
           academic_year_id: string | null
+          billing_frequency: string
           capacity: number
           category: string
           created_at: string
@@ -770,6 +852,7 @@ export type Database = {
           description: string | null
           end_date: string | null
           end_time: string | null
+          enrollment_fee: number
           id: string
           is_recurring: boolean
           location: string | null
@@ -784,6 +867,7 @@ export type Database = {
         }
         Insert: {
           academic_year_id?: string | null
+          billing_frequency?: string
           capacity?: number
           category?: string
           created_at?: string
@@ -791,6 +875,7 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           end_time?: string | null
+          enrollment_fee?: number
           id?: string
           is_recurring?: boolean
           location?: string | null
@@ -805,6 +890,7 @@ export type Database = {
         }
         Update: {
           academic_year_id?: string | null
+          billing_frequency?: string
           capacity?: number
           category?: string
           created_at?: string
@@ -812,6 +898,7 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           end_time?: string | null
+          enrollment_fee?: number
           id?: string
           is_recurring?: boolean
           location?: string | null
@@ -837,6 +924,64 @@ export type Database = {
             columns: ["school_id"]
             isOneToOne: false
             referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      extracurricular_enrollments: {
+        Row: {
+          activity_id: string
+          created_at: string
+          enrolled_at: string
+          id: string
+          notes: string | null
+          school_id: string
+          status: string
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          activity_id: string
+          created_at?: string
+          enrolled_at?: string
+          id?: string
+          notes?: string | null
+          school_id: string
+          status?: string
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          activity_id?: string
+          created_at?: string
+          enrolled_at?: string
+          id?: string
+          notes?: string | null
+          school_id?: string
+          status?: string
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extracurricular_enrollments_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "extracurricular_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extracurricular_enrollments_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extracurricular_enrollments_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
             referencedColumns: ["id"]
           },
         ]
@@ -2259,6 +2404,10 @@ export type Database = {
           _year_start: string
         }
         Returns: string
+      }
+      generate_activity_fees: {
+        Args: { _enrollment_id: string }
+        Returns: number
       }
       generate_student_fees_for_year: {
         Args: { _academic_year_id: string; _student_id: string }
