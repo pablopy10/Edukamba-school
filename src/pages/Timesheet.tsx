@@ -40,6 +40,19 @@ type TimeEntry = {
 
 type Employee = { id: string; name: string; role: string };
 
+const roleLabels: Record<string, string> = {
+  ADMIN: "Administrador",
+  TEACHER: "Professor",
+  PARENT: "Encarregado de Educação",
+  STUDENT: "Aluno",
+  SUPER_ADMIN: "Super Administrador",
+};
+
+const translateRole = (role: string | null | undefined) => {
+  if (!role) return "";
+  return roleLabels[role] ?? role;
+};
+
 const statusMeta: Record<EntryStatus, { label: string; color: string; icon: typeof CheckCircle2 }> = {
   completo: { label: "Completo", color: "bg-pastel-green text-pastel-green-foreground", icon: CheckCircle2 },
   em_curso: { label: "Em Curso", color: "bg-pastel-blue text-pastel-blue-foreground", icon: Loader2 },
@@ -56,6 +69,7 @@ const Timesheet = () => {
   const { user } = useAuth();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [myProfileId, setMyProfileId] = useState<string | null>(null);
+  const [myRole, setMyRole] = useState<string | null>(null);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,16 +89,19 @@ const Timesheet = () => {
     if (!user) return;
     supabase
       .from("profiles")
-      .select("id, school_id")
+      .select("id, school_id, role")
       .eq("id", user.id)
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
           setSchoolId(data.school_id);
           setMyProfileId(data.id);
+          setMyRole((data as any).role ?? null);
         }
       });
   }, [user]);
+
+  const isAdmin = myRole === "ADMIN" || myRole === "SUPER_ADMIN";
 
   const loadAll = async () => {
     if (!schoolId) return;
@@ -133,7 +150,8 @@ const Timesheet = () => {
       const matchSearch =
         !search ||
         e.employee_name.toLowerCase().includes(search.toLowerCase()) ||
-        (e.role ?? "").toLowerCase().includes(search.toLowerCase());
+        (e.role ?? "").toLowerCase().includes(search.toLowerCase()) ||
+        translateRole(e.role).toLowerCase().includes(search.toLowerCase());
       const matchStatus = statusFilter === "todos" || e.status === statusFilter;
       let matchMonth = true;
       let matchYear = true;
@@ -283,23 +301,30 @@ const Timesheet = () => {
   };
 
   const exportCsv = () => {
-    const header = "Funcionário;Função;Data;Entrada;Saída;Horas;Estado;Lat Entrada;Lng Entrada;Lat Saída;Lng Saída\n";
+    const header = isAdmin
+      ? "Funcionário;Função;Data;Entrada;Saída;Horas;Estado;Lat Entrada;Lng Entrada;Lat Saída;Lng Saída\n"
+      : "Funcionário;Função;Data;Entrada;Saída;Horas;Estado\n";
     const rows = filtered
-      .map((e) =>
-        [
+      .map((e) => {
+        const base = [
           e.employee_name,
-          e.role ?? "",
+          translateRole(e.role),
           e.date,
           formatTime(e.check_in) ?? "",
           formatTime(e.check_out) ?? "",
           e.hours_worked,
           statusMeta[e.status]?.label ?? e.status,
-          e.check_in_lat ?? "",
-          e.check_in_lng ?? "",
-          e.check_out_lat ?? "",
-          e.check_out_lng ?? "",
-        ].join(";"),
-      )
+        ];
+        if (isAdmin) {
+          base.push(
+            e.check_in_lat ?? "",
+            e.check_in_lng ?? "",
+            e.check_out_lat ?? "",
+            e.check_out_lng ?? "",
+          );
+        }
+        return base.join(";");
+      })
       .join("\n");
     const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -443,14 +468,16 @@ const Timesheet = () => {
                   <th className="px-4 py-3 text-left font-semibold">Entrada</th>
                   <th className="px-4 py-3 text-left font-semibold">Saída</th>
                   <th className="px-4 py-3 text-left font-semibold">Horas</th>
-                  <th className="px-4 py-3 text-left font-semibold">Localização</th>
+                  {isAdmin && (
+                    <th className="px-4 py-3 text-left font-semibold">Localização</th>
+                  )}
                   <th className="px-4 py-3 text-left font-semibold">Estado</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                    <td colSpan={isAdmin ? 7 : 6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                       <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                     </td>
                   </tr>
@@ -477,7 +504,7 @@ const Timesheet = () => {
                           </div>
                           <div>
                             <p className="font-semibold text-foreground">{e.employee_name}</p>
-                            <p className="text-xs text-muted-foreground">{e.role}</p>
+                            <p className="text-xs text-muted-foreground">{translateRole(e.role)}</p>
                           </div>
                         </div>
                       </td>
@@ -505,16 +532,18 @@ const Timesheet = () => {
                       <td className="px-4 py-3 font-semibold text-foreground">
                         {Number(e.hours_worked) > 0 ? `${Number(e.hours_worked).toFixed(2)}h` : "—"}
                       </td>
-                      <td className="px-4 py-3">
-                        {e.check_in_lat != null && e.check_in_lng != null ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                            <MapPin className="h-3.5 w-3.5" />
-                            {Number(e.check_in_lat).toFixed(4)}, {Number(e.check_in_lng).toFixed(4)}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
+                      {isAdmin && (
+                        <td className="px-4 py-3">
+                          {e.check_in_lat != null && e.check_in_lng != null ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              <MapPin className="h-3.5 w-3.5" />
+                              {Number(e.check_in_lat).toFixed(4)}, {Number(e.check_in_lng).toFixed(4)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                      )}
                       <td className="px-4 py-3">
                         <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold", meta.color)}>
                           <Icon className={cn("h-3 w-3", e.status === "em_curso" && "animate-spin")} />
@@ -526,7 +555,7 @@ const Timesheet = () => {
                 })}
                 {!loading && filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                    <td colSpan={isAdmin ? 7 : 6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                       Nenhum registo encontrado.
                     </td>
                   </tr>
@@ -582,7 +611,7 @@ const Timesheet = () => {
                   {employees.length === 0 && <option value="">Sem funcionários</option>}
                   {employees.map((e) => (
                     <option key={e.id} value={e.id}>
-                      {e.name}{e.role ? ` — ${e.role}` : ""}
+                      {e.name}{e.role ? ` — ${translateRole(e.role)}` : ""}
                     </option>
                   ))}
                 </select>
@@ -686,7 +715,7 @@ const Timesheet = () => {
               <div className="flex-1">
                 <h2 className="text-lg font-bold text-foreground">{selectedEntry.employee_name}</h2>
                 <p className="text-xs text-muted-foreground">
-                  {selectedEntry.role} · {selectedEntry.date}
+                  {translateRole(selectedEntry.role)} · {selectedEntry.date}
                 </p>
               </div>
               <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold", statusMeta[selectedEntry.status]?.color)}>
@@ -712,7 +741,7 @@ const Timesheet = () => {
             </div>
 
             <div className="flex flex-col gap-3">
-              {selectedEntry.check_in_lat != null && selectedEntry.check_in_lng != null && (
+              {isAdmin && selectedEntry.check_in_lat != null && selectedEntry.check_in_lng != null && (
                 <LocationCard
                   title="Localização de Entrada"
                   lat={Number(selectedEntry.check_in_lat)}
@@ -721,7 +750,7 @@ const Timesheet = () => {
                   tone="green"
                 />
               )}
-              {selectedEntry.check_out_lat != null && selectedEntry.check_out_lng != null && (
+              {isAdmin && selectedEntry.check_out_lat != null && selectedEntry.check_out_lng != null && (
                 <LocationCard
                   title="Localização de Saída"
                   lat={Number(selectedEntry.check_out_lat)}
