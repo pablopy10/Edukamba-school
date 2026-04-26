@@ -354,6 +354,7 @@ const Pagamentos = () => {
     const search = feeSearch.trim().toLowerCase();
     return allFees.filter((f) => {
       if (feeYearFilter !== "all" && f.academic_year_id !== feeYearFilter) return false;
+      if (feeClassroomFilter !== "all" && f.student?.classroom_id !== feeClassroomFilter) return false;
       if (feeFilter === "paid" && !f.is_paid) return false;
       if (feeFilter === "pending" && f.is_paid) return false;
       if (feeFilter === "overdue" && (f.is_paid || new Date(f.due_date).getTime() >= now)) return false;
