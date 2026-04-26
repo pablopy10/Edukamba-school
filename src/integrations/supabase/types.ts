@@ -137,32 +137,56 @@ export type Database = {
         Row: {
           assessment_type_id: string | null
           classroom_id: string | null
+          created_at: string
           date: string
           description: string | null
+          end_time: string | null
           id: string
+          room: string | null
+          school_id: string | null
+          start_time: string | null
           subject_id: string | null
           teacher_id: string | null
           title: string
+          type: string | null
+          updated_at: string
+          weight: number | null
         }
         Insert: {
           assessment_type_id?: string | null
           classroom_id?: string | null
+          created_at?: string
           date: string
           description?: string | null
+          end_time?: string | null
           id?: string
+          room?: string | null
+          school_id?: string | null
+          start_time?: string | null
           subject_id?: string | null
           teacher_id?: string | null
           title: string
+          type?: string | null
+          updated_at?: string
+          weight?: number | null
         }
         Update: {
           assessment_type_id?: string | null
           classroom_id?: string | null
+          created_at?: string
           date?: string
           description?: string | null
+          end_time?: string | null
           id?: string
+          room?: string | null
+          school_id?: string | null
+          start_time?: string | null
           subject_id?: string | null
           teacher_id?: string | null
           title?: string
+          type?: string | null
+          updated_at?: string
+          weight?: number | null
         }
         Relationships: [
           {
@@ -177,6 +201,13 @@ export type Database = {
             columns: ["classroom_id"]
             isOneToOne: false
             referencedRelation: "classrooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assessments_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
             referencedColumns: ["id"]
           },
           {
