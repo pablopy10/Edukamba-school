@@ -1,8 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
   Search,
-  Filter,
   Clock,
   MapPin,
   LogIn,
@@ -11,123 +10,35 @@ import {
   CheckCircle2,
   AlertCircle,
   Download,
-  Users,
   CalendarDays,
   Navigation,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "@/hooks/use-toast";
 
 type EntryStatus = "completo" | "em_curso" | "incompleto";
 
 type TimeEntry = {
   id: string;
-  employeeName: string;
-  role: string;
-  date: string; // yyyy-mm-dd
-  checkIn: string | null; // HH:mm
-  checkOut: string | null;
-  hoursWorked: number;
+  profile_id: string | null;
+  employee_name: string;
+  role: string | null;
+  date: string;
+  check_in: string | null;
+  check_out: string | null;
+  hours_worked: number;
   status: EntryStatus;
-  checkInLocation: { lat: number; lng: number; address: string } | null;
-  checkOutLocation: { lat: number; lng: number; address: string } | null;
+  check_in_lat: number | null;
+  check_in_lng: number | null;
+  check_in_address: string | null;
+  check_out_lat: number | null;
+  check_out_lng: number | null;
+  check_out_address: string | null;
 };
 
-const employees = [
-  { name: "Mariana Costa", role: "Professora" },
-  { name: "Ricardo Alves", role: "Professor" },
-  { name: "Helena Rodrigues", role: "Professora" },
-  { name: "André Ferreira", role: "Coordenador TIC" },
-  { name: "Teresa Pinto", role: "Bibliotecária" },
-  { name: "Vasco Lima", role: "Professor" },
-  { name: "Sandra Moreira", role: "Auxiliar" },
-];
-
-const initialEntries: TimeEntry[] = [
-  {
-    id: "t1",
-    employeeName: "Mariana Costa",
-    role: "Professora",
-    date: "2026-04-25",
-    checkIn: "07:55",
-    checkOut: "16:10",
-    hoursWorked: 8.25,
-    status: "completo",
-    checkInLocation: { lat: -8.8390, lng: 13.2894, address: "Escola EduKamba — Entrada Principal" },
-    checkOutLocation: { lat: -8.8392, lng: 13.2896, address: "Escola EduKamba — Portão Sul" },
-  },
-  {
-    id: "t2",
-    employeeName: "Ricardo Alves",
-    role: "Professor",
-    date: "2026-04-25",
-    checkIn: "08:02",
-    checkOut: "15:45",
-    hoursWorked: 7.72,
-    status: "completo",
-    checkInLocation: { lat: -8.8391, lng: 13.2895, address: "Escola EduKamba — Pavilhão" },
-    checkOutLocation: { lat: -8.8391, lng: 13.2895, address: "Escola EduKamba — Pavilhão" },
-  },
-  {
-    id: "t3",
-    employeeName: "Helena Rodrigues",
-    role: "Professora",
-    date: "2026-04-25",
-    checkIn: "08:15",
-    checkOut: null,
-    hoursWorked: 0,
-    status: "em_curso",
-    checkInLocation: { lat: -8.8389, lng: 13.2893, address: "Escola EduKamba — Sala de Artes" },
-    checkOutLocation: null,
-  },
-  {
-    id: "t4",
-    employeeName: "André Ferreira",
-    role: "Coordenador TIC",
-    date: "2026-04-25",
-    checkIn: "07:48",
-    checkOut: "17:00",
-    hoursWorked: 9.2,
-    status: "completo",
-    checkInLocation: { lat: -8.8390, lng: 13.2894, address: "Escola EduKamba — Lab. TIC" },
-    checkOutLocation: { lat: -8.8390, lng: 13.2894, address: "Escola EduKamba — Lab. TIC" },
-  },
-  {
-    id: "t5",
-    employeeName: "Teresa Pinto",
-    role: "Bibliotecária",
-    date: "2026-04-24",
-    checkIn: "08:30",
-    checkOut: "13:00",
-    hoursWorked: 4.5,
-    status: "incompleto",
-    checkInLocation: { lat: -8.8388, lng: 13.2892, address: "Escola EduKamba — Biblioteca" },
-    checkOutLocation: { lat: -8.8388, lng: 13.2892, address: "Escola EduKamba — Biblioteca" },
-  },
-  {
-    id: "t6",
-    employeeName: "Vasco Lima",
-    role: "Professor",
-    date: "2026-04-24",
-    checkIn: "08:05",
-    checkOut: "16:20",
-    hoursWorked: 8.25,
-    status: "completo",
-    checkInLocation: { lat: -8.8390, lng: 13.2894, address: "Escola EduKamba — Auditório" },
-    checkOutLocation: { lat: -8.8390, lng: 13.2894, address: "Escola EduKamba — Auditório" },
-  },
-  {
-    id: "t7",
-    employeeName: "Sandra Moreira",
-    role: "Auxiliar",
-    date: "2026-04-25",
-    checkIn: "07:30",
-    checkOut: null,
-    hoursWorked: 0,
-    status: "em_curso",
-    checkInLocation: { lat: -8.8391, lng: 13.2895, address: "Escola EduKamba — Receção" },
-    checkOutLocation: null,
-  },
-];
+type Employee = { id: string; name: string; role: string };
 
 const statusMeta: Record<EntryStatus, { label: string; color: string; icon: typeof CheckCircle2 }> = {
   completo: { label: "Completo", color: "bg-pastel-green text-pastel-green-foreground", icon: CheckCircle2 },
@@ -135,24 +46,78 @@ const statusMeta: Record<EntryStatus, { label: string; color: string; icon: type
   incompleto: { label: "Incompleto", color: "bg-pastel-yellow text-pastel-yellow-foreground", icon: AlertCircle },
 };
 
+const formatTime = (iso: string | null) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
 const Timesheet = () => {
-  const [entries, setEntries] = useState<TimeEntry[]>(initialEntries);
+  const { profile } = useAuth();
+  const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<EntryStatus | "todos">("todos");
   const [dateFilter, setDateFilter] = useState<string>("");
   const [selectedEntry, setSelectedEntry] = useState<TimeEntry | null>(null);
   const [registering, setRegistering] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState(employees[0].name);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
   const [registerType, setRegisterType] = useState<"in" | "out">("in");
   const [gpsStatus, setGpsStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const schoolId = profile?.school_id;
+
+  const loadAll = async () => {
+    if (!schoolId) return;
+    setLoading(true);
+    const [entriesRes, profilesRes] = await Promise.all([
+      supabase
+        .from("time_entries")
+        .select("*")
+        .eq("school_id", schoolId)
+        .order("date", { ascending: false })
+        .order("check_in", { ascending: false }),
+      supabase
+        .from("profiles")
+        .select("id, full_name, role")
+        .eq("school_id", schoolId)
+        .order("full_name"),
+    ]);
+
+    if (entriesRes.error) {
+      toast({ title: "Erro a carregar timesheet", description: entriesRes.error.message, variant: "destructive" });
+    } else {
+      setEntries((entriesRes.data ?? []) as TimeEntry[]);
+    }
+
+    if (!profilesRes.error && profilesRes.data) {
+      const list: Employee[] = profilesRes.data.map((p: any) => ({
+        id: p.id,
+        name: p.full_name,
+        role: p.role ?? "",
+      }));
+      setEmployees(list);
+      if (!selectedEmployeeId && profile?.id) setSelectedEmployeeId(profile.id);
+      else if (!selectedEmployeeId && list[0]) setSelectedEmployeeId(list[0].id);
+    }
+
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schoolId]);
 
   const filtered = useMemo(() => {
     return entries.filter((e) => {
       const matchSearch =
         !search ||
-        e.employeeName.toLowerCase().includes(search.toLowerCase()) ||
-        e.role.toLowerCase().includes(search.toLowerCase());
+        e.employee_name.toLowerCase().includes(search.toLowerCase()) ||
+        (e.role ?? "").toLowerCase().includes(search.toLowerCase());
       const matchStatus = statusFilter === "todos" || e.status === statusFilter;
       const matchDate = !dateFilter || e.date === dateFilter;
       return matchSearch && matchStatus && matchDate;
@@ -160,9 +125,9 @@ const Timesheet = () => {
   }, [entries, search, statusFilter, dateFilter]);
 
   const stats = useMemo(() => {
-    const totalHours = entries.reduce((s, e) => s + e.hoursWorked, 0);
+    const totalHours = entries.reduce((s, e) => s + Number(e.hours_worked || 0), 0);
     const today = new Date().toISOString().split("T")[0];
-    const todayEntries = entries.filter((e) => e.date === "2026-04-25" || e.date === today);
+    const todayEntries = entries.filter((e) => e.date === today);
     const inProgress = entries.filter((e) => e.status === "em_curso").length;
     const completed = entries.filter((e) => e.status === "completo").length;
     return { totalHours, todayCount: todayEntries.length, inProgress, completed };
@@ -171,11 +136,10 @@ const Timesheet = () => {
   const captureGps = () => {
     setGpsStatus("loading");
     if (!navigator.geolocation) {
-      // fallback mock
       setTimeout(() => {
-        setCurrentCoords({ lat: -8.8390, lng: 13.2894 });
+        setCurrentCoords({ lat: -8.839, lng: 13.2894 });
         setGpsStatus("success");
-      }, 800);
+      }, 600);
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -184,81 +148,130 @@ const Timesheet = () => {
         setGpsStatus("success");
       },
       () => {
-        // permission denied — fallback
-        setCurrentCoords({ lat: -8.8390, lng: 13.2894 });
+        setCurrentCoords({ lat: -8.839, lng: 13.2894 });
         setGpsStatus("success");
       },
       { enableHighAccuracy: true, timeout: 8000 },
     );
   };
 
-  const submitRegister = () => {
-    if (!currentCoords) return;
-    const now = new Date();
-    const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-    const date = now.toISOString().split("T")[0];
-    const employee = employees.find((e) => e.name === selectedEmployee)!;
-    const location = {
-      lat: currentCoords.lat,
-      lng: currentCoords.lng,
-      address: "Localização capturada via GPS",
-    };
+  const submitRegister = async () => {
+    if (!currentCoords || !schoolId || !selectedEmployeeId) return;
+    const employee = employees.find((e) => e.id === selectedEmployeeId);
+    if (!employee) return;
+
+    setSubmitting(true);
+    const nowIso = new Date().toISOString();
+    const date = nowIso.split("T")[0];
+    const address = "Localização capturada via GPS";
 
     if (registerType === "in") {
-      const newEntry: TimeEntry = {
-        id: `t${Date.now()}`,
-        employeeName: employee.name,
+      // Verificar se já existe um em_curso ativo deste funcionário
+      const { data: existing } = await supabase
+        .from("time_entries")
+        .select("id")
+        .eq("school_id", schoolId)
+        .eq("profile_id", selectedEmployeeId)
+        .eq("status", "em_curso")
+        .maybeSingle();
+
+      if (existing) {
+        toast({
+          title: "Entrada já registada",
+          description: "Este funcionário já tem uma entrada em curso. Registe primeiro a saída.",
+          variant: "destructive",
+        });
+        setSubmitting(false);
+        return;
+      }
+
+      const { error } = await supabase.from("time_entries").insert({
+        school_id: schoolId,
+        profile_id: selectedEmployeeId,
+        employee_name: employee.name,
         role: employee.role,
         date,
-        checkIn: time,
-        checkOut: null,
-        hoursWorked: 0,
+        check_in: nowIso,
         status: "em_curso",
-        checkInLocation: location,
-        checkOutLocation: null,
-      };
-      setEntries((prev) => [newEntry, ...prev]);
+        hours_worked: 0,
+        check_in_lat: currentCoords.lat,
+        check_in_lng: currentCoords.lng,
+        check_in_address: address,
+      });
+      if (error) {
+        toast({ title: "Erro ao registar entrada", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Entrada registada", description: `${employee.name}` });
+      }
     } else {
-      setEntries((prev) =>
-        prev.map((e) => {
-          if (e.employeeName === employee.name && e.status === "em_curso" && e.checkIn) {
-            const [hIn, mIn] = e.checkIn.split(":").map(Number);
-            const minutes = now.getHours() * 60 + now.getMinutes() - (hIn * 60 + mIn);
-            const hours = Math.max(0, minutes / 60);
-            return {
-              ...e,
-              checkOut: time,
-              checkOutLocation: location,
-              hoursWorked: Math.round(hours * 100) / 100,
-              status: hours >= 6 ? "completo" : "incompleto",
-            };
-          }
-          return e;
-        }),
-      );
+      // Procurar entrada em_curso
+      const { data: open } = await supabase
+        .from("time_entries")
+        .select("*")
+        .eq("school_id", schoolId)
+        .eq("profile_id", selectedEmployeeId)
+        .eq("status", "em_curso")
+        .order("check_in", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!open) {
+        toast({
+          title: "Sem entrada em curso",
+          description: "Não foi encontrada uma entrada por fechar para este funcionário.",
+          variant: "destructive",
+        });
+        setSubmitting(false);
+        return;
+      }
+
+      const checkInDate = new Date(open.check_in as string);
+      const diffMs = new Date(nowIso).getTime() - checkInDate.getTime();
+      const hours = Math.max(0, diffMs / (1000 * 60 * 60));
+      const status: EntryStatus = hours >= 6 ? "completo" : "incompleto";
+
+      const { error } = await supabase
+        .from("time_entries")
+        .update({
+          check_out: nowIso,
+          check_out_lat: currentCoords.lat,
+          check_out_lng: currentCoords.lng,
+          check_out_address: address,
+          hours_worked: Math.round(hours * 100) / 100,
+          status,
+        })
+        .eq("id", open.id);
+
+      if (error) {
+        toast({ title: "Erro ao registar saída", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Saída registada", description: `${employee.name} — ${hours.toFixed(2)}h` });
+      }
     }
 
+    setSubmitting(false);
     setRegistering(false);
     setGpsStatus("idle");
     setCurrentCoords(null);
+    loadAll();
   };
 
   const exportCsv = () => {
-    const header = "Funcionário;Função;Data;Entrada;Saída;Horas;Status;Lat Entrada;Lng Entrada;Lat Saída;Lng Saída\n";
+    const header = "Funcionário;Função;Data;Entrada;Saída;Horas;Estado;Lat Entrada;Lng Entrada;Lat Saída;Lng Saída\n";
     const rows = filtered
       .map((e) =>
         [
-          e.employeeName,
-          e.role,
+          e.employee_name,
+          e.role ?? "",
           e.date,
-          e.checkIn ?? "",
-          e.checkOut ?? "",
-          e.hoursWorked,
-          statusMeta[e.status].label,
-          e.checkInLocation?.lat ?? "",
-          e.checkInLocation?.lng ?? "",
-          e.checkOutLocation?.lat ?? "",
-          e.checkOutLocation?.lng ?? "",
+          formatTime(e.check_in) ?? "",
+          formatTime(e.check_out) ?? "",
+          e.hours_worked,
+          statusMeta[e.status]?.label ?? e.status,
+          e.check_in_lat ?? "",
+          e.check_in_lng ?? "",
+          e.check_out_lat ?? "",
+          e.check_out_lng ?? "",
         ].join(";"),
       )
       .join("\n");
@@ -350,6 +363,18 @@ const Timesheet = () => {
             <option value="em_curso">Em Curso</option>
             <option value="incompleto">Incompleto</option>
           </select>
+          {(dateFilter || statusFilter !== "todos" || search) && (
+            <button
+              onClick={() => {
+                setDateFilter("");
+                setStatusFilter("todos");
+                setSearch("");
+              }}
+              className="h-10 rounded-xl bg-secondary px-3 text-xs font-semibold text-foreground hover:opacity-90"
+            >
+              Limpar filtros
+            </button>
+          )}
         </div>
 
         {/* Table */}
@@ -368,9 +393,18 @@ const Timesheet = () => {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((e) => {
-                  const meta = statusMeta[e.status];
+                {loading && (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                    </td>
+                  </tr>
+                )}
+                {!loading && filtered.map((e) => {
+                  const meta = statusMeta[e.status] ?? statusMeta.em_curso;
                   const Icon = meta.icon;
+                  const checkIn = formatTime(e.check_in);
+                  const checkOut = formatTime(e.check_out);
                   return (
                     <tr
                       key={e.id}
@@ -380,47 +414,47 @@ const Timesheet = () => {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-pastel-lilac text-pastel-lilac-foreground text-xs font-bold">
-                            {e.employeeName
+                            {e.employee_name
                               .split(" ")
                               .map((n) => n[0])
                               .slice(0, 2)
                               .join("")}
                           </div>
                           <div>
-                            <p className="font-semibold text-foreground">{e.employeeName}</p>
+                            <p className="font-semibold text-foreground">{e.employee_name}</p>
                             <p className="text-xs text-muted-foreground">{e.role}</p>
                           </div>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-foreground">{e.date}</td>
                       <td className="px-4 py-3">
-                        {e.checkIn ? (
+                        {checkIn ? (
                           <span className="inline-flex items-center gap-1 font-medium text-foreground">
                             <LogIn className="h-3.5 w-3.5 text-pastel-green-foreground" />
-                            {e.checkIn}
+                            {checkIn}
                           </span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        {e.checkOut ? (
+                        {checkOut ? (
                           <span className="inline-flex items-center gap-1 font-medium text-foreground">
                             <LogOut className="h-3.5 w-3.5 text-pastel-pink-foreground" />
-                            {e.checkOut}
+                            {checkOut}
                           </span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
                       <td className="px-4 py-3 font-semibold text-foreground">
-                        {e.hoursWorked > 0 ? `${e.hoursWorked.toFixed(2)}h` : "—"}
+                        {Number(e.hours_worked) > 0 ? `${Number(e.hours_worked).toFixed(2)}h` : "—"}
                       </td>
                       <td className="px-4 py-3">
-                        {e.checkInLocation ? (
+                        {e.check_in_lat != null && e.check_in_lng != null ? (
                           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                             <MapPin className="h-3.5 w-3.5" />
-                            {e.checkInLocation.lat.toFixed(4)}, {e.checkInLocation.lng.toFixed(4)}
+                            {Number(e.check_in_lat).toFixed(4)}, {Number(e.check_in_lng).toFixed(4)}
                           </span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
@@ -435,7 +469,7 @@ const Timesheet = () => {
                     </tr>
                   );
                 })}
-                {filtered.length === 0 && (
+                {!loading && filtered.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
                       Nenhum registo encontrado.
@@ -453,6 +487,7 @@ const Timesheet = () => {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4"
           onClick={() => {
+            if (submitting) return;
             setRegistering(false);
             setGpsStatus("idle");
             setCurrentCoords(null);
@@ -485,13 +520,14 @@ const Timesheet = () => {
                   Funcionário
                 </label>
                 <select
-                  value={selectedEmployee}
-                  onChange={(e) => setSelectedEmployee(e.target.value)}
+                  value={selectedEmployeeId}
+                  onChange={(e) => setSelectedEmployeeId(e.target.value)}
                   className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
                 >
+                  {employees.length === 0 && <option value="">Sem funcionários</option>}
                   {employees.map((e) => (
-                    <option key={e.name} value={e.name}>
-                      {e.name} — {e.role}
+                    <option key={e.id} value={e.id}>
+                      {e.name}{e.role ? ` — ${e.role}` : ""}
                     </option>
                   ))}
                 </select>
@@ -555,15 +591,17 @@ const Timesheet = () => {
                     setGpsStatus("idle");
                     setCurrentCoords(null);
                   }}
-                  className="flex-1 rounded-xl bg-secondary py-2.5 text-sm font-semibold text-foreground hover:opacity-90"
+                  disabled={submitting}
+                  className="flex-1 rounded-xl bg-secondary py-2.5 text-sm font-semibold text-foreground hover:opacity-90 disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={submitRegister}
-                  disabled={!currentCoords}
-                  className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!currentCoords || submitting || !selectedEmployeeId}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
+                  {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   Confirmar Registo
                 </button>
               </div>
@@ -584,46 +622,58 @@ const Timesheet = () => {
           >
             <div className="flex items-center gap-3 pb-4">
               <div className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-pastel-lilac text-pastel-lilac-foreground text-sm font-bold">
-                {selectedEntry.employeeName
+                {selectedEntry.employee_name
                   .split(" ")
                   .map((n) => n[0])
                   .slice(0, 2)
                   .join("")}
               </div>
               <div className="flex-1">
-                <h2 className="text-lg font-bold text-foreground">{selectedEntry.employeeName}</h2>
+                <h2 className="text-lg font-bold text-foreground">{selectedEntry.employee_name}</h2>
                 <p className="text-xs text-muted-foreground">
                   {selectedEntry.role} · {selectedEntry.date}
                 </p>
               </div>
-              <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold", statusMeta[selectedEntry.status].color)}>
-                {statusMeta[selectedEntry.status].label}
+              <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold", statusMeta[selectedEntry.status]?.color)}>
+                {statusMeta[selectedEntry.status]?.label}
               </span>
             </div>
 
             <div className="grid grid-cols-2 gap-3 pb-4">
               <div className="rounded-xl bg-pastel-green/30 p-3">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-pastel-green-foreground">Entrada</p>
-                <p className="mt-1 text-lg font-bold text-foreground">{selectedEntry.checkIn ?? "—"}</p>
+                <p className="mt-1 text-lg font-bold text-foreground">{formatTime(selectedEntry.check_in) ?? "—"}</p>
               </div>
               <div className="rounded-xl bg-pastel-pink/30 p-3">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-pastel-pink-foreground">Saída</p>
-                <p className="mt-1 text-lg font-bold text-foreground">{selectedEntry.checkOut ?? "—"}</p>
+                <p className="mt-1 text-lg font-bold text-foreground">{formatTime(selectedEntry.check_out) ?? "—"}</p>
               </div>
               <div className="col-span-2 rounded-xl bg-pastel-blue/30 p-3">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-pastel-blue-foreground">Horas Trabalhadas</p>
                 <p className="mt-1 text-2xl font-bold text-foreground">
-                  {selectedEntry.hoursWorked > 0 ? `${selectedEntry.hoursWorked.toFixed(2)} h` : "Em curso"}
+                  {Number(selectedEntry.hours_worked) > 0 ? `${Number(selectedEntry.hours_worked).toFixed(2)} h` : "Em curso"}
                 </p>
               </div>
             </div>
 
             <div className="flex flex-col gap-3">
-              {selectedEntry.checkInLocation && (
-                <LocationCard title="Localização de Entrada" location={selectedEntry.checkInLocation} tone="green" />
+              {selectedEntry.check_in_lat != null && selectedEntry.check_in_lng != null && (
+                <LocationCard
+                  title="Localização de Entrada"
+                  lat={Number(selectedEntry.check_in_lat)}
+                  lng={Number(selectedEntry.check_in_lng)}
+                  address={selectedEntry.check_in_address ?? ""}
+                  tone="green"
+                />
               )}
-              {selectedEntry.checkOutLocation && (
-                <LocationCard title="Localização de Saída" location={selectedEntry.checkOutLocation} tone="pink" />
+              {selectedEntry.check_out_lat != null && selectedEntry.check_out_lng != null && (
+                <LocationCard
+                  title="Localização de Saída"
+                  lat={Number(selectedEntry.check_out_lat)}
+                  lng={Number(selectedEntry.check_out_lng)}
+                  address={selectedEntry.check_out_address ?? ""}
+                  tone="pink"
+                />
               )}
             </div>
 
@@ -664,23 +714,27 @@ const StatBox = ({
 
 const LocationCard = ({
   title,
-  location,
+  lat,
+  lng,
+  address,
   tone,
 }: {
   title: string;
-  location: { lat: number; lng: number; address: string };
+  lat: number;
+  lng: number;
+  address: string;
   tone: "green" | "pink";
 }) => {
-  const mapsUrl = `https://www.google.com/maps?q=${location.lat},${location.lng}`;
+  const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
   return (
     <div className="rounded-xl border border-border bg-muted/40 p-3">
       <div className="flex items-center gap-2 pb-1.5">
         <MapPin className={cn("h-4 w-4", tone === "green" ? "text-pastel-green-foreground" : "text-pastel-pink-foreground")} />
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
       </div>
-      <p className="text-sm font-medium text-foreground">{location.address}</p>
+      {address && <p className="text-sm font-medium text-foreground">{address}</p>}
       <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-        {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
+        {lat.toFixed(6)}, {lng.toFixed(6)}
       </p>
       <a
         href={mapsUrl}
