@@ -232,6 +232,20 @@ const AlunoPerfil = () => {
         .order("due_date", { ascending: true });
       if (!cancelled) {
         setFees((feeRows ?? []) as FeeRow[]);
+      }
+
+      const feeIds = (feeRows ?? []).map((f) => f.id);
+      if (feeIds.length > 0) {
+        const { data: payRows } = await supabase
+          .from("payments")
+          .select("id, student_fee_id, amount_paid, method, status, proof_url, payment_date, rejection_reason")
+          .in("student_fee_id", feeIds)
+          .order("payment_date", { ascending: false });
+        if (!cancelled) setPayments((payRows ?? []) as PaymentRow[]);
+      } else if (!cancelled) {
+        setPayments([]);
+      }
+      if (!cancelled) {
         setLoading(false);
       }
     };
