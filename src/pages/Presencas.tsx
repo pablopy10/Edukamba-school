@@ -288,7 +288,7 @@ const Presencas = () => {
             <h1 className="text-3xl font-bold tracking-tight text-foreground">Presenças</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {canEdit
-                ? "Clique numa célula para marcar Presente → Atrasado → Falta → Limpar."
+                ? "Clique numa célula para marcar Presente, Atrasado ou Falta."
                 : "Acompanhe a frequência diária dos alunos."}
             </p>
           </div>
