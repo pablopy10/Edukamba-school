@@ -427,6 +427,7 @@ const SlotRow = ({
   conflicts,
   onEdit,
   onDelete,
+  onCreate,
 }: {
   slot: TimeSlotRow;
   schedules: ScheduleRow[];
@@ -437,6 +438,7 @@ const SlotRow = ({
   conflicts: Set<string>;
   onEdit: (s: ScheduleRow) => void;
   onDelete: (id: string) => void;
+  onCreate: (day: number, slot: TimeSlotRow) => void;
 }) => {
   const cellsByDay = (day: number) =>
     schedules.filter(
@@ -466,7 +468,17 @@ const SlotRow = ({
       {DAYS.map((d) => {
         const cells = cellsByDay(d.value);
         if (cells.length === 0) {
-          return <div key={d.value} className="min-h-[100px] rounded-xl border border-dashed border-border bg-muted/20" />;
+          return (
+            <button
+              key={d.value}
+              type="button"
+              onClick={() => onCreate(d.value, slot)}
+              className="group flex min-h-[100px] items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+              aria-label="Adicionar aula"
+            >
+              <Plus className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" />
+            </button>
+          );
         }
         return (
           <div key={d.value} className="flex min-h-[100px] flex-col gap-1">
