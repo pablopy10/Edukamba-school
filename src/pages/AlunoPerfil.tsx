@@ -818,6 +818,55 @@ const AlunoPerfil = () => {
           )}
         </div>
       </div>
+
+      <Dialog open={!!proofDialogFee} onOpenChange={(o) => { if (!o) setProofDialogFee(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Submeter comprovativo de pagamento</DialogTitle>
+            <DialogDescription>
+              {proofDialogFee && (
+                <>Propina de {proofDialogFee.month_index ? monthNames[proofDialogFee.month_index - 1] : ""} — vencimento {formatDate(proofDialogFee.due_date)}</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="proof-amount">Valor pago</Label>
+                <Input id="proof-amount" type="number" min="0" value={proofAmount} onChange={(e) => setProofAmount(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Método</Label>
+                <Select value={proofMethod} onValueChange={setProofMethod}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="transferencia">Transferência</SelectItem>
+                    <SelectItem value="multicaixa">Multicaixa</SelectItem>
+                    <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                    <SelectItem value="cheque">Cheque</SelectItem>
+                    <SelectItem value="outro">Outro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="proof-file">Comprovativo (imagem ou PDF)</Label>
+              <Input id="proof-file" type="file" accept="image/*,application/pdf" onChange={(e) => setProofFile(e.target.files?.[0] ?? null)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="proof-notes">Notas (opcional)</Label>
+              <Textarea id="proof-notes" rows={3} value={proofNotes} onChange={(e) => setProofNotes(e.target.value)} placeholder="Referência, data da operação, etc." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProofDialogFee(null)} disabled={proofUploading}>Cancelar</Button>
+            <Button onClick={submitProof} disabled={proofUploading} className="gap-2">
+              {proofUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              Submeter
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
