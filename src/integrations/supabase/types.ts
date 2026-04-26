@@ -1019,39 +1019,61 @@ export type Database = {
       }
       students: {
         Row: {
+          avatar_color: string | null
           birth_date: string | null
+          classroom_id: string | null
           created_at: string | null
+          email: string | null
           enrollment_number: string | null
           full_name: string
           gender: string | null
           id: string
           parent_id: string | null
+          phone: string | null
           profile_id: string | null
           school_id: string | null
+          updated_at: string
         }
         Insert: {
+          avatar_color?: string | null
           birth_date?: string | null
+          classroom_id?: string | null
           created_at?: string | null
+          email?: string | null
           enrollment_number?: string | null
           full_name: string
           gender?: string | null
           id?: string
           parent_id?: string | null
+          phone?: string | null
           profile_id?: string | null
           school_id?: string | null
+          updated_at?: string
         }
         Update: {
+          avatar_color?: string | null
           birth_date?: string | null
+          classroom_id?: string | null
           created_at?: string | null
+          email?: string | null
           enrollment_number?: string | null
           full_name?: string
           gender?: string | null
           id?: string
           parent_id?: string | null
+          phone?: string | null
           profile_id?: string | null
           school_id?: string | null
+          updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "students_classroom_id_fkey"
+            columns: ["classroom_id"]
+            isOneToOne: false
+            referencedRelation: "classrooms"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "students_parent_id_fkey"
             columns: ["parent_id"]
