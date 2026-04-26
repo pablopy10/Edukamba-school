@@ -70,6 +70,19 @@ type FeeListRow = {
   } | null;
 };
 
+type PaymentListRow = {
+  id: string;
+  student_fee_id: string | null;
+  amount_paid: number;
+  method: string | null;
+  status: string;
+  proof_url: string | null;
+  payment_date: string | null;
+  notes: string | null;
+  rejection_reason: string | null;
+  submitted_by: string | null;
+};
+
 const fmtAOA = (n: number) =>
   new Intl.NumberFormat("pt-PT", { style: "currency", currency: "AOA", maximumFractionDigits: 0 }).format(n || 0);
 
