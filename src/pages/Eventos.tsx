@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { EventFormDialog, type EventRow } from "@/components/eventos/EventFormDialog";
 import {
@@ -60,8 +59,8 @@ const formatDateLong = (iso: string) => {
 const formatTime = (t: string | null) => (t ? t.slice(0, 5) : "");
 
 const Eventos = () => {
-  const { profile } = useAuth();
-  const schoolId = profile?.school_id ?? null;
+  const [schoolId, setSchoolId] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
 
   const [view, setView] = useState<View>("calendario");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
@@ -76,8 +75,8 @@ const Eventos = () => {
   const [editing, setEditing] = useState<EventRow | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const canEdit = profile?.role === "ADMIN" || profile?.role === "TEACHER";
-  const canDelete = profile?.role === "ADMIN";
+  const canEdit = role === "ADMIN" || role === "TEACHER";
+  const canDelete = role === "ADMIN";
 
   const loadEvents = async () => {
     if (!schoolId) return;
@@ -94,6 +93,20 @@ const Eventos = () => {
     }
     setEvents((data ?? []) as EventRow[]);
   };
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("school_id, role")
+        .eq("id", user.id)
+        .maybeSingle();
+      setSchoolId(profile?.school_id ?? null);
+      setRole(profile?.role ?? null);
+    })();
+  }, []);
 
   useEffect(() => {
     loadEvents();
