@@ -150,7 +150,8 @@ const Presencas = () => {
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [attendance, setAttendance] = useState<Record<string, AttendanceRow>>({});
-  const [loading, setLoading] = useState(true);
+  const [studentsLoading, setStudentsLoading] = useState(true);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
   const canEdit = userRole === "ADMIN" || userRole === "TEACHER";
@@ -188,10 +189,11 @@ const Presencas = () => {
   const monthDays = useMemo(() => getMonthDays(year, month0), [year, month0]);
   const visibleDays = monthDays;
 
-  // Load students + attendance for visible range
+  // Load students only when school or classroom filter changes (not on month change)
   useEffect(() => {
     if (!schoolId) return;
-    setLoading(true);
+    let cancelled = false;
+    setStudentsLoading(true);
     (async () => {
       let studentsQuery = supabase
         .from("students")
@@ -201,34 +203,43 @@ const Presencas = () => {
       if (classroomId !== "all") {
         studentsQuery = studentsQuery.eq("classroom_id", classroomId);
       }
-      const { data: studentsData } = await studentsQuery;
-      const studs = studentsData ?? [];
-      setStudents(studs);
+      const { data } = await studentsQuery;
+      if (cancelled) return;
+      setStudents(data ?? []);
+      setStudentsLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [schoolId, classroomId]);
 
-      if (studs.length === 0) {
-        setAttendance({});
-        setLoading(false);
-        return;
-      }
+  // Load attendance separately when month/year/school/classroom changes
+  useEffect(() => {
+    if (!schoolId) return;
+    let cancelled = false;
+    setAttendanceLoading(true);
 
-      const startDate = fmtISO(visibleDays[0]);
-      const endDate = fmtISO(visibleDays[visibleDays.length - 1]);
+    const startDate = fmtISO(new Date(year, month0, 1));
+    const endDate = fmtISO(new Date(year, month0 + 1, 0));
 
-      const { data: attData } = await supabase
+    (async () => {
+      let q = supabase
         .from("attendance")
         .select("id, student_id, date, status")
         .eq("school_id", schoolId)
         .gte("date", startDate)
-        .lte("date", endDate)
-        .in("student_id", studs.map((s) => s.id));
-
+        .lte("date", endDate);
+      if (classroomId !== "all") {
+        q = q.eq("classroom_id", classroomId);
+      }
+      const { data } = await q;
+      if (cancelled) return;
       const map: Record<string, AttendanceRow> = {};
-      (attData ?? []).forEach((row: any) => {
+      (data ?? []).forEach((row: any) => {
         map[`${row.student_id}__${row.date}`] = row as AttendanceRow;
       });
       setAttendance(map);
-      setLoading(false);
+      setAttendanceLoading(false);
     })();
+    return () => { cancelled = true; };
   }, [schoolId, classroomId, year, month0]);
 
   const applyStatus = async (student: Student, date: Date, next: Status | null) => {
