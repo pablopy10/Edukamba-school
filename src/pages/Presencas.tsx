@@ -196,23 +196,6 @@ const Presencas = () => {
     })();
   }, [schoolId, classroomId, year, month0, weekIdx]);
 
-  const cycleStatus = async (student: Student, date: Date, current: Status | null) => {
-    if (!canEdit || !schoolId) return;
-    const key = `${student.id}__${fmtISO(date)}`;
-    setSavingKey(key);
-
-    // cycle: none → PRESENT → LATE → ABSENT → none
-    const next: Status | null =
-      current === null ? "PRESENT" :
-      current === "PRESENT" ? "LATE" :
-      current === "LATE" ? "ABSENT" :
-      current === "ABSENT" ? null :
-      "PRESENT";
-
-    await applyStatus(student, date, next);
-    setSavingKey(null);
-  };
-
   const applyStatus = async (student: Student, date: Date, next: Status | null) => {
     if (!schoolId) return;
     const key = `${student.id}__${fmtISO(date)}`;
@@ -288,7 +271,7 @@ const Presencas = () => {
             <h1 className="text-3xl font-bold tracking-tight text-foreground">Presenças</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {canEdit
-                ? "Clique numa célula para marcar Presente → Atrasado → Falta → Limpar."
+                ? "Clique numa célula para marcar Presente, Atrasado ou Falta."
                 : "Acompanhe a frequência diária dos alunos."}
             </p>
           </div>
@@ -441,14 +424,6 @@ const Presencas = () => {
                                 <PopoverTrigger asChild>
                                   <button
                                     type="button"
-                                    onClick={(e) => {
-                                      // Quick cycle on plain left click; popover opens on the same click as fallback
-                                      // We stop propagation so popover doesn't open when cycling.
-                                      if (!e.shiftKey) {
-                                        e.preventDefault();
-                                        cycleStatus(s, d, status);
-                                      }
-                                    }}
                                     className="flex w-full justify-center rounded-md py-1 transition-colors hover:bg-accent"
                                     aria-label="Alterar presença"
                                   >
