@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { ArrowLeft, Mail, Phone, Calendar, GraduationCap, BookOpen, Clock, FileText, Pencil, Award, Users, Briefcase, TrendingUp, Loader2 } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Calendar, GraduationCap, BookOpen, Clock, FileText, Pencil, Award, Users, Briefcase, TrendingUp, Loader2, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { AssessmentFormDialog, type AssessmentRecord } from "@/components/avaliacoes/AssessmentFormDialog";
 
 type AvatarColor = "lilac" | "blue" | "yellow" | "green" | "pink";
 
@@ -90,6 +91,12 @@ const ProfessorPerfil = () => {
   const [assessments, setAssessments] = useState<AssessmentRow[]>([]);
   const [classroomsCount, setClassroomsCount] = useState(0);
   const [studentsCount, setStudentsCount] = useState(0);
+  const [schoolId, setSchoolId] = useState<string | null>(null);
+  const [classroomOpts, setClassroomOpts] = useState<{ id: string; name: string }[]>([]);
+  const [subjectOpts, setSubjectOpts] = useState<{ id: string; name: string }[]>([]);
+  const [teacherOpts, setTeacherOpts] = useState<{ id: string; name: string }[]>([]);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!id) return;
@@ -136,6 +143,34 @@ const ProfessorPerfil = () => {
         } else {
           setStudentsCount(0);
         }
+
+        // Load school_id + options for the assessment dialog
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("school_id")
+          .eq("id", teacherRow.profile_id)
+          .maybeSingle();
+        if (cancelled) return;
+        const sId = (prof?.school_id as string | null) ?? null;
+        setSchoolId(sId);
+        if (sId) {
+          const [crRes, subRes, tcRes] = await Promise.all([
+            supabase.from("classrooms").select("id, name").eq("school_id", sId).order("name"),
+            supabase.from("subjects").select("id, name").eq("school_id", sId).order("name"),
+            supabase
+              .from("teachers")
+              .select("profile_id, profiles(full_name)")
+              .eq("school_id", sId)
+              .not("profile_id", "is", null),
+          ]);
+          if (cancelled) return;
+          setClassroomOpts((crRes.data ?? []) as { id: string; name: string }[]);
+          setSubjectOpts((subRes.data ?? []) as { id: string; name: string }[]);
+          const tOpts = ((tcRes.data ?? []) as Array<{ profile_id: string; profiles: { full_name: string } | null }>)
+            .filter((r) => r.profile_id && r.profiles?.full_name)
+            .map((r) => ({ id: r.profile_id, name: r.profiles!.full_name }));
+          setTeacherOpts(tOpts);
+        }
       }
       if (!cancelled) setLoading(false);
     };
@@ -143,7 +178,7 @@ const ProfessorPerfil = () => {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, reloadKey]);
 
   const scheduleByDay = useMemo(() => {
     const days: Record<number, ScheduleRow[]> = {};
@@ -411,10 +446,26 @@ const ProfessorPerfil = () => {
               <FileText className="h-5 w-5 text-pastel-lilac-foreground" strokeWidth={1.75} />
               <h2 className="text-lg font-bold text-foreground">Avaliações Criadas</h2>
             </div>
-            <Link to="/avaliacoes" className="text-xs font-medium text-pastel-lilac-foreground hover:underline">Ver todas</Link>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setDialogOpen(true)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full bg-pastel-lilac px-4 text-xs font-semibold text-pastel-lilac-foreground shadow-soft transition-opacity hover:opacity-90"
+              >
+                <Plus className="h-4 w-4" strokeWidth={2} /> Nova avaliação
+              </button>
+              <Link to="/avaliacoes" className="text-xs font-medium text-pastel-lilac-foreground hover:underline">Ver todas</Link>
+            </div>
           </div>
           {assessments.length === 0 ? (
-            <p className="p-8 text-center text-sm text-muted-foreground">Sem avaliações criadas.</p>
+            <div className="p-8 text-center">
+              <p className="text-sm text-muted-foreground">Sem avaliações criadas.</p>
+              <button
+                onClick={() => setDialogOpen(true)}
+                className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-full bg-pastel-lilac px-4 text-xs font-semibold text-pastel-lilac-foreground shadow-soft transition-opacity hover:opacity-90"
+              >
+                <Plus className="h-4 w-4" strokeWidth={2} /> Criar primeira avaliação
+              </button>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -472,6 +523,24 @@ const ProfessorPerfil = () => {
             </div>
           </div>
         </div>
+
+        <AssessmentFormDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          schoolId={schoolId}
+          classrooms={classroomOpts}
+          subjects={subjectOpts}
+          teachers={teacherOpts}
+          initial={
+            teacher?.profile_id
+              ? ({
+                  teacher_id: teacher.profile_id,
+                  subject_id: teacher.subject_id ?? null,
+                } as Partial<AssessmentRecord>)
+              : null
+          }
+          onSaved={() => setReloadKey((k) => k + 1)}
+        />
       </div>
     </DashboardLayout>
   );
