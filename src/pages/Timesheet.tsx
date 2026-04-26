@@ -150,7 +150,8 @@ const Timesheet = () => {
       const matchSearch =
         !search ||
         e.employee_name.toLowerCase().includes(search.toLowerCase()) ||
-        (e.role ?? "").toLowerCase().includes(search.toLowerCase());
+        (e.role ?? "").toLowerCase().includes(search.toLowerCase()) ||
+        translateRole(e.role).toLowerCase().includes(search.toLowerCase());
       const matchStatus = statusFilter === "todos" || e.status === statusFilter;
       let matchMonth = true;
       let matchYear = true;
@@ -300,23 +301,30 @@ const Timesheet = () => {
   };
 
   const exportCsv = () => {
-    const header = "Funcionário;Função;Data;Entrada;Saída;Horas;Estado;Lat Entrada;Lng Entrada;Lat Saída;Lng Saída\n";
+    const header = isAdmin
+      ? "Funcionário;Função;Data;Entrada;Saída;Horas;Estado;Lat Entrada;Lng Entrada;Lat Saída;Lng Saída\n"
+      : "Funcionário;Função;Data;Entrada;Saída;Horas;Estado\n";
     const rows = filtered
-      .map((e) =>
-        [
+      .map((e) => {
+        const base = [
           e.employee_name,
-          e.role ?? "",
+          translateRole(e.role),
           e.date,
           formatTime(e.check_in) ?? "",
           formatTime(e.check_out) ?? "",
           e.hours_worked,
           statusMeta[e.status]?.label ?? e.status,
-          e.check_in_lat ?? "",
-          e.check_in_lng ?? "",
-          e.check_out_lat ?? "",
-          e.check_out_lng ?? "",
-        ].join(";"),
-      )
+        ];
+        if (isAdmin) {
+          base.push(
+            e.check_in_lat ?? "",
+            e.check_in_lng ?? "",
+            e.check_out_lat ?? "",
+            e.check_out_lng ?? "",
+          );
+        }
+        return base.join(";");
+      })
       .join("\n");
     const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
