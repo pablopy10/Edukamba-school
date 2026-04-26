@@ -2,12 +2,23 @@ import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
   User, Mail, Phone, Lock, Shield, Bell, Eye, EyeOff, Check, AlertCircle,
-  Globe, Save, Loader2,
+  Globe, Save, Loader2, Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type Tab = "pessoal" | "credenciais" | "preferencias" | "seguranca";
 
@@ -69,10 +80,14 @@ const defaultSecurity = { twoFactor: false, loginAlerts: true };
 
 const Perfil = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>("pessoal");
   const [toast, setToast] = useState<{ kind: "success" | "error"; msg: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   // Personal info
   const [profile, setProfile] = useState({ full_name: "", phone: "", language: "pt-PT", role: "" as string | null });
@@ -192,6 +207,25 @@ const Perfil = () => {
   const handleSaveSecurity = () => {
     localStorage.setItem(SECURITY_KEY, JSON.stringify(security));
     showToast("success", "Definições de segurança guardadas.");
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    setDeleting(true);
+    // Soft-delete: deactivate profile (RLS-safe from client) and sign out.
+    const { error } = await supabase
+      .from("profiles")
+      .update({ is_active: false })
+      .eq("id", user.id);
+    if (error) {
+      setDeleting(false);
+      showToast("error", error.message);
+      return;
+    }
+    await supabase.auth.signOut();
+    setDeleting(false);
+    setDeleteOpen(false);
+    navigate("/auth", { replace: true });
   };
 
   const initials = profile.full_name
