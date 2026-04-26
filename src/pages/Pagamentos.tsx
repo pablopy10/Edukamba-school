@@ -16,7 +16,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
 
 type FeeRule = {
@@ -67,6 +68,19 @@ type FeeListRow = {
     classroom_id: string | null;
     classroom?: { id: string; name: string } | null;
   } | null;
+};
+
+type PaymentListRow = {
+  id: string;
+  student_fee_id: string | null;
+  amount_paid: number;
+  method: string | null;
+  status: string;
+  proof_url: string | null;
+  payment_date: string | null;
+  notes: string | null;
+  rejection_reason: string | null;
+  submitted_by: string | null;
 };
 
 const fmtAOA = (n: number) =>
@@ -126,6 +140,10 @@ const Pagamentos = () => {
   const [feeSearch, setFeeSearch] = useState("");
   const [remindingFeeId, setRemindingFeeId] = useState<string | null>(null);
   const [classrooms, setClassrooms] = useState<ClassroomLite[]>([]);
+  const [payments, setPayments] = useState<PaymentListRow[]>([]);
+  const [validatingId, setValidatingId] = useState<string | null>(null);
+  const [rejectDialog, setRejectDialog] = useState<PaymentListRow | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   const fetchAll = async () => {
     setLoading(true);
@@ -171,8 +189,21 @@ const Pagamentos = () => {
         .in("student_id", studentIds)
         .order("due_date", { ascending: true });
       setAllFees((feesData ?? []) as unknown as FeeListRow[]);
+
+      const feeIds = (feesData ?? []).map((f) => f.id);
+      if (feeIds.length > 0) {
+        const { data: payRows } = await supabase
+          .from("payments")
+          .select("id, student_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+          .in("student_fee_id", feeIds)
+          .order("payment_date", { ascending: false });
+        setPayments((payRows ?? []) as PaymentListRow[]);
+      } else {
+        setPayments([]);
+      }
     } else {
       setAllFees([]);
+      setPayments([]);
     }
     setLoading(false);
   };
@@ -376,6 +407,100 @@ const Pagamentos = () => {
     return { paid, pending, overdue };
   }, [allFees]);
 
+  const latestPaymentByFee = useMemo(() => {
+    const map = new Map<string, PaymentListRow>();
+    payments.forEach((p) => {
+      if (!p.student_fee_id) return;
+      if (!map.has(p.student_fee_id)) map.set(p.student_fee_id, p);
+    });
+    return map;
+  }, [payments]);
+
+  const pendingValidations = useMemo(() => {
+    return allFees
+      .map((f) => ({ fee: f, payment: latestPaymentByFee.get(f.id) }))
+      .filter((x) => x.payment && x.payment.status === "pendente") as Array<{ fee: FeeListRow; payment: PaymentListRow }>;
+  }, [allFees, latestPaymentByFee]);
+
+  const viewProof = async (path: string) => {
+    const { data, error } = await supabase.storage.from("payment-proofs").createSignedUrl(path, 60);
+    if (error || !data?.signedUrl) {
+      toast({ title: "Erro a abrir comprovativo", description: error?.message ?? "Sem URL", variant: "destructive" });
+      return;
+    }
+    window.open(data.signedUrl, "_blank");
+  };
+
+  const validatePayment = async (fee: FeeListRow, payment: PaymentListRow) => {
+    if (!schoolId) return;
+    setValidatingId(payment.id);
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id ?? null;
+    const { error: payErr } = await supabase
+      .from("payments")
+      .update({ status: "validado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: null })
+      .eq("id", payment.id);
+    if (payErr) {
+      setValidatingId(null);
+      toast({ title: "Erro a validar", description: payErr.message, variant: "destructive" });
+      return;
+    }
+    const { error: feeErr } = await supabase.from("student_fees").update({ is_paid: true }).eq("id", fee.id);
+    if (feeErr) {
+      setValidatingId(null);
+      toast({ title: "Erro a marcar propina", description: feeErr.message, variant: "destructive" });
+      return;
+    }
+    if (fee.student?.parent_id) {
+      const monthLabel = fee.month_index ? monthNames[fee.month_index - 1] : "";
+      await supabase.from("notifications").insert({
+        recipient_id: fee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento validado — ${monthLabel}`.trim(),
+        description: `O pagamento da propina de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
+        category: "pagamento",
+        link: "/financas",
+      });
+    }
+    setValidatingId(null);
+    toast({ title: "Pagamento validado", description: "O encarregado foi notificado." });
+    await fetchAll();
+  };
+
+  const confirmReject = async () => {
+    if (!rejectDialog || !schoolId) return;
+    const payment = rejectDialog;
+    const fee = allFees.find((f) => f.id === payment.student_fee_id);
+    setValidatingId(payment.id);
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id ?? null;
+    const { error } = await supabase
+      .from("payments")
+      .update({ status: "rejeitado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: rejectReason || null })
+      .eq("id", payment.id);
+    if (error) {
+      setValidatingId(null);
+      toast({ title: "Erro a rejeitar", description: error.message, variant: "destructive" });
+      return;
+    }
+    if (fee?.student?.parent_id) {
+      const monthLabel = fee.month_index ? monthNames[fee.month_index - 1] : "";
+      await supabase.from("notifications").insert({
+        recipient_id: fee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento rejeitado — ${monthLabel}`.trim(),
+        description: `O comprovativo de pagamento de ${fee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}.` : ""} Por favor reenvie o comprovativo correto.`,
+        category: "pagamento",
+        link: "/financas",
+      });
+    }
+    setValidatingId(null);
+    setRejectDialog(null);
+    setRejectReason("");
+    toast({ title: "Pagamento rejeitado", description: "O encarregado foi notificado." });
+    await fetchAll();
+  };
+
   const sendReminder = async (fee: FeeListRow) => {
     if (!schoolId) return;
     const parentId = fee.student?.parent_id;
@@ -489,6 +614,72 @@ const Pagamentos = () => {
               </Card>
             </div>
 
+            {pendingValidations.length > 0 && (
+              <Card className="border-pastel-blue/60">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <FileText className="h-4 w-4" /> Comprovativos a validar
+                    <Badge variant="secondary">{pendingValidations.length}</Badge>
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">Comprovativos enviados pelos educadores que aguardam validação.</p>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="py-2 px-2">Aluno</th>
+                          <th className="py-2 px-2">Mês</th>
+                          <th className="py-2 px-2">Valor pago</th>
+                          <th className="py-2 px-2">Método</th>
+                          <th className="py-2 px-2">Submetido</th>
+                          <th className="py-2 px-2 text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pendingValidations.map(({ fee, payment }) => (
+                          <tr key={payment.id} className="border-b hover:bg-muted/30">
+                            <td className="py-2 px-2 font-medium">{fee.student?.full_name ?? "—"}</td>
+                            <td className="py-2 px-2">{fee.month_index ? monthNames[fee.month_index - 1] : "—"}</td>
+                            <td className="py-2 px-2 font-semibold">{fmtAOA(Number(payment.amount_paid))}</td>
+                            <td className="py-2 px-2 capitalize text-muted-foreground">{payment.method ?? "—"}</td>
+                            <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString("pt-PT") : "—"}</td>
+                            <td className="py-2 px-2">
+                              <div className="flex flex-wrap justify-end gap-2">
+                                {payment.proof_url && (
+                                  <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(payment.proof_url!)}>
+                                    <Eye className="h-3.5 w-3.5" /> Ver
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                                  disabled={validatingId === payment.id}
+                                  onClick={() => validatePayment(fee, payment)}
+                                >
+                                  {validatingId === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                  Validar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1 text-destructive"
+                                  disabled={validatingId === payment.id}
+                                  onClick={() => { setRejectDialog(payment); setRejectReason(""); }}
+                                >
+                                  <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <Card>
               <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
@@ -551,6 +742,9 @@ const Pagamentos = () => {
                       <tbody>
                         {filteredFees.slice(0, 200).map((f) => {
                           const overdue = !f.is_paid && new Date(f.due_date).getTime() < Date.now();
+                          const pay = latestPaymentByFee.get(f.id);
+                          const pendingValidation = !!pay && pay.status === "pendente";
+                          const rejected = !!pay && pay.status === "rejeitado";
                           return (
                             <tr key={f.id} className="border-b hover:bg-muted/30">
                               <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
@@ -561,6 +755,10 @@ const Pagamentos = () => {
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
                                   <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">Pago</Badge>
+                                ) : pendingValidation ? (
+                                  <Badge className="bg-pastel-blue text-pastel-blue-foreground hover:bg-pastel-blue">A validar</Badge>
+                                ) : rejected ? (
+                                  <Badge variant="outline" className="border-destructive text-destructive">Rejeitado</Badge>
                                 ) : overdue ? (
                                   <Badge variant="destructive">Em atraso</Badge>
                                 ) : (
@@ -568,12 +766,41 @@ const Pagamentos = () => {
                                 )}
                               </td>
                               <td className="py-2 px-2 text-right">
-                                {!f.is_paid && (
-                                  <Button size="sm" variant="outline" className="gap-2" onClick={() => sendReminder(f)} disabled={remindingFeeId === f.id || !f.student?.parent_id}>
-                                    {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                                    Cobrar
-                                  </Button>
-                                )}
+                                <div className="flex flex-wrap justify-end gap-2">
+                                  {pendingValidation && pay && (
+                                    <>
+                                      {pay.proof_url && (
+                                        <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
+                                          <Eye className="h-3.5 w-3.5" /> Ver
+                                        </Button>
+                                      )}
+                                      <Button
+                                        size="sm"
+                                        className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                                        disabled={validatingId === pay.id}
+                                        onClick={() => validatePayment(f, pay)}
+                                      >
+                                        {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                        Validar
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="gap-1 text-destructive"
+                                        disabled={validatingId === pay.id}
+                                        onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
+                                      >
+                                        <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                      </Button>
+                                    </>
+                                  )}
+                                  {!f.is_paid && !pendingValidation && (
+                                    <Button size="sm" variant="outline" className="gap-2" onClick={() => sendReminder(f)} disabled={remindingFeeId === f.id || !f.student?.parent_id}>
+                                      {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                      Cobrar
+                                    </Button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );
@@ -916,6 +1143,26 @@ const Pagamentos = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!rejectDialog} onOpenChange={(o) => { if (!o) { setRejectDialog(null); setRejectReason(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rejeitar comprovativo</DialogTitle>
+            <DialogDescription>Indique o motivo. O encarregado será notificado para reenviar.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="reject-reason">Motivo</Label>
+            <Textarea id="reject-reason" rows={3} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Ex.: comprovativo ilegível, valor incorreto..." />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectDialog(null)} disabled={!!validatingId}>Cancelar</Button>
+            <Button variant="destructive" onClick={confirmReject} disabled={!!validatingId} className="gap-2">
+              {validatingId ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+              Rejeitar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };

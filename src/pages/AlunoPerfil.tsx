@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { ArrowLeft, Mail, Phone, MapPin, Calendar, GraduationCap, BookOpen, Clock, CheckCircle2, XCircle, AlertCircle, Users, FileText, Pencil, Loader2, TrendingUp, Wallet, Bell } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Calendar, GraduationCap, BookOpen, Clock, CheckCircle2, XCircle, AlertCircle, Users, FileText, Pencil, Loader2, TrendingUp, Wallet, Bell, Upload, Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type AvatarColor = "lilac" | "blue" | "yellow" | "green" | "pink";
 
@@ -105,6 +110,17 @@ interface FeeRow {
   month_index: number | null;
 }
 
+interface PaymentRow {
+  id: string;
+  student_fee_id: string | null;
+  amount_paid: number;
+  method: string | null;
+  status: string;
+  proof_url: string | null;
+  payment_date: string | null;
+  rejection_reason: string | null;
+}
+
 const StatPill = ({ label, value, color }: { label: string; value: string; color: AvatarColor }) => (
   <div className="rounded-2xl bg-card p-5 shadow-card">
     <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", avatarStyles[color])}>{label}</span>
@@ -124,6 +140,13 @@ const AlunoPerfil = () => {
   const [teachers, setTeachers] = useState<{ id: string; full_name: string; subject: string | null; phone: string | null }[]>([]);
   const [fees, setFees] = useState<FeeRow[]>([]);
   const [remindingFeeId, setRemindingFeeId] = useState<string | null>(null);
+  const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [proofDialogFee, setProofDialogFee] = useState<FeeRow | null>(null);
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofMethod, setProofMethod] = useState<string>("transferencia");
+  const [proofNotes, setProofNotes] = useState("");
+  const [proofAmount, setProofAmount] = useState("");
+  const [proofUploading, setProofUploading] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -209,6 +232,20 @@ const AlunoPerfil = () => {
         .order("due_date", { ascending: true });
       if (!cancelled) {
         setFees((feeRows ?? []) as FeeRow[]);
+      }
+
+      const feeIds = (feeRows ?? []).map((f) => f.id);
+      if (feeIds.length > 0) {
+        const { data: payRows } = await supabase
+          .from("payments")
+          .select("id, student_fee_id, amount_paid, method, status, proof_url, payment_date, rejection_reason")
+          .in("student_fee_id", feeIds)
+          .order("payment_date", { ascending: false });
+        if (!cancelled) setPayments((payRows ?? []) as PaymentRow[]);
+      } else if (!cancelled) {
+        setPayments([]);
+      }
+      if (!cancelled) {
         setLoading(false);
       }
     };
@@ -238,6 +275,77 @@ const AlunoPerfil = () => {
     setRemindingFeeId(null);
     if (error) toast({ title: "Erro a enviar lembrete", description: error.message, variant: "destructive" });
     else toast({ title: "Lembrete enviado ao encarregado" });
+  };
+
+  const latestPaymentByFee = useMemo(() => {
+    const map = new Map<string, PaymentRow>();
+    payments.forEach((p) => {
+      if (!p.student_fee_id) return;
+      if (!map.has(p.student_fee_id)) map.set(p.student_fee_id, p);
+    });
+    return map;
+  }, [payments]);
+
+  const openProofDialog = (fee: FeeRow) => {
+    setProofDialogFee(fee);
+    setProofFile(null);
+    setProofMethod("transferencia");
+    setProofNotes("");
+    setProofAmount(String(fee.amount_due));
+  };
+
+  const submitProof = async () => {
+    if (!student || !proofDialogFee) return;
+    if (!proofFile) {
+      toast({ title: "Selecione um ficheiro", description: "É necessário anexar o comprovativo.", variant: "destructive" });
+      return;
+    }
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id;
+    if (!userId) {
+      toast({ title: "Sessão expirada", variant: "destructive" });
+      return;
+    }
+    const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", userId).maybeSingle();
+    const schoolId = profile?.school_id;
+    if (!schoolId) {
+      toast({ title: "Escola não encontrada", variant: "destructive" });
+      return;
+    }
+    setProofUploading(true);
+    const ext = proofFile.name.split(".").pop() || "bin";
+    const path = `${schoolId}/${student.id}/${proofDialogFee.id}-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from("payment-proofs").upload(path, proofFile, { upsert: false });
+    if (upErr) {
+      setProofUploading(false);
+      toast({ title: "Erro a enviar ficheiro", description: upErr.message, variant: "destructive" });
+      return;
+    }
+    const amount = Number(proofAmount) || Number(proofDialogFee.amount_due);
+    const { error: insErr } = await supabase.from("payments").insert({
+      student_fee_id: proofDialogFee.id,
+      amount_paid: amount,
+      method: proofMethod,
+      proof_url: path,
+      status: "pendente",
+      submitted_by: userId,
+      school_id: schoolId,
+      notes: proofNotes || null,
+    });
+    setProofUploading(false);
+    if (insErr) {
+      toast({ title: "Erro a registar pagamento", description: insErr.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Comprovativo enviado", description: "A escola será notificada para validar." });
+    setProofDialogFee(null);
+    // Reload payments
+    const { data: payRows } = await supabase
+      .from("payments")
+      .select("id, student_fee_id, amount_paid, method, status, proof_url, payment_date, rejection_reason")
+      .in("student_fee_id", fees.map((f) => f.id))
+      .order("payment_date", { ascending: false });
+    setPayments((payRows ?? []) as PaymentRow[]);
   };
 
   const subjectsAvg = useMemo(() => {
@@ -448,6 +556,9 @@ const AlunoPerfil = () => {
                 <tbody>
                   {fees.map((f) => {
                     const overdue = !f.is_paid && new Date(f.due_date) < new Date();
+                    const pay = latestPaymentByFee.get(f.id);
+                    const pendingValidation = !!pay && pay.status === "pendente";
+                    const rejected = !!pay && pay.status === "rejeitado";
                     return (
                       <tr key={f.id} className="border-b border-border last:border-0 hover:bg-muted/40">
                         <td className="py-3 pl-5 pr-4 font-medium text-foreground">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
@@ -456,6 +567,10 @@ const AlunoPerfil = () => {
                         <td className="py-3 pr-4">
                           {f.is_paid ? (
                             <span className="rounded-full bg-pastel-green px-3 py-1 text-xs font-semibold text-pastel-green-foreground">Pago</span>
+                          ) : pendingValidation ? (
+                            <span className="rounded-full bg-pastel-blue px-3 py-1 text-xs font-semibold text-pastel-blue-foreground">A validar</span>
+                          ) : rejected ? (
+                            <span className="rounded-full bg-pastel-pink px-3 py-1 text-xs font-semibold text-pastel-pink-foreground" title={pay?.rejection_reason ?? undefined}>Rejeitado</span>
                           ) : overdue ? (
                             <span className="rounded-full bg-pastel-pink px-3 py-1 text-xs font-semibold text-pastel-pink-foreground">Em atraso</span>
                           ) : (
@@ -464,16 +579,29 @@ const AlunoPerfil = () => {
                         </td>
                         <td className="py-3 pr-5 text-right">
                           {!f.is_paid && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-2"
-                              onClick={() => sendReminder(f)}
-                              disabled={remindingFeeId === f.id || !student.parent_id}
-                            >
-                              {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                              Cobrar
-                            </Button>
+                            <div className="flex flex-wrap justify-end gap-2">
+                              {!pendingValidation && (
+                                <Button size="sm" variant="outline" className="gap-2" onClick={() => openProofDialog(f)}>
+                                  <Upload className="h-3.5 w-3.5" />
+                                  {rejected ? "Reenviar" : "Comprovativo"}
+                                </Button>
+                              )}
+                              {pendingValidation && (
+                                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Paperclip className="h-3.5 w-3.5" /> Aguarda validação
+                                </span>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-2"
+                                onClick={() => sendReminder(f)}
+                                disabled={remindingFeeId === f.id || !student.parent_id}
+                              >
+                                {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                Cobrar
+                              </Button>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -690,6 +818,55 @@ const AlunoPerfil = () => {
           )}
         </div>
       </div>
+
+      <Dialog open={!!proofDialogFee} onOpenChange={(o) => { if (!o) setProofDialogFee(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Submeter comprovativo de pagamento</DialogTitle>
+            <DialogDescription>
+              {proofDialogFee && (
+                <>Propina de {proofDialogFee.month_index ? monthNames[proofDialogFee.month_index - 1] : ""} — vencimento {formatDate(proofDialogFee.due_date)}</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="proof-amount">Valor pago</Label>
+                <Input id="proof-amount" type="number" min="0" value={proofAmount} onChange={(e) => setProofAmount(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Método</Label>
+                <Select value={proofMethod} onValueChange={setProofMethod}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="transferencia">Transferência</SelectItem>
+                    <SelectItem value="multicaixa">Multicaixa</SelectItem>
+                    <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                    <SelectItem value="cheque">Cheque</SelectItem>
+                    <SelectItem value="outro">Outro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="proof-file">Comprovativo (imagem ou PDF)</Label>
+              <Input id="proof-file" type="file" accept="image/*,application/pdf" onChange={(e) => setProofFile(e.target.files?.[0] ?? null)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="proof-notes">Notas (opcional)</Label>
+              <Textarea id="proof-notes" rows={3} value={proofNotes} onChange={(e) => setProofNotes(e.target.value)} placeholder="Referência, data da operação, etc." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProofDialogFee(null)} disabled={proofUploading}>Cancelar</Button>
+            <Button onClick={submitProof} disabled={proofUploading} className="gap-2">
+              {proofUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              Submeter
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
