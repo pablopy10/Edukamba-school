@@ -51,7 +51,7 @@ const Auth = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data: signInData, error } = await supabase.auth.signInWithPassword({
       email: loginEmail,
       password: loginPassword,
     });
@@ -66,6 +66,23 @@ const Auth = () => {
         variant: "destructive",
       });
       return;
+    }
+    // Block inactive / removed users
+    if (signInData.user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("is_active")
+        .eq("id", signInData.user.id)
+        .maybeSingle();
+      if (profile && profile.is_active === false) {
+        await supabase.auth.signOut();
+        toast({
+          title: "Conta inativa",
+          description: "A sua conta foi desativada. Contacte o administrador da escola.",
+          variant: "destructive",
+        });
+        return;
+      }
     }
     toast({ title: "Bem-vindo!", description: "Sessão iniciada com sucesso." });
     navigate("/dashboard", { replace: true });
