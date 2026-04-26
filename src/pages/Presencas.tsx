@@ -57,27 +57,6 @@ const getMonthDays = (year: number, month0: number) => {
   return Array.from({ length: totalDays }, (_, i) => new Date(year, month0, i + 1));
 };
 
-// Group days into weeks (each starting Monday)
-const groupIntoWeeks = (days: Date[]): Date[][] => {
-  const weeks: Date[][] = [];
-  let current: Date[] = [];
-  days.forEach((d) => {
-    if (current.length === 0) {
-      current.push(d);
-    } else {
-      // start a new week on Monday
-      if (d.getDay() === 1) {
-        weeks.push(current);
-        current = [d];
-      } else {
-        current.push(d);
-      }
-    }
-  });
-  if (current.length) weeks.push(current);
-  return weeks;
-};
-
 const fmtISO = (d: Date) => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -164,7 +143,6 @@ const Presencas = () => {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month0, setMonth0] = useState(today.getMonth());
-  const [weekIdx, setWeekIdx] = useState<number>(-1); // -1 = all weeks
   const [classroomId, setClassroomId] = useState<string>("all");
 
   const [schoolId, setSchoolId] = useState<string | null>(null);
@@ -206,10 +184,9 @@ const Presencas = () => {
     })();
   }, [schoolId]);
 
-  // Compute month days + weeks
+  // Compute month days
   const monthDays = useMemo(() => getMonthDays(year, month0), [year, month0]);
-  const weeks = useMemo(() => groupIntoWeeks(monthDays), [monthDays]);
-  const visibleDays = weekIdx >= 0 && weeks[weekIdx] ? weeks[weekIdx] : monthDays;
+  const visibleDays = monthDays;
 
   // Load students + attendance for visible range
   useEffect(() => {
@@ -252,7 +229,7 @@ const Presencas = () => {
       setAttendance(map);
       setLoading(false);
     })();
-  }, [schoolId, classroomId, year, month0, weekIdx]);
+  }, [schoolId, classroomId, year, month0]);
 
   const applyStatus = async (student: Student, date: Date, next: Status | null) => {
     if (!schoolId) return;
@@ -335,7 +312,7 @@ const Presencas = () => {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {/* Month */}
-            <Select value={String(month0)} onValueChange={(v) => { setMonth0(Number(v)); setWeekIdx(-1); }}>
+            <Select value={String(month0)} onValueChange={(v) => setMonth0(Number(v))}>
               <SelectTrigger className="w-[140px] rounded-full bg-card">
                 <SelectValue />
               </SelectTrigger>
@@ -347,28 +324,13 @@ const Presencas = () => {
             </Select>
 
             {/* Year */}
-            <Select value={String(year)} onValueChange={(v) => { setYear(Number(v)); setWeekIdx(-1); }}>
+            <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
               <SelectTrigger className="w-[110px] rounded-full bg-card">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {[year - 1, year, year + 1].map((y) => (
                   <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Week */}
-            <Select value={String(weekIdx)} onValueChange={(v) => setWeekIdx(Number(v))}>
-              <SelectTrigger className="w-[160px] rounded-full bg-card">
-                <SelectValue placeholder="Semana" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="-1">Todas as semanas</SelectItem>
-                {weeks.map((w, i) => (
-                  <SelectItem key={i} value={String(i)}>
-                    Semana {i + 1} ({w[0].getDate()}–{w[w.length - 1].getDate()})
-                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
