@@ -596,8 +596,13 @@ const ScheduleCell = ({
 }) => {
   return (
     <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("application/x-schedule-id", schedule.id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
       className={cn(
-        "group relative flex flex-1 flex-col justify-between rounded-xl p-3 text-left",
+        "group relative flex flex-1 cursor-grab flex-col justify-between rounded-xl p-3 text-left active:cursor-grabbing",
         colorClass,
         hasConflict && "ring-2 ring-destructive ring-offset-2 ring-offset-card",
       )}
