@@ -2,12 +2,23 @@ import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
   User, Mail, Phone, Lock, Shield, Bell, Eye, EyeOff, Check, AlertCircle,
-  Globe, Save, Loader2,
+  Globe, Save, Loader2, Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type Tab = "pessoal" | "credenciais" | "preferencias" | "seguranca";
 
@@ -69,10 +80,14 @@ const defaultSecurity = { twoFactor: false, loginAlerts: true };
 
 const Perfil = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>("pessoal");
   const [toast, setToast] = useState<{ kind: "success" | "error"; msg: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   // Personal info
   const [profile, setProfile] = useState({ full_name: "", phone: "", language: "pt-PT", role: "" as string | null });
@@ -192,6 +207,25 @@ const Perfil = () => {
   const handleSaveSecurity = () => {
     localStorage.setItem(SECURITY_KEY, JSON.stringify(security));
     showToast("success", "Definições de segurança guardadas.");
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    setDeleting(true);
+    // Soft-delete: deactivate profile (RLS-safe from client) and sign out.
+    const { error } = await supabase
+      .from("profiles")
+      .update({ is_active: false })
+      .eq("id", user.id);
+    if (error) {
+      setDeleting(false);
+      showToast("error", error.message);
+      return;
+    }
+    await supabase.auth.signOut();
+    setDeleting(false);
+    setDeleteOpen(false);
+    navigate("/auth", { replace: true });
   };
 
   const initials = profile.full_name
@@ -518,8 +552,64 @@ const Perfil = () => {
                 </button>
               </div>
             </div>
+
+            {/* Danger zone — Remover conta */}
+            <div className="rounded-2xl border-2 border-pastel-pink/60 bg-card p-6 shadow-card">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pastel-pink text-pastel-pink-foreground">
+                  <Trash2 className="h-5 w-5" strokeWidth={2} />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-lg font-bold text-foreground">Remover conta</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Esta ação desativa permanentemente o seu acesso. Os seus dados na escola serão preservados,
+                    mas perderá imediatamente o acesso à plataforma e terá de contactar um administrador para reativar.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 flex justify-end">
+                <button
+                  onClick={() => { setDeleteConfirm(""); setDeleteOpen(true); }}
+                  className="flex h-11 items-center gap-2 rounded-full bg-pastel-pink px-5 text-sm font-semibold text-pastel-pink-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
+                >
+                  <Trash2 className="h-4 w-4" strokeWidth={2} /> Remover a minha conta
+                </button>
+              </div>
+            </div>
           </div>
         )}
+
+        {/* Confirm delete dialog */}
+        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <AlertDialogContent className="rounded-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remover a sua conta?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação desativa o seu acesso e termina a sua sessão. Para continuar, escreva{" "}
+                <span className="font-semibold text-foreground">REMOVER</span> abaixo.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <input
+              autoFocus
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+              placeholder="REMOVER"
+              className="h-11 rounded-xl border border-border bg-card px-4 text-sm shadow-soft outline-none focus:border-pastel-pink-foreground focus:ring-2 focus:ring-pastel-pink/40"
+            />
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting} className="rounded-full">Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={deleteConfirm !== "REMOVER" || deleting}
+                onClick={(e) => { e.preventDefault(); handleDeleteAccount(); }}
+                className="rounded-full bg-pastel-pink text-pastel-pink-foreground hover:opacity-90 disabled:opacity-50"
+              >
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" strokeWidth={2} />}
+                Confirmar remoção
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Toast */}
         {toast && (
