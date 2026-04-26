@@ -1143,6 +1143,26 @@ const Pagamentos = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!rejectDialog} onOpenChange={(o) => { if (!o) { setRejectDialog(null); setRejectReason(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rejeitar comprovativo</DialogTitle>
+            <DialogDescription>Indique o motivo. O encarregado será notificado para reenviar.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="reject-reason">Motivo</Label>
+            <Textarea id="reject-reason" rows={3} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Ex.: comprovativo ilegível, valor incorreto..." />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectDialog(null)} disabled={!!validatingId}>Cancelar</Button>
+            <Button variant="destructive" onClick={confirmReject} disabled={!!validatingId} className="gap-2">
+              {validatingId ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+              Rejeitar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
