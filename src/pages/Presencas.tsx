@@ -441,14 +441,6 @@ const Presencas = () => {
                                 <PopoverTrigger asChild>
                                   <button
                                     type="button"
-                                    onClick={(e) => {
-                                      // Quick cycle on plain left click; popover opens on the same click as fallback
-                                      // We stop propagation so popover doesn't open when cycling.
-                                      if (!e.shiftKey) {
-                                        e.preventDefault();
-                                        cycleStatus(s, d, status);
-                                      }
-                                    }}
                                     className="flex w-full justify-center rounded-md py-1 transition-colors hover:bg-accent"
                                     aria-label="Alterar presença"
                                   >
