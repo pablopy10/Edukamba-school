@@ -318,7 +318,6 @@ const Material = () => {
         userId={user?.id ?? null}
         userName={userName}
         request={editingRequest}
-        materials={stock.map((s) => ({ id: s.id, name: s.name, category: s.category }))}
         classrooms={classrooms}
         students={students}
         onSaved={loadAll}
