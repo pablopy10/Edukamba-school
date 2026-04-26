@@ -387,7 +387,7 @@ const Presencas = () => {
 
         {/* Attendance table */}
         <div className="overflow-hidden rounded-2xl bg-card shadow-card">
-          {loading ? (
+          {studentsLoading ? (
             <div className="flex h-60 items-center justify-center text-muted-foreground">
               <Loader2 className="mr-2 h-5 w-5 animate-spin" /> A carregar…
             </div>
