@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { ArrowLeft, Mail, Phone, MapPin, Calendar, GraduationCap, BookOpen, Clock, CheckCircle2, XCircle, AlertCircle, Users, FileText, Pencil, Loader2, TrendingUp } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Calendar, GraduationCap, BookOpen, Clock, CheckCircle2, XCircle, AlertCircle, Users, FileText, Pencil, Loader2, TrendingUp, Wallet, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { toast } from "@/hooks/use-toast";
 
 type AvatarColor = "lilac" | "blue" | "yellow" | "green" | "pink";
 
@@ -44,6 +46,11 @@ const ageFrom = (s: string | null) => {
 };
 
 const dayNames = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+
+const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+const fmtAOA = (n: number) =>
+  new Intl.NumberFormat("pt-PT", { style: "currency", currency: "AOA", maximumFractionDigits: 0 }).format(n || 0);
 
 interface StudentRow {
   id: string;
@@ -90,6 +97,14 @@ interface AttendanceRow {
   classrooms?: { name: string } | null;
 }
 
+interface FeeRow {
+  id: string;
+  amount_due: number;
+  due_date: string;
+  is_paid: boolean | null;
+  month_index: number | null;
+}
+
 const StatPill = ({ label, value, color }: { label: string; value: string; color: AvatarColor }) => (
   <div className="rounded-2xl bg-card p-5 shadow-card">
     <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", avatarStyles[color])}>{label}</span>
@@ -107,6 +122,8 @@ const AlunoPerfil = () => {
   const [grades, setGrades] = useState<GradeRow[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRow[]>([]);
   const [teachers, setTeachers] = useState<{ id: string; full_name: string; subject: string | null; phone: string | null }[]>([]);
+  const [fees, setFees] = useState<FeeRow[]>([]);
+  const [remindingFeeId, setRemindingFeeId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -183,6 +200,15 @@ const AlunoPerfil = () => {
       if (!cancelled) {
         setGrades((grRes.data ?? []) as unknown as GradeRow[]);
         setAttendance((atRes.data ?? []) as unknown as AttendanceRow[]);
+      }
+
+      const { data: feeRows } = await supabase
+        .from("student_fees")
+        .select("id, amount_due, due_date, is_paid, month_index")
+        .eq("student_id", id)
+        .order("due_date", { ascending: true });
+      if (!cancelled) {
+        setFees((feeRows ?? []) as FeeRow[]);
         setLoading(false);
       }
     };
@@ -191,6 +217,28 @@ const AlunoPerfil = () => {
       cancelled = true;
     };
   }, [id]);
+
+  const sendReminder = async (fee: FeeRow) => {
+    if (!student) return;
+    if (!student.parent_id) {
+      toast({ title: "Sem encarregado associado", description: "Não é possível enviar lembrete.", variant: "destructive" });
+      return;
+    }
+    setRemindingFeeId(fee.id);
+    const { data: schoolRow } = await supabase.from("profiles").select("school_id").eq("id", student.parent_id).maybeSingle();
+    const monthLabel = fee.month_index ? monthNames[fee.month_index - 1] : "";
+    const { error } = await supabase.from("notifications").insert({
+      recipient_id: student.parent_id,
+      school_id: schoolRow?.school_id ?? null,
+      title: `Lembrete de propina ${monthLabel}`.trim(),
+      description: `A propina de ${student.full_name} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${formatDate(fee.due_date)}. Por favor regularize o pagamento.`,
+      category: "pagamento",
+      link: "/financas",
+    });
+    setRemindingFeeId(null);
+    if (error) toast({ title: "Erro a enviar lembrete", description: error.message, variant: "destructive" });
+    else toast({ title: "Lembrete enviado ao encarregado" });
+  };
 
   const subjectsAvg = useMemo(() => {
     const map = new Map<string, { sum: number; n: number }>();
@@ -216,6 +264,13 @@ const AlunoPerfil = () => {
     const present = attendance.filter((a) => a.status === "PRESENT" || a.status === "LATE").length;
     return `${Math.round((present / attendance.length) * 100)}%`;
   }, [attendance]);
+
+  const feesSummary = useMemo(() => {
+    const paid = fees.filter((f) => f.is_paid).reduce((s, f) => s + Number(f.amount_due), 0);
+    const pending = fees.filter((f) => !f.is_paid).reduce((s, f) => s + Number(f.amount_due), 0);
+    const overdue = fees.filter((f) => !f.is_paid && new Date(f.due_date) < new Date()).length;
+    return { paid, pending, overdue };
+  }, [fees]);
 
   const scheduleByDay = useMemo(() => {
     const days: Record<number, ScheduleRow[]> = {};
@@ -359,6 +414,75 @@ const AlunoPerfil = () => {
           <StatPill label="Assiduidade" value={presenceRate} color="green" />
           <StatPill label="Avaliações" value={String(assessments.length)} color="blue" />
           <StatPill label="Disciplinas" value={String(subjectsAvg.length)} color="yellow" />
+        </div>
+
+        {/* Propinas */}
+        <div className="rounded-2xl bg-card shadow-card">
+          <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-pastel-yellow-foreground" strokeWidth={1.75} />
+              <h2 className="text-lg font-bold text-foreground">Propinas</h2>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full bg-pastel-green/60 px-3 py-1 font-medium text-pastel-green-foreground">Pago: {fmtAOA(feesSummary.paid)}</span>
+              <span className="rounded-full bg-pastel-yellow/60 px-3 py-1 font-medium text-pastel-yellow-foreground">Em dívida: {fmtAOA(feesSummary.pending)}</span>
+              {feesSummary.overdue > 0 && (
+                <span className="rounded-full bg-pastel-pink/60 px-3 py-1 font-medium text-pastel-pink-foreground">{feesSummary.overdue} em atraso</span>
+              )}
+            </div>
+          </div>
+          {fees.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">Sem propinas geradas para este aluno.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-pastel-yellow/30 text-left text-xs uppercase tracking-wider text-pastel-yellow-foreground">
+                    <th className="py-3 pl-5 pr-4 font-semibold">Mês</th>
+                    <th className="py-3 pr-4 font-semibold">Vencimento</th>
+                    <th className="py-3 pr-4 font-semibold">Valor</th>
+                    <th className="py-3 pr-4 font-semibold">Estado</th>
+                    <th className="py-3 pr-5 text-right font-semibold">Ação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fees.map((f) => {
+                    const overdue = !f.is_paid && new Date(f.due_date) < new Date();
+                    return (
+                      <tr key={f.id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                        <td className="py-3 pl-5 pr-4 font-medium text-foreground">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
+                        <td className="py-3 pr-4 text-muted-foreground">{formatDate(f.due_date)}</td>
+                        <td className="py-3 pr-4 font-semibold text-foreground">{fmtAOA(Number(f.amount_due))}</td>
+                        <td className="py-3 pr-4">
+                          {f.is_paid ? (
+                            <span className="rounded-full bg-pastel-green px-3 py-1 text-xs font-semibold text-pastel-green-foreground">Pago</span>
+                          ) : overdue ? (
+                            <span className="rounded-full bg-pastel-pink px-3 py-1 text-xs font-semibold text-pastel-pink-foreground">Em atraso</span>
+                          ) : (
+                            <span className="rounded-full bg-pastel-yellow px-3 py-1 text-xs font-semibold text-pastel-yellow-foreground">Pendente</span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-5 text-right">
+                          {!f.is_paid && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-2"
+                              onClick={() => sendReminder(f)}
+                              disabled={remindingFeeId === f.id || !student.parent_id}
+                            >
+                              {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                              Cobrar
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Schedule + guardian */}
