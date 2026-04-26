@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
   Plus,
@@ -78,6 +79,7 @@ const formatDateLong = (iso: string) => {
 const tt = (t?: string | null) => (t ? t.slice(0, 5) : "");
 
 const Avaliacoes = () => {
+  const navigate = useNavigate();
   const [view, setView] = useState<View>("calendario");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
@@ -337,6 +339,7 @@ const Avaliacoes = () => {
             conflictIds={conflictIds}
             onEdit={openEdit}
             onDelete={(id) => setDeleteId(id)}
+            onOpen={(id) => navigate(`/avaliacoes/${id}/notas`)}
           />
         ) : (
           <ListView
@@ -347,6 +350,7 @@ const Avaliacoes = () => {
             conflictIds={conflictIds}
             onEdit={openEdit}
             onDelete={(id) => setDeleteId(id)}
+            onOpen={(id) => navigate(`/avaliacoes/${id}/notas`)}
           />
         )}
       </div>
