@@ -6,7 +6,7 @@ import { useModules, ModuleKey } from "@/context/ModulesContext";
 type Item = { icon: React.ElementType; label: string; to: string; hasArrow?: boolean; moduleKey?: ModuleKey };
 
 const menu: Item[] = [
-  { icon: Home, label: "Painel de Controlo", to: "/" },
+  { icon: Home, label: "Painel de Controlo", to: "/dashboard" },
   { icon: GraduationCap, label: "Professores", to: "/professores", moduleKey: "professores" },
   { icon: Users, label: "Alunos", to: "/alunos", moduleKey: "alunos" },
   { icon: Receipt, label: "Matrículas", to: "/matriculas", moduleKey: "matriculas" },
