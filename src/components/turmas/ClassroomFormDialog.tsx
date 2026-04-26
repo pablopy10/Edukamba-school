@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { GRADE_LEVELS } from "@/lib/grade-levels";
 
 export type ClassroomRow = {
   id: string;
@@ -121,7 +122,14 @@ export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classr
           </div>
           <div>
             <Label htmlFor="gl">Ano de escolaridade</Label>
-            <Input id="gl" value={gradeLevel} onChange={(e) => setGradeLevel(e.target.value)} placeholder="Ex.: 9" />
+            <Select value={gradeLevel} onValueChange={setGradeLevel}>
+              <SelectTrigger id="gl"><SelectValue placeholder="Seleccionar nível..." /></SelectTrigger>
+              <SelectContent>
+                {GRADE_LEVELS.map((g) => (
+                  <SelectItem key={g} value={g}>{g}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label>Período</Label>

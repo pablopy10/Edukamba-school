@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle } from "lucide-react";
+import { GRADE_LEVELS } from "@/lib/grade-levels";
 
 type FeeRule = {
   id: string;
@@ -512,7 +513,14 @@ const Pagamentos = () => {
           <div className="grid gap-4">
             <div className="grid gap-2">
               <Label>Nível de ensino</Label>
-              <Input value={ruleForm.grade_level} onChange={(e) => setRuleForm({ ...ruleForm, grade_level: e.target.value })} placeholder="Ex: Ensino Básico, Ensino Secundário" />
+              <Select value={ruleForm.grade_level} onValueChange={(v) => setRuleForm({ ...ruleForm, grade_level: v })}>
+                <SelectTrigger><SelectValue placeholder="Seleccionar nível..." /></SelectTrigger>
+                <SelectContent>
+                  {GRADE_LEVELS.map((g) => (
+                    <SelectItem key={g} value={g}>{g}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-2">
               <Label>Valor mensal (AOA)</Label>
