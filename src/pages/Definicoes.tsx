@@ -773,7 +773,7 @@ const Definicoes = () => {
                 </Field>
               </div>
             </div>
-            <SaveBar onClick={handleSaveSchool} />
+            <SaveBar onClick={handleSaveSchool} saving={saving} isAdmin={isAdmin} />
           </SectionCard>
         )}
 
@@ -846,7 +846,7 @@ const Definicoes = () => {
                 </div>
               </Field>
             </div>
-            <SaveBar onClick={handleSaveBrand} />
+            <SaveBar onClick={handleSaveBrand} saving={saving} isAdmin={isAdmin} />
           </SectionCard>
         )}
 
@@ -885,7 +885,7 @@ const Definicoes = () => {
                 </Field>
               </div>
             )}
-            <SaveBar onClick={handleSaveAcademic} disabled={!year.id} />
+            <SaveBar onClick={handleSaveAcademic} disabled={!year.id} saving={saving} isAdmin={isAdmin} />
           </SectionCard>
         )}
 
@@ -1021,7 +1021,7 @@ const Definicoes = () => {
                     Administradores têm sempre todas as permissões.
                   </p>
                 )}
-                <SaveBar onClick={saveRolePerms} disabled={activeRole === "ADMIN"} />
+                <SaveBar onClick={saveRolePerms} disabled={activeRole === "ADMIN"} saving={saving} isAdmin={isAdmin} />
               </>
             ) : (
               <>
@@ -1045,7 +1045,7 @@ const Definicoes = () => {
                 {activeUserId && (
                   <>
                     <PermissionsTable perms={userPerms} onChange={setUserPermField} disabled={!isAdmin} />
-                    <SaveBar onClick={saveUserPerms} />
+                    <SaveBar onClick={saveUserPerms} saving={saving} isAdmin={isAdmin} />
                   </>
                 )}
               </>
@@ -1088,7 +1088,7 @@ const Definicoes = () => {
                 </div>
               ))}
             </div>
-            <SaveBar onClick={saveNotifPrefs} />
+            <SaveBar onClick={saveNotifPrefs} saving={saving} isAdmin={isAdmin} />
           </SectionCard>
         )}
 
