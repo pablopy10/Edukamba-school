@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { ArrowLeft, Mail, Phone, MapPin, Calendar, GraduationCap, BookOpen, Clock, FileText, Pencil, Download, Award, Users, Briefcase, Star, TrendingUp } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Calendar, GraduationCap, BookOpen, Clock, FileText, Pencil, Award, Users, Briefcase, TrendingUp, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 type AvatarColor = "lilac" | "blue" | "yellow" | "green" | "pink";
 
@@ -14,75 +15,65 @@ const avatarStyles: Record<AvatarColor, string> = {
   pink: "bg-pastel-pink text-pastel-pink-foreground",
 };
 
-type Teacher = {
+const palette: AvatarColor[] = ["blue", "pink", "yellow", "green", "lilac"];
+const colorFor = (key: string): AvatarColor => {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return palette[h % palette.length];
+};
+
+const initialsOf = (name: string) =>
+  name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
+
+const formatDate = (s: string | null) => {
+  if (!s) return "—";
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+  return d.toLocaleDateString("pt-PT");
+};
+
+const yearsSince = (s: string | null) => {
+  if (!s) return null;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  let y = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) y--;
+  return Math.max(0, y);
+};
+
+const dayNames = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+
+interface TeacherRow {
   id: string;
-  name: string;
-  email: string;
-  teacherId: string;
-  subject: string;
-  hireDate: string;
-  phone: string;
-  initials: string;
-  avatarColor: AvatarColor;
-  address: string;
-  dob: string;
-  gender: "Masculino" | "Feminino";
-  status: "Activo" | "Inactivo";
-  qualification: string;
-  yearsExp: number;
-  department: string;
-  role: string;
-};
+  profile_id: string | null;
+  subject_id: string | null;
+  hire_date: string | null;
+  employee_id: string | null;
+  avatar_color: string | null;
+  is_active: boolean | null;
+  profiles: { full_name: string; phone: string | null; avatar_url: string | null } | null;
+  subjects: { name: string } | null;
+}
 
-const teachersDb: Record<string, Teacher> = {
-  "1": { id: "1", name: "Carla Mendes", email: "cmendes@edukamba.edu", teacherId: "PROF-2016-001", subject: "Matemática", hireDate: "12/03/2016", phone: "(244) 924 101 010", initials: "CM", avatarColor: "pink", address: "Rua Ho Chi Minh 14, Luanda", dob: "07/05/1985", gender: "Feminino", status: "Activo", qualification: "Mestrado em Matemática Aplicada", yearsExp: 10, department: "Ciências Exactas", role: "Coordenadora de Departamento" },
-  "2": { id: "2", name: "Tiago Ferreira", email: "tferreira@edukamba.edu", teacherId: "PROF-2014-002", subject: "Física", hireDate: "01/09/2014", phone: "(244) 924 202 020", initials: "TF", avatarColor: "blue", address: "Av. Comandante Valódia 56, Luanda", dob: "15/11/1982", gender: "Masculino", status: "Activo", qualification: "Doutoramento em Física", yearsExp: 12, department: "Ciências Exactas", role: "Professor Sénior" },
-  "3": { id: "3", name: "Helena Costa", email: "hcosta@edukamba.edu", teacherId: "PROF-2017-003", subject: "Português", hireDate: "23/01/2017", phone: "(244) 924 303 030", initials: "HC", avatarColor: "yellow", address: "Rua Marechal Brós Tito 22, Luanda", dob: "29/03/1988", gender: "Feminino", status: "Activo", qualification: "Licenciatura em Letras", yearsExp: 9, department: "Línguas e Humanidades", role: "Professora" },
-  "4": { id: "4", name: "Rui Pereira", email: "rpereira@edukamba.edu", teacherId: "PROF-2015-004", subject: "Química", hireDate: "10/06/2015", phone: "(244) 924 404 040", initials: "RP", avatarColor: "green", address: "Bairro Alvalade 9, Luanda", dob: "18/08/1980", gender: "Masculino", status: "Activo", qualification: "Mestrado em Química Orgânica", yearsExp: 11, department: "Ciências Exactas", role: "Professor" },
-  "5": { id: "5", name: "Sofia Almeida", email: "salmeida@edukamba.edu", teacherId: "PROF-2018-005", subject: "Biologia", hireDate: "05/02/2018", phone: "(244) 924 505 050", initials: "SA", avatarColor: "lilac", address: "Rua Lueji A'Nkonde 31, Luanda", dob: "12/12/1990", gender: "Feminino", status: "Activo", qualification: "Mestrado em Biologia Molecular", yearsExp: 8, department: "Ciências Naturais", role: "Diretora de Turma" },
-};
+interface ScheduleRow {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  room: string | null;
+  classrooms: { id: string; name: string } | null;
+  subjects: { name: string } | null;
+}
 
-const subjects = [
-  { name: "Matemática A", classes: ["10A", "11A", "12"], students: 84, color: "blue" as AvatarColor },
-  { name: "Matemática Aplicada", classes: ["11B"], students: 28, color: "lilac" as AvatarColor },
-];
-
-const schedule = [
-  { day: "Segunda", slots: [
-    { time: "08:00 — 09:30", subject: "Matemática A", room: "Sala 12", className: "10A", color: "blue" as AvatarColor },
-    { time: "09:45 — 11:15", subject: "Matemática A", room: "Sala 14", className: "11A", color: "blue" as AvatarColor },
-  ]},
-  { day: "Terça", slots: [
-    { time: "08:00 — 09:30", subject: "Matemática A", room: "Sala 12", className: "12", color: "blue" as AvatarColor },
-    { time: "11:30 — 13:00", subject: "Matemática Aplic.", room: "Sala 9", className: "11B", color: "lilac" as AvatarColor },
-  ]},
-  { day: "Quarta", slots: [
-    { time: "08:00 — 09:30", subject: "Matemática A", room: "Sala 12", className: "10A", color: "blue" as AvatarColor },
-    { time: "14:00 — 15:30", subject: "Apoio Escolar", room: "Sala 7", className: "Misto", color: "green" as AvatarColor },
-  ]},
-  { day: "Quinta", slots: [
-    { time: "09:45 — 11:15", subject: "Matemática A", room: "Sala 14", className: "11A", color: "blue" as AvatarColor },
-    { time: "11:30 — 13:00", subject: "Matemática Aplic.", room: "Sala 9", className: "11B", color: "lilac" as AvatarColor },
-  ]},
-  { day: "Sexta", slots: [
-    { time: "09:45 — 11:15", subject: "Matemática A", room: "Sala 12", className: "12", color: "blue" as AvatarColor },
-  ]},
-];
-
-const assessmentsCreated = [
-  { id: "a1", title: "Teste de Funções", date: "12/04/2026", type: "Teste", className: "10A", students: 28, avgScore: 14.5, status: "Corrigido" },
-  { id: "a2", title: "Trabalho — Estatística", date: "08/04/2026", type: "Trabalho", className: "11A", students: 26, avgScore: 15.8, status: "Corrigido" },
-  { id: "a3", title: "Exame Intercalar", date: "02/04/2026", type: "Exame", className: "12", students: 30, avgScore: 13.2, status: "Corrigido" },
-  { id: "a4", title: "Quiz — Derivadas", date: "28/03/2026", type: "Quiz", className: "11A", students: 26, avgScore: 16.1, status: "Corrigido" },
-  { id: "a5", title: "Teste — Geometria", date: "30/04/2026", type: "Teste", className: "10A", students: 28, avgScore: null, status: "Agendado" },
-];
-
-const classes = [
-  { name: "10A", role: "Professora", students: 28, color: "blue" as AvatarColor },
-  { name: "11A", role: "Professora", students: 26, color: "lilac" as AvatarColor },
-  { name: "11B", role: "Professora", students: 28, color: "green" as AvatarColor },
-  { name: "12", role: "Diretora de Turma", students: 30, color: "pink" as AvatarColor },
-];
+interface AssessmentRow {
+  id: string;
+  title: string;
+  date: string;
+  type: string | null;
+  classrooms: { name: string } | null;
+  subjects: { name: string } | null;
+}
 
 const StatPill = ({ label, value, color }: { label: string; value: string; color: AvatarColor }) => (
   <div className="rounded-2xl bg-card p-5 shadow-card">
@@ -93,14 +84,127 @@ const StatPill = ({ label, value, color }: { label: string; value: string; color
 
 const ProfessorPerfil = () => {
   const { id } = useParams<{ id: string }>();
-  const teacher = useMemo(() => (id && teachersDb[id]) || teachersDb["1"], [id]);
+  const [loading, setLoading] = useState(true);
+  const [teacher, setTeacher] = useState<TeacherRow | null>(null);
+  const [schedule, setSchedule] = useState<ScheduleRow[]>([]);
+  const [assessments, setAssessments] = useState<AssessmentRow[]>([]);
+  const [classroomsCount, setClassroomsCount] = useState(0);
+  const [studentsCount, setStudentsCount] = useState(0);
 
-  const totalStudents = subjects.reduce((acc, s) => acc + s.students, 0);
-  const totalAssessments = assessmentsCreated.length;
-  const corrected = assessmentsCreated.filter((a) => a.status === "Corrigido");
-  const avgClassScore = corrected.length
-    ? (corrected.reduce((acc, a) => acc + (a.avgScore ?? 0), 0) / corrected.length).toFixed(1)
-    : "—";
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      const { data: t } = await supabase
+        .from("teachers")
+        .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, is_active, profiles(full_name, phone, avatar_url), subjects(name)")
+        .eq("id", id)
+        .maybeSingle();
+      if (cancelled) return;
+      const teacherRow = t as unknown as TeacherRow | null;
+      setTeacher(teacherRow);
+
+      if (teacherRow?.profile_id) {
+        const [schRes, asRes] = await Promise.all([
+          supabase
+            .from("schedules")
+            .select("day_of_week, start_time, end_time, room, classrooms(id, name), subjects(name)")
+            .eq("teacher_id", teacherRow.profile_id)
+            .order("day_of_week")
+            .order("start_time"),
+          supabase
+            .from("assessments")
+            .select("id, title, date, type, classrooms(name), subjects(name)")
+            .eq("teacher_id", teacherRow.profile_id)
+            .order("date", { ascending: false })
+            .limit(10),
+        ]);
+        if (cancelled) return;
+        const schRows = (schRes.data ?? []) as unknown as ScheduleRow[];
+        setSchedule(schRows);
+        setAssessments((asRes.data ?? []) as unknown as AssessmentRow[]);
+
+        const classroomIds = Array.from(new Set(schRows.map((s) => s.classrooms?.id).filter(Boolean) as string[]));
+        setClassroomsCount(classroomIds.length);
+        if (classroomIds.length > 0) {
+          const { count } = await supabase
+            .from("students")
+            .select("id", { count: "exact", head: true })
+            .in("classroom_id", classroomIds);
+          if (!cancelled) setStudentsCount(count ?? 0);
+        } else {
+          setStudentsCount(0);
+        }
+      }
+      if (!cancelled) setLoading(false);
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  const scheduleByDay = useMemo(() => {
+    const days: Record<number, ScheduleRow[]> = {};
+    [1, 2, 3, 4, 5].forEach((d) => (days[d] = []));
+    schedule.forEach((s) => {
+      if (s.day_of_week >= 1 && s.day_of_week <= 5) days[s.day_of_week].push(s);
+    });
+    return days;
+  }, [schedule]);
+
+  const classes = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>();
+    schedule.forEach((s) => {
+      if (s.classrooms?.id) map.set(s.classrooms.id, { id: s.classrooms.id, name: s.classrooms.name });
+    });
+    return Array.from(map.values());
+  }, [schedule]);
+
+  const subjectsList = useMemo(() => {
+    const set = new Set<string>();
+    schedule.forEach((s) => {
+      if (s.subjects?.name) set.add(s.subjects.name);
+    });
+    if (teacher?.subjects?.name) set.add(teacher.subjects.name);
+    return Array.from(set);
+  }, [schedule, teacher]);
+
+  const weeklyHours = useMemo(() => {
+    let mins = 0;
+    schedule.forEach((s) => {
+      const [sh, sm] = (s.start_time ?? "0:0").split(":").map(Number);
+      const [eh, em] = (s.end_time ?? "0:0").split(":").map(Number);
+      mins += eh * 60 + em - (sh * 60 + sm);
+    });
+    return Math.round(mins / 60);
+  }, [schedule]);
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!teacher) {
+    return (
+      <DashboardLayout>
+        <div className="rounded-2xl bg-card p-8 text-center shadow-card">
+          <p className="text-muted-foreground">Professor não encontrado.</p>
+          <Link to="/professores" className="mt-4 inline-block text-sm font-medium text-pastel-blue-foreground hover:underline">Voltar a Professores</Link>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const fullName = teacher.profiles?.full_name ?? "Professor";
+  const avatarColor = (teacher.avatar_color as AvatarColor) || "blue";
+  const yearsExp = yearsSince(teacher.hire_date);
 
   return (
     <DashboardLayout>
@@ -110,43 +214,46 @@ const ProfessorPerfil = () => {
           Voltar a Professores
         </Link>
 
-        {/* Profile header */}
+        {/* Header */}
         <div className="rounded-2xl bg-card p-6 shadow-card">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
-              <div className={cn("flex h-24 w-24 shrink-0 items-center justify-center rounded-3xl text-3xl font-bold shadow-soft", avatarStyles[teacher.avatarColor])}>
-                {teacher.initials}
+              <div className={cn("flex h-24 w-24 shrink-0 items-center justify-center rounded-3xl text-3xl font-bold shadow-soft", avatarStyles[avatarColor])}>
+                {initialsOf(fullName)}
               </div>
               <div>
                 <div className="flex flex-wrap items-center gap-3">
-                  <h1 className="text-2xl font-bold tracking-tight text-foreground">{teacher.name}</h1>
-                  <span className="rounded-full bg-pastel-green px-3 py-1 text-xs font-semibold text-pastel-green-foreground">{teacher.status}</span>
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">ID {teacher.teacherId} · {teacher.gender} · {teacher.yearsExp} anos de experiência</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-pastel-blue/40 px-3 py-1 text-xs font-medium text-pastel-blue-foreground">
-                    <BookOpen className="h-3.5 w-3.5" strokeWidth={2} /> {teacher.subject}
+                  <h1 className="text-2xl font-bold tracking-tight text-foreground">{fullName}</h1>
+                  <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", teacher.is_active === false ? "bg-pastel-pink text-pastel-pink-foreground" : "bg-pastel-green text-pastel-green-foreground")}>
+                    {teacher.is_active === false ? "Inactivo" : "Activo"}
                   </span>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {teacher.employee_id ? `Nº ${teacher.employee_id}` : `ID ${teacher.id.slice(0, 8)}`}
+                  {yearsExp !== null ? ` · ${yearsExp} ${yearsExp === 1 ? "ano" : "anos"} na escola` : ""}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {teacher.subjects?.name && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-pastel-blue/40 px-3 py-1 text-xs font-medium text-pastel-blue-foreground">
+                      <BookOpen className="h-3.5 w-3.5" strokeWidth={2} /> {teacher.subjects.name}
+                    </span>
+                  )}
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-pastel-lilac/50 px-3 py-1 text-xs font-medium text-pastel-lilac-foreground">
-                    <Briefcase className="h-3.5 w-3.5" strokeWidth={2} /> {teacher.role}
+                    <Briefcase className="h-3.5 w-3.5" strokeWidth={2} /> Professor
                   </span>
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-pastel-yellow/50 px-3 py-1 text-xs font-medium text-pastel-yellow-foreground">
-                    <GraduationCap className="h-3.5 w-3.5" strokeWidth={2} /> {teacher.department}
+                    <GraduationCap className="h-3.5 w-3.5" strokeWidth={2} /> {classroomsCount} {classroomsCount === 1 ? "turma" : "turmas"}
                   </span>
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button className="flex h-10 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent">
-                <Download className="h-4 w-4" strokeWidth={1.75} /> Exportar Ficha
-              </button>
-              <button className="flex h-10 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
+              <Link to="/professores" className="flex h-10 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
                 <Pencil className="h-4 w-4" strokeWidth={2} /> Editar
-              </button>
+              </Link>
             </div>
           </div>
 
-          {/* Contact grid */}
           <div className="mt-6 grid grid-cols-1 gap-4 border-t border-border pt-5 sm:grid-cols-2 lg:grid-cols-4">
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pastel-blue/40 text-pastel-blue-foreground">
@@ -154,7 +261,7 @@ const ProfessorPerfil = () => {
               </div>
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Email</p>
-                <p className="truncate text-sm font-medium text-foreground">{teacher.email}</p>
+                <p className="truncate text-sm font-medium text-foreground">—</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -163,16 +270,7 @@ const ProfessorPerfil = () => {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Telefone</p>
-                <p className="text-sm font-medium text-foreground">{teacher.phone}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pastel-pink/50 text-pastel-pink-foreground">
-                <MapPin className="h-4 w-4" strokeWidth={1.75} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Morada</p>
-                <p className="truncate text-sm font-medium text-foreground">{teacher.address}</p>
+                <p className="text-sm font-medium text-foreground">{teacher.profiles?.phone || "—"}</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -181,7 +279,16 @@ const ProfessorPerfil = () => {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Admitido em</p>
-                <p className="text-sm font-medium text-foreground">{teacher.hireDate}</p>
+                <p className="text-sm font-medium text-foreground">{formatDate(teacher.hire_date)}</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pastel-pink/50 text-pastel-pink-foreground">
+                <Clock className="h-4 w-4" strokeWidth={1.75} />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Carga horária</p>
+                <p className="text-sm font-medium text-foreground">{weeklyHours}h / semana</p>
               </div>
             </div>
           </div>
@@ -189,13 +296,13 @@ const ProfessorPerfil = () => {
 
         {/* Stats */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatPill label="Alunos" value={String(totalStudents)} color="blue" />
-          <StatPill label="Turmas" value={String(classes.length)} color="lilac" />
-          <StatPill label="Avaliações" value={String(totalAssessments)} color="yellow" />
-          <StatPill label="Média Turmas" value={String(avgClassScore)} color="green" />
+          <StatPill label="Alunos" value={String(studentsCount)} color="blue" />
+          <StatPill label="Turmas" value={String(classroomsCount)} color="lilac" />
+          <StatPill label="Avaliações" value={String(assessments.length)} color="yellow" />
+          <StatPill label="Disciplinas" value={String(subjectsList.length)} color="green" />
         </div>
 
-        {/* Schedule + Sidebar info */}
+        {/* Schedule + sidebar */}
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
           <div className="rounded-2xl bg-card p-5 shadow-card xl:col-span-2">
             <div className="mb-4 flex items-center justify-between">
@@ -203,61 +310,68 @@ const ProfessorPerfil = () => {
                 <Clock className="h-5 w-5 text-pastel-blue-foreground" strokeWidth={1.75} />
                 <h2 className="text-lg font-bold text-foreground">Horário Semanal</h2>
               </div>
-              <Link to="/horario" className="text-xs font-medium text-pastel-blue-foreground hover:underline">Ver completo</Link>
+              <Link to="/horarios" className="text-xs font-medium text-pastel-blue-foreground hover:underline">Ver completo</Link>
             </div>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
-              {schedule.map((day) => (
-                <div key={day.day} className="rounded-xl bg-muted/40 p-3">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{day.day}</p>
-                  <div className="flex flex-col gap-2">
-                    {day.slots.length === 0 && <p className="text-xs text-muted-foreground italic">Sem aulas</p>}
-                    {day.slots.map((s, i) => (
-                      <div key={i} className={cn("rounded-lg p-2.5 text-xs", avatarStyles[s.color])}>
-                        <p className="font-semibold">{s.subject}</p>
-                        <p className="opacity-80">{s.time}</p>
-                        <p className="opacity-70">{s.className} · {s.room}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-6">
-            {/* Qualification */}
-            <div className="rounded-2xl bg-card p-5 shadow-card">
-              <div className="mb-4 flex items-center gap-2">
-                <Award className="h-5 w-5 text-pastel-yellow-foreground" strokeWidth={1.75} />
-                <h2 className="text-lg font-bold text-foreground">Formação</h2>
-              </div>
-              <p className="text-sm font-medium text-foreground">{teacher.qualification}</p>
-              <div className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-4 text-sm">
-                <div>
-                  <p className="text-xs text-muted-foreground">Data de Nasc.</p>
-                  <p className="font-medium text-foreground">{teacher.dob}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Experiência</p>
-                  <p className="font-medium text-foreground">{teacher.yearsExp} anos</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Subjects */}
-            <div className="rounded-2xl bg-card p-5 shadow-card">
-              <div className="mb-4 flex items-center gap-2">
-                <BookOpen className="h-5 w-5 text-pastel-blue-foreground" strokeWidth={1.75} />
-                <h2 className="text-lg font-bold text-foreground">Disciplinas Lecionadas</h2>
-              </div>
-              <div className="flex flex-col gap-3">
-                {subjects.map((s) => (
-                  <div key={s.name} className={cn("rounded-xl p-3", avatarStyles[s.color])}>
-                    <p className="font-semibold">{s.name}</p>
-                    <p className="mt-1 text-xs opacity-80">{s.classes.join(" · ")} · {s.students} alunos</p>
+            {schedule.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">Sem horário definido.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+                {[1, 2, 3, 4, 5].map((d) => (
+                  <div key={d} className="rounded-xl bg-muted/40 p-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{dayNames[d]}</p>
+                    <div className="flex flex-col gap-2">
+                      {scheduleByDay[d].length === 0 && <p className="text-xs italic text-muted-foreground">Sem aulas</p>}
+                      {scheduleByDay[d].map((s, i) => {
+                        const subj = s.subjects?.name ?? "—";
+                        return (
+                          <div key={i} className={cn("rounded-lg p-2.5 text-xs", avatarStyles[colorFor(subj)])}>
+                            <p className="font-semibold">{subj}</p>
+                            <p className="opacity-80">{s.start_time?.slice(0, 5)} — {s.end_time?.slice(0, 5)}</p>
+                            <p className="opacity-70">{s.classrooms?.name ?? ""}{s.room ? ` · ${s.room}` : ""}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-6">
+            <div className="rounded-2xl bg-card p-5 shadow-card">
+              <div className="mb-4 flex items-center gap-2">
+                <Award className="h-5 w-5 text-pastel-yellow-foreground" strokeWidth={1.75} />
+                <h2 className="text-lg font-bold text-foreground">Detalhes</h2>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Nº Funcionário</p>
+                  <p className="font-medium text-foreground">{teacher.employee_id || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Experiência</p>
+                  <p className="font-medium text-foreground">{yearsExp !== null ? `${yearsExp} anos` : "—"}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-card p-5 shadow-card">
+              <div className="mb-4 flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-pastel-blue-foreground" strokeWidth={1.75} />
+                <h2 className="text-lg font-bold text-foreground">Disciplinas</h2>
+              </div>
+              {subjectsList.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Sem disciplinas atribuídas.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {subjectsList.map((name) => (
+                    <div key={name} className={cn("rounded-xl p-3 text-sm font-semibold", avatarStyles[colorFor(name)])}>
+                      {name}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -271,20 +385,23 @@ const ProfessorPerfil = () => {
             </div>
             <Link to="/turmas" className="text-xs font-medium text-pastel-pink-foreground hover:underline">Ver todas</Link>
           </div>
-          <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
-            {classes.map((c) => (
-              <div key={c.name} className="flex items-center gap-3 rounded-xl border border-border p-4 transition-colors hover:bg-muted/40">
-                <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-sm font-bold", avatarStyles[c.color])}>
-                  {c.name}
+          {classes.length === 0 ? (
+            <p className="p-8 text-center text-sm text-muted-foreground">Sem turmas atribuídas.</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
+              {classes.map((c) => (
+                <div key={c.id} className="flex items-center gap-3 rounded-xl border border-border p-4 transition-colors hover:bg-muted/40">
+                  <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-sm font-bold", avatarStyles[colorFor(c.id)])}>
+                    {c.name.slice(0, 3)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-foreground">Turma {c.name}</p>
+                    <p className="text-xs text-muted-foreground">Professor</p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="font-semibold text-foreground">Turma {c.name}</p>
-                  <p className="text-xs text-muted-foreground">{c.role}</p>
-                  <p className="text-xs text-muted-foreground">{c.students} alunos</p>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Assessments created */}
@@ -296,105 +413,62 @@ const ProfessorPerfil = () => {
             </div>
             <Link to="/avaliacoes" className="text-xs font-medium text-pastel-lilac-foreground hover:underline">Ver todas</Link>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-pastel-lilac/30 text-left text-xs uppercase tracking-wider text-pastel-lilac-foreground">
-                  <th className="py-4 pl-5 pr-4 font-semibold">Título</th>
-                  <th className="py-4 pr-4 font-semibold">Tipo</th>
-                  <th className="py-4 pr-4 font-semibold">Turma</th>
-                  <th className="py-4 pr-4 font-semibold">Data</th>
-                  <th className="py-4 pr-4 font-semibold text-center">Alunos</th>
-                  <th className="py-4 pr-4 font-semibold text-center">Média</th>
-                  <th className="py-4 pr-5 font-semibold">Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {assessmentsCreated.map((a) => (
-                  <tr key={a.id} className="border-b border-border last:border-0 hover:bg-muted/40">
-                    <td className="py-3.5 pl-5 pr-4 font-medium text-foreground">{a.title}</td>
-                    <td className="py-3.5 pr-4">
-                      <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{a.type}</span>
-                    </td>
-                    <td className="py-3.5 pr-4 text-foreground">{a.className}</td>
-                    <td className="py-3.5 pr-4 text-muted-foreground">{a.date}</td>
-                    <td className="py-3.5 pr-4 text-center text-muted-foreground">{a.students}</td>
-                    <td className="py-3.5 pr-4 text-center">
-                      {a.avgScore !== null ? (
-                        <span className={cn(
-                          "inline-block min-w-[40px] rounded-full px-3 py-1 text-xs font-bold",
-                          a.avgScore >= 16 ? "bg-pastel-green text-pastel-green-foreground" :
-                          a.avgScore >= 14 ? "bg-pastel-blue text-pastel-blue-foreground" :
-                          a.avgScore >= 10 ? "bg-pastel-yellow text-pastel-yellow-foreground" :
-                          "bg-pastel-pink text-pastel-pink-foreground"
-                        )}>{a.avgScore}</span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="py-3.5 pr-5">
-                      <span className={cn(
-                        "rounded-full px-3 py-1 text-xs font-medium",
-                        a.status === "Corrigido" ? "bg-pastel-green text-pastel-green-foreground" : "bg-pastel-yellow text-pastel-yellow-foreground"
-                      )}>{a.status}</span>
-                    </td>
+          {assessments.length === 0 ? (
+            <p className="p-8 text-center text-sm text-muted-foreground">Sem avaliações criadas.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-pastel-lilac/30 text-left text-xs uppercase tracking-wider text-pastel-lilac-foreground">
+                    <th className="py-4 pl-5 pr-4 font-semibold">Título</th>
+                    <th className="py-4 pr-4 font-semibold">Tipo</th>
+                    <th className="py-4 pr-4 font-semibold">Disciplina</th>
+                    <th className="py-4 pr-4 font-semibold">Turma</th>
+                    <th className="py-4 pr-5 font-semibold">Data</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {assessments.map((a) => (
+                    <tr key={a.id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                      <td className="py-3.5 pl-5 pr-4 font-medium text-foreground">{a.title}</td>
+                      <td className="py-3.5 pr-4">
+                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{a.type ?? "Avaliação"}</span>
+                      </td>
+                      <td className="py-3.5 pr-4 text-foreground">{a.subjects?.name ?? "—"}</td>
+                      <td className="py-3.5 pr-4 text-foreground">{a.classrooms?.name ?? "—"}</td>
+                      <td className="py-3.5 pr-5 text-muted-foreground">{formatDate(a.date)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
-        {/* Performance summary */}
+        {/* Summary */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="rounded-2xl bg-card p-5 shadow-card">
             <div className="mb-4 flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-pastel-green-foreground" strokeWidth={1.75} />
-              <h2 className="text-lg font-bold text-foreground">Desempenho</h2>
+              <h2 className="text-lg font-bold text-foreground">Resumo</h2>
             </div>
             <div className="flex flex-col gap-3 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Média das turmas</span>
-                <span className="font-bold text-foreground">{avgClassScore} / 20</span>
+                <span className="text-muted-foreground">Alunos no total</span>
+                <span className="font-bold text-foreground">{studentsCount}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Avaliações corrigidas</span>
-                <span className="font-bold text-foreground">{corrected.length} / {totalAssessments}</span>
+                <span className="text-muted-foreground">Turmas</span>
+                <span className="font-bold text-foreground">{classroomsCount}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Carga horária</span>
-                <span className="font-bold text-foreground">22h / semana</span>
+                <span className="font-bold text-foreground">{weeklyHours}h / semana</span>
               </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl bg-card p-5 shadow-card">
-            <div className="mb-4 flex items-center gap-2">
-              <Star className="h-5 w-5 text-pastel-yellow-foreground" strokeWidth={1.75} />
-              <h2 className="text-lg font-bold text-foreground">Avaliação dos Alunos</h2>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <p className="text-4xl font-bold text-foreground">4.7</p>
-              <p className="text-sm text-muted-foreground">/ 5.0</p>
-            </div>
-            <div className="mt-2 flex items-center gap-1">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Star key={i} className={cn("h-4 w-4", i <= 4 ? "fill-pastel-yellow-foreground text-pastel-yellow-foreground" : "text-muted-foreground")} strokeWidth={1.5} />
-              ))}
-            </div>
-            <p className="mt-3 text-xs text-muted-foreground">Baseado em 124 avaliações</p>
-          </div>
-
-          <div className="rounded-2xl bg-card p-5 shadow-card">
-            <div className="mb-4 flex items-center gap-2">
-              <Briefcase className="h-5 w-5 text-pastel-blue-foreground" strokeWidth={1.75} />
-              <h2 className="text-lg font-bold text-foreground">Departamento</h2>
-            </div>
-            <p className="text-sm font-medium text-foreground">{teacher.department}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{teacher.role}</p>
-            <div className="mt-4 border-t border-border pt-3">
-              <p className="text-xs text-muted-foreground">Coordenador</p>
-              <p className="text-sm font-medium text-foreground">Prof. António Silva</p>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Avaliações criadas</span>
+                <span className="font-bold text-foreground">{assessments.length}</span>
+              </div>
             </div>
           </div>
         </div>
