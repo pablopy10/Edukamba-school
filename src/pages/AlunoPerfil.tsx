@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { ArrowLeft, Mail, Phone, MapPin, Calendar, GraduationCap, BookOpen, Clock, CheckCircle2, XCircle, AlertCircle, Users, FileText, Pencil, Loader2, TrendingUp } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Calendar, GraduationCap, BookOpen, Clock, CheckCircle2, XCircle, AlertCircle, Users, FileText, Pencil, Loader2, TrendingUp, Wallet, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { toast } from "@/hooks/use-toast";
 
 type AvatarColor = "lilac" | "blue" | "yellow" | "green" | "pink";
 
@@ -90,6 +92,14 @@ interface AttendanceRow {
   classrooms?: { name: string } | null;
 }
 
+interface FeeRow {
+  id: string;
+  amount_due: number;
+  due_date: string;
+  is_paid: boolean | null;
+  month_index: number | null;
+}
+
 const StatPill = ({ label, value, color }: { label: string; value: string; color: AvatarColor }) => (
   <div className="rounded-2xl bg-card p-5 shadow-card">
     <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", avatarStyles[color])}>{label}</span>
@@ -107,6 +117,8 @@ const AlunoPerfil = () => {
   const [grades, setGrades] = useState<GradeRow[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRow[]>([]);
   const [teachers, setTeachers] = useState<{ id: string; full_name: string; subject: string | null; phone: string | null }[]>([]);
+  const [fees, setFees] = useState<FeeRow[]>([]);
+  const [remindingFeeId, setRemindingFeeId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -183,6 +195,15 @@ const AlunoPerfil = () => {
       if (!cancelled) {
         setGrades((grRes.data ?? []) as unknown as GradeRow[]);
         setAttendance((atRes.data ?? []) as unknown as AttendanceRow[]);
+      }
+
+      const { data: feeRows } = await supabase
+        .from("student_fees")
+        .select("id, amount_due, due_date, is_paid, month_index")
+        .eq("student_id", id)
+        .order("due_date", { ascending: true });
+      if (!cancelled) {
+        setFees((feeRows ?? []) as FeeRow[]);
         setLoading(false);
       }
     };
@@ -191,6 +212,28 @@ const AlunoPerfil = () => {
       cancelled = true;
     };
   }, [id]);
+
+  const sendReminder = async (fee: FeeRow) => {
+    if (!student) return;
+    if (!student.parent_id) {
+      toast({ title: "Sem encarregado associado", description: "Não é possível enviar lembrete.", variant: "destructive" });
+      return;
+    }
+    setRemindingFeeId(fee.id);
+    const { data: schoolRow } = await supabase.from("profiles").select("school_id").eq("id", student.parent_id).maybeSingle();
+    const monthLabel = fee.month_index ? monthNames[fee.month_index - 1] : "";
+    const { error } = await supabase.from("notifications").insert({
+      recipient_id: student.parent_id,
+      school_id: schoolRow?.school_id ?? null,
+      title: `Lembrete de propina ${monthLabel}`.trim(),
+      description: `A propina de ${student.full_name} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${formatDate(fee.due_date)}. Por favor regularize o pagamento.`,
+      category: "pagamento",
+      link: "/financas",
+    });
+    setRemindingFeeId(null);
+    if (error) toast({ title: "Erro a enviar lembrete", description: error.message, variant: "destructive" });
+    else toast({ title: "Lembrete enviado ao encarregado" });
+  };
 
   const subjectsAvg = useMemo(() => {
     const map = new Map<string, { sum: number; n: number }>();
@@ -216,6 +259,13 @@ const AlunoPerfil = () => {
     const present = attendance.filter((a) => a.status === "PRESENT" || a.status === "LATE").length;
     return `${Math.round((present / attendance.length) * 100)}%`;
   }, [attendance]);
+
+  const feesSummary = useMemo(() => {
+    const paid = fees.filter((f) => f.is_paid).reduce((s, f) => s + Number(f.amount_due), 0);
+    const pending = fees.filter((f) => !f.is_paid).reduce((s, f) => s + Number(f.amount_due), 0);
+    const overdue = fees.filter((f) => !f.is_paid && new Date(f.due_date) < new Date()).length;
+    return { paid, pending, overdue };
+  }, [fees]);
 
   const scheduleByDay = useMemo(() => {
     const days: Record<number, ScheduleRow[]> = {};
