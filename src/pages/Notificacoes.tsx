@@ -332,7 +332,14 @@ const Notificacoes = () => {
             </span>
           </div>
 
-          {filtered.length === 0 ? (
+          {loading ? (
+            <div className="flex flex-col items-center justify-center gap-3 p-16 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground animate-pulse">
+                <Bell className="h-6 w-6" strokeWidth={1.5} />
+              </span>
+              <p className="text-sm font-medium text-foreground">A carregar notificações…</p>
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 p-16 text-center">
               <span className="flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
                 <Bell className="h-6 w-6" strokeWidth={1.5} />
