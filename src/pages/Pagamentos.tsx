@@ -138,12 +138,13 @@ const Pagamentos = () => {
     setSchoolId(sId);
     if (!sId) { setLoading(false); return; }
 
-    const [yRes, rRes, fRes, dRes, sRes] = await Promise.all([
+    const [yRes, rRes, fRes, dRes, sRes, cRes] = await Promise.all([
       supabase.from("academic_years").select("id, label, is_active").eq("school_id", sId).order("start_date", { ascending: false }),
       supabase.from("fee_rules").select("*").eq("school_id", sId).order("grade_level"),
       supabase.from("family_discount_rules").select("*").eq("school_id", sId).order("sibling_position"),
       supabase.from("student_discounts").select("*, student:students(full_name)").eq("school_id", sId).order("created_at", { ascending: false }),
       supabase.from("students").select("id, full_name").eq("school_id", sId).order("full_name"),
+      supabase.from("classrooms").select("id, name").eq("school_id", sId).order("name"),
     ]);
 
     if (yRes.error) toast({ title: "Erro a carregar anos letivos", description: yRes.error.message, variant: "destructive" });
@@ -159,15 +160,16 @@ const Pagamentos = () => {
     setFamilyRules((fRes.data ?? []) as FamilyRule[]);
     setDiscounts((dRes.data ?? []) as StudentDiscount[]);
     setStudents((sRes.data ?? []) as StudentLite[]);
+    setClassrooms((cRes.data ?? []) as ClassroomLite[]);
 
     // Carregar propinas com aluno e educador
     const studentIds = (sRes.data ?? []).map((s) => s.id);
     if (studentIds.length > 0) {
       const { data: feesData } = await supabase
         .from("student_fees")
-        .select("id, amount_due, due_date, is_paid, month_index, student_id, academic_year_id, student:students(id, full_name, parent_id)")
+        .select("id, amount_due, due_date, is_paid, month_index, student_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name))")
         .in("student_id", studentIds)
-        .order("due_date", { ascending: false });
+        .order("due_date", { ascending: true });
       setAllFees((feesData ?? []) as unknown as FeeListRow[]);
     } else {
       setAllFees([]);
