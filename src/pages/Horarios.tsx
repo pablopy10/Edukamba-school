@@ -114,10 +114,12 @@ const Horarios = () => {
     setClassrooms((classroomsRes.data ?? []).map((c) => ({ id: c.id, name: c.name })));
     setSubjects((subjectsRes.data ?? []).map((s) => ({ id: s.id, name: s.name })));
     setTeachers(
-      (teachersRes.data ?? []).map((t: any) => ({
-        id: t.id,
-        name: t.profiles?.full_name ?? "Sem nome",
-      })),
+      (teachersRes.data ?? [])
+        .filter((t: any) => !!t.profile_id)
+        .map((t: any) => ({
+          id: t.profile_id,
+          name: t.profiles?.full_name ?? "Sem nome",
+        })),
     );
     setTimeSlots(
       (slotsRes.data ?? []).map((s: any) => ({
