@@ -164,6 +164,10 @@ const AlunoPerfil = () => {
   const [fees, setFees] = useState<FeeRow[]>([]);
   const [remindingFeeId, setRemindingFeeId] = useState<string | null>(null);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [activityFees, setActivityFees] = useState<ActivityFeeRow[]>([]);
+  const [activityPayments, setActivityPayments] = useState<PaymentRow[]>([]);
+  const [transportFees, setTransportFees] = useState<TransportFeeRow[]>([]);
+  const [transportPayments, setTransportPayments] = useState<PaymentRow[]>([]);
   const [proofDialogFee, setProofDialogFee] = useState<FeeRow | null>(null);
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofMethod, setProofMethod] = useState<string>("transferencia");
