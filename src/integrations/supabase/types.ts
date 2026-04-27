@@ -453,8 +453,10 @@ export type Database = {
           ip_address: string | null
           new_data: Json | null
           old_data: Json | null
+          record_id: string | null
           school_id: string | null
           table_name: string
+          user_full_name: string | null
           user_id: string | null
         }
         Insert: {
@@ -464,8 +466,10 @@ export type Database = {
           ip_address?: string | null
           new_data?: Json | null
           old_data?: Json | null
+          record_id?: string | null
           school_id?: string | null
           table_name: string
+          user_full_name?: string | null
           user_id?: string | null
         }
         Update: {
@@ -475,8 +479,10 @@ export type Database = {
           ip_address?: string | null
           new_data?: Json | null
           old_data?: Json | null
+          record_id?: string | null
           school_id?: string | null
           table_name?: string
+          user_full_name?: string | null
           user_id?: string | null
         }
         Relationships: [
@@ -2920,7 +2926,9 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _ensure_audit_trigger: { Args: { p_table: string }; Returns: undefined }
       apply_monthly_late_fees: { Args: never; Returns: Json }
+      cleanup_old_audit_logs: { Args: never; Returns: undefined }
       clone_academic_year: {
         Args: {
           _clone_classrooms?: boolean

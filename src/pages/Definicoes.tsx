@@ -22,6 +22,7 @@ import {
   Loader2,
   FileText,
   Plus,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
@@ -30,6 +31,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/integrations/supabase/types";
 import { TermsAndHolidaysManager } from "@/components/definicoes/TermsAndHolidaysManager";
 import { NewAcademicYearWizard } from "@/components/definicoes/NewAcademicYearWizard";
+import { AuditLogsPanel } from "@/components/definicoes/AuditLogsPanel";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -40,7 +42,8 @@ type Tab =
   | "utilizadores"
   | "permissoes"
   | "notificacoes"
-  | "faturacao";
+  | "faturacao"
+  | "auditoria";
 
 type Role = Database["public"]["Enums"]["user_role"];
 
@@ -52,6 +55,7 @@ const tabs: { id: Tab; label: string; icon: typeof Building2 }[] = [
   { id: "permissoes", label: "Permissões", icon: Shield },
   { id: "notificacoes", label: "Notificações", icon: Bell },
   { id: "faturacao", label: "Faturação", icon: CreditCard },
+  { id: "auditoria", label: "Auditoria", icon: History },
 ];
 
 // ===== UI atoms (module scope to keep stable identity across renders) =====
@@ -1650,6 +1654,21 @@ const Definicoes = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {/* AUDITORIA */}
+        {activeTab === "auditoria" && (
+          isAdmin ? (
+            <AuditLogsPanel />
+          ) : (
+            <div className="rounded-2xl bg-card p-8 text-center shadow-card">
+              <Shield className="mx-auto mb-3 h-10 w-10 text-muted-foreground" strokeWidth={1.5} />
+              <h2 className="text-lg font-bold text-foreground">Acesso restrito</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Apenas administradores podem consultar os logs de auditoria.
+              </p>
+            </div>
+          )
         )}
 
         {/* Edit user modal */}
