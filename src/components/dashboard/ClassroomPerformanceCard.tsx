@@ -2,25 +2,34 @@ import { useEffect, useState } from "react";
 import { Trophy, TrendingDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 interface Props {
   variant: "best" | "worst";
 }
 
 export const ClassroomPerformanceCard = ({ variant }: Props) => {
+  const { selectedYear } = useAcademicYear();
   const [name, setName] = useState<string>("—");
   const [score, setScore] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const { data: grades } = await supabase
+      let query = supabase
         .from("grades")
-        .select("score, assessments(classroom_id, classrooms(name))");
+        .select("score, assessments(date, classroom_id, classrooms(name))");
+
+      if (selectedYear) {
+        query = query.gte("assessments.date", selectedYear.start_date).lte("assessments.date", selectedYear.end_date);
+      }
+
+      const { data: grades } = await query;
 
       type Row = {
         score: number;
         assessments: {
+          date: string | null;
           classroom_id: string | null;
           classrooms: { name: string | null } | null;
         } | null;
@@ -56,7 +65,7 @@ export const ClassroomPerformanceCard = ({ variant }: Props) => {
     return () => {
       cancelled = true;
     };
-  }, [variant]);
+  }, [variant, selectedYear]);
 
   const isBest = variant === "best";
   const Icon = isBest ? Trophy : TrendingDown;
