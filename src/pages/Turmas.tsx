@@ -308,9 +308,9 @@ const Turmas = () => {
         templateSheetName="Turmas"
         fields={[
           { key: "name", label: "Nome da turma", required: true, aliases: ["turma", "classe", "name"], example: "5ª A" },
-          { key: "grade_level", label: "Ano de escolaridade", required: true, aliases: ["ano", "ano de escolaridade", "grade", "nivel", "escolaridade"], example: "5" },
+          { key: "grade_level", label: "Ano de escolaridade", required: true, aliases: ["ano", "ano de escolaridade", "grade", "nivel", "escolaridade"], example: "Ensino Básico" },
           { key: "period", label: "Período", required: true, aliases: ["periodo", "turno"], example: "Manhã" },
-          { key: "course", label: "Curso", required: true, aliases: ["curso", "course"], example: "Ensino Básico" },
+          { key: "course", label: "Curso", required: true, aliases: ["curso", "course"], example: "Informática" },
           { key: "academic_year", label: "Ano letivo", aliases: ["ano letivo", "ano lectivo", "academic year", "ano_letivo"], example: "2025/2026" },
         ]}
         onImportRow={async (row) => {
