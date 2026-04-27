@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 export type EnrollmentRow = {
   id: string;
@@ -41,6 +42,7 @@ const STATUSES: { value: string; label: string }[] = [
 ];
 
 export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms, years, enrollment, onSaved }: Props) => {
+  const { selectedYearId } = useAcademicYear();
   const isEdit = !!enrollment;
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"new" | "renew">("renew");
@@ -66,12 +68,12 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         setStatus(enrollment.status ?? "ACTIVE");
       } else {
         const activeYear = years.find((y) => y.is_active);
-        setStudentId(""); setClassroomId(""); setYearId(activeYear?.id ?? ""); setStatus("ACTIVE");
+        setStudentId(""); setClassroomId(""); setYearId(selectedYearId ?? activeYear?.id ?? ""); setStatus("ACTIVE");
         setTab("renew");
         setFullName(""); setEmail(""); setPhone(""); setBirthDate(""); setGender(""); setEnrollmentNumber("");
       }
     }
-  }, [open, enrollment, years]);
+  }, [open, enrollment, years, selectedYearId]);
 
   const handleSubmit = async () => {
     if (!classroomId) { toast({ title: "Turma obrigatória", variant: "destructive" }); return; }
