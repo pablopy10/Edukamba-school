@@ -1256,6 +1256,19 @@ const AlunoPerfil = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {student && (
+        <CreateStudentAccessDialog
+          open={accessDialogOpen}
+          onOpenChange={setAccessDialogOpen}
+          studentId={student.id}
+          studentName={student.full_name}
+          defaultEmail={student.email}
+          onCreated={() => {
+            setStudent({ ...student, user_id: student.user_id ?? "pending" });
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 };
