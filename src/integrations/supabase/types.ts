@@ -267,6 +267,7 @@ export type Database = {
       }
       assessments: {
         Row: {
+          academic_year_id: string | null
           assessment_type_id: string | null
           classroom_id: string | null
           created_at: string
@@ -286,6 +287,7 @@ export type Database = {
           weight: number | null
         }
         Insert: {
+          academic_year_id?: string | null
           assessment_type_id?: string | null
           classroom_id?: string | null
           created_at?: string
@@ -305,6 +307,7 @@ export type Database = {
           weight?: number | null
         }
         Update: {
+          academic_year_id?: string | null
           assessment_type_id?: string | null
           classroom_id?: string | null
           created_at?: string
@@ -324,6 +327,13 @@ export type Database = {
           weight?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "assessments_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "assessments_assessment_type_id_fkey"
             columns: ["assessment_type_id"]
