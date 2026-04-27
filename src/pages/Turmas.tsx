@@ -58,7 +58,7 @@ const Turmas = () => {
       const [{ data: cls, error }, { data: cs }, { data: ys }, { data: students }] = await Promise.all([
         classroomsQuery,
         supabase.from("courses").select("id, name").order("name"),
-        supabase.from("academic_years").select("id, label, is_active").order("start_date", { ascending: false }),
+        supabase.from("academic_years").select("id, label, is_active").order("start_date", { ascending: true }),
         supabase.from("students").select("id, classroom_id"),
       ]);
       if (error) throw error;
