@@ -22,6 +22,7 @@ export type AssessmentRecord = {
   room: string | null;
   weight: number;
   description: string | null;
+  term_id: string | null;
 };
 
 type Option = { id: string; name: string };
@@ -36,6 +37,8 @@ const TYPES = [
 const trimTime = (t: string) => (t ? t.slice(0, 5) : "");
 
 type Conflict = { id: string; title: string; reason: string };
+
+type Term = { id: string; term_number: number; name: string; start_date: string; end_date: string };
 
 type Props = {
   open: boolean;
@@ -60,6 +63,7 @@ const empty: AssessmentRecord = {
   room: "",
   weight: 0,
   description: "",
+  term_id: null,
 };
 
 export const AssessmentFormDialog = ({
@@ -75,10 +79,13 @@ export const AssessmentFormDialog = ({
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<AssessmentRecord>(empty);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
+  const [terms, setTerms] = useState<Term[]>([]);
+  const [termManuallyOverridden, setTermManuallyOverridden] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setConflicts([]);
+    setTermManuallyOverridden(!!initial?.term_id);
     setForm({
       ...empty,
       ...initial,
@@ -93,8 +100,27 @@ export const AssessmentFormDialog = ({
       room: initial?.room ?? "",
       weight: Number(initial?.weight ?? 0),
       description: initial?.description ?? "",
+      term_id: initial?.term_id ?? null,
     });
   }, [open, initial]);
+
+  // Load terms for the school
+  useEffect(() => {
+    if (!open || !schoolId) return;
+    supabase
+      .from("academic_terms")
+      .select("id, term_number, name, start_date, end_date")
+      .eq("school_id", schoolId)
+      .order("term_number")
+      .then(({ data }) => setTerms((data ?? []) as Term[]));
+  }, [open, schoolId]);
+
+  // Auto-derive term from date unless user manually overrode it
+  useEffect(() => {
+    if (!form.date || terms.length === 0 || termManuallyOverridden) return;
+    const matched = terms.find((t) => form.date >= t.start_date && form.date <= t.end_date);
+    setForm((f) => ({ ...f, term_id: matched?.id ?? null }));
+  }, [form.date, terms, termManuallyOverridden]);
 
   const update = <K extends keyof AssessmentRecord>(key: K, value: AssessmentRecord[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -186,6 +212,7 @@ export const AssessmentFormDialog = ({
       room: form.room?.trim() || null,
       weight: Number(form.weight) || 0,
       description: form.description?.trim() || null,
+      term_id: form.term_id,
     };
 
     const { error } = form.id
@@ -283,6 +310,46 @@ export const AssessmentFormDialog = ({
           <div className="space-y-2">
             <Label>Peso (%)</Label>
             <Input type="number" min={0} max={100} value={form.weight} onChange={(e) => update("weight", Number(e.target.value))} />
+          </div>
+
+          <div className="space-y-2 sm:col-span-2">
+            <Label>
+              Trimestre {!termManuallyOverridden && <span className="text-xs font-normal text-muted-foreground">(automático pela data)</span>}
+            </Label>
+            {terms.length === 0 ? (
+              <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                Configure os trimestres em Definições → Académico para ativar este campo.
+              </p>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Select
+                  value={form.term_id ?? "auto"}
+                  onValueChange={(v) => {
+                    if (v === "auto") {
+                      setTermManuallyOverridden(false);
+                      const matched = terms.find((t) => form.date >= t.start_date && form.date <= t.end_date);
+                      update("term_id", matched?.id ?? null);
+                    } else {
+                      setTermManuallyOverridden(true);
+                      update("term_id", v);
+                    }
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Sem trimestre" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Automático pela data</SelectItem>
+                    {terms.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {termManuallyOverridden && (
+                  <span className="rounded-full bg-pastel-yellow/40 px-2 py-1 text-[10px] font-semibold text-pastel-yellow-foreground">
+                    Manual
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2 sm:col-span-2">

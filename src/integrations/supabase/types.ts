@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      academic_terms: {
+        Row: {
+          academic_year_id: string | null
+          created_at: string
+          end_date: string
+          id: string
+          name: string
+          school_id: string
+          start_date: string
+          term_number: number
+          updated_at: string
+        }
+        Insert: {
+          academic_year_id?: string | null
+          created_at?: string
+          end_date: string
+          id?: string
+          name: string
+          school_id: string
+          start_date: string
+          term_number: number
+          updated_at?: string
+        }
+        Update: {
+          academic_year_id?: string | null
+          created_at?: string
+          end_date?: string
+          id?: string
+          name?: string
+          school_id?: string
+          start_date?: string
+          term_number?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academic_terms_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academic_terms_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       academic_years: {
         Row: {
           created_at: string | null
@@ -228,6 +279,7 @@ export type Database = {
           start_time: string | null
           subject_id: string | null
           teacher_id: string | null
+          term_id: string | null
           title: string
           type: string | null
           updated_at: string
@@ -246,6 +298,7 @@ export type Database = {
           start_time?: string | null
           subject_id?: string | null
           teacher_id?: string | null
+          term_id?: string | null
           title: string
           type?: string | null
           updated_at?: string
@@ -264,6 +317,7 @@ export type Database = {
           start_time?: string | null
           subject_id?: string | null
           teacher_id?: string | null
+          term_id?: string | null
           title?: string
           type?: string | null
           updated_at?: string
@@ -303,6 +357,13 @@ export type Database = {
             columns: ["teacher_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assessments_term_id_fkey"
+            columns: ["term_id"]
+            isOneToOne: false
+            referencedRelation: "academic_terms"
             referencedColumns: ["id"]
           },
         ]
@@ -1865,6 +1926,57 @@ export type Database = {
           },
         ]
       }
+      school_holidays: {
+        Row: {
+          academic_year_id: string | null
+          created_at: string
+          description: string | null
+          end_date: string
+          id: string
+          name: string
+          school_id: string
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          academic_year_id?: string | null
+          created_at?: string
+          description?: string | null
+          end_date: string
+          id?: string
+          name: string
+          school_id: string
+          start_date: string
+          updated_at?: string
+        }
+        Update: {
+          academic_year_id?: string | null
+          created_at?: string
+          description?: string | null
+          end_date?: string
+          id?: string
+          name?: string
+          school_id?: string
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "school_holidays_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "school_holidays_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       school_invoices: {
         Row: {
           amount: number
@@ -2831,6 +2943,10 @@ export type Database = {
         Returns: Database["public"]["Enums"]["user_role"]
       }
       get_my_school: { Args: never; Returns: string }
+      get_term_for_date: {
+        Args: { _date: string; _school_id: string }
+        Returns: string
+      }
       is_school_active: { Args: { _school_id: string }; Returns: boolean }
       notify_user: {
         Args: {

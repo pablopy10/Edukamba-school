@@ -50,7 +50,11 @@ type Assessment = {
   classroom_id: string | null;
   subject_id: string | null;
   teacher_id: string | null;
+  term_id: string | null;
 };
+
+type Term = { id: string; term_number: number; name: string; start_date: string; end_date: string };
+type Holiday = { id: string; name: string; start_date: string; end_date: string };
 
 type Option = { id: string; name: string };
 
@@ -85,6 +89,7 @@ const Avaliacoes = () => {
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
   const [teacherFilter, setTeacherFilter] = useState<string>("all");
   const [classroomFilter, setClassroomFilter] = useState<string>("all");
+  const [termFilter, setTermFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [cursor, setCursor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -95,6 +100,8 @@ const Avaliacoes = () => {
   const [classrooms, setClassrooms] = useState<Option[]>([]);
   const [subjects, setSubjects] = useState<Option[]>([]);
   const [teachers, setTeachers] = useState<Option[]>([]);
+  const [terms, setTerms] = useState<Term[]>([]);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Partial<AssessmentRecord> | null>(null);
@@ -109,11 +116,13 @@ const Avaliacoes = () => {
     setSchoolId(sid);
     if (!sid) { setLoading(false); return; }
 
-    const [aRes, cRes, sRes, tRes] = await Promise.all([
-      supabase.from("assessments").select("id,title,type,date,start_time,end_time,room,weight,description,classroom_id,subject_id,teacher_id").eq("school_id", sid).order("date", { ascending: true }),
+    const [aRes, cRes, sRes, tRes, termRes, holRes] = await Promise.all([
+      supabase.from("assessments").select("id,title,type,date,start_time,end_time,room,weight,description,classroom_id,subject_id,teacher_id,term_id").eq("school_id", sid).order("date", { ascending: true }),
       supabase.from("classrooms").select("id, name").eq("school_id", sid).order("name"),
       supabase.from("subjects").select("id, name").eq("school_id", sid).order("name"),
       supabase.from("teachers").select("id, profile_id, profiles:profile_id(full_name)").eq("school_id", sid),
+      supabase.from("academic_terms").select("id, term_number, name, start_date, end_date").eq("school_id", sid).order("term_number"),
+      supabase.from("school_holidays").select("id, name, start_date, end_date").eq("school_id", sid).order("start_date"),
     ]);
 
     setAssessments((aRes.data ?? []) as Assessment[]);
@@ -125,6 +134,8 @@ const Avaliacoes = () => {
         .map((t: any) => ({ id: t.profile_id, name: t.profiles?.full_name ?? "Sem nome" }))
         .sort((a, b) => a.name.localeCompare(b.name))
     );
+    setTerms((termRes.data ?? []) as Term[]);
+    setHolidays((holRes.data ?? []) as Holiday[]);
     setLoading(false);
   };
 
@@ -140,6 +151,15 @@ const Avaliacoes = () => {
       if (subjectFilter !== "all" && e.subject_id !== subjectFilter) return false;
       if (teacherFilter !== "all" && e.teacher_id !== teacherFilter) return false;
       if (classroomFilter !== "all" && e.classroom_id !== classroomFilter) return false;
+      if (termFilter !== "all") {
+        // Resolve effective term: stored term_id, otherwise derive from date
+        let effectiveTerm = e.term_id;
+        if (!effectiveTerm) {
+          const matched = terms.find((t) => e.date >= t.start_date && e.date <= t.end_date);
+          effectiveTerm = matched?.id ?? null;
+        }
+        if (effectiveTerm !== termFilter) return false;
+      }
       const q = search.trim().toLowerCase();
       if (!q) return true;
       const subjectName = e.subject_id ? subjectMap.get(e.subject_id) ?? "" : "";
@@ -152,7 +172,7 @@ const Avaliacoes = () => {
         teacherName.toLowerCase().includes(q)
       );
     });
-  }, [assessments, typeFilter, subjectFilter, teacherFilter, classroomFilter, search, subjectMap, classroomMap, teacherMap]);
+  }, [assessments, typeFilter, subjectFilter, teacherFilter, classroomFilter, termFilter, terms, search, subjectMap, classroomMap, teacherMap]);
 
   const stats = useMemo(() => ({
     total: filtered.length,
@@ -205,6 +225,7 @@ const Avaliacoes = () => {
       room: a.room,
       weight: Number(a.weight ?? 0),
       description: a.description,
+      term_id: a.term_id,
     });
     setDialogOpen(true);
   };
@@ -299,7 +320,7 @@ const Avaliacoes = () => {
               ))}
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Select value={subjectFilter} onValueChange={setSubjectFilter}>
               <SelectTrigger className="h-10 rounded-full"><SelectValue placeholder="Disciplina" /></SelectTrigger>
               <SelectContent>
@@ -321,6 +342,13 @@ const Avaliacoes = () => {
                 {classrooms.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            <Select value={termFilter} onValueChange={setTermFilter}>
+              <SelectTrigger className="h-10 rounded-full"><SelectValue placeholder="Trimestre" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os trimestres</SelectItem>
+                {terms.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -338,6 +366,7 @@ const Avaliacoes = () => {
             classroomMap={classroomMap}
             subjectMap={subjectMap}
             conflictIds={conflictIds}
+            holidays={holidays}
             onEdit={openEdit}
             onDelete={(id) => setDeleteId(id)}
             onOpen={(id) => navigate(`/avaliacoes/${id}/notas`)}
@@ -400,7 +429,7 @@ const TypeChip = ({
 /* ======================= Calendar View ======================= */
 const CalendarView = ({
   cursor, setCursor, evaluations, selectedDate, setSelectedDate,
-  classroomMap, subjectMap, conflictIds, onEdit, onDelete, onOpen,
+  classroomMap, subjectMap, conflictIds, holidays, onEdit, onDelete, onOpen,
 }: {
   cursor: Date;
   setCursor: (d: Date) => void;
@@ -410,6 +439,7 @@ const CalendarView = ({
   classroomMap: Map<string, string>;
   subjectMap: Map<string, string>;
   conflictIds: Set<string>;
+  holidays: Holiday[];
   onEdit: (a: Assessment) => void;
   onDelete: (id: string) => void;
   onOpen: (id: string) => void;
@@ -442,6 +472,10 @@ const CalendarView = ({
   const todayIso = new Date().toISOString().slice(0, 10);
   const selectedEvents = selectedDate ? eventsByDate.get(selectedDate) ?? [] : [];
 
+  const holidayForDate = (iso: string) =>
+    holidays.find((h) => iso >= h.start_date && iso <= h.end_date);
+  const selectedHoliday = selectedDate ? holidayForDate(selectedDate) : null;
+
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
       <div className="overflow-hidden rounded-2xl bg-card shadow-card">
@@ -473,6 +507,7 @@ const CalendarView = ({
               const events = eventsByDate.get(c.iso) ?? [];
               const isToday = c.iso === todayIso;
               const isSelected = c.iso === selectedDate;
+              const holiday = holidayForDate(c.iso);
               return (
                 <button
                   key={i}
@@ -480,6 +515,7 @@ const CalendarView = ({
                   className={cn(
                     "flex min-h-[92px] flex-col items-stretch gap-1 rounded-xl border p-2 text-left transition-all hover:-translate-y-0.5",
                     isSelected ? "border-pastel-blue-foreground bg-pastel-blue/30" : "border-border bg-background",
+                    holiday && !isSelected && "border-pastel-yellow-foreground/30 bg-pastel-yellow/20",
                   )}
                 >
                   <div className="flex items-center justify-between">
@@ -492,6 +528,11 @@ const CalendarView = ({
                     )}
                   </div>
                   <div className="flex flex-col gap-1">
+                    {holiday && (
+                      <span className="truncate rounded-md bg-pastel-yellow px-1.5 py-0.5 text-[10px] font-semibold text-pastel-yellow-foreground">
+                        🌴 {holiday.name}
+                      </span>
+                    )}
                     {events.slice(0, 2).map((e) => (
                       <span key={e.id} className={cn("truncate rounded-md px-1.5 py-0.5 text-[10px] font-semibold", meta(e.type).color, conflictIds.has(e.id) && "ring-1 ring-destructive")}>
                         {e.title}
@@ -522,6 +563,15 @@ const CalendarView = ({
         {selectedDate && selectedEvents.length === 0 && (
           <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
             Sem avaliações neste dia.
+          </div>
+        )}
+
+        {selectedHoliday && (
+          <div className="mb-3 rounded-xl border border-pastel-yellow-foreground/30 bg-pastel-yellow/30 p-3 text-sm">
+            <p className="flex items-center gap-2 font-semibold text-pastel-yellow-foreground">
+              <span>🌴</span> {selectedHoliday.name}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Período de férias dos alunos.</p>
           </div>
         )}
 
