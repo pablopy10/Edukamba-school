@@ -34,6 +34,7 @@ export interface MessagePreview {
   text: string;
   time: string;
   unread: boolean;
+  senderId: string | null;
 }
 
 const dayLabels = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -75,6 +76,9 @@ export const useDashboardData = () => {
 
         const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
+        const { data: authData } = await supabase.auth.getUser();
+        const currentUserId = authData.user?.id ?? null;
+
         const [
           studentsRes,
           teachersRes,
@@ -109,7 +113,7 @@ export const useDashboardData = () => {
             .limit(6),
           supabase
             .from("messages")
-            .select("id, content, created_at, is_read, sender_id, profiles!messages_sender_id_fkey(full_name)")
+            .select("id, content, created_at, is_read, sender_id, receiver_id, profiles!messages_sender_id_fkey(full_name)")
             .order("created_at", { ascending: false })
             .limit(5),
         ]);
@@ -170,6 +174,8 @@ export const useDashboardData = () => {
           content: string;
           created_at: string;
           is_read: boolean | null;
+          sender_id: string | null;
+          receiver_id: string | null;
           profiles: { full_name: string | null } | null;
         };
         const msgs = (messagesRes.data ?? []) as unknown as MsgRow[];
@@ -178,13 +184,15 @@ export const useDashboardData = () => {
             const name = m.profiles?.full_name ?? "Desconhecido";
             const d = new Date(m.created_at);
             const time = d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
+            const isIncoming = !!currentUserId && m.receiver_id === currentUserId && m.sender_id !== currentUserId;
             return {
               id: m.id,
               name,
               initials: initials(name),
               text: m.content,
               time,
-              unread: !m.is_read,
+              unread: isIncoming && !m.is_read,
+              senderId: m.sender_id,
             };
           }),
         );
