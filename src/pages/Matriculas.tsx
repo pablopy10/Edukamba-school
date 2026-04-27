@@ -291,7 +291,7 @@ const Matriculas = () => {
                             {e.students?.id ? (
                               <Link
                                 to={`/alunos/${e.students.id}`}
-                                className="font-semibold text-foreground hover:text-primary hover:underline"
+                                className="font-semibold text-foreground transition-colors hover:text-pastel-blue-foreground hover:underline"
                               >
                                 {name}
                               </Link>
