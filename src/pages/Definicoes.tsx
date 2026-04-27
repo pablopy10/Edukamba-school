@@ -1656,6 +1656,21 @@ const Definicoes = () => {
           </div>
         )}
 
+        {/* AUDITORIA */}
+        {activeTab === "auditoria" && (
+          isAdmin ? (
+            <AuditLogsPanel />
+          ) : (
+            <div className="rounded-2xl bg-card p-8 text-center shadow-card">
+              <Shield className="mx-auto mb-3 h-10 w-10 text-muted-foreground" strokeWidth={1.5} />
+              <h2 className="text-lg font-bold text-foreground">Acesso restrito</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Apenas administradores podem consultar os logs de auditoria.
+              </p>
+            </div>
+          )
+        )}
+
         {/* Edit user modal */}
         {editUser && (
           <div
