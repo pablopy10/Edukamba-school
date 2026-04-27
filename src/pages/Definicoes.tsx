@@ -572,6 +572,59 @@ const Definicoes = () => {
     showToast("success", "Ano letivo ativo atualizado.");
   };
 
+  const handleCreateAcademicYear = async () => {
+    if (!schoolId) return;
+    // Suggest the next school year based on the most recent end_date.
+    const latest = years
+      .slice()
+      .sort((a, b) => (a.end_date < b.end_date ? 1 : -1))[0];
+    const baseYear = latest ? new Date(latest.end_date).getFullYear() : new Date().getFullYear();
+    const startYear = baseYear;
+    const endYear = baseYear + 1;
+    const label = `${startYear}/${endYear}`;
+    const start_date = `${startYear}-09-01`;
+    const end_date = `${endYear}-07-31`;
+    setSaving(true);
+    const { data, error } = await supabase
+      .from("academic_years")
+      .insert({ school_id: schoolId, label, start_date, end_date, is_active: false })
+      .select("id")
+      .maybeSingle();
+    setSaving(false);
+    if (error) return showToast("error", error.message);
+    await refreshAcademicYears();
+    if (data?.id) setSelectedYearId(data.id);
+    showToast("success", "Ano letivo criado. Edite os dados conforme necessário.");
+  };
+
+  const [confirmDeleteYearId, setConfirmDeleteYearId] = useState<string | null>(null);
+
+  const handleDeleteAcademicYear = async () => {
+    if (!schoolId || !confirmDeleteYearId) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from("academic_years")
+      .delete()
+      .eq("id", confirmDeleteYearId);
+    setSaving(false);
+    if (error) {
+      setConfirmDeleteYearId(null);
+      return showToast(
+        "error",
+        "Não foi possível eliminar. Existem dados associados a este ano letivo.",
+      );
+    }
+    const removed = confirmDeleteYearId;
+    setConfirmDeleteYearId(null);
+    await refreshAcademicYears();
+    // Pick another year if the removed one was selected.
+    if (selectedYearId === removed) {
+      const next = years.find((y) => y.id !== removed);
+      if (next) setSelectedYearId(next.id);
+    }
+    showToast("success", "Ano letivo eliminado.");
+  };
+
   // ===== Users =====
   const updateUserRole = async (id: string, role: Role) => {
     const { error } = await supabase.from("profiles").update({ role }).eq("id", id);
