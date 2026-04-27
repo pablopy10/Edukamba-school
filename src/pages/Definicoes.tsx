@@ -212,6 +212,7 @@ const schoolSchema = z.object({
 
 const Definicoes = () => {
   const { user } = useAuth();
+  const { selectedYearId } = useAcademicYear();
   const [activeTab, setActiveTab] = useState<Tab>("escola");
   const [toast, setToast] = useState<{ kind: "success" | "error"; msg: string } | null>(null);
   const [loading, setLoading] = useState(true);
