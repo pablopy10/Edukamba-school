@@ -18,7 +18,7 @@ export const ClassroomPerformanceCard = ({ variant }: Props) => {
     const load = async () => {
       let query = supabase
         .from("grades")
-        .select("score, assessments(date, classroom_id, classrooms(name))");
+        .select("score, assessments!inner(date, classroom_id, classrooms(name))");
 
       if (selectedYear) {
         query = query.gte("assessments.date", selectedYear.start_date).lte("assessments.date", selectedYear.end_date);
