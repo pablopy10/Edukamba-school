@@ -2282,6 +2282,8 @@ export type Database = {
           fee_category_id: string | null
           id: string
           is_paid: boolean | null
+          late_fee_amount: number
+          late_fee_applied_at: string | null
           month_index: number | null
           student_id: string | null
         }
@@ -2292,6 +2294,8 @@ export type Database = {
           fee_category_id?: string | null
           id?: string
           is_paid?: boolean | null
+          late_fee_amount?: number
+          late_fee_applied_at?: string | null
           month_index?: number | null
           student_id?: string | null
         }
@@ -2302,6 +2306,8 @@ export type Database = {
           fee_category_id?: string | null
           id?: string
           is_paid?: boolean | null
+          late_fee_amount?: number
+          late_fee_applied_at?: string | null
           month_index?: number | null
           student_id?: string | null
         }
@@ -2914,6 +2920,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_monthly_late_fees: { Args: never; Returns: Json }
       clone_academic_year: {
         Args: {
           _clone_classrooms?: boolean
@@ -2973,6 +2980,7 @@ export type Database = {
         Returns: string
       }
       is_school_active: { Args: { _school_id: string }; Returns: boolean }
+      notify_low_stock_materials: { Args: never; Returns: Json }
       notify_user: {
         Args: {
           _actor_id?: string
