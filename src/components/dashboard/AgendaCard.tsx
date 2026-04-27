@@ -55,7 +55,7 @@ const dateLabel = (date: Date) => {
 export const AgendaCard = ({ date }: AgendaCardProps) => {
   const { selectedYearId } = useAcademicYear();
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
-  const [classroomId, setClassroomId] = useState<string>("ALL");
+  const [classroomId, setClassroomId] = useState<string>("");
   const [items, setItems] = useState<AgendaItem[]>([]);
 
   useEffect(() => {
@@ -64,12 +64,23 @@ export const AgendaCard = ({ date }: AgendaCardProps) => {
       .select("id, name")
       .order("name", { ascending: true });
     if (selectedYearId) query = query.eq("academic_year_id", selectedYearId);
-    query.then(({ data }) => setClassrooms(data ?? []));
+    query.then(({ data }) => {
+      const list = data ?? [];
+      setClassrooms(list);
+      setClassroomId((prev) => {
+        if (prev && list.some((c) => c.id === prev)) return prev;
+        return list[0]?.id ?? "";
+      });
+    });
   }, [selectedYearId]);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!classroomId) {
+        setItems([]);
+        return;
+      }
       const dow = date.getDay();
       let query = supabase
         .from("schedules")
@@ -83,9 +94,7 @@ export const AgendaCard = ({ date }: AgendaCardProps) => {
         query = query.eq("academic_year_id", selectedYearId);
       }
 
-      if (classroomId !== "ALL") {
-        query = query.eq("classroom_id", classroomId);
-      }
+      query = query.eq("classroom_id", classroomId);
 
       const { data } = await query;
       type Row = {
@@ -117,12 +126,15 @@ export const AgendaCard = ({ date }: AgendaCardProps) => {
           <h3 className="text-lg font-bold text-foreground">Agenda</h3>
           <p className="truncate text-xs capitalize text-muted-foreground">{dateLabel(date)}</p>
         </div>
-        <Select value={classroomId} onValueChange={setClassroomId}>
+        <Select
+          value={classroomId}
+          onValueChange={setClassroomId}
+          disabled={classrooms.length === 0}
+        >
           <SelectTrigger className="h-8 w-auto min-w-[120px] rounded-full border-border bg-background px-3 text-xs font-medium">
             <SelectValue placeholder="Turma" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">Todas as turmas</SelectItem>
             {classrooms.map((c) => (
               <SelectItem key={c.id} value={c.id}>
                 {c.name}
