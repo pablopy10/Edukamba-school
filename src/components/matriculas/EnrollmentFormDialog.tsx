@@ -263,7 +263,12 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         }
       }
       onSaved();
-      onOpenChange(false);
+      // If we triggered the access prompt, keep this dialog mounted so the
+      // child CreateStudentAccessDialog doesn't get unmounted mid-open.
+      // The parent dialog will close once the access prompt is dismissed.
+      if (!isClassroomEligible(classroomId)) {
+        onOpenChange(false);
+      }
     } catch (e: any) {
       toast({ title: "Erro", description: e?.message ?? String(e), variant: "destructive" });
     } finally {
