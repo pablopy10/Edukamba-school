@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Medal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 interface HonorEntry {
   id: string;
@@ -24,6 +25,7 @@ export const HonorRollCard = () => {
   const [entries, setEntries] = useState<HonorEntry[]>([]);
   const [terms, setTerms] = useState<Term[]>([]);
   const [selectedTermId, setSelectedTermId] = useState<string>("all");
+  const { selectedYearId } = useAcademicYear();
 
   useEffect(() => {
     let cancelled = false;
@@ -36,19 +38,13 @@ export const HonorRollCard = () => {
         .eq("id", user.id)
         .maybeSingle();
       if (!profile?.school_id) return;
-      // Restrict to terms of the active academic year
-      const { data: activeYear } = await supabase
-        .from("academic_years")
-        .select("id")
-        .eq("school_id", profile.school_id)
-        .eq("is_active", true)
-        .maybeSingle();
+      // Restrict to terms of the currently selected academic year
       let q = supabase
         .from("academic_terms")
         .select("id, term_number, name, start_date, end_date")
         .eq("school_id", profile.school_id)
         .order("term_number");
-      if (activeYear?.id) q = q.eq("academic_year_id", activeYear.id);
+      if (selectedYearId) q = q.eq("academic_year_id", selectedYearId);
       const { data } = await q;
       if (cancelled) return;
       const ts = (data ?? []) as Term[];
@@ -56,11 +52,11 @@ export const HonorRollCard = () => {
       // Auto-select current term
       const today = new Date().toISOString().slice(0, 10);
       const current = ts.find((t) => today >= t.start_date && today <= t.end_date);
-      if (current) setSelectedTermId(current.id);
+      setSelectedTermId(current?.id ?? "all");
     };
     loadTerms();
     return () => { cancelled = true; };
-  }, []);
+  }, [selectedYearId]);
 
   useEffect(() => {
     let cancelled = false;
