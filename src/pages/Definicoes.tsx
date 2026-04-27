@@ -826,20 +826,8 @@ const Definicoes = () => {
         subId = data.id;
       }
     }
-    // Gerar cobranças conforme o ciclo
-    const { data: genCount, error: genErr } = await supabase.rpc("generate_school_invoices", {
-      _school_id: schoolId,
-    });
-    if (genErr) {
-      showToast("error", `Ciclo guardado, mas falhou a geração: ${genErr.message}`);
-    } else {
-      await reloadInvoices();
-      const n = Number(genCount ?? 0);
-      showToast(
-        "success",
-        n > 0 ? `Ciclo atualizado. ${n} cobrança(s) gerada(s).` : "Ciclo atualizado.",
-      );
-    }
+    // Pagamentos são gerados manualmente — não disparar geração automática
+    showToast("success", "Ciclo de pagamento atualizado.");
     void subId;
   };
 
