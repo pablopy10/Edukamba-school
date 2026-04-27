@@ -243,6 +243,13 @@ const Definicoes = () => {
     end_date: "",
   });
 
+  // Academic settings (stored on schools.settings jsonb)
+  const [academicSettings, setAcademicSettings] = useState({
+    honor_roll_min_average: 14,
+    grading_max_score: 20,
+  });
+  const [savingAcademicSettings, setSavingAcademicSettings] = useState(false);
+
   // Users
   type UserRow = {
     id: string;
