@@ -1672,6 +1672,47 @@ export type Database = {
         }
         Relationships: []
       }
+      plan_change_requests: {
+        Row: {
+          created_at: string
+          current_plan: string | null
+          id: string
+          message: string | null
+          requested_by: string | null
+          requested_plan: string
+          school_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          current_plan?: string | null
+          id?: string
+          message?: string | null
+          requested_by?: string | null
+          requested_plan: string
+          school_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          current_plan?: string | null
+          id?: string
+          message?: string | null
+          requested_by?: string | null
+          requested_plan?: string
+          school_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_change_requests_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null

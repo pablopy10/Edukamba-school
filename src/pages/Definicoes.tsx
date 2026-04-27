@@ -289,7 +289,14 @@ const Definicoes = () => {
     plan_type: "Essencial" | "Pro" | "Enterprise";
     billing_cycle: "SEMESTRAL" | "ANNUAL";
   };
-  const [sub, setSub] = useState<Subscription>({ id: null, plan_type: "Essencial", billing_cycle: "ANNUAL" });
+  const [sub, setSub] = useState<Subscription>({ id: null, plan_type: "Enterprise", billing_cycle: "ANNUAL" });
+  // Plan change request UI state
+  const [planRequest, setPlanRequest] = useState<{
+    open: boolean;
+    targetPlan: "Essencial" | "Pro" | "Enterprise" | null;
+    message: string;
+    submitting: boolean;
+  }>({ open: false, targetPlan: null, message: "", submitting: false });
   type Invoice = {
     id: string;
     invoice_number: string;
@@ -844,6 +851,28 @@ const Definicoes = () => {
       .eq("school_id", schoolId)
       .order("issue_date", { ascending: false });
     if (data) setInvoices(data as Invoice[]);
+  };
+
+  const submitPlanRequest = async () => {
+    if (!planRequest.targetPlan) return;
+    setPlanRequest((p) => ({ ...p, submitting: true }));
+    try {
+      const { data, error } = await supabase.functions.invoke("request-plan-change", {
+        body: {
+          requested_plan: planRequest.targetPlan,
+          message: planRequest.message?.trim() || undefined,
+        },
+      });
+      if (error) throw error;
+      const emailNote = (data as { email_sent?: boolean })?.email_sent
+        ? "Pedido enviado para geral@edukamba.com."
+        : "Pedido registado. A nossa equipa entrará em contacto.";
+      showToast("success", emailNote);
+      setPlanRequest({ open: false, targetPlan: null, message: "", submitting: false });
+    } catch (e) {
+      showToast("error", (e as Error).message ?? "Falha ao enviar pedido.");
+      setPlanRequest((p) => ({ ...p, submitting: false }));
+    }
   };
 
   const submitProof = async () => {
@@ -1640,10 +1669,35 @@ const Definicoes = () => {
                           </li>
                         ))}
                       </ul>
+                      <button
+                        type="button"
+                        disabled={!isAdmin || isCurrent}
+                        onClick={() =>
+                          setPlanRequest({
+                            open: true,
+                            targetPlan: p.name as "Essencial" | "Pro" | "Enterprise",
+                            message: "",
+                            submitting: false,
+                          })
+                        }
+                        className={cn(
+                          "mt-2 inline-flex h-10 w-full items-center justify-center rounded-xl px-4 text-sm font-semibold transition-[var(--transition-smooth)] disabled:cursor-not-allowed disabled:opacity-50",
+                          isCurrent
+                            ? "bg-muted text-muted-foreground"
+                            : p.highlight
+                              ? "bg-pastel-blue text-pastel-blue-foreground hover:opacity-90"
+                              : "border border-border bg-card text-foreground hover:bg-accent",
+                        )}
+                      >
+                        {isCurrent ? "Plano atual" : `Solicitar plano ${p.name}`}
+                      </button>
                     </div>
                   );
                 })}
               </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                A ativação ou alteração do plano é feita pela equipa Edukamba após a assinatura do contrato. Ao solicitar um plano, será enviado um email para <span className="font-medium text-foreground">geral@edukamba.com</span> com o seu pedido.
+              </p>
             </SectionCard>
 
             <SectionCard title="Ciclo de Pagamento" desc="Escolha como prefere ser cobrado pela plataforma.">
@@ -1974,6 +2028,51 @@ const Definicoes = () => {
           >
             {toast.kind === "success" ? <Check className="h-4 w-4" strokeWidth={2} /> : <AlertCircle className="h-4 w-4" strokeWidth={2} />}
             {toast.msg}
+          </div>
+        )}
+
+        {/* Plan change request modal */}
+        {planRequest.open && planRequest.targetPlan && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => !planRequest.submitting && setPlanRequest({ open: false, targetPlan: null, message: "", submitting: false })}
+          >
+            <div
+              className="w-full max-w-md rounded-2xl bg-card p-6 shadow-card"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-bold text-foreground">
+                Solicitar plano {planRequest.targetPlan}
+              </h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Será enviado um email para <span className="font-medium text-foreground">geral@edukamba.com</span> a informar do seu interesse em ativar o plano <span className="font-medium text-foreground">{planRequest.targetPlan}</span>. A nossa equipa entrará em contacto para formalizar o contrato.
+              </p>
+              <label className="mt-4 block text-xs font-medium text-foreground">Mensagem (opcional)</label>
+              <textarea
+                value={planRequest.message}
+                onChange={(e) => setPlanRequest((p) => ({ ...p, message: e.target.value }))}
+                rows={4}
+                placeholder="Indique necessidades específicas, prazos, número de alunos, etc."
+                className="mt-1 w-full rounded-xl border border-border bg-card p-3 text-sm shadow-soft outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+              <div className="mt-6 flex justify-end gap-2">
+                <button
+                  onClick={() => setPlanRequest({ open: false, targetPlan: null, message: "", submitting: false })}
+                  disabled={planRequest.submitting}
+                  className="h-10 rounded-full border border-border px-4 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={submitPlanRequest}
+                  disabled={planRequest.submitting}
+                  className="inline-flex h-10 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft hover:opacity-90 disabled:opacity-50"
+                >
+                  {planRequest.submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Enviar pedido
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

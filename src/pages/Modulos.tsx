@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Search, Package, Eye, EyeOff, RotateCcw, Check, AlertCircle } from "lucide-react";
+import { Search, Package, Eye, EyeOff, RotateCcw, Check, AlertCircle, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useModules, moduleMeta, ModuleKey } from "@/context/ModulesContext";
+import { useModules, moduleMeta, ModuleKey, modulePlan, isModuleAllowedForPlan } from "@/context/ModulesContext";
 
 const Modulos = () => {
-  const { modules, setModule, setAll, resetDefaults } = useModules();
+  const { modules, setModule, setAll, resetDefaults, plan } = useModules();
   const [search, setSearch] = useState("");
   const [toast, setToast] = useState<{ kind: "success" | "error"; msg: string } | null>(null);
 
@@ -17,9 +17,15 @@ const Modulos = () => {
   const list = useMemo(
     () =>
       (Object.keys(moduleMeta) as ModuleKey[])
-        .map((k) => ({ key: k, ...moduleMeta[k], enabled: modules[k] }))
+        .map((k) => ({
+          key: k,
+          ...moduleMeta[k],
+          enabled: modules[k],
+          requiredPlan: modulePlan[k],
+          allowed: isModuleAllowedForPlan(k, plan),
+        }))
         .filter((m) => m.label.toLowerCase().includes(search.toLowerCase()) || m.description.toLowerCase().includes(search.toLowerCase())),
-    [modules, search],
+    [modules, search, plan],
   );
 
   const total = (Object.keys(moduleMeta) as ModuleKey[]).length;
@@ -51,7 +57,9 @@ const Modulos = () => {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Módulos</h1>
-            <p className="text-sm text-muted-foreground">Active ou desactive módulos da plataforma. Os módulos desactivados ficam ocultos no menu lateral.</p>
+            <p className="text-sm text-muted-foreground">
+              Active ou desactive módulos da plataforma. Apenas os módulos incluídos no plano <span className="font-semibold text-foreground">{plan}</span> podem ser activados.
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -114,25 +122,37 @@ const Modulos = () => {
           {list.map((m) => (
             <div key={m.key} className={cn(
               "flex flex-col gap-3 rounded-2xl border bg-card p-5 shadow-card transition-colors",
-              m.enabled ? "border-border" : "border-border opacity-70",
+              !m.allowed ? "border-border opacity-60" : m.enabled ? "border-border" : "border-border opacity-70",
             )}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={cn("flex h-9 w-9 items-center justify-center rounded-xl", m.enabled ? "bg-pastel-blue text-pastel-blue-foreground" : "bg-muted text-muted-foreground")}>
-                      <Package className="h-4 w-4" strokeWidth={1.75} />
+                    <span className={cn("flex h-9 w-9 items-center justify-center rounded-xl", !m.allowed ? "bg-muted text-muted-foreground" : m.enabled ? "bg-pastel-blue text-pastel-blue-foreground" : "bg-muted text-muted-foreground")}>
+                      {m.allowed ? <Package className="h-4 w-4" strokeWidth={1.75} /> : <Lock className="h-4 w-4" strokeWidth={1.75} />}
                     </span>
                     <h3 className="font-semibold text-foreground">{m.label}</h3>
                   </div>
                   <p className="mt-2 text-xs text-muted-foreground">{m.description}</p>
                   <p className="mt-2 text-[11px] font-mono text-muted-foreground">{m.path}</p>
                 </div>
-                <Toggle checked={m.enabled} onChange={(v) => { setModule(m.key, v); showToast("success", `${m.label} ${v ? "activado" : "desactivado"}.`); }} />
+                {m.allowed ? (
+                  <Toggle checked={m.enabled} onChange={(v) => { setModule(m.key, v); showToast("success", `${m.label} ${v ? "activado" : "desactivado"}.`); }} />
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                    <Lock className="h-3 w-3" /> {m.requiredPlan}
+                  </span>
+                )}
               </div>
               <div className="mt-1">
-                <span className={cn("inline-block rounded-full px-2.5 py-1 text-[11px] font-medium", m.enabled ? "bg-pastel-green text-pastel-green-foreground" : "bg-pastel-pink text-pastel-pink-foreground")}>
-                  {m.enabled ? "Activo" : "Inactivo"}
-                </span>
+                {!m.allowed ? (
+                  <span className="inline-block rounded-full bg-pastel-yellow px-2.5 py-1 text-[11px] font-medium text-pastel-yellow-foreground">
+                    Disponível no plano {m.requiredPlan}
+                  </span>
+                ) : (
+                  <span className={cn("inline-block rounded-full px-2.5 py-1 text-[11px] font-medium", m.enabled ? "bg-pastel-green text-pastel-green-foreground" : "bg-pastel-pink text-pastel-pink-foreground")}>
+                    {m.enabled ? "Activo" : "Inactivo"}
+                  </span>
+                )}
               </div>
             </div>
           ))}

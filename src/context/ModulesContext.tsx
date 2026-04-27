@@ -1,4 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 export type ModuleKey =
   | "professores"
@@ -43,6 +45,39 @@ export const moduleMeta: Record<ModuleKey, { label: string; description: string;
   transportes: { label: "Transporte", description: "Giros escolares, paragens, inscrições e mensalidade do transporte.", path: "/transportes" },
 };
 
+export type PlanType = "Essencial" | "Pro" | "Enterprise";
+
+// Module → minimum plan required.
+export const modulePlan: Record<ModuleKey, PlanType> = {
+  // Essencial
+  professores: "Essencial",
+  alunos: "Essencial",
+  matriculas: "Essencial",
+  cursos: "Essencial",
+  turmas: "Essencial",
+  disciplinas: "Essencial",
+  educadores: "Essencial",
+  presencas: "Essencial",
+  horario: "Essencial",
+  avaliacoes: "Essencial",
+  eventos: "Essencial",
+  pagamentos: "Essencial",
+  financas: "Essencial",
+  relatorios: "Essencial",
+  // Pro
+  extracurriculares: "Pro",
+  pedidos: "Pro",
+  timesheet: "Pro",
+  // Enterprise
+  material: "Enterprise",
+  transportes: "Enterprise",
+};
+
+const planRank: Record<PlanType, number> = { Essencial: 1, Pro: 2, Enterprise: 3 };
+
+export const isModuleAllowedForPlan = (key: ModuleKey, plan: PlanType): boolean =>
+  planRank[plan] >= planRank[modulePlan[key]];
+
 const STORAGE_KEY = "edukamba.modules";
 
 const defaults: Record<ModuleKey, boolean> = (Object.keys(moduleMeta) as ModuleKey[]).reduce(
@@ -55,11 +90,16 @@ type Ctx = {
   setModule: (key: ModuleKey, enabled: boolean) => void;
   setAll: (enabled: boolean) => void;
   resetDefaults: () => void;
+  plan: PlanType;
+  isAllowed: (key: ModuleKey) => boolean;
 };
 
 const ModulesContext = createContext<Ctx | undefined>(undefined);
 
 export const ModulesProvider = ({ children }: { children: ReactNode }) => {
+  const { user } = useAuth();
+  const [plan, setPlan] = useState<PlanType>("Enterprise");
+
   const [modules, setModules] = useState<Record<ModuleKey, boolean>>(() => {
     if (typeof window === "undefined") return defaults;
     try {
@@ -80,20 +120,72 @@ export const ModulesProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [modules]);
 
+  // Load the school's current plan
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("school_id")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (!profile?.school_id || cancelled) return;
+      const { data: sub } = await supabase
+        .from("saas_subscriptions")
+        .select("plan_type")
+        .eq("school_id", profile.school_id)
+        .maybeSingle();
+      if (cancelled) return;
+      const p = (sub?.plan_type as PlanType) ?? "Enterprise";
+      if (p === "Essencial" || p === "Pro" || p === "Enterprise") setPlan(p);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  // Auto-disable modules that are not allowed for the current plan
+  useEffect(() => {
+    setModules((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      (Object.keys(moduleMeta) as ModuleKey[]).forEach((k) => {
+        if (!isModuleAllowedForPlan(k, plan) && next[k]) {
+          next[k] = false;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [plan]);
+
   const value = useMemo<Ctx>(
     () => ({
       modules,
-      setModule: (key, enabled) => setModules((prev) => ({ ...prev, [key]: enabled })),
+      setModule: (key, enabled) => {
+        // Block enabling a module that is not part of the current plan
+        if (enabled && !isModuleAllowedForPlan(key, plan)) return;
+        setModules((prev) => ({ ...prev, [key]: enabled }));
+      },
       setAll: (enabled) =>
         setModules(() =>
           (Object.keys(moduleMeta) as ModuleKey[]).reduce(
-            (acc, k) => ({ ...acc, [k]: enabled }),
+            (acc, k) => ({ ...acc, [k]: enabled && isModuleAllowedForPlan(k, plan) }),
             {} as Record<ModuleKey, boolean>,
           ),
         ),
-      resetDefaults: () => setModules(defaults),
+      resetDefaults: () =>
+        setModules(
+          (Object.keys(moduleMeta) as ModuleKey[]).reduce(
+            (acc, k) => ({ ...acc, [k]: isModuleAllowedForPlan(k, plan) }),
+            {} as Record<ModuleKey, boolean>,
+          ),
+        ),
+      plan,
+      isAllowed: (key) => isModuleAllowedForPlan(key, plan),
     }),
-    [modules],
+    [modules, plan],
   );
 
   return <ModulesContext.Provider value={value}>{children}</ModulesContext.Provider>;
@@ -107,6 +199,8 @@ export const useModules = () => {
       setModule: () => {},
       setAll: () => {},
       resetDefaults: () => {},
+      plan: "Enterprise" as PlanType,
+      isAllowed: () => true,
     } as Ctx;
   }
   return ctx;

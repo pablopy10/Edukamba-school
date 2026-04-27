@@ -8,3 +8,6 @@ verify_jwt = true
 
 [functions.invite-student]
 verify_jwt = true
+
+[functions.request-plan-change]
+verify_jwt = true
