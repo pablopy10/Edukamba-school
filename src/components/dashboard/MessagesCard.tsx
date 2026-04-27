@@ -9,13 +9,13 @@ const palette = [
 ];
 
 interface MessagesCardProps {
-  messages: { id: string; name: string; initials: string; text: string; time: string; unread: boolean; senderId: string | null }[];
+  messages: { id: string; name: string; initials: string; text: string; time: string; unread: boolean; contactId: string | null }[];
 }
 
 export const MessagesCard = ({ messages }: MessagesCardProps) => {
   const navigate = useNavigate();
-  const openChat = (senderId: string | null) => {
-    if (senderId) navigate(`/chat?to=${senderId}`);
+  const openChat = (contactId: string | null) => {
+    if (contactId) navigate(`/chat?to=${contactId}`);
     else navigate("/chat");
   };
   return (
@@ -39,7 +39,7 @@ export const MessagesCard = ({ messages }: MessagesCardProps) => {
           <button
             key={m.id}
             type="button"
-            onClick={() => openChat(m.senderId)}
+            onClick={() => openChat(m.contactId)}
             className="flex items-start gap-3 rounded-xl p-1 -m-1 text-left transition-colors hover:bg-muted/60"
           >
             <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold ${palette[i % palette.length]}`}>

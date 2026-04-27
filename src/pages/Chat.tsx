@@ -165,7 +165,8 @@ const Chat = () => {
     if (!toParam || contacts.length === 0) return;
     const exists = contacts.some((c) => c.id === toParam);
     if (exists) setActiveId(toParam);
-    else toast({ title: "Contacto não disponível", variant: "destructive" });
+    // Se o contacto não estiver disponível (ex.: foi removido ou tem perfil incompatível),
+    // simplesmente não selecionamos — sem alarme visual.
     searchParams.delete("to");
     setSearchParams(searchParams, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps

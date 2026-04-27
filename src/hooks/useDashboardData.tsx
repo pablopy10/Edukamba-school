@@ -34,7 +34,7 @@ export interface MessagePreview {
   text: string;
   time: string;
   unread: boolean;
-  senderId: string | null;
+  contactId: string | null;
 }
 
 const dayLabels = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -179,9 +179,31 @@ export const useDashboardData = () => {
           profiles: { full_name: string | null } | null;
         };
         const msgs = (messagesRes.data ?? []) as unknown as MsgRow[];
+        // Need names for the "other" participant, not just the sender.
+        // Fetch receiver names for outgoing messages.
+        const receiverIds = Array.from(
+          new Set(
+            msgs
+              .filter((m) => currentUserId && m.sender_id === currentUserId && m.receiver_id)
+              .map((m) => m.receiver_id as string),
+          ),
+        );
+        let receiverNameMap = new Map<string, string>();
+        if (receiverIds.length > 0) {
+          const { data: profs } = await supabase
+            .from("profiles")
+            .select("id, full_name")
+            .in("id", receiverIds);
+          (profs ?? []).forEach((p) => receiverNameMap.set(p.id, p.full_name ?? "Desconhecido"));
+        }
+
         setMessages(
           msgs.map((m) => {
-            const name = m.profiles?.full_name ?? "Desconhecido";
+            const isOutgoing = !!currentUserId && m.sender_id === currentUserId;
+            const contactId = isOutgoing ? m.receiver_id : m.sender_id;
+            const name = isOutgoing
+              ? (m.receiver_id ? receiverNameMap.get(m.receiver_id) ?? "Desconhecido" : "Desconhecido")
+              : (m.profiles?.full_name ?? "Desconhecido");
             const d = new Date(m.created_at);
             const time = d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
             const isIncoming = !!currentUserId && m.receiver_id === currentUserId && m.sender_id !== currentUserId;
@@ -192,7 +214,7 @@ export const useDashboardData = () => {
               text: m.content,
               time,
               unread: isIncoming && !m.is_read,
-              senderId: m.sender_id,
+              contactId,
             };
           }),
         );
