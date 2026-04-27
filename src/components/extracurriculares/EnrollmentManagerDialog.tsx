@@ -168,7 +168,7 @@ export function EnrollmentManagerDialog({ open, onOpenChange, activity, schoolId
           {canEdit && activity?.enrollment_fee && activity.enrollment_fee > 0 && (
             <Button size="sm" onClick={generateAllFees} disabled={working}>
               <Sparkles className="h-4 w-4 mr-1" />
-              Gerar propinas
+              Gerar cobranças
             </Button>
           )}
         </div>
