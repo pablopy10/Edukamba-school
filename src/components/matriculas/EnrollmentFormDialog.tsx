@@ -272,6 +272,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -435,5 +436,17 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {accessPrompt && (
+      <CreateStudentAccessDialog
+        open={!!accessPrompt}
+        onOpenChange={(v) => { if (!v) setAccessPrompt(null); }}
+        studentId={accessPrompt.studentId}
+        studentName={accessPrompt.studentName}
+        defaultEmail={accessPrompt.defaultEmail}
+        onCreated={() => setAccessPrompt(null)}
+      />
+    )}
+    </>
   );
 };
