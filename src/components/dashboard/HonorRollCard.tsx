@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { Medal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface HonorEntry {
   id: string;
   name: string;
   avg: number;
 }
+
+type Term = { id: string; term_number: number; name: string; start_date: string; end_date: string };
 
 const medalColor = (i: number) =>
   i === 0
@@ -19,23 +22,64 @@ const medalColor = (i: number) =>
 
 export const HonorRollCard = () => {
   const [entries, setEntries] = useState<HonorEntry[]>([]);
+  const [terms, setTerms] = useState<Term[]>([]);
+  const [selectedTermId, setSelectedTermId] = useState<string>("all");
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadTerms = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("school_id")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (!profile?.school_id) return;
+      const { data } = await supabase
+        .from("academic_terms")
+        .select("id, term_number, name, start_date, end_date")
+        .eq("school_id", profile.school_id)
+        .order("term_number");
+      if (cancelled) return;
+      const ts = (data ?? []) as Term[];
+      setTerms(ts);
+      // Auto-select current term
+      const today = new Date().toISOString().slice(0, 10);
+      const current = ts.find((t) => today >= t.start_date && today <= t.end_date);
+      if (current) setSelectedTermId(current.id);
+    };
+    loadTerms();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       const { data } = await supabase
         .from("grades")
-        .select("score, students(id, full_name)");
+        .select("score, students(id, full_name), assessments(date, term_id)");
 
       type Row = {
         score: number;
         students: { id: string; full_name: string } | null;
+        assessments: { date: string | null; term_id: string | null } | null;
       };
 
       const buckets = new Map<string, { name: string; sum: number; count: number }>();
       ((data ?? []) as unknown as Row[]).forEach((g) => {
         const s = g.students;
         if (!s) return;
+        // Term filtering
+        if (selectedTermId !== "all") {
+          const a = g.assessments;
+          let effective = a?.term_id ?? null;
+          if (!effective && a?.date) {
+            const t = terms.find((tt) => a.date! >= tt.start_date && a.date! <= tt.end_date);
+            effective = t?.id ?? null;
+          }
+          if (effective !== selectedTermId) return;
+        }
         const b = buckets.get(s.id) ?? { name: s.full_name, sum: 0, count: 0 };
         b.sum += Number(g.score) || 0;
         b.count += 1;
@@ -51,21 +95,34 @@ export const HonorRollCard = () => {
       if (!cancelled) setEntries(ranked);
     };
     load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    return () => { cancelled = true; };
+  }, [selectedTermId, terms]);
 
   return (
     <div className="flex h-full flex-col gap-4 rounded-2xl bg-card p-5 shadow-card">
-      <div className="flex items-center gap-2">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pastel-yellow text-pastel-yellow-foreground">
-          <Medal className="h-5 w-5" strokeWidth={1.75} />
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pastel-yellow text-pastel-yellow-foreground">
+            <Medal className="h-5 w-5" strokeWidth={1.75} />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-foreground">Quadro de Honra</h3>
+            <p className="text-xs text-muted-foreground">Melhores médias</p>
+          </div>
         </div>
-        <div>
-          <h3 className="text-base font-bold text-foreground">Quadro de Honra</h3>
-          <p className="text-xs text-muted-foreground">Melhores médias</p>
-        </div>
+        {terms.length > 0 && (
+          <Select value={selectedTermId} onValueChange={setSelectedTermId}>
+            <SelectTrigger className="h-8 w-[140px] rounded-full text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              <SelectItem value="all">Todo o ano</SelectItem>
+              {terms.map((t) => (
+                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {entries.length === 0 ? (
