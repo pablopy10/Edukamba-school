@@ -218,6 +218,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         });
         if (eErr) throw eErr;
         toast({ title: "Aluno e matrícula criados" });
+        maybePromptAccess(created.id, fullName.trim(), email || null);
       } else {
         if (!studentId) { toast({ title: "Seleccione o aluno", variant: "destructive" }); setLoading(false); return; }
         // Prevent duplicate enrollment on the same year
@@ -243,9 +244,15 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         });
         if (error) throw error;
         toast({ title: "Matrícula renovada" });
+        await maybePromptAccessExisting(studentId);
       }
       onSaved();
-      onOpenChange(false);
+      // Keep the dialog open if we are about to show access prompt; otherwise close.
+      if (!accessPromptPendingRef.current) {
+        onOpenChange(false);
+      } else {
+        accessPromptPendingRef.current = false;
+      }
     } catch (e: any) {
       toast({ title: "Erro", description: e?.message ?? String(e), variant: "destructive" });
     } finally {
