@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type AvatarColor = "lilac" | "blue" | "yellow" | "green" | "pink";
 
@@ -113,12 +114,34 @@ interface FeeRow {
 interface PaymentRow {
   id: string;
   student_fee_id: string | null;
+  activity_fee_id?: string | null;
+  transport_fee_id?: string | null;
   amount_paid: number;
   method: string | null;
   status: string;
   proof_url: string | null;
   payment_date: string | null;
   rejection_reason: string | null;
+}
+
+interface ActivityFeeRow {
+  id: string;
+  amount_due: number;
+  due_date: string;
+  is_paid: boolean | null;
+  month_index: number | null;
+  activity_id: string;
+  activity?: { id: string; name: string } | null;
+}
+
+interface TransportFeeRow {
+  id: string;
+  amount_due: number;
+  due_date: string;
+  is_paid: boolean | null;
+  month_index: number | null;
+  route_id: string;
+  route?: { id: string; name: string } | null;
 }
 
 const StatPill = ({ label, value, color }: { label: string; value: string; color: AvatarColor }) => (
@@ -141,6 +164,10 @@ const AlunoPerfil = () => {
   const [fees, setFees] = useState<FeeRow[]>([]);
   const [remindingFeeId, setRemindingFeeId] = useState<string | null>(null);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [activityFees, setActivityFees] = useState<ActivityFeeRow[]>([]);
+  const [activityPayments, setActivityPayments] = useState<PaymentRow[]>([]);
+  const [transportFees, setTransportFees] = useState<TransportFeeRow[]>([]);
+  const [transportPayments, setTransportPayments] = useState<PaymentRow[]>([]);
   const [proofDialogFee, setProofDialogFee] = useState<FeeRow | null>(null);
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofMethod, setProofMethod] = useState<string>("transferencia");
@@ -245,6 +272,45 @@ const AlunoPerfil = () => {
       } else if (!cancelled) {
         setPayments([]);
       }
+
+      // Activity (extracurricular) fees
+      const { data: actFeeRows } = await supabase
+        .from("activity_fees")
+        .select("id, amount_due, due_date, is_paid, month_index, activity_id, activity:extracurricular_activities(id, name)")
+        .eq("student_id", id)
+        .order("due_date", { ascending: true });
+      if (!cancelled) setActivityFees((actFeeRows ?? []) as unknown as ActivityFeeRow[]);
+      const actIds = (actFeeRows ?? []).map((f) => f.id);
+      if (actIds.length > 0) {
+        const { data: actPayRows } = await supabase
+          .from("payments")
+          .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, rejection_reason")
+          .in("activity_fee_id", actIds)
+          .order("payment_date", { ascending: false });
+        if (!cancelled) setActivityPayments((actPayRows ?? []) as PaymentRow[]);
+      } else if (!cancelled) {
+        setActivityPayments([]);
+      }
+
+      // Transport fees
+      const { data: trFeeRows } = await supabase
+        .from("transport_fees")
+        .select("id, amount_due, due_date, is_paid, month_index, route_id, route:transport_routes(id, name)")
+        .eq("student_id", id)
+        .order("due_date", { ascending: true });
+      if (!cancelled) setTransportFees((trFeeRows ?? []) as unknown as TransportFeeRow[]);
+      const trIds = (trFeeRows ?? []).map((f) => f.id);
+      if (trIds.length > 0) {
+        const { data: trPayRows } = await supabase
+          .from("payments")
+          .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, rejection_reason")
+          .in("transport_fee_id", trIds)
+          .order("payment_date", { ascending: false });
+        if (!cancelled) setTransportPayments((trPayRows ?? []) as PaymentRow[]);
+      } else if (!cancelled) {
+        setTransportPayments([]);
+      }
+
       if (!cancelled) {
         setLoading(false);
       }
@@ -379,6 +445,38 @@ const AlunoPerfil = () => {
     const overdue = fees.filter((f) => !f.is_paid && new Date(f.due_date) < new Date()).length;
     return { paid, pending, overdue };
   }, [fees]);
+
+  const activityFeesSummary = useMemo(() => {
+    const paid = activityFees.filter((f) => f.is_paid).reduce((s, f) => s + Number(f.amount_due), 0);
+    const pending = activityFees.filter((f) => !f.is_paid).reduce((s, f) => s + Number(f.amount_due), 0);
+    const overdue = activityFees.filter((f) => !f.is_paid && new Date(f.due_date) < new Date()).length;
+    return { paid, pending, overdue };
+  }, [activityFees]);
+
+  const transportFeesSummary = useMemo(() => {
+    const paid = transportFees.filter((f) => f.is_paid).reduce((s, f) => s + Number(f.amount_due), 0);
+    const pending = transportFees.filter((f) => !f.is_paid).reduce((s, f) => s + Number(f.amount_due), 0);
+    const overdue = transportFees.filter((f) => !f.is_paid && new Date(f.due_date) < new Date()).length;
+    return { paid, pending, overdue };
+  }, [transportFees]);
+
+  const latestPaymentByActivityFee = useMemo(() => {
+    const map = new Map<string, PaymentRow>();
+    activityPayments.forEach((p) => {
+      if (!p.activity_fee_id) return;
+      if (!map.has(p.activity_fee_id)) map.set(p.activity_fee_id, p);
+    });
+    return map;
+  }, [activityPayments]);
+
+  const latestPaymentByTransportFee = useMemo(() => {
+    const map = new Map<string, PaymentRow>();
+    transportPayments.forEach((p) => {
+      if (!p.transport_fee_id) return;
+      if (!map.has(p.transport_fee_id)) map.set(p.transport_fee_id, p);
+    });
+    return map;
+  }, [transportPayments]);
 
   const scheduleByDay = useMemo(() => {
     const days: Record<number, ScheduleRow[]> = {};
@@ -524,93 +622,221 @@ const AlunoPerfil = () => {
           <StatPill label="Disciplinas" value={String(subjectsAvg.length)} color="yellow" />
         </div>
 
-        {/* Propinas */}
+        {/* Pagamentos */}
         <div className="rounded-2xl bg-card shadow-card">
-          <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <Wallet className="h-5 w-5 text-pastel-yellow-foreground" strokeWidth={1.75} />
-              <h2 className="text-lg font-bold text-foreground">Propinas</h2>
-            </div>
-            <div className="flex flex-wrap gap-2 text-xs">
-              <span className="rounded-full bg-pastel-green/60 px-3 py-1 font-medium text-pastel-green-foreground">Pago: {fmtAOA(feesSummary.paid)}</span>
-              <span className="rounded-full bg-pastel-yellow/60 px-3 py-1 font-medium text-pastel-yellow-foreground">Em dívida: {fmtAOA(feesSummary.pending)}</span>
-              {feesSummary.overdue > 0 && (
-                <span className="rounded-full bg-pastel-pink/60 px-3 py-1 font-medium text-pastel-pink-foreground">{feesSummary.overdue} em atraso</span>
-              )}
-            </div>
+          <div className="flex items-center gap-2 border-b border-border p-5">
+            <Wallet className="h-5 w-5 text-pastel-yellow-foreground" strokeWidth={1.75} />
+            <h2 className="text-lg font-bold text-foreground">Pagamentos</h2>
           </div>
-          {fees.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Sem propinas geradas para este aluno.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-pastel-yellow/30 text-left text-xs uppercase tracking-wider text-pastel-yellow-foreground">
-                    <th className="py-3 pl-5 pr-4 font-semibold">Mês</th>
-                    <th className="py-3 pr-4 font-semibold">Vencimento</th>
-                    <th className="py-3 pr-4 font-semibold">Valor</th>
-                    <th className="py-3 pr-4 font-semibold">Estado</th>
-                    <th className="py-3 pr-5 text-right font-semibold">Ação</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {fees.map((f) => {
-                    const overdue = !f.is_paid && new Date(f.due_date) < new Date();
-                    const pay = latestPaymentByFee.get(f.id);
-                    const pendingValidation = !!pay && pay.status === "pendente";
-                    const rejected = !!pay && pay.status === "rejeitado";
-                    return (
-                      <tr key={f.id} className="border-b border-border last:border-0 hover:bg-muted/40">
-                        <td className="py-3 pl-5 pr-4 font-medium text-foreground">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
-                        <td className="py-3 pr-4 text-muted-foreground">{formatDate(f.due_date)}</td>
-                        <td className="py-3 pr-4 font-semibold text-foreground">{fmtAOA(Number(f.amount_due))}</td>
-                        <td className="py-3 pr-4">
-                          {f.is_paid ? (
-                            <span className="rounded-full bg-pastel-green px-3 py-1 text-xs font-semibold text-pastel-green-foreground">Pago</span>
-                          ) : pendingValidation ? (
-                            <span className="rounded-full bg-pastel-blue px-3 py-1 text-xs font-semibold text-pastel-blue-foreground">A validar</span>
-                          ) : rejected ? (
-                            <span className="rounded-full bg-pastel-pink px-3 py-1 text-xs font-semibold text-pastel-pink-foreground" title={pay?.rejection_reason ?? undefined}>Rejeitado</span>
-                          ) : overdue ? (
-                            <span className="rounded-full bg-pastel-pink px-3 py-1 text-xs font-semibold text-pastel-pink-foreground">Em atraso</span>
-                          ) : (
-                            <span className="rounded-full bg-pastel-yellow px-3 py-1 text-xs font-semibold text-pastel-yellow-foreground">Pendente</span>
-                          )}
-                        </td>
-                        <td className="py-3 pr-5 text-right">
-                          {!f.is_paid && (
-                            <div className="flex flex-wrap justify-end gap-2">
-                              {!pendingValidation && (
-                                <Button size="sm" variant="outline" className="gap-2" onClick={() => openProofDialog(f)}>
-                                  <Upload className="h-3.5 w-3.5" />
-                                  {rejected ? "Reenviar" : "Comprovativo"}
-                                </Button>
-                              )}
-                              {pendingValidation && (
-                                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                                  <Paperclip className="h-3.5 w-3.5" /> Aguarda validação
-                                </span>
-                              )}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-2"
-                                onClick={() => sendReminder(f)}
-                                disabled={remindingFeeId === f.id || !student.parent_id}
-                              >
-                                {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                                Cobrar
-                              </Button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          <Tabs defaultValue="propinas" className="w-full">
+            <div className="px-5 pt-4">
+              <TabsList>
+                <TabsTrigger value="propinas">Propinas</TabsTrigger>
+                <TabsTrigger value="extracurriculares">Extracurriculares</TabsTrigger>
+                <TabsTrigger value="transporte">Transporte</TabsTrigger>
+              </TabsList>
             </div>
-          )}
+
+            <TabsContent value="propinas" className="mt-0">
+              <div className="flex flex-wrap gap-2 px-5 pb-3 pt-3 text-xs">
+                <span className="rounded-full bg-pastel-green/60 px-3 py-1 font-medium text-pastel-green-foreground">Pago: {fmtAOA(feesSummary.paid)}</span>
+                <span className="rounded-full bg-pastel-yellow/60 px-3 py-1 font-medium text-pastel-yellow-foreground">Em dívida: {fmtAOA(feesSummary.pending)}</span>
+                {feesSummary.overdue > 0 && (
+                  <span className="rounded-full bg-pastel-pink/60 px-3 py-1 font-medium text-pastel-pink-foreground">{feesSummary.overdue} em atraso</span>
+                )}
+              </div>
+              {fees.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">Sem propinas geradas para este aluno.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-pastel-yellow/30 text-left text-xs uppercase tracking-wider text-pastel-yellow-foreground">
+                        <th className="py-3 pl-5 pr-4 font-semibold">Mês</th>
+                        <th className="py-3 pr-4 font-semibold">Vencimento</th>
+                        <th className="py-3 pr-4 font-semibold">Valor</th>
+                        <th className="py-3 pr-4 font-semibold">Estado</th>
+                        <th className="py-3 pr-5 text-right font-semibold">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fees.map((f) => {
+                        const overdue = !f.is_paid && new Date(f.due_date) < new Date();
+                        const pay = latestPaymentByFee.get(f.id);
+                        const pendingValidation = !!pay && pay.status === "pendente";
+                        const rejected = !!pay && pay.status === "rejeitado";
+                        return (
+                          <tr key={f.id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                            <td className="py-3 pl-5 pr-4 font-medium text-foreground">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
+                            <td className="py-3 pr-4 text-muted-foreground">{formatDate(f.due_date)}</td>
+                            <td className="py-3 pr-4 font-semibold text-foreground">{fmtAOA(Number(f.amount_due))}</td>
+                            <td className="py-3 pr-4">
+                              {f.is_paid ? (
+                                <span className="rounded-full bg-pastel-green px-3 py-1 text-xs font-semibold text-pastel-green-foreground">Pago</span>
+                              ) : pendingValidation ? (
+                                <span className="rounded-full bg-pastel-blue px-3 py-1 text-xs font-semibold text-pastel-blue-foreground">A validar</span>
+                              ) : rejected ? (
+                                <span className="rounded-full bg-pastel-pink px-3 py-1 text-xs font-semibold text-pastel-pink-foreground" title={pay?.rejection_reason ?? undefined}>Rejeitado</span>
+                              ) : overdue ? (
+                                <span className="rounded-full bg-pastel-pink px-3 py-1 text-xs font-semibold text-pastel-pink-foreground">Em atraso</span>
+                              ) : (
+                                <span className="rounded-full bg-pastel-yellow px-3 py-1 text-xs font-semibold text-pastel-yellow-foreground">Pendente</span>
+                              )}
+                            </td>
+                            <td className="py-3 pr-5 text-right">
+                              {!f.is_paid && (
+                                <div className="flex flex-wrap justify-end gap-2">
+                                  {!pendingValidation && (
+                                    <Button size="sm" variant="outline" className="gap-2" onClick={() => openProofDialog(f)}>
+                                      <Upload className="h-3.5 w-3.5" />
+                                      {rejected ? "Reenviar" : "Comprovativo"}
+                                    </Button>
+                                  )}
+                                  {pendingValidation && (
+                                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                      <Paperclip className="h-3.5 w-3.5" /> Aguarda validação
+                                    </span>
+                                  )}
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-2"
+                                    onClick={() => sendReminder(f)}
+                                    disabled={remindingFeeId === f.id || !student.parent_id}
+                                  >
+                                    {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                    Cobrar
+                                  </Button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="extracurriculares" className="mt-0">
+              <div className="flex flex-wrap gap-2 px-5 pb-3 pt-3 text-xs">
+                <span className="rounded-full bg-pastel-green/60 px-3 py-1 font-medium text-pastel-green-foreground">Pago: {fmtAOA(activityFeesSummary.paid)}</span>
+                <span className="rounded-full bg-pastel-yellow/60 px-3 py-1 font-medium text-pastel-yellow-foreground">Em dívida: {fmtAOA(activityFeesSummary.pending)}</span>
+                {activityFeesSummary.overdue > 0 && (
+                  <span className="rounded-full bg-pastel-pink/60 px-3 py-1 font-medium text-pastel-pink-foreground">{activityFeesSummary.overdue} em atraso</span>
+                )}
+              </div>
+              {activityFees.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">Sem cobranças de atividades extracurriculares.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-pastel-blue/30 text-left text-xs uppercase tracking-wider text-pastel-blue-foreground">
+                        <th className="py-3 pl-5 pr-4 font-semibold">Atividade</th>
+                        <th className="py-3 pr-4 font-semibold">Mês</th>
+                        <th className="py-3 pr-4 font-semibold">Vencimento</th>
+                        <th className="py-3 pr-4 font-semibold">Valor</th>
+                        <th className="py-3 pr-5 font-semibold">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activityFees.map((f) => {
+                        const overdue = !f.is_paid && new Date(f.due_date) < new Date();
+                        const pay = latestPaymentByActivityFee.get(f.id);
+                        const pendingValidation = !!pay && pay.status === "pendente";
+                        const rejected = !!pay && pay.status === "rejeitado";
+                        return (
+                          <tr key={f.id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                            <td className="py-3 pl-5 pr-4 font-medium text-foreground">{f.activity?.name ?? "—"}</td>
+                            <td className="py-3 pr-4">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
+                            <td className="py-3 pr-4 text-muted-foreground">{formatDate(f.due_date)}</td>
+                            <td className="py-3 pr-4 font-semibold text-foreground">{fmtAOA(Number(f.amount_due))}</td>
+                            <td className="py-3 pr-5">
+                              {f.is_paid ? (
+                                <span className="rounded-full bg-pastel-green px-3 py-1 text-xs font-semibold text-pastel-green-foreground">Pago</span>
+                              ) : pendingValidation ? (
+                                <span className="rounded-full bg-pastel-blue px-3 py-1 text-xs font-semibold text-pastel-blue-foreground">A validar</span>
+                              ) : rejected ? (
+                                <span className="rounded-full bg-pastel-pink px-3 py-1 text-xs font-semibold text-pastel-pink-foreground">Rejeitado</span>
+                              ) : overdue ? (
+                                <span className="rounded-full bg-pastel-pink px-3 py-1 text-xs font-semibold text-pastel-pink-foreground">Em atraso</span>
+                              ) : (
+                                <span className="rounded-full bg-pastel-yellow px-3 py-1 text-xs font-semibold text-pastel-yellow-foreground">Pendente</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <div className="px-5 py-3 text-right">
+                    <Link to="/pagamentos" className="text-xs font-medium text-pastel-blue-foreground hover:underline">Gerir pagamentos →</Link>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="transporte" className="mt-0">
+              <div className="flex flex-wrap gap-2 px-5 pb-3 pt-3 text-xs">
+                <span className="rounded-full bg-pastel-green/60 px-3 py-1 font-medium text-pastel-green-foreground">Pago: {fmtAOA(transportFeesSummary.paid)}</span>
+                <span className="rounded-full bg-pastel-yellow/60 px-3 py-1 font-medium text-pastel-yellow-foreground">Em dívida: {fmtAOA(transportFeesSummary.pending)}</span>
+                {transportFeesSummary.overdue > 0 && (
+                  <span className="rounded-full bg-pastel-pink/60 px-3 py-1 font-medium text-pastel-pink-foreground">{transportFeesSummary.overdue} em atraso</span>
+                )}
+              </div>
+              {transportFees.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">Sem cobranças de transporte para este aluno.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-pastel-lilac/30 text-left text-xs uppercase tracking-wider text-pastel-lilac-foreground">
+                        <th className="py-3 pl-5 pr-4 font-semibold">Rota</th>
+                        <th className="py-3 pr-4 font-semibold">Mês</th>
+                        <th className="py-3 pr-4 font-semibold">Vencimento</th>
+                        <th className="py-3 pr-4 font-semibold">Valor</th>
+                        <th className="py-3 pr-5 font-semibold">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {transportFees.map((f) => {
+                        const overdue = !f.is_paid && new Date(f.due_date) < new Date();
+                        const pay = latestPaymentByTransportFee.get(f.id);
+                        const pendingValidation = !!pay && pay.status === "pendente";
+                        const rejected = !!pay && pay.status === "rejeitado";
+                        return (
+                          <tr key={f.id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                            <td className="py-3 pl-5 pr-4 font-medium text-foreground">{f.route?.name ?? "—"}</td>
+                            <td className="py-3 pr-4">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
+                            <td className="py-3 pr-4 text-muted-foreground">{formatDate(f.due_date)}</td>
+                            <td className="py-3 pr-4 font-semibold text-foreground">{fmtAOA(Number(f.amount_due))}</td>
+                            <td className="py-3 pr-5">
+                              {f.is_paid ? (
+                                <span className="rounded-full bg-pastel-green px-3 py-1 text-xs font-semibold text-pastel-green-foreground">Pago</span>
+                              ) : pendingValidation ? (
+                                <span className="rounded-full bg-pastel-blue px-3 py-1 text-xs font-semibold text-pastel-blue-foreground">A validar</span>
+                              ) : rejected ? (
+                                <span className="rounded-full bg-pastel-pink px-3 py-1 text-xs font-semibold text-pastel-pink-foreground">Rejeitado</span>
+                              ) : overdue ? (
+                                <span className="rounded-full bg-pastel-pink px-3 py-1 text-xs font-semibold text-pastel-pink-foreground">Em atraso</span>
+                              ) : (
+                                <span className="rounded-full bg-pastel-yellow px-3 py-1 text-xs font-semibold text-pastel-yellow-foreground">Pendente</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <div className="px-5 py-3 text-right">
+                    <Link to="/pagamentos" className="text-xs font-medium text-pastel-blue-foreground hover:underline">Gerir pagamentos →</Link>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </div>
 
         {/* Schedule + guardian */}

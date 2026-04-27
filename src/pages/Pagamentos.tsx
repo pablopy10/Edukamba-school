@@ -16,7 +16,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
 
@@ -74,6 +74,7 @@ type PaymentListRow = {
   id: string;
   student_fee_id: string | null;
   activity_fee_id: string | null;
+  transport_fee_id: string | null;
   amount_paid: number;
   method: string | null;
   status: string;
@@ -102,6 +103,26 @@ type ActivityFeeRow = {
     classroom?: { id: string; name: string } | null;
   } | null;
   activity?: { id: string; name: string; category: string | null } | null;
+};
+
+type TransportFeeRow = {
+  id: string;
+  amount_due: number;
+  due_date: string;
+  is_paid: boolean | null;
+  month_index: number | null;
+  student_id: string;
+  route_id: string;
+  enrollment_id: string;
+  academic_year_id: string | null;
+  student?: {
+    id: string;
+    full_name: string;
+    parent_id: string | null;
+    classroom_id: string | null;
+    classroom?: { id: string; name: string } | null;
+  } | null;
+  route?: { id: string; name: string } | null;
 };
 
 const fmtAOA = (n: number) =>
@@ -176,10 +197,21 @@ const Pagamentos = () => {
   const [activitiesList, setActivitiesList] = useState<Array<{ id: string; name: string }>>([]);
   const [remindingActFeeId, setRemindingActFeeId] = useState<string | null>(null);
 
+  // Transport fees
+  const [allTransportFees, setAllTransportFees] = useState<TransportFeeRow[]>([]);
+  const [transportPayments, setTransportPayments] = useState<PaymentListRow[]>([]);
+  const [trFilter, setTrFilter] = useState<"all" | "paid" | "pending" | "overdue">("pending");
+  const [trYearFilter, setTrYearFilter] = useState<string>("all");
+  const [trRouteFilter, setTrRouteFilter] = useState<string>("all");
+  const [trSearch, setTrSearch] = useState("");
+  const [routesList, setRoutesList] = useState<Array<{ id: string; name: string }>>([]);
+  const [remindingTrFeeId, setRemindingTrFeeId] = useState<string | null>(null);
+
   // Staff "registar pagamento" dialog (works for both tuition and activity fees)
   const [recordDialog, setRecordDialog] = useState<
     | { kind: "fee"; fee: FeeListRow }
     | { kind: "activity"; fee: ActivityFeeRow }
+    | { kind: "transport"; fee: TransportFeeRow }
     | null
   >(null);
   const [recordFile, setRecordFile] = useState<File | null>(null);
@@ -202,6 +234,13 @@ const Pagamentos = () => {
     setRecordMethod("transferencia");
     setRecordNotes("");
   };
+  const openRecordForTransport = (fee: TransportFeeRow) => {
+    setRecordDialog({ kind: "transport", fee });
+    setRecordFile(null);
+    setRecordAmount(String(fee.amount_due));
+    setRecordMethod("transferencia");
+    setRecordNotes("");
+  };
 
   const submitStaffPayment = async () => {
     if (!recordDialog || !schoolId) return;
@@ -213,9 +252,14 @@ const Pagamentos = () => {
     const userId = userRes.user?.id;
     if (!userId) { toast({ title: "Sessão expirada", variant: "destructive" }); return; }
 
-    const isFee = recordDialog.kind === "fee";
+    const kind = recordDialog.kind;
     const fee = recordDialog.fee;
-    const studentId = isFee ? (fee as FeeListRow).student_id : (fee as ActivityFeeRow).student_id;
+    const studentId =
+      kind === "fee"
+        ? (fee as FeeListRow).student_id
+        : kind === "activity"
+        ? (fee as ActivityFeeRow).student_id
+        : (fee as TransportFeeRow).student_id;
     setRecordUploading(true);
     const ext = recordFile.name.split(".").pop() || "bin";
     const path = `${schoolId}/${studentId}/${fee.id}-${Date.now()}.${ext}`;
@@ -236,8 +280,9 @@ const Pagamentos = () => {
       validated_at: new Date().toISOString(),
       school_id: schoolId,
       notes: recordNotes || null,
-      student_fee_id: isFee ? fee.id : null,
-      activity_fee_id: isFee ? null : fee.id,
+      student_fee_id: kind === "fee" ? fee.id : null,
+      activity_fee_id: kind === "activity" ? fee.id : null,
+      transport_fee_id: kind === "transport" ? fee.id : null,
     };
     const { error: insErr } = await supabase.from("payments").insert(insertPayload);
     if (insErr) {
@@ -245,18 +290,21 @@ const Pagamentos = () => {
       toast({ title: "Erro a registar pagamento", description: insErr.message, variant: "destructive" });
       return;
     }
-    const { error: feeErr } = isFee
-      ? await supabase.from("student_fees").update({ is_paid: true }).eq("id", fee.id)
-      : await supabase.from("activity_fees").update({ is_paid: true }).eq("id", fee.id);
+    const { error: feeErr } =
+      kind === "fee"
+        ? await supabase.from("student_fees").update({ is_paid: true }).eq("id", fee.id)
+        : kind === "activity"
+        ? await supabase.from("activity_fees").update({ is_paid: true }).eq("id", fee.id)
+        : await supabase.from("transport_fees").update({ is_paid: true }).eq("id", fee.id);
     if (feeErr) {
       setRecordUploading(false);
       toast({ title: "Pagamento registado mas falha a marcar como pago", description: feeErr.message, variant: "destructive" });
       return;
     }
     // Notificar encarregado
-    const parentId = (fee as FeeListRow | ActivityFeeRow).student?.parent_id;
+    const parentId = (fee as FeeListRow | ActivityFeeRow | TransportFeeRow).student?.parent_id;
     if (parentId) {
-      if (isFee) {
+      if (kind === "fee") {
         const f = fee as FeeListRow;
         const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
         await supabase.from("notifications").insert({
@@ -267,7 +315,7 @@ const Pagamentos = () => {
           category: "pagamento",
           link: "/financas",
         });
-      } else {
+      } else if (kind === "activity") {
         const f = fee as ActivityFeeRow;
         await supabase.from("notifications").insert({
           recipient_id: parentId,
@@ -276,6 +324,17 @@ const Pagamentos = () => {
           description: `A escola registou o pagamento da atividade ${f.activity?.name ?? ""} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}). Pode consultar o comprovativo no portal.`,
           category: "pagamento",
           link: "/extracurriculares",
+        });
+      } else {
+        const f = fee as TransportFeeRow;
+        const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
+        await supabase.from("notifications").insert({
+          recipient_id: parentId,
+          school_id: schoolId,
+          title: `Pagamento de transporte registado — ${monthLabel}`.trim(),
+          description: `A escola registou o pagamento do transporte (${f.route?.name ?? "rota"}) de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).`,
+          category: "pagamento",
+          link: "/transportes",
         });
       }
     }
@@ -334,7 +393,7 @@ const Pagamentos = () => {
       if (feeIds.length > 0) {
         const { data: payRows } = await supabase
           .from("payments")
-          .select("id, student_fee_id, activity_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+          .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
           .in("student_fee_id", feeIds)
           .order("payment_date", { ascending: false });
         setPayments((payRows ?? []) as PaymentListRow[]);
@@ -362,18 +421,48 @@ const Pagamentos = () => {
       if (actFeeIds.length > 0) {
         const { data: actPayRows } = await supabase
           .from("payments")
-          .select("id, student_fee_id, activity_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+          .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
           .in("activity_fee_id", actFeeIds)
           .order("payment_date", { ascending: false });
         setActivityPayments((actPayRows ?? []) as PaymentListRow[]);
       } else {
         setActivityPayments([]);
       }
+
+      // Transport fees + lista de rotas para filtros
+      const [{ data: trFees }, { data: rtsList }] = await Promise.all([
+        supabase
+          .from("transport_fees")
+          .select("id, amount_due, due_date, is_paid, month_index, student_id, route_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), route:transport_routes(id, name)")
+          .eq("school_id", sId)
+          .order("due_date", { ascending: true }),
+        supabase
+          .from("transport_routes")
+          .select("id, name")
+          .eq("school_id", sId)
+          .order("name"),
+      ]);
+      setAllTransportFees((trFees ?? []) as unknown as TransportFeeRow[]);
+      setRoutesList((rtsList ?? []) as Array<{ id: string; name: string }>);
+
+      const trFeeIds = (trFees ?? []).map((f: { id: string }) => f.id);
+      if (trFeeIds.length > 0) {
+        const { data: trPayRows } = await supabase
+          .from("payments")
+          .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+          .in("transport_fee_id", trFeeIds)
+          .order("payment_date", { ascending: false });
+        setTransportPayments((trPayRows ?? []) as PaymentListRow[]);
+      } else {
+        setTransportPayments([]);
+      }
     } else {
       setAllFees([]);
       setPayments([]);
       setAllActivityFees([]);
       setActivityPayments([]);
+      setAllTransportFees([]);
+      setTransportPayments([]);
     }
     setLoading(false);
   };
@@ -642,6 +731,7 @@ const Pagamentos = () => {
     const payment = rejectDialog;
     const fee = payment.student_fee_id ? allFees.find((f) => f.id === payment.student_fee_id) : null;
     const actFee = payment.activity_fee_id ? allActivityFees.find((f) => f.id === payment.activity_fee_id) : null;
+    const trFee = payment.transport_fee_id ? allTransportFees.find((f) => f.id === payment.transport_fee_id) : null;
     setValidatingId(payment.id);
     const { data: userRes } = await supabase.auth.getUser();
     const userId = userRes.user?.id ?? null;
@@ -673,6 +763,16 @@ const Pagamentos = () => {
         description: `O comprovativo de pagamento da atividade ${actFee.activity?.name ?? ""} de ${actFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}.` : ""} Por favor reenvie o comprovativo correto.`,
         category: "pagamento",
         link: "/extracurriculares",
+      });
+    }
+    if (trFee?.student?.parent_id) {
+      await supabase.from("notifications").insert({
+        recipient_id: trFee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento de transporte rejeitado`,
+        description: `O comprovativo de pagamento do transporte (${trFee.route?.name ?? "rota"}) de ${trFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}.` : ""} Por favor reenvie o comprovativo correto.`,
+        category: "pagamento",
+        link: "/transportes",
       });
     }
     setValidatingId(null);
@@ -841,6 +941,124 @@ const Pagamentos = () => {
     else toast({ title: `${rows.length} lembrete(s) enviado(s)` });
   };
 
+  // ===== Transport fees logic =====
+  const filteredTransportFees = useMemo(() => {
+    const now = Date.now();
+    const search = trSearch.trim().toLowerCase();
+    return allTransportFees.filter((f) => {
+      if (trYearFilter !== "all" && f.academic_year_id !== trYearFilter) return false;
+      if (trRouteFilter !== "all" && f.route_id !== trRouteFilter) return false;
+      if (trFilter === "paid" && !f.is_paid) return false;
+      if (trFilter === "pending" && f.is_paid) return false;
+      if (trFilter === "overdue" && (f.is_paid || new Date(f.due_date).getTime() >= now)) return false;
+      if (search && !(f.student?.full_name ?? "").toLowerCase().includes(search) && !(f.route?.name ?? "").toLowerCase().includes(search)) return false;
+      return true;
+    });
+  }, [allTransportFees, trFilter, trYearFilter, trRouteFilter, trSearch]);
+
+  const transportFeeStats = useMemo(() => {
+    const now = Date.now();
+    let paid = 0, pending = 0, overdue = 0;
+    allTransportFees.forEach((f) => {
+      if (f.is_paid) paid += Number(f.amount_due);
+      else {
+        pending += Number(f.amount_due);
+        if (new Date(f.due_date).getTime() < now) overdue += Number(f.amount_due);
+      }
+    });
+    return { paid, pending, overdue };
+  }, [allTransportFees]);
+
+  const latestPaymentByTransportFee = useMemo(() => {
+    const map = new Map<string, PaymentListRow>();
+    transportPayments.forEach((p) => {
+      if (!p.transport_fee_id) return;
+      if (!map.has(p.transport_fee_id)) map.set(p.transport_fee_id, p);
+    });
+    return map;
+  }, [transportPayments]);
+
+  const pendingTransportValidations = useMemo(() => {
+    return allTransportFees
+      .map((f) => ({ fee: f, payment: latestPaymentByTransportFee.get(f.id) }))
+      .filter((x) => x.payment && x.payment.status === "pendente") as Array<{ fee: TransportFeeRow; payment: PaymentListRow }>;
+  }, [allTransportFees, latestPaymentByTransportFee]);
+
+  const validateTransportPayment = async (fee: TransportFeeRow, payment: PaymentListRow) => {
+    if (!schoolId) return;
+    setValidatingId(payment.id);
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id ?? null;
+    const { error: payErr } = await supabase
+      .from("payments")
+      .update({ status: "validado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: null })
+      .eq("id", payment.id);
+    if (payErr) {
+      setValidatingId(null);
+      toast({ title: "Erro a validar", description: payErr.message, variant: "destructive" });
+      return;
+    }
+    const { error: feeErr } = await supabase.from("transport_fees").update({ is_paid: true }).eq("id", fee.id);
+    if (feeErr) {
+      setValidatingId(null);
+      toast({ title: "Erro a marcar cobrança", description: feeErr.message, variant: "destructive" });
+      return;
+    }
+    if (fee.student?.parent_id) {
+      await supabase.from("notifications").insert({
+        recipient_id: fee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento de transporte validado`,
+        description: `O pagamento do transporte (${fee.route?.name ?? "rota"}) de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
+        category: "pagamento",
+        link: "/transportes",
+      });
+    }
+    setValidatingId(null);
+    toast({ title: "Pagamento validado", description: "O encarregado foi notificado." });
+    await fetchAll();
+  };
+
+  const sendTransportReminder = async (fee: TransportFeeRow) => {
+    if (!schoolId) return;
+    const parentId = fee.student?.parent_id;
+    if (!parentId) {
+      toast({ title: "Aluno sem encarregado", description: "Não é possível enviar lembrete.", variant: "destructive" });
+      return;
+    }
+    setRemindingTrFeeId(fee.id);
+    const { error } = await supabase.from("notifications").insert({
+      recipient_id: parentId,
+      school_id: schoolId,
+      title: `Lembrete — Transporte (${fee.route?.name ?? "rota"})`,
+      description: `A cobrança do transporte de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      category: "pagamento",
+      link: "/transportes",
+    });
+    setRemindingTrFeeId(null);
+    if (error) toast({ title: "Erro a enviar lembrete", description: error.message, variant: "destructive" });
+    else toast({ title: "Lembrete enviado ao encarregado" });
+  };
+
+  const sendTransportBulkReminders = async () => {
+    const targets = filteredTransportFees.filter((f) => !f.is_paid && f.student?.parent_id);
+    if (targets.length === 0) {
+      toast({ title: "Sem destinatários", description: "Não há cobranças em dívida com encarregado associado." });
+      return;
+    }
+    const rows = targets.map((f) => ({
+      recipient_id: f.student!.parent_id!,
+      school_id: schoolId!,
+      title: `Lembrete — Transporte (${f.route?.name ?? "rota"})`,
+      description: `A cobrança do transporte de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      category: "pagamento",
+      link: "/transportes",
+    }));
+    const { error } = await supabase.from("notifications").insert(rows);
+    if (error) toast({ title: "Erro a enviar lembretes", description: error.message, variant: "destructive" });
+    else toast({ title: `${rows.length} lembrete(s) enviado(s)` });
+  };
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
@@ -893,6 +1111,7 @@ const Pagamentos = () => {
             <TabsTrigger value="rules">Regras de propina</TabsTrigger>
             <TabsTrigger value="fees">Propinas</TabsTrigger>
             <TabsTrigger value="activity-fees">Extracurriculares</TabsTrigger>
+            <TabsTrigger value="transport-fees">Transporte</TabsTrigger>
             <TabsTrigger value="family">Descontos por irmão</TabsTrigger>
             <TabsTrigger value="overrides">Descontos por aluno</TabsTrigger>
           </TabsList>
@@ -1345,6 +1564,230 @@ const Pagamentos = () => {
             </Card>
           </TabsContent>
 
+          {/* TRANSPORT FEES TAB */}
+          <TabsContent value="transport-fees" className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total recebido</CardTitle></CardHeader>
+                <CardContent><p className="text-2xl font-bold text-pastel-green-foreground">{fmtAOA(transportFeeStats.paid)}</p></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em dívida</CardTitle></CardHeader>
+                <CardContent><p className="text-2xl font-bold text-pastel-yellow-foreground">{fmtAOA(transportFeeStats.pending)}</p></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em atraso</CardTitle></CardHeader>
+                <CardContent><p className="text-2xl font-bold text-destructive">{fmtAOA(transportFeeStats.overdue)}</p></CardContent>
+              </Card>
+            </div>
+
+            {pendingTransportValidations.length > 0 && (
+              <Card className="border-pastel-blue/60">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <FileText className="h-4 w-4" /> Comprovativos a validar
+                    <Badge variant="secondary">{pendingTransportValidations.length}</Badge>
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">Comprovativos de transporte escolar enviados pelos educadores.</p>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="py-2 px-2">Aluno</th>
+                          <th className="py-2 px-2">Rota</th>
+                          <th className="py-2 px-2">Valor pago</th>
+                          <th className="py-2 px-2">Método</th>
+                          <th className="py-2 px-2">Submetido</th>
+                          <th className="py-2 px-2 text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pendingTransportValidations.map(({ fee, payment }) => (
+                          <tr key={payment.id} className="border-b hover:bg-muted/30">
+                            <td className="py-2 px-2 font-medium">{fee.student?.full_name ?? "—"}</td>
+                            <td className="py-2 px-2">{fee.route?.name ?? "—"}</td>
+                            <td className="py-2 px-2 font-semibold">{fmtAOA(Number(payment.amount_paid))}</td>
+                            <td className="py-2 px-2 capitalize text-muted-foreground">{payment.method ?? "—"}</td>
+                            <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString("pt-PT") : "—"}</td>
+                            <td className="py-2 px-2">
+                              <div className="flex flex-wrap justify-end gap-2">
+                                {payment.proof_url && (
+                                  <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(payment.proof_url!)}>
+                                    <Eye className="h-3.5 w-3.5" /> Ver
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                                  disabled={validatingId === payment.id}
+                                  onClick={() => validateTransportPayment(fee, payment)}
+                                >
+                                  {validatingId === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                  Validar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1 text-destructive"
+                                  disabled={validatingId === payment.id}
+                                  onClick={() => { setRejectDialog(payment); setRejectReason(""); }}
+                                >
+                                  <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card>
+              <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2"><Bus className="h-4 w-4" /> Cobranças de transporte escolar</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">Controla as mensalidades de transporte e envia lembretes aos encarregados.</p>
+                </div>
+                <Button onClick={sendTransportBulkReminders} size="sm" variant="outline" className="gap-2">
+                  <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input className="pl-9" placeholder="Pesquisar aluno ou rota..." value={trSearch} onChange={(e) => setTrSearch(e.target.value)} />
+                  </div>
+                  <Select value={trFilter} onValueChange={(v) => setTrFilter(v as typeof trFilter)}>
+                    <SelectTrigger className="md:w-44"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="pending">Não pagas</SelectItem>
+                      <SelectItem value="overdue">Em atraso</SelectItem>
+                      <SelectItem value="paid">Pagas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={trYearFilter} onValueChange={setTrYearFilter}>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Ano letivo" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os anos</SelectItem>
+                      {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={trRouteFilter} onValueChange={setTrRouteFilter}>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Rota" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas as rotas</SelectItem>
+                      {routesList.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {loading ? (
+                  <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                ) : filteredTransportFees.length === 0 ? (
+                  <p className="text-center py-10 text-muted-foreground">Sem cobranças a apresentar.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="py-2 px-2">Aluno</th>
+                          <th className="py-2 px-2">Rota</th>
+                          <th className="py-2 px-2">Mês</th>
+                          <th className="py-2 px-2">Vencimento</th>
+                          <th className="py-2 px-2">Valor</th>
+                          <th className="py-2 px-2">Estado</th>
+                          <th className="py-2 px-2 text-right">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredTransportFees.slice(0, 200).map((f) => {
+                          const overdue = !f.is_paid && new Date(f.due_date).getTime() < Date.now();
+                          const pay = latestPaymentByTransportFee.get(f.id);
+                          const pendingValidation = !!pay && pay.status === "pendente";
+                          const rejected = !!pay && pay.status === "rejeitado";
+                          return (
+                            <tr key={f.id} className="border-b hover:bg-muted/30">
+                              <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
+                              <td className="py-2 px-2">{f.route?.name ?? "—"}</td>
+                              <td className="py-2 px-2">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
+                              <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
+                              <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
+                              <td className="py-2 px-2">
+                                {f.is_paid ? (
+                                  <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">Pago</Badge>
+                                ) : pendingValidation ? (
+                                  <Badge className="bg-pastel-blue text-pastel-blue-foreground hover:bg-pastel-blue">A validar</Badge>
+                                ) : rejected ? (
+                                  <Badge variant="outline" className="border-destructive text-destructive">Rejeitado</Badge>
+                                ) : overdue ? (
+                                  <Badge variant="destructive">Em atraso</Badge>
+                                ) : (
+                                  <Badge variant="secondary">Pendente</Badge>
+                                )}
+                              </td>
+                              <td className="py-2 px-2 text-right">
+                                <div className="flex flex-wrap justify-end gap-2">
+                                  {pendingValidation && pay && (
+                                    <>
+                                      {pay.proof_url && (
+                                        <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
+                                          <Eye className="h-3.5 w-3.5" /> Ver
+                                        </Button>
+                                      )}
+                                      <Button
+                                        size="sm"
+                                        className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                                        disabled={validatingId === pay.id}
+                                        onClick={() => validateTransportPayment(f, pay)}
+                                      >
+                                        {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                        Validar
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="gap-1 text-destructive"
+                                        disabled={validatingId === pay.id}
+                                        onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
+                                      >
+                                        <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                      </Button>
+                                    </>
+                                  )}
+                                  {!f.is_paid && !pendingValidation && (
+                                    <>
+                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForTransport(f)}>
+                                        <Upload className="h-3.5 w-3.5" /> Registar pagamento
+                                      </Button>
+                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => sendTransportReminder(f)} disabled={remindingTrFeeId === f.id || !f.student?.parent_id}>
+                                        {remindingTrFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                        Cobrar
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {filteredTransportFees.length > 200 && (
+                      <p className="text-xs text-muted-foreground text-center py-3">A mostrar 200 de {filteredTransportFees.length}. Refina os filtros para ver as restantes.</p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* RULES TAB */}
           <TabsContent value="rules" className="space-y-4">
             <Card>
@@ -1703,6 +2146,8 @@ const Pagamentos = () => {
                 ? `Anexa o comprovativo da propina de ${recordDialog.fee.student?.full_name ?? ""}. Será marcado como pago e validado, e o encarregado será notificado.`
                 : recordDialog?.kind === "activity"
                 ? `Anexa o comprovativo da atividade ${recordDialog.fee.activity?.name ?? ""} de ${recordDialog.fee.student?.full_name ?? ""}. Será marcado como pago e validado.`
+                : recordDialog?.kind === "transport"
+                ? `Anexa o comprovativo do transporte (${recordDialog.fee.route?.name ?? ""}) de ${recordDialog.fee.student?.full_name ?? ""}. Será marcado como pago e validado.`
                 : ""}
             </DialogDescription>
           </DialogHeader>
