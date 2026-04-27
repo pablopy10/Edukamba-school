@@ -38,6 +38,7 @@ import Modulos from "./pages/Modulos.tsx";
 import Notificacoes from "./pages/Notificacoes.tsx";
 import Chat from "./pages/Chat.tsx";
 import Pesquisa from "./pages/Pesquisa.tsx";
+import Transportes from "./pages/Transportes.tsx";
 import { ModulesProvider } from "./context/ModulesContext";
 
 const queryClient = new QueryClient();
@@ -84,6 +85,7 @@ const App = () => (
           <Route path="/notificacoes" element={<ProtectedRoute><Notificacoes /></ProtectedRoute>} />
           <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
           <Route path="/pesquisa" element={<ProtectedRoute><Pesquisa /></ProtectedRoute>} />
+          <Route path="/transportes" element={<ProtectedRoute><Transportes /></ProtectedRoute>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
           </Routes>
