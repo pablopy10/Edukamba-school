@@ -731,6 +731,7 @@ const Pagamentos = () => {
     const payment = rejectDialog;
     const fee = payment.student_fee_id ? allFees.find((f) => f.id === payment.student_fee_id) : null;
     const actFee = payment.activity_fee_id ? allActivityFees.find((f) => f.id === payment.activity_fee_id) : null;
+    const trFee = payment.transport_fee_id ? allTransportFees.find((f) => f.id === payment.transport_fee_id) : null;
     setValidatingId(payment.id);
     const { data: userRes } = await supabase.auth.getUser();
     const userId = userRes.user?.id ?? null;
@@ -762,6 +763,16 @@ const Pagamentos = () => {
         description: `O comprovativo de pagamento da atividade ${actFee.activity?.name ?? ""} de ${actFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}.` : ""} Por favor reenvie o comprovativo correto.`,
         category: "pagamento",
         link: "/extracurriculares",
+      });
+    }
+    if (trFee?.student?.parent_id) {
+      await supabase.from("notifications").insert({
+        recipient_id: trFee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento de transporte rejeitado`,
+        description: `O comprovativo de pagamento do transporte (${trFee.route?.name ?? "rota"}) de ${trFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}.` : ""} Por favor reenvie o comprovativo correto.`,
+        category: "pagamento",
+        link: "/transportes",
       });
     }
     setValidatingId(null);
