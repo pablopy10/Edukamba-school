@@ -603,6 +603,124 @@ const Pagamentos = () => {
     else toast({ title: `${rows.length} lembrete(s) enviado(s)` });
   };
 
+  // ===== Activity fees logic =====
+  const filteredActivityFees = useMemo(() => {
+    const now = Date.now();
+    const search = actSearch.trim().toLowerCase();
+    return allActivityFees.filter((f) => {
+      if (actYearFilter !== "all" && f.academic_year_id !== actYearFilter) return false;
+      if (actActivityFilter !== "all" && f.activity_id !== actActivityFilter) return false;
+      if (actFilter === "paid" && !f.is_paid) return false;
+      if (actFilter === "pending" && f.is_paid) return false;
+      if (actFilter === "overdue" && (f.is_paid || new Date(f.due_date).getTime() >= now)) return false;
+      if (search && !(f.student?.full_name ?? "").toLowerCase().includes(search) && !(f.activity?.name ?? "").toLowerCase().includes(search)) return false;
+      return true;
+    });
+  }, [allActivityFees, actFilter, actYearFilter, actActivityFilter, actSearch]);
+
+  const activityFeeStats = useMemo(() => {
+    const now = Date.now();
+    let paid = 0, pending = 0, overdue = 0;
+    allActivityFees.forEach((f) => {
+      if (f.is_paid) paid += Number(f.amount_due);
+      else {
+        pending += Number(f.amount_due);
+        if (new Date(f.due_date).getTime() < now) overdue += Number(f.amount_due);
+      }
+    });
+    return { paid, pending, overdue };
+  }, [allActivityFees]);
+
+  const latestPaymentByActivityFee = useMemo(() => {
+    const map = new Map<string, PaymentListRow>();
+    activityPayments.forEach((p) => {
+      if (!p.activity_fee_id) return;
+      if (!map.has(p.activity_fee_id)) map.set(p.activity_fee_id, p);
+    });
+    return map;
+  }, [activityPayments]);
+
+  const pendingActivityValidations = useMemo(() => {
+    return allActivityFees
+      .map((f) => ({ fee: f, payment: latestPaymentByActivityFee.get(f.id) }))
+      .filter((x) => x.payment && x.payment.status === "pendente") as Array<{ fee: ActivityFeeRow; payment: PaymentListRow }>;
+  }, [allActivityFees, latestPaymentByActivityFee]);
+
+  const validateActivityPayment = async (fee: ActivityFeeRow, payment: PaymentListRow) => {
+    if (!schoolId) return;
+    setValidatingId(payment.id);
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id ?? null;
+    const { error: payErr } = await supabase
+      .from("payments")
+      .update({ status: "validado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: null })
+      .eq("id", payment.id);
+    if (payErr) {
+      setValidatingId(null);
+      toast({ title: "Erro a validar", description: payErr.message, variant: "destructive" });
+      return;
+    }
+    const { error: feeErr } = await supabase.from("activity_fees").update({ is_paid: true }).eq("id", fee.id);
+    if (feeErr) {
+      setValidatingId(null);
+      toast({ title: "Erro a marcar cobrança", description: feeErr.message, variant: "destructive" });
+      return;
+    }
+    if (fee.student?.parent_id) {
+      await supabase.from("notifications").insert({
+        recipient_id: fee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento validado — ${fee.activity?.name ?? "atividade"}`,
+        description: `O pagamento da atividade ${fee.activity?.name ?? ""} de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
+        category: "pagamento",
+        link: "/extracurriculares",
+      });
+    }
+    setValidatingId(null);
+    toast({ title: "Pagamento validado", description: "O encarregado foi notificado." });
+    await fetchAll();
+  };
+
+  const sendActivityReminder = async (fee: ActivityFeeRow) => {
+    if (!schoolId) return;
+    const parentId = fee.student?.parent_id;
+    if (!parentId) {
+      toast({ title: "Aluno sem encarregado", description: "Não é possível enviar lembrete.", variant: "destructive" });
+      return;
+    }
+    setRemindingActFeeId(fee.id);
+    const { error } = await supabase.from("notifications").insert({
+      recipient_id: parentId,
+      school_id: schoolId,
+      title: `Lembrete — ${fee.activity?.name ?? "Atividade"}`,
+      description: `A cobrança da atividade ${fee.activity?.name ?? ""} de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      category: "pagamento",
+      link: "/extracurriculares",
+    });
+    setRemindingActFeeId(null);
+    if (error) toast({ title: "Erro a enviar lembrete", description: error.message, variant: "destructive" });
+    else toast({ title: "Lembrete enviado ao encarregado" });
+  };
+
+  const sendActivityBulkReminders = async () => {
+    const targets = filteredActivityFees.filter((f) => !f.is_paid && f.student?.parent_id);
+    if (targets.length === 0) {
+      toast({ title: "Sem destinatários", description: "Não há cobranças em dívida com encarregado associado." });
+      return;
+    }
+    const rows = targets.map((f) => ({
+      recipient_id: f.student!.parent_id!,
+      school_id: schoolId!,
+      title: `Lembrete — ${f.activity?.name ?? "Atividade"}`,
+      description: `A cobrança da atividade ${f.activity?.name ?? ""} de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      category: "pagamento",
+      link: "/extracurriculares",
+    }));
+    const { error } = await supabase.from("notifications").insert(rows);
+    if (error) toast({ title: "Erro a enviar lembretes", description: error.message, variant: "destructive" });
+    else toast({ title: `${rows.length} lembrete(s) enviado(s)` });
+  };
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
