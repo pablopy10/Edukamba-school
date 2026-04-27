@@ -531,7 +531,8 @@ const Pagamentos = () => {
   const confirmReject = async () => {
     if (!rejectDialog || !schoolId) return;
     const payment = rejectDialog;
-    const fee = allFees.find((f) => f.id === payment.student_fee_id);
+    const fee = payment.student_fee_id ? allFees.find((f) => f.id === payment.student_fee_id) : null;
+    const actFee = payment.activity_fee_id ? allActivityFees.find((f) => f.id === payment.activity_fee_id) : null;
     setValidatingId(payment.id);
     const { data: userRes } = await supabase.auth.getUser();
     const userId = userRes.user?.id ?? null;
@@ -553,6 +554,16 @@ const Pagamentos = () => {
         description: `O comprovativo de pagamento de ${fee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}.` : ""} Por favor reenvie o comprovativo correto.`,
         category: "pagamento",
         link: "/financas",
+      });
+    }
+    if (actFee?.student?.parent_id) {
+      await supabase.from("notifications").insert({
+        recipient_id: actFee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento rejeitado — ${actFee.activity?.name ?? "atividade"}`,
+        description: `O comprovativo de pagamento da atividade ${actFee.activity?.name ?? ""} de ${actFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}.` : ""} Por favor reenvie o comprovativo correto.`,
+        category: "pagamento",
+        link: "/extracurriculares",
       });
     }
     setValidatingId(null);
