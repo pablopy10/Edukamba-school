@@ -158,7 +158,16 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         }
         const { data: userRes } = await supabase.auth.getUser();
         const shouldPublish = publishResult && result && result !== "EM_CURSO";
-        const updatePayload: Record<string, unknown> = {
+        const updatePayload: {
+          student_id: string;
+          classroom_id: string;
+          academic_year_id: string | null;
+          status: string;
+          result: string | null;
+          result_notes: string | null;
+          result_published_at?: string | null;
+          result_published_by?: string | null;
+        } = {
           student_id: studentId,
           classroom_id: classroomId,
           academic_year_id: yearId || null,
