@@ -4,6 +4,7 @@ import { Check, X, Clock, Loader2, MinusCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 import { toast } from "sonner";
 import {
   Select,
@@ -140,6 +141,7 @@ const AttendancePopover = ({
 
 const Presencas = () => {
   const { user } = useAuth();
+  const { selectedYearId } = useAcademicYear();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month0, setMonth0] = useState(today.getMonth());
@@ -175,15 +177,24 @@ const Presencas = () => {
   // Load classrooms
   useEffect(() => {
     if (!schoolId) return;
+    if (!selectedYearId) {
+      setClassrooms([]);
+      setClassroomId("all");
+      return;
+    }
     (async () => {
       const { data } = await supabase
         .from("classrooms")
         .select("id, name")
         .eq("school_id", schoolId)
+        .eq("academic_year_id", selectedYearId)
         .order("name");
-      setClassrooms(data ?? []);
+      const list = data ?? [];
+      setClassrooms(list);
+      // Pre-select first classroom by ascending name; fall back to "all" if none.
+      setClassroomId(list[0]?.id ?? "all");
     })();
-  }, [schoolId]);
+  }, [schoolId, selectedYearId]);
 
   // Compute month days
   const monthDays = useMemo(() => getMonthDays(year, month0), [year, month0]);
