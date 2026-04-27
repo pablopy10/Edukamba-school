@@ -289,7 +289,14 @@ const Definicoes = () => {
     plan_type: "Essencial" | "Pro" | "Enterprise";
     billing_cycle: "SEMESTRAL" | "ANNUAL";
   };
-  const [sub, setSub] = useState<Subscription>({ id: null, plan_type: "Essencial", billing_cycle: "ANNUAL" });
+  const [sub, setSub] = useState<Subscription>({ id: null, plan_type: "Enterprise", billing_cycle: "ANNUAL" });
+  // Plan change request UI state
+  const [planRequest, setPlanRequest] = useState<{
+    open: boolean;
+    targetPlan: "Essencial" | "Pro" | "Enterprise" | null;
+    message: string;
+    submitting: boolean;
+  }>({ open: false, targetPlan: null, message: "", submitting: false });
   type Invoice = {
     id: string;
     invoice_number: string;
