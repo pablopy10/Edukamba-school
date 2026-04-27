@@ -446,6 +446,38 @@ const AlunoPerfil = () => {
     return { paid, pending, overdue };
   }, [fees]);
 
+  const activityFeesSummary = useMemo(() => {
+    const paid = activityFees.filter((f) => f.is_paid).reduce((s, f) => s + Number(f.amount_due), 0);
+    const pending = activityFees.filter((f) => !f.is_paid).reduce((s, f) => s + Number(f.amount_due), 0);
+    const overdue = activityFees.filter((f) => !f.is_paid && new Date(f.due_date) < new Date()).length;
+    return { paid, pending, overdue };
+  }, [activityFees]);
+
+  const transportFeesSummary = useMemo(() => {
+    const paid = transportFees.filter((f) => f.is_paid).reduce((s, f) => s + Number(f.amount_due), 0);
+    const pending = transportFees.filter((f) => !f.is_paid).reduce((s, f) => s + Number(f.amount_due), 0);
+    const overdue = transportFees.filter((f) => !f.is_paid && new Date(f.due_date) < new Date()).length;
+    return { paid, pending, overdue };
+  }, [transportFees]);
+
+  const latestPaymentByActivityFee = useMemo(() => {
+    const map = new Map<string, PaymentRow>();
+    activityPayments.forEach((p) => {
+      if (!p.activity_fee_id) return;
+      if (!map.has(p.activity_fee_id)) map.set(p.activity_fee_id, p);
+    });
+    return map;
+  }, [activityPayments]);
+
+  const latestPaymentByTransportFee = useMemo(() => {
+    const map = new Map<string, PaymentRow>();
+    transportPayments.forEach((p) => {
+      if (!p.transport_fee_id) return;
+      if (!map.has(p.transport_fee_id)) map.set(p.transport_fee_id, p);
+    });
+    return map;
+  }, [transportPayments]);
+
   const scheduleByDay = useMemo(() => {
     const days: Record<number, ScheduleRow[]> = {};
     [1, 2, 3, 4, 5].forEach((d) => (days[d] = []));
