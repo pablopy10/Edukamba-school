@@ -218,7 +218,9 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         });
         if (eErr) throw eErr;
         toast({ title: "Aluno e matrícula criados" });
-        maybePromptAccess(created.id, fullName.trim(), email || null);
+        if (isClassroomEligible(classroomId)) {
+          setAccessPrompt({ studentId: created.id, studentName: fullName.trim(), defaultEmail: email || null });
+        }
       } else {
         if (!studentId) { toast({ title: "Seleccione o aluno", variant: "destructive" }); setLoading(false); return; }
         // Prevent duplicate enrollment on the same year
@@ -244,15 +246,19 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         });
         if (error) throw error;
         toast({ title: "Matrícula renovada" });
-        await maybePromptAccessExisting(studentId);
+        if (isClassroomEligible(classroomId)) {
+          const { data: st } = await supabase
+            .from("students")
+            .select("full_name, email, user_id")
+            .eq("id", studentId)
+            .maybeSingle();
+          if (st && !st.user_id) {
+            setAccessPrompt({ studentId, studentName: st.full_name, defaultEmail: st.email });
+          }
+        }
       }
       onSaved();
-      // Keep the dialog open if we are about to show access prompt; otherwise close.
-      if (!accessPromptPendingRef.current) {
-        onOpenChange(false);
-      } else {
-        accessPromptPendingRef.current = false;
-      }
+      onOpenChange(false);
     } catch (e: any) {
       toast({ title: "Erro", description: e?.message ?? String(e), variant: "destructive" });
     } finally {
