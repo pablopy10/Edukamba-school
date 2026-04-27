@@ -40,6 +40,7 @@ const trimTime = (t: string) => (t ? t.slice(0, 5) : "");
 type Conflict = { id: string; title: string; reason: string };
 
 type Term = { id: string; term_number: number; name: string; start_date: string; end_date: string };
+type Holiday = { id: string; name: string; start_date: string; end_date: string };
 
 type Props = {
   open: boolean;
@@ -81,6 +82,7 @@ export const AssessmentFormDialog = ({
   const [form, setForm] = useState<AssessmentRecord>(empty);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [terms, setTerms] = useState<Term[]>([]);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [termManuallyOverridden, setTermManuallyOverridden] = useState(false);
 
   useEffect(() => {
@@ -118,8 +120,17 @@ export const AssessmentFormDialog = ({
       if (selectedYearId) q = q.eq("academic_year_id", selectedYearId);
       const { data } = await q;
       setTerms((data ?? []) as Term[]);
+      let hq = supabase
+        .from("school_holidays")
+        .select("id, name, start_date, end_date")
+        .eq("school_id", schoolId);
+      if (selectedYearId) hq = hq.eq("academic_year_id", selectedYearId);
+      const { data: hData } = await hq;
+      setHolidays((hData ?? []) as Holiday[]);
     })();
   }, [open, schoolId, selectedYearId]);
+
+  const holidayMatch = holidays.find((h) => form.date >= h.start_date && form.date <= h.end_date);
 
   // Auto-derive term from date unless user manually overrode it
   useEffect(() => {
@@ -377,6 +388,16 @@ export const AssessmentFormDialog = ({
                 ))}
               </ul>
               <p className="mt-2 text-muted-foreground">Pode guardar mesmo assim.</p>
+            </div>
+          )}
+
+          {holidayMatch && (
+            <div className="sm:col-span-2 rounded-lg border border-pastel-yellow-foreground/30 bg-pastel-yellow/30 p-3 text-xs">
+              <div className="mb-1 flex items-center gap-2 font-semibold text-pastel-yellow-foreground">
+                <AlertTriangle className="h-4 w-4" />
+                Esta data está em período de férias: {holidayMatch.name}
+              </div>
+              <p className="text-muted-foreground">Pode guardar mesmo assim — a avaliação ficará marcada com aviso.</p>
             </div>
           )}
         </div>

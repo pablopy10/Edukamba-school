@@ -137,16 +137,28 @@ const Avaliacoes = () => {
       .eq("school_id", sid)
       .order("date", { ascending: true });
     if (yearId) {
-      // Filter assessments by the year window via term linkage OR raw date range
+      // Include assessments whose date falls in the year window OR whose term belongs to that year.
+      // This ensures items created during holiday periods (between terms) still appear.
       const { data: yearRow } = await supabase
         .from("academic_years")
         .select("start_date, end_date")
         .eq("id", yearId)
         .maybeSingle();
+      const { data: yearTerms } = await supabase
+        .from("academic_terms")
+        .select("id")
+        .eq("school_id", sid)
+        .eq("academic_year_id", yearId);
+      const termIds = (yearTerms ?? []).map((t: any) => t.id);
+      const filters: string[] = [];
       if (yearRow?.start_date && yearRow?.end_date) {
-        assessmentsQuery = assessmentsQuery
-          .gte("date", yearRow.start_date)
-          .lte("date", yearRow.end_date);
+        filters.push(`and(date.gte.${yearRow.start_date},date.lte.${yearRow.end_date})`);
+      }
+      if (termIds.length > 0) {
+        filters.push(`term_id.in.(${termIds.join(",")})`);
+      }
+      if (filters.length > 0) {
+        assessmentsQuery = assessmentsQuery.or(filters.join(","));
       }
     }
 
@@ -243,6 +255,16 @@ const Avaliacoes = () => {
     }
     return ids;
   }, [assessments]);
+
+  // Map of assessmentId -> holiday name for assessments scheduled during a holiday period
+  const holidayConflicts = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of assessments) {
+      const h = holidays.find((hol) => a.date >= hol.start_date && a.date <= hol.end_date);
+      if (h) map.set(a.id, h.name);
+    }
+    return map;
+  }, [assessments, holidays]);
 
   const openCreate = () => { setEditing(null); setDialogOpen(true); };
   const openEdit = (a: Assessment) => {
@@ -401,6 +423,7 @@ const Avaliacoes = () => {
             subjectMap={subjectMap}
             conflictIds={conflictIds}
             holidays={holidays}
+            holidayConflicts={holidayConflicts}
             onEdit={openEdit}
             onDelete={(id) => setDeleteId(id)}
             onOpen={(id) => navigate(`/avaliacoes/${id}/notas`)}
@@ -412,6 +435,7 @@ const Avaliacoes = () => {
             subjectMap={subjectMap}
             teacherMap={teacherMap}
             conflictIds={conflictIds}
+            holidayConflicts={holidayConflicts}
             onEdit={openEdit}
             onDelete={(id) => setDeleteId(id)}
             onOpen={(id) => navigate(`/avaliacoes/${id}/notas`)}
@@ -463,7 +487,7 @@ const TypeChip = ({
 /* ======================= Calendar View ======================= */
 const CalendarView = ({
   cursor, setCursor, evaluations, selectedDate, setSelectedDate,
-  classroomMap, subjectMap, conflictIds, holidays, onEdit, onDelete, onOpen,
+  classroomMap, subjectMap, conflictIds, holidays, holidayConflicts, onEdit, onDelete, onOpen,
 }: {
   cursor: Date;
   setCursor: (d: Date) => void;
@@ -474,6 +498,7 @@ const CalendarView = ({
   subjectMap: Map<string, string>;
   conflictIds: Set<string>;
   holidays: Holiday[];
+  holidayConflicts: Map<string, string>;
   onEdit: (a: Assessment) => void;
   onDelete: (id: string) => void;
   onOpen: (id: string) => void;
@@ -648,6 +673,11 @@ const CalendarView = ({
                     <AlertTriangle className="h-3 w-3" /> Conflito detetado
                   </div>
                 )}
+                {holidayConflicts.has(e.id) && (
+                  <div className="mt-2 flex items-center gap-1 text-[11px] font-medium text-pastel-yellow-foreground">
+                    <AlertTriangle className="h-3 w-3" /> Marcada em férias: {holidayConflicts.get(e.id)}
+                  </div>
+                )}
                 <div className="mt-3 flex gap-2">
                   <button onClick={(ev) => { ev.stopPropagation(); onOpen(e.id); }} className="inline-flex items-center gap-1 rounded-full bg-pastel-blue px-3 py-1 text-xs font-medium text-pastel-blue-foreground hover:opacity-90">
                     <GraduationCap className="h-3 w-3" /> Notas
@@ -670,13 +700,14 @@ const CalendarView = ({
 
 /* ======================= List View ======================= */
 const ListView = ({
-  evaluations, classroomMap, subjectMap, teacherMap, conflictIds, onEdit, onDelete, onOpen,
+  evaluations, classroomMap, subjectMap, teacherMap, conflictIds, holidayConflicts, onEdit, onDelete, onOpen,
 }: {
   evaluations: Assessment[];
   classroomMap: Map<string, string>;
   subjectMap: Map<string, string>;
   teacherMap: Map<string, string>;
   conflictIds: Set<string>;
+  holidayConflicts: Map<string, string>;
   onEdit: (a: Assessment) => void;
   onDelete: (id: string) => void;
   onOpen: (id: string) => void;
@@ -734,6 +765,11 @@ const ListView = ({
                         <p className="font-semibold text-foreground flex items-center gap-2">
                           {e.title}
                           {isConflict && <AlertTriangle className="h-3.5 w-3.5 text-destructive" />}
+                          {holidayConflicts.has(e.id) && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-pastel-yellow/40 px-2 py-0.5 text-[10px] font-semibold text-pastel-yellow-foreground" title={`Marcada em férias: ${holidayConflicts.get(e.id)}`}>
+                              🌴 Férias
+                            </span>
+                          )}
                         </p>
                         <p className="text-xs text-muted-foreground">{subj}</p>
                       </div>
