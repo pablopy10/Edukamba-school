@@ -650,22 +650,95 @@ const Definicoes = () => {
   const saveBillingCycle = async (cycle: "SEMESTRAL" | "ANNUAL") => {
     if (!schoolId) return;
     setSub((s) => ({ ...s, billing_cycle: cycle }));
+    let subId = sub.id;
     if (sub.id) {
       const { error } = await supabase
         .from("saas_subscriptions")
-        .update({ billing_cycle: cycle })
+        .update({ billing_cycle: cycle, last_generated_cycle_key: null })
         .eq("id", sub.id);
       if (error) return showToast("error", error.message);
     } else {
       const { data, error } = await supabase
         .from("saas_subscriptions")
-        .insert({ school_id: schoolId, plan_type: sub.plan_type, billing_cycle: cycle })
+        .insert({ school_id: schoolId, plan_type: sub.plan_type, billing_cycle: cycle, status: "ACTIVE" })
         .select()
         .maybeSingle();
       if (error) return showToast("error", error.message);
-      if (data) setSub((s) => ({ ...s, id: data.id }));
+      if (data) {
+        setSub((s) => ({ ...s, id: data.id }));
+        subId = data.id;
+      }
     }
-    showToast("success", "Ciclo de pagamento atualizado.");
+    // Gerar cobranças conforme o ciclo
+    const { data: genCount, error: genErr } = await supabase.rpc("generate_school_invoices", {
+      _school_id: schoolId,
+    });
+    if (genErr) {
+      showToast("error", `Ciclo guardado, mas falhou a geração: ${genErr.message}`);
+    } else {
+      await reloadInvoices();
+      const n = Number(genCount ?? 0);
+      showToast(
+        "success",
+        n > 0 ? `Ciclo atualizado. ${n} cobrança(s) gerada(s).` : "Ciclo atualizado.",
+      );
+    }
+    void subId;
+  };
+
+  const reloadInvoices = async () => {
+    if (!schoolId) return;
+    const { data } = await supabase
+      .from("school_invoices")
+      .select("*")
+      .eq("school_id", schoolId)
+      .order("issue_date", { ascending: false });
+    if (data) setInvoices(data as Invoice[]);
+  };
+
+  const submitProof = async () => {
+    if (!proofInvoice || !schoolId || !user) return;
+    if (!proofFile) return showToast("error", "Selecione o ficheiro do comprovativo.");
+    setProofUploading(true);
+    try {
+      const ext = proofFile.name.split(".").pop() || "pdf";
+      const path = `${schoolId}/${proofInvoice.id}-${Date.now()}.${ext}`;
+      const up = await supabase.storage
+        .from("school-invoice-proofs")
+        .upload(path, proofFile, { upsert: true, contentType: proofFile.type || undefined });
+      if (up.error) throw up.error;
+      const { error: updErr } = await supabase
+        .from("school_invoices")
+        .update({
+          proof_url: path,
+          payment_method: proofMethod,
+          notes: proofNotes || null,
+          submitted_at: new Date().toISOString(),
+          submitted_by: user.id,
+          status: "submitted",
+        })
+        .eq("id", proofInvoice.id);
+      if (updErr) throw updErr;
+      await reloadInvoices();
+      setProofInvoice(null);
+      setProofFile(null);
+      setProofMethod("transferencia");
+      setProofNotes("");
+      showToast("success", "Comprovativo enviado. Aguarda validação.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erro ao enviar comprovativo.";
+      showToast("error", msg);
+    } finally {
+      setProofUploading(false);
+    }
+  };
+
+  const downloadProof = async (path: string) => {
+    const { data, error } = await supabase.storage
+      .from("school-invoice-proofs")
+      .createSignedUrl(path, 60 * 5);
+    if (error || !data?.signedUrl) return showToast("error", "Não foi possível abrir o comprovativo.");
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   };
 
   const statusBadge = (active: boolean | null) => {
