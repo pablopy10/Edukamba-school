@@ -64,7 +64,7 @@ const Matriculas = () => {
       enrollmentsQuery,
       supabase.from("students").select("id, full_name").order("full_name"),
       classroomsQuery,
-      supabase.from("academic_years").select("id, label, is_active").order("start_date", { ascending: false }),
+      supabase.from("academic_years").select("id, label, is_active").order("start_date", { ascending: true }),
     ]);
     if (eErr) {
       toast({ title: "Erro a carregar matrículas", description: eErr.message, variant: "destructive" });

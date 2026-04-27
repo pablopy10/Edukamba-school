@@ -356,7 +356,7 @@ const Pagamentos = () => {
     if (!sId) { setLoading(false); return; }
 
     const [yRes, rRes, fRes, dRes, sRes, cRes] = await Promise.all([
-      supabase.from("academic_years").select("id, label, is_active").eq("school_id", sId).order("start_date", { ascending: false }),
+      supabase.from("academic_years").select("id, label, is_active").eq("school_id", sId).order("start_date", { ascending: true }),
       supabase.from("fee_rules").select("*").eq("school_id", sId).order("grade_level"),
       supabase.from("family_discount_rules").select("*").eq("school_id", sId).order("sibling_position"),
       supabase.from("student_discounts").select("*, student:students(full_name)").eq("school_id", sId).order("created_at", { ascending: false }),
