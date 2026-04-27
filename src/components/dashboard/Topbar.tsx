@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
-import { Search, MessageSquare, Bell, Clock } from "lucide-react";
+import { Search, MessageSquare, Bell, Clock, CalendarDays } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { useAcademicYear } from "@/context/AcademicYearContext";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const roleLabels: Record<string, string> = {
   SUPER_ADMIN: "Super Admin",
@@ -24,6 +32,7 @@ export const Topbar = () => {
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const { user } = useAuth();
+  const { years, selectedYearId, setSelectedYearId } = useAcademicYear();
   const [profile, setProfile] = useState<{ full_name: string; role: string | null; avatar_url: string | null } | null>(null);
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
 
@@ -83,6 +92,24 @@ export const Topbar = () => {
       </form>
 
       <div className="flex items-center gap-3">
+        {years.length > 0 && (
+          <div className="hidden items-center md:flex" title="Ano letivo em gestão">
+            <Select value={selectedYearId ?? undefined} onValueChange={setSelectedYearId}>
+              <SelectTrigger className="h-11 w-auto gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-soft hover:bg-accent">
+                <CalendarDays className="h-4 w-4 text-pastel-blue-foreground" strokeWidth={1.75} />
+                <SelectValue placeholder="Ano letivo" />
+              </SelectTrigger>
+              <SelectContent>
+                {years.map((y) => (
+                  <SelectItem key={y.id} value={y.id}>
+                    {y.label}
+                    {y.is_active ? " · ativo" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         {trialDaysLeft !== null && (
           <div
             className={`hidden items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium shadow-soft md:flex ${
