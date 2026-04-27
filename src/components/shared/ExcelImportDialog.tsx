@@ -103,7 +103,8 @@ export const ExcelImportDialog = ({
     const ws = XLSX.utils.aoa_to_sheet([headerRow, exampleRow]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, templateSheetName);
-    XLSX.writeFile(wb, `template-${templateSheetName.toLowerCase()}.xlsx`);
+    const stamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `modelo-${templateSheetName.toLowerCase()}-${stamp}.xlsx`);
   };
 
   const missingRequired = useMemo(
