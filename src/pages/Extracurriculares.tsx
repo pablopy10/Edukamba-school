@@ -38,6 +38,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { UserPlus, Wallet } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 
 type ActivityCategory = "musica" | "desporto" | "arte" | "tecnologia" | "academico" | "teatro";
 
@@ -64,6 +65,7 @@ const Extracurriculares = () => {
 
   const [activities, setActivities] = useState<ActivityRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [billingStatus, setBillingStatus] = useState<Record<string, { enrolled: number; billed: number }>>({});
 
   const [view, setView] = useState<"lista" | "calendario">("lista");
   const [search, setSearch] = useState("");
@@ -117,6 +119,47 @@ const Extracurriculares = () => {
       return;
     }
     setActivities((data ?? []) as ActivityRow[]);
+    await loadBillingStatus((data ?? []) as ActivityRow[]);
+  };
+
+  const loadBillingStatus = async (acts: ActivityRow[]) => {
+    if (!schoolId || acts.length === 0) {
+      setBillingStatus({});
+      return;
+    }
+    const ids = acts.map((a) => a.id);
+    const [{ data: enrolls }, { data: fees }] = await Promise.all([
+      supabase
+        .from("extracurricular_enrollments")
+        .select("activity_id, student_id")
+        .in("activity_id", ids)
+        .eq("status", "ativa"),
+      supabase
+        .from("activity_fees")
+        .select("activity_id, student_id")
+        .in("activity_id", ids),
+    ]);
+    const enrolledMap = new Map<string, Set<string>>();
+    (enrolls ?? []).forEach((e: any) => {
+      if (!enrolledMap.has(e.activity_id)) enrolledMap.set(e.activity_id, new Set());
+      enrolledMap.get(e.activity_id)!.add(e.student_id);
+    });
+    const billedMap = new Map<string, Set<string>>();
+    (fees ?? []).forEach((f: any) => {
+      if (!billedMap.has(f.activity_id)) billedMap.set(f.activity_id, new Set());
+      billedMap.get(f.activity_id)!.add(f.student_id);
+    });
+    const status: Record<string, { enrolled: number; billed: number }> = {};
+    ids.forEach((id) => {
+      const enrolled = enrolledMap.get(id) ?? new Set();
+      const billed = billedMap.get(id) ?? new Set();
+      let billedEnrolled = 0;
+      enrolled.forEach((sid) => {
+        if (billed.has(sid)) billedEnrolled++;
+      });
+      status[id] = { enrolled: enrolled.size, billed: billedEnrolled };
+    });
+    setBillingStatus(status);
   };
 
   useEffect(() => {
@@ -391,6 +434,20 @@ const Extracurriculares = () => {
                     ) : null}
                   </div>
 
+                  {a.enrollment_fee && a.enrollment_fee > 0 && billingStatus[a.id] && billingStatus[a.id].enrolled > 0 && (
+                    billingStatus[a.id].billed >= billingStatus[a.id].enrolled ? (
+                      <div className="inline-flex items-center gap-1.5 rounded-lg bg-pastel-green px-2.5 py-1.5 text-[11px] font-semibold text-pastel-green-foreground w-fit">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Cobrança gerada para todos os inscritos
+                      </div>
+                    ) : billingStatus[a.id].billed > 0 ? (
+                      <div className="inline-flex items-center gap-1.5 rounded-lg bg-pastel-yellow px-2.5 py-1.5 text-[11px] font-semibold text-pastel-yellow-foreground w-fit">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Cobrança gerada para {billingStatus[a.id].billed} de {billingStatus[a.id].enrolled} inscritos
+                      </div>
+                    ) : null
+                  )}
+
                   {canEdit && (
                     <button
                       onClick={() => { setEnrollActivity(a); setEnrollOpen(true); }}
@@ -497,7 +554,10 @@ const Extracurriculares = () => {
 
       <EnrollmentManagerDialog
         open={enrollOpen}
-        onOpenChange={setEnrollOpen}
+        onOpenChange={(o) => {
+          setEnrollOpen(o);
+          if (!o) loadBillingStatus(activities);
+        }}
         activity={enrollActivity}
         schoolId={schoolId}
         canEdit={canEdit}
