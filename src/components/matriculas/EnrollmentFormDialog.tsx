@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { CreateStudentAccessDialog, ELIGIBLE_GRADES } from "@/components/alunos/CreateStudentAccessDialog";
 
 export type EnrollmentRow = {
   id: string;
@@ -68,7 +69,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
   const [publishResult, setPublishResult] = useState<boolean>(false);
   const [alreadyPublished, setAlreadyPublished] = useState<boolean>(false);
   // classrooms filtered by selected year inside the dialog
-  const [yearClassrooms, setYearClassrooms] = useState<Opt[]>([]);
+  const [yearClassrooms, setYearClassrooms] = useState<(Opt & { grade_level?: string | null })[]>([]);
   const [loadingClassrooms, setLoadingClassrooms] = useState(false);
   // new student fields
   const [fullName, setFullName] = useState("");
@@ -77,6 +78,14 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
   const [birthDate, setBirthDate] = useState("");
   const [gender, setGender] = useState<string>("");
   const [enrollmentNumber, setEnrollmentNumber] = useState("");
+
+  // Post-save: prompt to create student platform access when eligible
+  const [accessPrompt, setAccessPrompt] = useState<{ studentId: string; studentName: string; defaultEmail: string | null } | null>(null);
+
+  const isClassroomEligible = (cId: string) => {
+    const c = yearClassrooms.find((x) => x.id === cId);
+    return !!(c?.grade_level && ELIGIBLE_GRADES.has(c.grade_level));
+  };
 
   useEffect(() => {
     if (open) {
@@ -111,14 +120,14 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
       setLoadingClassrooms(true);
       const { data, error } = await supabase
         .from("classrooms")
-        .select("id, name")
+        .select("id, name, grade_level")
         .eq("academic_year_id", yearId)
         .order("name");
       if (cancelled) return;
       if (error) {
         setYearClassrooms([]);
       } else {
-        setYearClassrooms((data ?? []) as Opt[]);
+        setYearClassrooms((data ?? []) as (Opt & { grade_level?: string | null })[]);
       }
       setLoadingClassrooms(false);
     };
@@ -214,6 +223,9 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         });
         if (eErr) throw eErr;
         toast({ title: "Aluno e matrícula criados" });
+        if (isClassroomEligible(classroomId)) {
+          setAccessPrompt({ studentId: created.id, studentName: fullName.trim(), defaultEmail: email || null });
+        }
       } else {
         if (!studentId) { toast({ title: "Seleccione o aluno", variant: "destructive" }); setLoading(false); return; }
         // Prevent duplicate enrollment on the same year
@@ -239,6 +251,16 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         });
         if (error) throw error;
         toast({ title: "Matrícula renovada" });
+        if (isClassroomEligible(classroomId)) {
+          const { data: st } = await supabase
+            .from("students")
+            .select("full_name, email, user_id")
+            .eq("id", studentId)
+            .maybeSingle();
+          if (st && !st.user_id) {
+            setAccessPrompt({ studentId, studentName: st.full_name, defaultEmail: st.email });
+          }
+        }
       }
       onSaved();
       onOpenChange(false);
@@ -250,6 +272,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -413,5 +436,17 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {accessPrompt && (
+      <CreateStudentAccessDialog
+        open={!!accessPrompt}
+        onOpenChange={(v) => { if (!v) setAccessPrompt(null); }}
+        studentId={accessPrompt.studentId}
+        studentName={accessPrompt.studentName}
+        defaultEmail={accessPrompt.defaultEmail}
+        onCreated={() => setAccessPrompt(null)}
+      />
+    )}
+    </>
   );
 };

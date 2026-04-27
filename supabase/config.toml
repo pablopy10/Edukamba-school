@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.invite-guardian]
 verify_jwt = true
+
+[functions.invite-student]
+verify_jwt = true

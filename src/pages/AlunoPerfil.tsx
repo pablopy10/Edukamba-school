@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CreateStudentAccessDialog, ELIGIBLE_GRADES } from "@/components/alunos/CreateStudentAccessDialog";
+import { KeyRound, ShieldCheck } from "lucide-react";
 
 type AvatarColor = "lilac" | "blue" | "yellow" | "green" | "pink";
 
@@ -69,8 +71,9 @@ interface StudentRow {
   avatar_color: string | null;
   classroom_id: string | null;
   parent_id: string | null;
+  user_id: string | null;
   created_at: string | null;
-  classrooms?: { id: string; name: string; courses?: { name: string } | null } | null;
+  classrooms?: { id: string; name: string; grade_level?: string | null; courses?: { name: string } | null } | null;
 }
 
 interface ScheduleRow {
@@ -186,6 +189,7 @@ const AlunoPerfil = () => {
   const [proofAmount, setProofAmount] = useState("");
   const [proofUploading, setProofUploading] = useState(false);
   const [enrollmentHistory, setEnrollmentHistory] = useState<EnrollmentHistoryRow[]>([]);
+  const [accessDialogOpen, setAccessDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -194,7 +198,7 @@ const AlunoPerfil = () => {
       setLoading(true);
       const { data: s } = await supabase
         .from("students")
-        .select("id, full_name, email, phone, birth_date, gender, enrollment_number, avatar_color, classroom_id, parent_id, created_at, classrooms(id, name, courses(name))")
+        .select("id, full_name, email, phone, birth_date, gender, enrollment_number, avatar_color, classroom_id, parent_id, user_id, created_at, classrooms(id, name, grade_level, courses(name))")
         .eq("id", id)
         .maybeSingle();
       if (cancelled) return;
@@ -615,6 +619,30 @@ const AlunoPerfil = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {(() => {
+                if (!student) return null;
+                if (student.user_id) {
+                  return (
+                    <span className="inline-flex h-10 items-center gap-2 rounded-full bg-pastel-green/40 px-4 text-xs font-semibold text-pastel-green-foreground">
+                      <ShieldCheck className="h-4 w-4" strokeWidth={2} /> Acesso à plataforma activo
+                    </span>
+                  );
+                }
+                const currentGrade = student.classrooms?.grade_level ?? null;
+                const eligibleNow = currentGrade ? ELIGIBLE_GRADES.has(currentGrade) : false;
+                const eligibleHistory = enrollmentHistory.some(
+                  (h) => h.status === "ACTIVE" && h.classroom?.grade_level && ELIGIBLE_GRADES.has(h.classroom.grade_level),
+                );
+                if (!eligibleNow && !eligibleHistory) return null;
+                return (
+                  <button
+                    onClick={() => setAccessDialogOpen(true)}
+                    className="flex h-10 items-center gap-2 rounded-full bg-pastel-lilac px-5 text-sm font-semibold text-pastel-lilac-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
+                  >
+                    <KeyRound className="h-4 w-4" strokeWidth={2} /> Criar acesso à plataforma
+                  </button>
+                );
+              })()}
               <Link to="/alunos" className="flex h-10 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
                 <Pencil className="h-4 w-4" strokeWidth={2} /> Editar
               </Link>
@@ -1228,6 +1256,19 @@ const AlunoPerfil = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {student && (
+        <CreateStudentAccessDialog
+          open={accessDialogOpen}
+          onOpenChange={setAccessDialogOpen}
+          studentId={student.id}
+          studentName={student.full_name}
+          defaultEmail={student.email}
+          onCreated={() => {
+            setStudent({ ...student, user_id: student.user_id ?? "pending" });
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 };
