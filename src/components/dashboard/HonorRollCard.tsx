@@ -25,7 +25,7 @@ export const HonorRollCard = () => {
   const [entries, setEntries] = useState<HonorEntry[]>([]);
   const [terms, setTerms] = useState<Term[]>([]);
   const [selectedTermId, setSelectedTermId] = useState<string>("all");
-  const { selectedYearId } = useAcademicYear();
+  const { selectedYearId, selectedYear } = useAcademicYear();
 
   useEffect(() => {
     let cancelled = false;
@@ -61,9 +61,15 @@ export const HonorRollCard = () => {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const { data } = await supabase
+      let query = supabase
         .from("grades")
-        .select("score, students(id, full_name), assessments(date, term_id)");
+        .select("score, students(id, full_name), assessments!inner(date, term_id)");
+
+      if (selectedYear) {
+        query = query.gte("assessments.date", selectedYear.start_date).lte("assessments.date", selectedYear.end_date);
+      }
+
+      const { data } = await query;
 
       type Row = {
         score: number;
@@ -101,7 +107,7 @@ export const HonorRollCard = () => {
     };
     load();
     return () => { cancelled = true; };
-  }, [selectedTermId, terms]);
+  }, [selectedTermId, terms, selectedYear]);
 
   return (
     <div className="flex h-full flex-col gap-4 rounded-2xl bg-card p-5 shadow-card">

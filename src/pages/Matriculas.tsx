@@ -7,6 +7,7 @@ import { EnrollmentFormDialog, EnrollmentRow } from "@/components/matriculas/Enr
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 type Opt = { id: string; name: string };
 type YearOpt = { id: string; label: string; is_active: boolean | null };
@@ -32,6 +33,7 @@ const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 
 const Matriculas = () => {
+  const { selectedYearId } = useAcademicYear();
   const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([]);
   const [students, setStudents] = useState<Opt[]>([]);
   const [classrooms, setClassrooms] = useState<Opt[]>([]);
@@ -49,13 +51,19 @@ const Matriculas = () => {
 
   const load = async () => {
     setLoading(true);
+    let enrollmentsQuery = supabase
+      .from("enrollments")
+      .select("id, student_id, classroom_id, academic_year_id, status, enrolled_at, students(id, full_name, email, avatar_color), classrooms(id, name), academic_years(id, label)")
+      .order("enrolled_at", { ascending: false });
+    let classroomsQuery = supabase.from("classrooms").select("id, name").order("name");
+    if (selectedYearId) {
+      enrollmentsQuery = enrollmentsQuery.eq("academic_year_id", selectedYearId);
+      classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
+    }
     const [{ data: eData, error: eErr }, { data: sData }, { data: cData }, { data: yData }] = await Promise.all([
-      supabase
-        .from("enrollments")
-        .select("id, student_id, classroom_id, academic_year_id, status, enrolled_at, students(id, full_name, email, avatar_color), classrooms(id, name), academic_years(id, label)")
-        .order("enrolled_at", { ascending: false }),
+      enrollmentsQuery,
       supabase.from("students").select("id, full_name").order("full_name"),
-      supabase.from("classrooms").select("id, name").order("name"),
+      classroomsQuery,
       supabase.from("academic_years").select("id, label, is_active").order("start_date", { ascending: false }),
     ]);
     if (eErr) {
@@ -68,7 +76,10 @@ const Matriculas = () => {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    setFilterYear(selectedYearId ?? "all");
+    load();
+  }, [selectedYearId]);
 
   const filtered = useMemo(() => {
     return enrollments.filter((e) => {

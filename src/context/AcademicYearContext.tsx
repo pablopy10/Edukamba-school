@@ -56,16 +56,11 @@ export const AcademicYearProvider = ({ children }: { children: ReactNode }) => {
     const list = (data ?? []) as AcademicYear[];
     setYears(list);
 
-    // Decide initial selection
+    // Default to the school's active academic year; fall back to the last valid manual choice.
+    const active = list.find((y) => y.is_active);
     const stored = localStorage.getItem(STORAGE_KEY);
-    let initial: string | null = null;
-    if (stored && list.some((y) => y.id === stored)) {
-      initial = stored;
-    } else {
-      const active = list.find((y) => y.is_active);
-      initial = active?.id ?? list[0]?.id ?? null;
-      if (initial) localStorage.setItem(STORAGE_KEY, initial);
-    }
+    const initial = active?.id ?? (stored && list.some((y) => y.id === stored) ? stored : list[0]?.id ?? null);
+    if (initial) localStorage.setItem(STORAGE_KEY, initial);
     setSelectedYearIdState(initial);
     setLoading(false);
   }, [user?.id]);

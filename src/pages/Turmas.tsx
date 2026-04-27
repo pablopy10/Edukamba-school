@@ -10,6 +10,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ClassroomFormDialog, ClassroomRow } from "@/components/turmas/ClassroomFormDialog";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 type ClassroomWithJoins = ClassroomRow & {
   courses?: { id: string; name: string } | null;
@@ -32,6 +33,7 @@ const periodStyles: Record<string, string> = {
 };
 
 const Turmas = () => {
+  const { selectedYearId } = useAcademicYear();
   const [search, setSearch] = useState("");
   const [periodFilter, setPeriodFilter] = useState<string>("all");
   const [courseFilter, setCourseFilter] = useState<string>("all");
@@ -46,12 +48,15 @@ const Turmas = () => {
   const load = async () => {
     setLoading(true);
     try {
+      let classroomsQuery = supabase
+        .from("classrooms")
+        .select(`id, name, grade_level, period, course_id, academic_year_id, school_id,
+                 courses(id, name), academic_years(id, label)`)
+        .order("name", { ascending: true });
+      if (selectedYearId) classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
+
       const [{ data: cls, error }, { data: cs }, { data: ys }, { data: students }] = await Promise.all([
-        supabase
-          .from("classrooms")
-          .select(`id, name, grade_level, period, course_id, academic_year_id, school_id,
-                   courses(id, name), academic_years(id, label)`)
-          .order("name", { ascending: true }),
+        classroomsQuery,
         supabase.from("courses").select("id, name").order("name"),
         supabase.from("academic_years").select("id, label, is_active").order("start_date", { ascending: false }),
         supabase.from("students").select("id, classroom_id"),
@@ -80,7 +85,7 @@ const Turmas = () => {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [selectedYearId]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
