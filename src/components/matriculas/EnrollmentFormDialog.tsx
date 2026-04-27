@@ -146,6 +146,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
   const handleSubmit = async () => {
     if (!classroomId) { toast({ title: "Turma obrigatória", variant: "destructive" }); return; }
     setLoading(true);
+    let triggeredAccessPrompt = false;
     try {
       if (isEdit && enrollment) {
         if (!studentId) { toast({ title: "Aluno obrigatório", variant: "destructive" }); setLoading(false); return; }
@@ -225,6 +226,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         toast({ title: "Aluno e matrícula criados" });
         if (isClassroomEligible(classroomId)) {
           setAccessPrompt({ studentId: created.id, studentName: fullName.trim(), defaultEmail: email || null });
+          triggeredAccessPrompt = true;
         }
       } else {
         if (!studentId) { toast({ title: "Seleccione o aluno", variant: "destructive" }); setLoading(false); return; }
@@ -259,11 +261,17 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
             .maybeSingle();
           if (st && !st.user_id) {
             setAccessPrompt({ studentId, studentName: st.full_name, defaultEmail: st.email });
+            triggeredAccessPrompt = true;
           }
         }
       }
       onSaved();
-      onOpenChange(false);
+      // If we triggered the access prompt, keep this dialog mounted so the
+      // child CreateStudentAccessDialog doesn't get unmounted mid-open.
+      // The parent dialog will close once the access prompt is dismissed.
+      if (!triggeredAccessPrompt) {
+        onOpenChange(false);
+      }
     } catch (e: any) {
       toast({ title: "Erro", description: e?.message ?? String(e), variant: "destructive" });
     } finally {
@@ -273,7 +281,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
 
   return (
     <>
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open && !accessPrompt} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Editar Matrícula" : "Nova Matrícula"}</DialogTitle>
@@ -440,11 +448,19 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
     {accessPrompt && (
       <CreateStudentAccessDialog
         open={!!accessPrompt}
-        onOpenChange={(v) => { if (!v) setAccessPrompt(null); }}
+        onOpenChange={(v) => {
+          if (!v) {
+            setAccessPrompt(null);
+            onOpenChange(false);
+          }
+        }}
         studentId={accessPrompt.studentId}
         studentName={accessPrompt.studentName}
         defaultEmail={accessPrompt.defaultEmail}
-        onCreated={() => setAccessPrompt(null)}
+        onCreated={() => {
+          setAccessPrompt(null);
+          onOpenChange(false);
+        }}
       />
     )}
     </>
