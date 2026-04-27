@@ -248,6 +248,9 @@ const Definicoes = () => {
   const [academicSettings, setAcademicSettings] = useState({
     honor_roll_min_average: 14,
     grading_max_score: 20,
+    late_fee_enabled: false,
+    late_fee_type: "fixed" as "fixed" | "percentage",
+    late_fee_value: 0,
   });
   const [savingAcademicSettings, setSavingAcademicSettings] = useState(false);
 
