@@ -107,12 +107,22 @@ export const AssessmentFormDialog = ({
   // Load terms for the school
   useEffect(() => {
     if (!open || !schoolId) return;
-    supabase
-      .from("academic_terms")
-      .select("id, term_number, name, start_date, end_date")
-      .eq("school_id", schoolId)
-      .order("term_number")
-      .then(({ data }) => setTerms((data ?? []) as Term[]));
+    (async () => {
+      const { data: activeYear } = await supabase
+        .from("academic_years")
+        .select("id")
+        .eq("school_id", schoolId)
+        .eq("is_active", true)
+        .maybeSingle();
+      let q = supabase
+        .from("academic_terms")
+        .select("id, term_number, name, start_date, end_date")
+        .eq("school_id", schoolId)
+        .order("term_number");
+      if (activeYear?.id) q = q.eq("academic_year_id", activeYear.id);
+      const { data } = await q;
+      setTerms((data ?? []) as Term[]);
+    })();
   }, [open, schoolId]);
 
   // Auto-derive term from date unless user manually overrode it
