@@ -46,7 +46,7 @@ export const HonorRollCard = () => {
         .filter(([, b]) => b.count > 0)
         .map(([id, b]) => ({ id, name: b.name, avg: b.sum / b.count }))
         .sort((a, b) => b.avg - a.avg)
-        .slice(0, 5);
+        .slice(0, 20);
 
       if (!cancelled) setEntries(ranked);
     };
