@@ -281,7 +281,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
 
   return (
     <>
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open && !accessPrompt} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Editar Matrícula" : "Nova Matrícula"}</DialogTitle>
@@ -448,11 +448,19 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
     {accessPrompt && (
       <CreateStudentAccessDialog
         open={!!accessPrompt}
-        onOpenChange={(v) => { if (!v) setAccessPrompt(null); }}
+        onOpenChange={(v) => {
+          if (!v) {
+            setAccessPrompt(null);
+            onOpenChange(false);
+          }
+        }}
         studentId={accessPrompt.studentId}
         studentName={accessPrompt.studentName}
         defaultEmail={accessPrompt.defaultEmail}
-        onCreated={() => setAccessPrompt(null)}
+        onCreated={() => {
+          setAccessPrompt(null);
+          onOpenChange(false);
+        }}
       />
     )}
     </>
