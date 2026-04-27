@@ -272,6 +272,45 @@ const AlunoPerfil = () => {
       } else if (!cancelled) {
         setPayments([]);
       }
+
+      // Activity (extracurricular) fees
+      const { data: actFeeRows } = await supabase
+        .from("activity_fees")
+        .select("id, amount_due, due_date, is_paid, month_index, activity_id, activity:extracurricular_activities(id, name)")
+        .eq("student_id", id)
+        .order("due_date", { ascending: true });
+      if (!cancelled) setActivityFees((actFeeRows ?? []) as unknown as ActivityFeeRow[]);
+      const actIds = (actFeeRows ?? []).map((f) => f.id);
+      if (actIds.length > 0) {
+        const { data: actPayRows } = await supabase
+          .from("payments")
+          .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, rejection_reason")
+          .in("activity_fee_id", actIds)
+          .order("payment_date", { ascending: false });
+        if (!cancelled) setActivityPayments((actPayRows ?? []) as PaymentRow[]);
+      } else if (!cancelled) {
+        setActivityPayments([]);
+      }
+
+      // Transport fees
+      const { data: trFeeRows } = await supabase
+        .from("transport_fees")
+        .select("id, amount_due, due_date, is_paid, month_index, route_id, route:transport_routes(id, name)")
+        .eq("student_id", id)
+        .order("due_date", { ascending: true });
+      if (!cancelled) setTransportFees((trFeeRows ?? []) as unknown as TransportFeeRow[]);
+      const trIds = (trFeeRows ?? []).map((f) => f.id);
+      if (trIds.length > 0) {
+        const { data: trPayRows } = await supabase
+          .from("payments")
+          .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, rejection_reason")
+          .in("transport_fee_id", trIds)
+          .order("payment_date", { ascending: false });
+        if (!cancelled) setTransportPayments((trPayRows ?? []) as PaymentRow[]);
+      } else if (!cancelled) {
+        setTransportPayments([]);
+      }
+
       if (!cancelled) {
         setLoading(false);
       }
