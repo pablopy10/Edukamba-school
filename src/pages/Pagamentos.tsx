@@ -225,16 +225,46 @@ const Pagamentos = () => {
       if (feeIds.length > 0) {
         const { data: payRows } = await supabase
           .from("payments")
-          .select("id, student_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+          .select("id, student_fee_id, activity_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
           .in("student_fee_id", feeIds)
           .order("payment_date", { ascending: false });
         setPayments((payRows ?? []) as PaymentListRow[]);
       } else {
         setPayments([]);
       }
+
+      // Activity fees + lista de atividades para filtros
+      const [{ data: actFees }, { data: actsList }] = await Promise.all([
+        supabase
+          .from("activity_fees")
+          .select("id, amount_due, due_date, is_paid, month_index, student_id, activity_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), activity:extracurricular_activities(id, name, category)")
+          .eq("school_id", sId)
+          .order("due_date", { ascending: true }),
+        supabase
+          .from("extracurricular_activities")
+          .select("id, name")
+          .eq("school_id", sId)
+          .order("name"),
+      ]);
+      setAllActivityFees((actFees ?? []) as unknown as ActivityFeeRow[]);
+      setActivitiesList((actsList ?? []) as Array<{ id: string; name: string }>);
+
+      const actFeeIds = (actFees ?? []).map((f: { id: string }) => f.id);
+      if (actFeeIds.length > 0) {
+        const { data: actPayRows } = await supabase
+          .from("payments")
+          .select("id, student_fee_id, activity_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+          .in("activity_fee_id", actFeeIds)
+          .order("payment_date", { ascending: false });
+        setActivityPayments((actPayRows ?? []) as PaymentListRow[]);
+      } else {
+        setActivityPayments([]);
+      }
     } else {
       setAllFees([]);
       setPayments([]);
+      setAllActivityFees([]);
+      setActivityPayments([]);
     }
     setLoading(false);
   };
