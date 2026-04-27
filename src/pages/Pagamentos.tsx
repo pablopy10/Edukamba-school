@@ -197,10 +197,21 @@ const Pagamentos = () => {
   const [activitiesList, setActivitiesList] = useState<Array<{ id: string; name: string }>>([]);
   const [remindingActFeeId, setRemindingActFeeId] = useState<string | null>(null);
 
+  // Transport fees
+  const [allTransportFees, setAllTransportFees] = useState<TransportFeeRow[]>([]);
+  const [transportPayments, setTransportPayments] = useState<PaymentListRow[]>([]);
+  const [trFilter, setTrFilter] = useState<"all" | "paid" | "pending" | "overdue">("pending");
+  const [trYearFilter, setTrYearFilter] = useState<string>("all");
+  const [trRouteFilter, setTrRouteFilter] = useState<string>("all");
+  const [trSearch, setTrSearch] = useState("");
+  const [routesList, setRoutesList] = useState<Array<{ id: string; name: string }>>([]);
+  const [remindingTrFeeId, setRemindingTrFeeId] = useState<string | null>(null);
+
   // Staff "registar pagamento" dialog (works for both tuition and activity fees)
   const [recordDialog, setRecordDialog] = useState<
     | { kind: "fee"; fee: FeeListRow }
     | { kind: "activity"; fee: ActivityFeeRow }
+    | { kind: "transport"; fee: TransportFeeRow }
     | null
   >(null);
   const [recordFile, setRecordFile] = useState<File | null>(null);
@@ -218,6 +229,13 @@ const Pagamentos = () => {
   };
   const openRecordForActivity = (fee: ActivityFeeRow) => {
     setRecordDialog({ kind: "activity", fee });
+    setRecordFile(null);
+    setRecordAmount(String(fee.amount_due));
+    setRecordMethod("transferencia");
+    setRecordNotes("");
+  };
+  const openRecordForTransport = (fee: TransportFeeRow) => {
+    setRecordDialog({ kind: "transport", fee });
     setRecordFile(null);
     setRecordAmount(String(fee.amount_due));
     setRecordMethod("transferencia");
