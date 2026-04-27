@@ -212,7 +212,7 @@ const schoolSchema = z.object({
 
 const Definicoes = () => {
   const { user } = useAuth();
-  const { selectedYearId } = useAcademicYear();
+  const { years, selectedYearId, setSelectedYearId, refresh: refreshAcademicYears } = useAcademicYear();
   const [activeTab, setActiveTab] = useState<Tab>("escola");
   const [toast, setToast] = useState<{ kind: "success" | "error"; msg: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -553,7 +553,21 @@ const Definicoes = () => {
       .eq("id", year.id);
     setSaving(false);
     if (error) return showToast("error", error.message);
+    await refreshAcademicYears();
     showToast("success", "Ano letivo atualizado.");
+  };
+
+  const handleSetActiveAcademic = async () => {
+    if (!schoolId || !year.id) return;
+    setSaving(true);
+    const clear = await supabase.from("academic_years").update({ is_active: false }).eq("school_id", schoolId);
+    const setActive = clear.error
+      ? clear
+      : await supabase.from("academic_years").update({ is_active: true }).eq("id", year.id);
+    setSaving(false);
+    if (setActive.error) return showToast("error", setActive.error.message);
+    await refreshAcademicYears();
+    showToast("success", "Ano letivo ativo atualizado.");
   };
 
   // ===== Users =====
