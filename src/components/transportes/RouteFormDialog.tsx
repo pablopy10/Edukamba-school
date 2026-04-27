@@ -101,11 +101,11 @@ export const RouteFormDialog = ({ open, onOpenChange, schoolId, initial, onSaved
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{initial ? "Editar rota" : "Nova rota de transporte"}</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 overflow-y-auto flex-1 pr-2 -mr-2">
           <div className="md:col-span-2">
             <Label>Nome da rota *</Label>
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex: Giro Talatona — Maianga" />
@@ -158,7 +158,7 @@ export const RouteFormDialog = ({ open, onOpenChange, schoolId, initial, onSaved
             <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex-shrink-0">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={submit} disabled={saving}>{saving ? "A guardar..." : "Guardar"}</Button>
         </DialogFooter>
