@@ -146,6 +146,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
   const handleSubmit = async () => {
     if (!classroomId) { toast({ title: "Turma obrigatória", variant: "destructive" }); return; }
     setLoading(true);
+    let triggeredAccessPrompt = false;
     try {
       if (isEdit && enrollment) {
         if (!studentId) { toast({ title: "Aluno obrigatório", variant: "destructive" }); setLoading(false); return; }
@@ -225,6 +226,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         toast({ title: "Aluno e matrícula criados" });
         if (isClassroomEligible(classroomId)) {
           setAccessPrompt({ studentId: created.id, studentName: fullName.trim(), defaultEmail: email || null });
+          triggeredAccessPrompt = true;
         }
       } else {
         if (!studentId) { toast({ title: "Seleccione o aluno", variant: "destructive" }); setLoading(false); return; }
@@ -259,6 +261,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
             .maybeSingle();
           if (st && !st.user_id) {
             setAccessPrompt({ studentId, studentName: st.full_name, defaultEmail: st.email });
+            triggeredAccessPrompt = true;
           }
         }
       }
@@ -266,7 +269,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
       // If we triggered the access prompt, keep this dialog mounted so the
       // child CreateStudentAccessDialog doesn't get unmounted mid-open.
       // The parent dialog will close once the access prompt is dismissed.
-      if (!isClassroomEligible(classroomId)) {
+      if (!triggeredAccessPrompt) {
         onOpenChange(false);
       }
     } catch (e: any) {
