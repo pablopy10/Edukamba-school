@@ -313,6 +313,46 @@ export const AssessmentFormDialog = ({
           </div>
 
           <div className="space-y-2 sm:col-span-2">
+            <Label>
+              Trimestre {!termManuallyOverridden && <span className="text-xs font-normal text-muted-foreground">(automático pela data)</span>}
+            </Label>
+            {terms.length === 0 ? (
+              <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                Configure os trimestres em Definições → Académico para ativar este campo.
+              </p>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Select
+                  value={form.term_id ?? "auto"}
+                  onValueChange={(v) => {
+                    if (v === "auto") {
+                      setTermManuallyOverridden(false);
+                      const matched = terms.find((t) => form.date >= t.start_date && form.date <= t.end_date);
+                      update("term_id", matched?.id ?? null);
+                    } else {
+                      setTermManuallyOverridden(true);
+                      update("term_id", v);
+                    }
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Sem trimestre" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Automático pela data</SelectItem>
+                    {terms.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {termManuallyOverridden && (
+                  <span className="rounded-full bg-pastel-yellow/40 px-2 py-1 text-[10px] font-semibold text-pastel-yellow-foreground">
+                    Manual
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2 sm:col-span-2">
             <Label>Descrição</Label>
             <Textarea value={form.description ?? ""} onChange={(e) => update("description", e.target.value)} rows={2} />
           </div>
