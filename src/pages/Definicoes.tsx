@@ -665,6 +665,15 @@ const Definicoes = () => {
     if (Number.isNaN(min) || min < 0 || Number.isNaN(max) || max <= 0 || min > max) {
       return showToast("error", "Verifique os valores: 0 ≤ média mínima ≤ nota máxima.");
     }
+    const lateValue = Number(academicSettings.late_fee_value);
+    if (academicSettings.late_fee_enabled) {
+      if (Number.isNaN(lateValue) || lateValue <= 0) {
+        return showToast("error", "Defina um valor de multa maior que zero.");
+      }
+      if (academicSettings.late_fee_type === "percentage" && lateValue > 100) {
+        return showToast("error", "A percentagem da multa não pode exceder 100%.");
+      }
+    }
     setSavingAcademicSettings(true);
     // Merge into existing settings to avoid wiping unrelated keys
     const { data: current } = await supabase
@@ -676,6 +685,9 @@ const Definicoes = () => {
       ...((current?.settings ?? {}) as Record<string, unknown>),
       honor_roll_min_average: min,
       grading_max_score: max,
+      late_fee_enabled: academicSettings.late_fee_enabled,
+      late_fee_type: academicSettings.late_fee_type,
+      late_fee_value: academicSettings.late_fee_enabled ? lateValue : 0,
     };
     const { error } = await supabase.from("schools").update({ settings: merged }).eq("id", schoolId);
     setSavingAcademicSettings(false);
