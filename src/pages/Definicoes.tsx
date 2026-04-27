@@ -648,6 +648,31 @@ const Definicoes = () => {
     showToast("success", "Ano letivo eliminado.");
   };
 
+  const handleSaveAcademicSettings = async () => {
+    if (!schoolId) return;
+    const min = Number(academicSettings.honor_roll_min_average);
+    const max = Number(academicSettings.grading_max_score);
+    if (Number.isNaN(min) || min < 0 || Number.isNaN(max) || max <= 0 || min > max) {
+      return showToast("error", "Verifique os valores: 0 ≤ média mínima ≤ nota máxima.");
+    }
+    setSavingAcademicSettings(true);
+    // Merge into existing settings to avoid wiping unrelated keys
+    const { data: current } = await supabase
+      .from("schools")
+      .select("settings")
+      .eq("id", schoolId)
+      .maybeSingle();
+    const merged = {
+      ...((current?.settings ?? {}) as Record<string, unknown>),
+      honor_roll_min_average: min,
+      grading_max_score: max,
+    };
+    const { error } = await supabase.from("schools").update({ settings: merged }).eq("id", schoolId);
+    setSavingAcademicSettings(false);
+    if (error) return showToast("error", error.message);
+    showToast("success", "Critérios académicos guardados.");
+  };
+
   // ===== Users =====
   const updateUserRole = async (id: string, role: Role) => {
     const { error } = await supabase.from("profiles").update({ role }).eq("id", id);
