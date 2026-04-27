@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { CreateStudentAccessDialog, ELIGIBLE_GRADES } from "@/components/alunos/CreateStudentAccessDialog";
 
 export type EnrollmentRow = {
   id: string;
@@ -68,7 +69,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
   const [publishResult, setPublishResult] = useState<boolean>(false);
   const [alreadyPublished, setAlreadyPublished] = useState<boolean>(false);
   // classrooms filtered by selected year inside the dialog
-  const [yearClassrooms, setYearClassrooms] = useState<Opt[]>([]);
+  const [yearClassrooms, setYearClassrooms] = useState<(Opt & { grade_level?: string | null })[]>([]);
   const [loadingClassrooms, setLoadingClassrooms] = useState(false);
   // new student fields
   const [fullName, setFullName] = useState("");
@@ -77,6 +78,9 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
   const [birthDate, setBirthDate] = useState("");
   const [gender, setGender] = useState<string>("");
   const [enrollmentNumber, setEnrollmentNumber] = useState("");
+
+  // Post-save: prompt to create student platform access when eligible
+  const [accessPrompt, setAccessPrompt] = useState<{ studentId: string; studentName: string; defaultEmail: string | null } | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -111,14 +115,14 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
       setLoadingClassrooms(true);
       const { data, error } = await supabase
         .from("classrooms")
-        .select("id, name")
+        .select("id, name, grade_level")
         .eq("academic_year_id", yearId)
         .order("name");
       if (cancelled) return;
       if (error) {
         setYearClassrooms([]);
       } else {
-        setYearClassrooms((data ?? []) as Opt[]);
+        setYearClassrooms((data ?? []) as (Opt & { grade_level?: string | null })[]);
       }
       setLoadingClassrooms(false);
     };
