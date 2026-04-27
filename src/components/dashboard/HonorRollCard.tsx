@@ -76,28 +76,22 @@ export const HonorRollCard = () => {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const { data } = await supabase
+      let q = supabase
         .from("grades")
-        .select("score, students(id, full_name), assessments!inner(date, term_id)");
+        .select("score, students(id, full_name), assessments!inner(academic_year_id, term_id, date)");
+      if (selectedYearId) q = q.eq("assessments.academic_year_id", selectedYearId);
+      const { data } = await q;
 
       type Row = {
         score: number;
         students: { id: string; full_name: string } | null;
-        assessments: { date: string | null; term_id: string | null } | null;
+        assessments: { academic_year_id: string | null; term_id: string | null; date: string | null } | null;
       };
 
       const buckets = new Map<string, { name: string; sum: number; count: number }>();
       ((data ?? []) as unknown as Row[]).forEach((g) => {
         const s = g.students;
         if (!s) return;
-        // Year scoping: include if date inside year window OR term linked to the selected year
-        if (selectedYear) {
-          const a = g.assessments;
-          const d = a?.date ?? null;
-          const inDate = d ? d >= selectedYear.start_date && d <= selectedYear.end_date : false;
-          const termInYear = a?.term_id ? terms.some((t) => t.id === a.term_id) : false;
-          if (!inDate && !termInYear) return;
-        }
         // Term filtering
         if (selectedTermId !== "all") {
           const a = g.assessments;
@@ -125,7 +119,7 @@ export const HonorRollCard = () => {
     };
     load();
     return () => { cancelled = true; };
-  }, [selectedTermId, terms, selectedYear, minAverage]);
+  }, [selectedTermId, terms, selectedYearId, minAverage]);
 
   return (
     <div className="flex h-full flex-col gap-4 rounded-2xl bg-card p-5 shadow-card">
