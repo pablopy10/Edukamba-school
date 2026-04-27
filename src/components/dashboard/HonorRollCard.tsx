@@ -73,7 +73,7 @@ export const HonorRollCard = () => {
           Sem notas registadas.
         </p>
       ) : (
-        <ol className="flex flex-col gap-2">
+        <ol className="flex max-h-64 flex-col gap-2 overflow-y-auto pr-2 -mr-2">
           {entries.map((e, i) => (
             <li key={e.id} className="flex items-center gap-3">
               <span
