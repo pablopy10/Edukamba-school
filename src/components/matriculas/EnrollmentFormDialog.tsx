@@ -372,6 +372,38 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
           </div>
         </div>
 
+        {isEdit && (
+          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+            <div>
+              <Label className="text-sm font-semibold">Resultado do ano lectivo</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">Define se o aluno passou ou reprovou neste ano lectivo.</p>
+            </div>
+            <Select value={result} onValueChange={setResult}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {RESULTS.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {result !== "EM_CURSO" && (
+              <>
+                <div>
+                  <Label htmlFor="result-notes" className="text-xs">Observações para o encarregado (opcional)</Label>
+                  <Textarea id="result-notes" rows={3} value={resultNotes} onChange={(e) => setResultNotes(e.target.value)} placeholder="Ex.: passou com média de 14 valores, parabéns!" />
+                </div>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <Checkbox checked={publishResult} onCheckedChange={(v) => setPublishResult(!!v)} className="mt-0.5" />
+                  <span className="text-sm">
+                    Comunicar resultado ao encarregado de educação
+                    {alreadyPublished && <span className="block text-xs text-muted-foreground">Já comunicado anteriormente — desmarcar não retira a notificação enviada.</span>}
+                  </span>
+                </label>
+              </>
+            )}
+          </div>
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancelar</Button>
           <Button onClick={handleSubmit} disabled={loading}>
