@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type AvatarColor = "lilac" | "blue" | "yellow" | "green" | "pink";
 
@@ -113,12 +114,34 @@ interface FeeRow {
 interface PaymentRow {
   id: string;
   student_fee_id: string | null;
+  activity_fee_id?: string | null;
+  transport_fee_id?: string | null;
   amount_paid: number;
   method: string | null;
   status: string;
   proof_url: string | null;
   payment_date: string | null;
   rejection_reason: string | null;
+}
+
+interface ActivityFeeRow {
+  id: string;
+  amount_due: number;
+  due_date: string;
+  is_paid: boolean | null;
+  month_index: number | null;
+  activity_id: string;
+  activity?: { id: string; name: string } | null;
+}
+
+interface TransportFeeRow {
+  id: string;
+  amount_due: number;
+  due_date: string;
+  is_paid: boolean | null;
+  month_index: number | null;
+  route_id: string;
+  route?: { id: string; name: string } | null;
 }
 
 const StatPill = ({ label, value, color }: { label: string; value: string; color: AvatarColor }) => (
