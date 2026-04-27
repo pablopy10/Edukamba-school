@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CreateStudentAccessDialog, ELIGIBLE_GRADES } from "@/components/alunos/CreateStudentAccessDialog";
+import { KeyRound, ShieldCheck } from "lucide-react";
 
 type AvatarColor = "lilac" | "blue" | "yellow" | "green" | "pink";
 
@@ -69,8 +71,9 @@ interface StudentRow {
   avatar_color: string | null;
   classroom_id: string | null;
   parent_id: string | null;
+  user_id: string | null;
   created_at: string | null;
-  classrooms?: { id: string; name: string; courses?: { name: string } | null } | null;
+  classrooms?: { id: string; name: string; grade_level?: string | null; courses?: { name: string } | null } | null;
 }
 
 interface ScheduleRow {
