@@ -1,7 +1,9 @@
 import { GraduationCap, Home, Users, Receipt, BookOpen, Presentation, Contact, PersonStanding, UsersRound, CalendarDays, BookMarked, CalendarCheck, Smartphone, BookOpenCheck, BarChart3, Clock, UserCircle, Settings, Package, LogOut, ChevronRight, Sparkles, Wallet, TrendingUp, Bus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useModules, ModuleKey } from "@/context/ModulesContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 type Item = { icon: React.ElementType; label: string; to: string; hasArrow?: boolean; moduleKey?: ModuleKey };
 
@@ -32,13 +34,24 @@ const other: Item[] = [
   { icon: UserCircle, label: "Perfil", to: "/perfil" },
   { icon: Settings, label: "Definições", to: "/definicoes" },
   { icon: Package, label: "Módulos", to: "/modulos" },
-  { icon: LogOut, label: "Sair", to: "/sair" },
 ];
 
 export const Sidebar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { modules } = useModules();
   const visibleMenu = menu.filter((i) => !i.moduleKey || modules[i.moduleKey]);
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error("Logout error", e);
+    } finally {
+      navigate("/", { replace: true });
+      toast.success("Sessão terminada");
+    }
+  };
 
   const renderItem = (item: Item) => {
     const Icon = item.icon;
@@ -76,6 +89,17 @@ export const Sidebar = () => {
       <div className="mt-auto flex flex-col gap-1">
         <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Outros</p>
         {other.map(renderItem)}
+        <button
+          type="button"
+          onClick={handleLogout}
+          className={cn(
+            "group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-[var(--transition-smooth)]",
+            "text-sidebar-foreground hover:bg-sidebar-accent",
+          )}
+        >
+          <LogOut className="h-5 w-5 shrink-0" strokeWidth={1.75} />
+          <span className="flex-1 text-left">Sair</span>
+        </button>
       </div>
     </aside>
   );
