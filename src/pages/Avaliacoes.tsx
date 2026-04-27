@@ -423,6 +423,7 @@ const Avaliacoes = () => {
             subjectMap={subjectMap}
             conflictIds={conflictIds}
             holidays={holidays}
+            holidayConflicts={holidayConflicts}
             onEdit={openEdit}
             onDelete={(id) => setDeleteId(id)}
             onOpen={(id) => navigate(`/avaliacoes/${id}/notas`)}
@@ -434,6 +435,7 @@ const Avaliacoes = () => {
             subjectMap={subjectMap}
             teacherMap={teacherMap}
             conflictIds={conflictIds}
+            holidayConflicts={holidayConflicts}
             onEdit={openEdit}
             onDelete={(id) => setDeleteId(id)}
             onOpen={(id) => navigate(`/avaliacoes/${id}/notas`)}
