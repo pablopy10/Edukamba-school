@@ -717,6 +717,10 @@ export type Database = {
           classroom_id: string | null
           enrolled_at: string | null
           id: string
+          result: string | null
+          result_notes: string | null
+          result_published_at: string | null
+          result_published_by: string | null
           status: string | null
           student_id: string | null
         }
@@ -725,6 +729,10 @@ export type Database = {
           classroom_id?: string | null
           enrolled_at?: string | null
           id?: string
+          result?: string | null
+          result_notes?: string | null
+          result_published_at?: string | null
+          result_published_by?: string | null
           status?: string | null
           student_id?: string | null
         }
@@ -733,6 +741,10 @@ export type Database = {
           classroom_id?: string | null
           enrolled_at?: string | null
           id?: string
+          result?: string | null
+          result_notes?: string | null
+          result_published_at?: string | null
+          result_published_by?: string | null
           status?: string | null
           student_id?: string | null
         }
