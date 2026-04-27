@@ -116,13 +116,33 @@ const Avaliacoes = () => {
     setSchoolId(sid);
     if (!sid) { setLoading(false); return; }
 
+    // Restrict trimesters and holidays to the active academic year
+    const { data: activeYear } = await supabase
+      .from("academic_years")
+      .select("id")
+      .eq("school_id", sid)
+      .eq("is_active", true)
+      .maybeSingle();
+    const activeYearId = activeYear?.id ?? null;
+
+    const termsBase = supabase
+      .from("academic_terms")
+      .select("id, term_number, name, start_date, end_date")
+      .eq("school_id", sid)
+      .order("term_number");
+    const holidaysBase = supabase
+      .from("school_holidays")
+      .select("id, name, start_date, end_date")
+      .eq("school_id", sid)
+      .order("start_date");
+
     const [aRes, cRes, sRes, tRes, termRes, holRes] = await Promise.all([
       supabase.from("assessments").select("id,title,type,date,start_time,end_time,room,weight,description,classroom_id,subject_id,teacher_id,term_id").eq("school_id", sid).order("date", { ascending: true }),
       supabase.from("classrooms").select("id, name").eq("school_id", sid).order("name"),
       supabase.from("subjects").select("id, name").eq("school_id", sid).order("name"),
       supabase.from("teachers").select("id, profile_id, profiles:profile_id(full_name)").eq("school_id", sid),
-      supabase.from("academic_terms").select("id, term_number, name, start_date, end_date").eq("school_id", sid).order("term_number"),
-      supabase.from("school_holidays").select("id, name, start_date, end_date").eq("school_id", sid).order("start_date"),
+      activeYearId ? termsBase.eq("academic_year_id", activeYearId) : termsBase,
+      activeYearId ? holidaysBase.eq("academic_year_id", activeYearId) : holidaysBase,
     ]);
 
     setAssessments((aRes.data ?? []) as Assessment[]);
