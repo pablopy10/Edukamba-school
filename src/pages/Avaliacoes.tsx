@@ -34,6 +34,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { AssessmentFormDialog, type AssessmentRecord } from "@/components/avaliacoes/AssessmentFormDialog";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 type EvalType = "teste" | "exame" | "trabalho" | "oral";
 
@@ -84,6 +85,7 @@ const tt = (t?: string | null) => (t ? t.slice(0, 5) : "");
 
 const Avaliacoes = () => {
   const navigate = useNavigate();
+  const { selectedYearId } = useAcademicYear();
   const [view, setView] = useState<View>("calendario");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
