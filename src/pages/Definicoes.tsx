@@ -21,6 +21,7 @@ import {
   Hash,
   Loader2,
   FileText,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
