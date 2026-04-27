@@ -700,13 +700,14 @@ const CalendarView = ({
 
 /* ======================= List View ======================= */
 const ListView = ({
-  evaluations, classroomMap, subjectMap, teacherMap, conflictIds, onEdit, onDelete, onOpen,
+  evaluations, classroomMap, subjectMap, teacherMap, conflictIds, holidayConflicts, onEdit, onDelete, onOpen,
 }: {
   evaluations: Assessment[];
   classroomMap: Map<string, string>;
   subjectMap: Map<string, string>;
   teacherMap: Map<string, string>;
   conflictIds: Set<string>;
+  holidayConflicts: Map<string, string>;
   onEdit: (a: Assessment) => void;
   onDelete: (id: string) => void;
   onOpen: (id: string) => void;
@@ -764,6 +765,11 @@ const ListView = ({
                         <p className="font-semibold text-foreground flex items-center gap-2">
                           {e.title}
                           {isConflict && <AlertTriangle className="h-3.5 w-3.5 text-destructive" />}
+                          {holidayConflicts.has(e.id) && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-pastel-yellow/40 px-2 py-0.5 text-[10px] font-semibold text-pastel-yellow-foreground" title={`Marcada em férias: ${holidayConflicts.get(e.id)}`}>
+                              🌴 Férias
+                            </span>
+                          )}
                         </p>
                         <p className="text-xs text-muted-foreground">{subj}</p>
                       </div>
