@@ -166,6 +166,16 @@ const Pagamentos = () => {
   const [rejectDialog, setRejectDialog] = useState<PaymentListRow | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
+  // Activity fees (extracurriculares)
+  const [allActivityFees, setAllActivityFees] = useState<ActivityFeeRow[]>([]);
+  const [activityPayments, setActivityPayments] = useState<PaymentListRow[]>([]);
+  const [actFilter, setActFilter] = useState<"all" | "paid" | "pending" | "overdue">("pending");
+  const [actYearFilter, setActYearFilter] = useState<string>("all");
+  const [actActivityFilter, setActActivityFilter] = useState<string>("all");
+  const [actSearch, setActSearch] = useState("");
+  const [activitiesList, setActivitiesList] = useState<Array<{ id: string; name: string }>>([]);
+  const [remindingActFeeId, setRemindingActFeeId] = useState<string | null>(null);
+
   const fetchAll = async () => {
     setLoading(true);
     const { data: profile } = await supabase
