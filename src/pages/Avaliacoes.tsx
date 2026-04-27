@@ -256,6 +256,16 @@ const Avaliacoes = () => {
     return ids;
   }, [assessments]);
 
+  // Map of assessmentId -> holiday name for assessments scheduled during a holiday period
+  const holidayConflicts = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of assessments) {
+      const h = holidays.find((hol) => a.date >= hol.start_date && a.date <= hol.end_date);
+      if (h) map.set(a.id, h.name);
+    }
+    return map;
+  }, [assessments, holidays]);
+
   const openCreate = () => { setEditing(null); setDialogOpen(true); };
   const openEdit = (a: Assessment) => {
     setEditing({
