@@ -52,7 +52,7 @@ export const AcademicYearProvider = ({ children }: { children: ReactNode }) => {
       .from("academic_years")
       .select("id, label, start_date, end_date, is_active")
       .eq("school_id", profile.school_id)
-      .order("start_date", { ascending: false });
+      .order("start_date", { ascending: true });
     const list = (data ?? []) as AcademicYear[];
     setYears(list);
 
