@@ -853,6 +853,28 @@ const Definicoes = () => {
     if (data) setInvoices(data as Invoice[]);
   };
 
+  const submitPlanRequest = async () => {
+    if (!planRequest.targetPlan) return;
+    setPlanRequest((p) => ({ ...p, submitting: true }));
+    try {
+      const { data, error } = await supabase.functions.invoke("request-plan-change", {
+        body: {
+          requested_plan: planRequest.targetPlan,
+          message: planRequest.message?.trim() || undefined,
+        },
+      });
+      if (error) throw error;
+      const emailNote = (data as { email_sent?: boolean })?.email_sent
+        ? "Pedido enviado para geral@edukamba.com."
+        : "Pedido registado. A nossa equipa entrará em contacto.";
+      showToast("success", emailNote);
+      setPlanRequest({ open: false, targetPlan: null, message: "", submitting: false });
+    } catch (e) {
+      showToast("error", (e as Error).message ?? "Falha ao enviar pedido.");
+      setPlanRequest((p) => ({ ...p, submitting: false }));
+    }
+  };
+
   const submitProof = async () => {
     if (!proofInvoice || !schoolId || !user) return;
     if (!proofFile) return showToast("error", "Selecione o ficheiro do comprovativo.");
