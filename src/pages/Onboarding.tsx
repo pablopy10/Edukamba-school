@@ -143,7 +143,8 @@ const Onboarding = () => {
       if (rpcError) throw rpcError;
 
       toast({ title: "Escola criada!", description: "Bem-vindo ao Edukamba." });
-      navigate("/dashboard", { replace: true });
+      // Hard reload to ensure all auth/school context is refreshed
+      window.location.assign("/dashboard");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Tente novamente.";
       toast({ title: "Erro a criar escola", description: message, variant: "destructive" });
