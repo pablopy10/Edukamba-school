@@ -393,7 +393,7 @@ const Pagamentos = () => {
       if (feeIds.length > 0) {
         const { data: payRows } = await supabase
           .from("payments")
-          .select("id, student_fee_id, activity_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+          .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
           .in("student_fee_id", feeIds)
           .order("payment_date", { ascending: false });
         setPayments((payRows ?? []) as PaymentListRow[]);
@@ -421,18 +421,48 @@ const Pagamentos = () => {
       if (actFeeIds.length > 0) {
         const { data: actPayRows } = await supabase
           .from("payments")
-          .select("id, student_fee_id, activity_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+          .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
           .in("activity_fee_id", actFeeIds)
           .order("payment_date", { ascending: false });
         setActivityPayments((actPayRows ?? []) as PaymentListRow[]);
       } else {
         setActivityPayments([]);
       }
+
+      // Transport fees + lista de rotas para filtros
+      const [{ data: trFees }, { data: rtsList }] = await Promise.all([
+        supabase
+          .from("transport_fees")
+          .select("id, amount_due, due_date, is_paid, month_index, student_id, route_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), route:transport_routes(id, name)")
+          .eq("school_id", sId)
+          .order("due_date", { ascending: true }),
+        supabase
+          .from("transport_routes")
+          .select("id, name")
+          .eq("school_id", sId)
+          .order("name"),
+      ]);
+      setAllTransportFees((trFees ?? []) as unknown as TransportFeeRow[]);
+      setRoutesList((rtsList ?? []) as Array<{ id: string; name: string }>);
+
+      const trFeeIds = (trFees ?? []).map((f: { id: string }) => f.id);
+      if (trFeeIds.length > 0) {
+        const { data: trPayRows } = await supabase
+          .from("payments")
+          .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+          .in("transport_fee_id", trFeeIds)
+          .order("payment_date", { ascending: false });
+        setTransportPayments((trPayRows ?? []) as PaymentListRow[]);
+      } else {
+        setTransportPayments([]);
+      }
     } else {
       setAllFees([]);
       setPayments([]);
       setAllActivityFees([]);
       setActivityPayments([]);
+      setAllTransportFees([]);
+      setTransportPayments([]);
     }
     setLoading(false);
   };
