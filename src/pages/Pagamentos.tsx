@@ -226,7 +226,7 @@ const Pagamentos = () => {
       return;
     }
     const amount = Number(recordAmount) || Number(fee.amount_due);
-    const insertPayload: Record<string, unknown> = {
+    const insertPayload = {
       amount_paid: amount,
       method: recordMethod,
       proof_url: path,
@@ -236,10 +236,9 @@ const Pagamentos = () => {
       validated_at: new Date().toISOString(),
       school_id: schoolId,
       notes: recordNotes || null,
+      student_fee_id: isFee ? fee.id : null,
+      activity_fee_id: isFee ? null : fee.id,
     };
-    if (isFee) insertPayload.student_fee_id = fee.id;
-    else insertPayload.activity_fee_id = fee.id;
-
     const { error: insErr } = await supabase.from("payments").insert(insertPayload);
     if (insErr) {
       setRecordUploading(false);
