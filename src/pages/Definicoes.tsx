@@ -248,6 +248,9 @@ const Definicoes = () => {
   const [academicSettings, setAcademicSettings] = useState({
     honor_roll_min_average: 14,
     grading_max_score: 20,
+    late_fee_enabled: false,
+    late_fee_type: "fixed" as "fixed" | "percentage",
+    late_fee_value: 0,
   });
   const [savingAcademicSettings, setSavingAcademicSettings] = useState(false);
 
@@ -366,10 +369,16 @@ const Definicoes = () => {
         const s = (schoolRes.data.settings ?? {}) as {
           honor_roll_min_average?: number;
           grading_max_score?: number;
+          late_fee_enabled?: boolean;
+          late_fee_type?: "fixed" | "percentage";
+          late_fee_value?: number;
         };
         setAcademicSettings({
           honor_roll_min_average: typeof s.honor_roll_min_average === "number" ? s.honor_roll_min_average : 14,
           grading_max_score: typeof s.grading_max_score === "number" ? s.grading_max_score : 20,
+          late_fee_enabled: typeof s.late_fee_enabled === "boolean" ? s.late_fee_enabled : false,
+          late_fee_type: s.late_fee_type === "percentage" ? "percentage" : "fixed",
+          late_fee_value: typeof s.late_fee_value === "number" ? s.late_fee_value : 0,
         });
       }
       if (yearRes.data) {
@@ -656,6 +665,15 @@ const Definicoes = () => {
     if (Number.isNaN(min) || min < 0 || Number.isNaN(max) || max <= 0 || min > max) {
       return showToast("error", "Verifique os valores: 0 ≤ média mínima ≤ nota máxima.");
     }
+    const lateValue = Number(academicSettings.late_fee_value);
+    if (academicSettings.late_fee_enabled) {
+      if (Number.isNaN(lateValue) || lateValue <= 0) {
+        return showToast("error", "Defina um valor de multa maior que zero.");
+      }
+      if (academicSettings.late_fee_type === "percentage" && lateValue > 100) {
+        return showToast("error", "A percentagem da multa não pode exceder 100%.");
+      }
+    }
     setSavingAcademicSettings(true);
     // Merge into existing settings to avoid wiping unrelated keys
     const { data: current } = await supabase
@@ -667,6 +685,9 @@ const Definicoes = () => {
       ...((current?.settings ?? {}) as Record<string, unknown>),
       honor_roll_min_average: min,
       grading_max_score: max,
+      late_fee_enabled: academicSettings.late_fee_enabled,
+      late_fee_type: academicSettings.late_fee_type,
+      late_fee_value: academicSettings.late_fee_enabled ? lateValue : 0,
     };
     const { error } = await supabase.from("schools").update({ settings: merged }).eq("id", schoolId);
     setSavingAcademicSettings(false);
@@ -1222,6 +1243,72 @@ const Definicoes = () => {
                   />
                 </Field>
               </div>
+              <div className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
+                <SaveBar onClick={handleSaveAcademicSettings} saving={savingAcademicSettings} isAdmin={isAdmin} />
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              title="Multas por Atraso de Propinas"
+              desc="Aplicada automaticamente no dia 11 de cada mês a propinas vencidas e ainda não pagas. Pode ser um valor fixo (Kz) ou uma percentagem do valor da propina."
+            >
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+                <Field label="Cobrar multa por atraso?">
+                  <select
+                    className={inputCls(false)}
+                    disabled={!isAdmin}
+                    value={academicSettings.late_fee_enabled ? "yes" : "no"}
+                    onChange={(e) =>
+                      setAcademicSettings((s) => ({ ...s, late_fee_enabled: e.target.value === "yes" }))
+                    }
+                  >
+                    <option value="no">Não cobrar</option>
+                    <option value="yes">Sim, cobrar multa</option>
+                  </select>
+                </Field>
+                <Field label="Tipo de multa">
+                  <select
+                    className={inputCls(false)}
+                    disabled={!isAdmin || !academicSettings.late_fee_enabled}
+                    value={academicSettings.late_fee_type}
+                    onChange={(e) =>
+                      setAcademicSettings((s) => ({
+                        ...s,
+                        late_fee_type: e.target.value === "percentage" ? "percentage" : "fixed",
+                      }))
+                    }
+                  >
+                    <option value="fixed">Valor fixo (Kz)</option>
+                    <option value="percentage">Percentagem (%)</option>
+                  </select>
+                </Field>
+                <Field
+                  label={
+                    academicSettings.late_fee_type === "percentage"
+                      ? "Percentagem da multa (%)"
+                      : "Valor da multa (Kz)"
+                  }
+                >
+                  <input
+                    type="number"
+                    min={0}
+                    step={academicSettings.late_fee_type === "percentage" ? 0.5 : 100}
+                    className={inputCls(false)}
+                    disabled={!isAdmin || !academicSettings.late_fee_enabled}
+                    value={academicSettings.late_fee_value}
+                    onChange={(e) =>
+                      setAcademicSettings((s) => ({
+                        ...s,
+                        late_fee_value: e.target.value === "" ? 0 : Number(e.target.value),
+                      }))
+                    }
+                  />
+                </Field>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                A multa é aplicada uma única vez por propina em atraso, no dia 11. As propinas pagas antes do
+                vencimento ou já regularizadas não são afetadas.
+              </p>
               <div className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
                 <SaveBar onClick={handleSaveAcademicSettings} saving={savingAcademicSettings} isAdmin={isAdmin} />
               </div>
