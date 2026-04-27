@@ -252,9 +252,14 @@ const Pagamentos = () => {
     const userId = userRes.user?.id;
     if (!userId) { toast({ title: "Sessão expirada", variant: "destructive" }); return; }
 
-    const isFee = recordDialog.kind === "fee";
+    const kind = recordDialog.kind;
     const fee = recordDialog.fee;
-    const studentId = isFee ? (fee as FeeListRow).student_id : (fee as ActivityFeeRow).student_id;
+    const studentId =
+      kind === "fee"
+        ? (fee as FeeListRow).student_id
+        : kind === "activity"
+        ? (fee as ActivityFeeRow).student_id
+        : (fee as TransportFeeRow).student_id;
     setRecordUploading(true);
     const ext = recordFile.name.split(".").pop() || "bin";
     const path = `${schoolId}/${studentId}/${fee.id}-${Date.now()}.${ext}`;
@@ -275,8 +280,9 @@ const Pagamentos = () => {
       validated_at: new Date().toISOString(),
       school_id: schoolId,
       notes: recordNotes || null,
-      student_fee_id: isFee ? fee.id : null,
-      activity_fee_id: isFee ? null : fee.id,
+      student_fee_id: kind === "fee" ? fee.id : null,
+      activity_fee_id: kind === "activity" ? fee.id : null,
+      transport_fee_id: kind === "transport" ? fee.id : null,
     };
     const { error: insErr } = await supabase.from("payments").insert(insertPayload);
     if (insErr) {
@@ -284,18 +290,21 @@ const Pagamentos = () => {
       toast({ title: "Erro a registar pagamento", description: insErr.message, variant: "destructive" });
       return;
     }
-    const { error: feeErr } = isFee
-      ? await supabase.from("student_fees").update({ is_paid: true }).eq("id", fee.id)
-      : await supabase.from("activity_fees").update({ is_paid: true }).eq("id", fee.id);
+    const { error: feeErr } =
+      kind === "fee"
+        ? await supabase.from("student_fees").update({ is_paid: true }).eq("id", fee.id)
+        : kind === "activity"
+        ? await supabase.from("activity_fees").update({ is_paid: true }).eq("id", fee.id)
+        : await supabase.from("transport_fees").update({ is_paid: true }).eq("id", fee.id);
     if (feeErr) {
       setRecordUploading(false);
       toast({ title: "Pagamento registado mas falha a marcar como pago", description: feeErr.message, variant: "destructive" });
       return;
     }
     // Notificar encarregado
-    const parentId = (fee as FeeListRow | ActivityFeeRow).student?.parent_id;
+    const parentId = (fee as FeeListRow | ActivityFeeRow | TransportFeeRow).student?.parent_id;
     if (parentId) {
-      if (isFee) {
+      if (kind === "fee") {
         const f = fee as FeeListRow;
         const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
         await supabase.from("notifications").insert({
@@ -306,7 +315,7 @@ const Pagamentos = () => {
           category: "pagamento",
           link: "/financas",
         });
-      } else {
+      } else if (kind === "activity") {
         const f = fee as ActivityFeeRow;
         await supabase.from("notifications").insert({
           recipient_id: parentId,
@@ -315,6 +324,17 @@ const Pagamentos = () => {
           description: `A escola registou o pagamento da atividade ${f.activity?.name ?? ""} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}). Pode consultar o comprovativo no portal.`,
           category: "pagamento",
           link: "/extracurriculares",
+        });
+      } else {
+        const f = fee as TransportFeeRow;
+        const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
+        await supabase.from("notifications").insert({
+          recipient_id: parentId,
+          school_id: schoolId,
+          title: `Pagamento de transporte registado — ${monthLabel}`.trim(),
+          description: `A escola registou o pagamento do transporte (${f.route?.name ?? "rota"}) de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).`,
+          category: "pagamento",
+          link: "/transportes",
         });
       }
     }
