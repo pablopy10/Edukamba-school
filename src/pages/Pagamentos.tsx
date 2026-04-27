@@ -1111,6 +1111,7 @@ const Pagamentos = () => {
             <TabsTrigger value="rules">Regras de propina</TabsTrigger>
             <TabsTrigger value="fees">Propinas</TabsTrigger>
             <TabsTrigger value="activity-fees">Extracurriculares</TabsTrigger>
+            <TabsTrigger value="transport-fees">Transporte</TabsTrigger>
             <TabsTrigger value="family">Descontos por irmão</TabsTrigger>
             <TabsTrigger value="overrides">Descontos por aluno</TabsTrigger>
           </TabsList>
