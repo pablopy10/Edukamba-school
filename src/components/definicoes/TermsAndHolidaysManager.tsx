@@ -54,18 +54,25 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
   const load = async () => {
     if (!schoolId) return;
     setLoading(true);
-    const [tRes, hRes] = await Promise.all([
-      supabase
-        .from("academic_terms")
-        .select("id, term_number, name, start_date, end_date")
-        .eq("school_id", schoolId)
-        .order("term_number"),
-      supabase
-        .from("school_holidays")
-        .select("id, name, start_date, end_date, description")
-        .eq("school_id", schoolId)
-        .order("start_date"),
-    ]);
+    let termsQuery = supabase
+      .from("academic_terms")
+      .select("id, term_number, name, start_date, end_date")
+      .eq("school_id", schoolId)
+      .order("term_number");
+    let holidaysQuery = supabase
+      .from("school_holidays")
+      .select("id, name, start_date, end_date, description")
+      .eq("school_id", schoolId)
+      .order("start_date");
+    if (academicYearId) {
+      termsQuery = termsQuery.eq("academic_year_id", academicYearId);
+      holidaysQuery = holidaysQuery.eq("academic_year_id", academicYearId);
+    } else {
+      // No academic year selected → show only legacy entries with no year
+      termsQuery = termsQuery.is("academic_year_id", null);
+      holidaysQuery = holidaysQuery.is("academic_year_id", null);
+    }
+    const [tRes, hRes] = await Promise.all([termsQuery, holidaysQuery]);
     const fetched = (tRes.data ?? []) as Term[];
     setTerms(fetched);
     setHolidays((hRes.data ?? []) as Holiday[]);
@@ -87,7 +94,7 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schoolId]);
+  }, [schoolId, academicYearId]);
 
   const updateTermDraft = (n: number, field: "name" | "start_date" | "end_date", value: string) => {
     setTermDrafts((prev) => ({
