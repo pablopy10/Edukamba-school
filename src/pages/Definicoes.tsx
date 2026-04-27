@@ -27,6 +27,7 @@ import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/integrations/supabase/types";
+import { TermsAndHolidaysManager } from "@/components/definicoes/TermsAndHolidaysManager";
 
 type Tab =
   | "escola"
@@ -935,41 +936,50 @@ const Definicoes = () => {
 
         {/* ACADÉMICO */}
         {activeTab === "academico" && (
-          <SectionCard title="Configuração Académica" desc="Ano letivo ativo da escola.">
-            {!year.id ? (
-              <p className="text-sm text-muted-foreground">Sem ano letivo ativo.</p>
-            ) : (
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <Field label="Ano letivo">
-                  <input
-                    className={inputCls(false)}
-                    disabled={!isAdmin}
-                    value={year.label}
-                    onChange={(e) => setYear({ ...year, label: e.target.value })}
-                  />
-                </Field>
-                <Field label="Início" icon={Calendar}>
-                  <input
-                    type="date"
-                    className={inputCls(false)}
-                    disabled={!isAdmin}
-                    value={year.start_date}
-                    onChange={(e) => setYear({ ...year, start_date: e.target.value })}
-                  />
-                </Field>
-                <Field label="Fim" icon={Calendar}>
-                  <input
-                    type="date"
-                    className={inputCls(false)}
-                    disabled={!isAdmin}
-                    value={year.end_date}
-                    onChange={(e) => setYear({ ...year, end_date: e.target.value })}
-                  />
-                </Field>
-              </div>
-            )}
-            <SaveBar onClick={handleSaveAcademic} disabled={!year.id} saving={saving} isAdmin={isAdmin} />
-          </SectionCard>
+          <div className="flex flex-col gap-6">
+            <SectionCard title="Ano letivo" desc="Ano letivo ativo da escola.">
+              {!year.id ? (
+                <p className="text-sm text-muted-foreground">Sem ano letivo ativo.</p>
+              ) : (
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                  <Field label="Ano letivo">
+                    <input
+                      className={inputCls(false)}
+                      disabled={!isAdmin}
+                      value={year.label}
+                      onChange={(e) => setYear({ ...year, label: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Início" icon={Calendar}>
+                    <input
+                      type="date"
+                      className={inputCls(false)}
+                      disabled={!isAdmin}
+                      value={year.start_date}
+                      onChange={(e) => setYear({ ...year, start_date: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Fim" icon={Calendar}>
+                    <input
+                      type="date"
+                      className={inputCls(false)}
+                      disabled={!isAdmin}
+                      value={year.end_date}
+                      onChange={(e) => setYear({ ...year, end_date: e.target.value })}
+                    />
+                  </Field>
+                </div>
+              )}
+              <SaveBar onClick={handleSaveAcademic} disabled={!year.id} saving={saving} isAdmin={isAdmin} />
+            </SectionCard>
+
+            <SectionCard
+              title="Trimestres e Férias"
+              desc="Defina as datas dos 1º, 2º e 3º trimestres e marque os períodos de férias dos alunos."
+            >
+              <TermsAndHolidaysManager schoolId={schoolId} academicYearId={year.id ?? null} isAdmin={isAdmin} />
+            </SectionCard>
+          </div>
         )}
 
         {/* UTILIZADORES */}
