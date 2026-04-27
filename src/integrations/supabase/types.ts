@@ -786,6 +786,7 @@ export type Database = {
           notes: string | null
           payment_method: string | null
           receipt_url: string | null
+          recurring_expense_id: string | null
           school_id: string
           updated_at: string
         }
@@ -800,6 +801,7 @@ export type Database = {
           notes?: string | null
           payment_method?: string | null
           receipt_url?: string | null
+          recurring_expense_id?: string | null
           school_id: string
           updated_at?: string
         }
@@ -814,6 +816,7 @@ export type Database = {
           notes?: string | null
           payment_method?: string | null
           receipt_url?: string | null
+          recurring_expense_id?: string | null
           school_id?: string
           updated_at?: string
         }
@@ -830,6 +833,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_recurring_expense_id_fkey"
+            columns: ["recurring_expense_id"]
+            isOneToOne: false
+            referencedRelation: "recurring_expenses"
             referencedColumns: ["id"]
           },
           {
@@ -1600,6 +1610,72 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "profiles_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recurring_expenses: {
+        Row: {
+          amount: number
+          category_id: string | null
+          created_at: string
+          created_by: string | null
+          description: string
+          end_date: string | null
+          frequency: string
+          id: string
+          is_active: boolean
+          notes: string | null
+          payment_method: string | null
+          school_id: string
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          category_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description: string
+          end_date?: string | null
+          frequency: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          payment_method?: string | null
+          school_id: string
+          start_date?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          category_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          payment_method?: string | null
+          school_id?: string
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_expenses_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "expense_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_expenses_school_id_fkey"
             columns: ["school_id"]
             isOneToOne: false
             referencedRelation: "schools"
@@ -2417,6 +2493,10 @@ export type Database = {
       }
       generate_activity_fees: {
         Args: { _enrollment_id: string }
+        Returns: number
+      }
+      generate_recurring_expense_occurrences: {
+        Args: { _recurring_id: string; _until?: string }
         Returns: number
       }
       generate_student_fees_for_year: {

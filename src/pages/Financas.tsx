@@ -16,7 +16,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet, AlertCircle } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet, AlertCircle, RefreshCw, Repeat, Power } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   LineChart, Line,
@@ -35,6 +37,27 @@ type Expense = {
 };
 type Category = { id: string; name: string; color: string | null };
 
+type RecurringFrequency = "mensal" | "trimestral" | "semestral" | "anual";
+type RecurringExpense = {
+  id: string;
+  category_id: string | null;
+  description: string;
+  amount: number;
+  frequency: RecurringFrequency;
+  start_date: string;
+  end_date: string | null;
+  payment_method: string | null;
+  notes: string | null;
+  is_active: boolean;
+  category?: { name: string; color: string | null } | null;
+};
+const FREQ_LABEL: Record<RecurringFrequency, string> = {
+  mensal: "Mensal",
+  trimestral: "Trimestral",
+  semestral: "Semestral",
+  anual: "Anual",
+};
+
 const monthShort = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const fmtAOA = (n: number) =>
   new Intl.NumberFormat("pt-PT", { style: "currency", currency: "AOA", maximumFractionDigits: 0 }).format(n || 0);
@@ -43,6 +66,7 @@ const Financas = () => {
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [recurring, setRecurring] = useState<RecurringExpense[]>([]);
   const [revenueByMonth, setRevenueByMonth] = useState<Record<number, number>>({});
   const [overdueAmount, setOverdueAmount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -67,6 +91,23 @@ const Financas = () => {
   const [deleteExp, setDeleteExp] = useState<string | null>(null);
   const [deleteCat, setDeleteCat] = useState<string | null>(null);
 
+  // Recurring expense state
+  const [recDialog, setRecDialog] = useState(false);
+  const [editingRec, setEditingRec] = useState<RecurringExpense | null>(null);
+  const [recForm, setRecForm] = useState({
+    description: "",
+    amount: "0",
+    frequency: "mensal" as RecurringFrequency,
+    start_date: new Date().toISOString().slice(0, 10),
+    end_date: "",
+    category_id: "",
+    payment_method: "",
+    notes: "",
+    is_active: true,
+  });
+  const [deleteRec, setDeleteRec] = useState<string | null>(null);
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+
   const fetchAll = async () => {
     setLoading(true);
     const { data: profile } = await supabase
@@ -81,18 +122,23 @@ const Financas = () => {
     const yearStart = `${year}-01-01`;
     const yearEnd = `${year}-12-31`;
 
-    const [eRes, cRes, fRes] = await Promise.all([
+    const [eRes, cRes, fRes, rRes] = await Promise.all([
       supabase.from("expenses").select("*, category:expense_categories(name, color)")
         .eq("school_id", sId).gte("expense_date", yearStart).lte("expense_date", yearEnd)
         .order("expense_date", { ascending: false }),
       supabase.from("expense_categories").select("*").eq("school_id", sId).order("name"),
       supabase.from("student_fees").select("amount_due, due_date, is_paid")
         .gte("due_date", yearStart).lte("due_date", yearEnd),
+      (supabase as any).from("recurring_expenses")
+        .select("*, category:expense_categories(name, color)")
+        .eq("school_id", sId)
+        .order("created_at", { ascending: false }),
     ]);
 
     if (eRes.error) toast({ title: "Erro a carregar despesas", description: eRes.error.message, variant: "destructive" });
     setExpenses((eRes.data ?? []) as Expense[]);
     setCategories((cRes.data ?? []) as Category[]);
+    setRecurring(((rRes as any)?.data ?? []) as RecurringExpense[]);
 
     // Receitas (apenas propinas pagas) por mês + overdue
     const revMap: Record<number, number> = {};
@@ -231,6 +277,97 @@ const Financas = () => {
     fetchAll();
   };
 
+  // Recurring expense CRUD
+  const openNewRec = () => {
+    setEditingRec(null);
+    setRecForm({
+      description: "",
+      amount: "0",
+      frequency: "mensal",
+      start_date: new Date().toISOString().slice(0, 10),
+      end_date: "",
+      category_id: "",
+      payment_method: "",
+      notes: "",
+      is_active: true,
+    });
+    setRecDialog(true);
+  };
+  const openEditRec = (r: RecurringExpense) => {
+    setEditingRec(r);
+    setRecForm({
+      description: r.description,
+      amount: String(r.amount),
+      frequency: r.frequency,
+      start_date: r.start_date,
+      end_date: r.end_date ?? "",
+      category_id: r.category_id ?? "",
+      payment_method: r.payment_method ?? "",
+      notes: r.notes ?? "",
+      is_active: r.is_active,
+    });
+    setRecDialog(true);
+  };
+  const saveRec = async () => {
+    if (!schoolId) return;
+    if (!recForm.description.trim()) { toast({ title: "Descrição obrigatória", variant: "destructive" }); return; }
+    const payload: Record<string, unknown> = {
+      school_id: schoolId,
+      description: recForm.description.trim(),
+      amount: Number(recForm.amount) || 0,
+      frequency: recForm.frequency,
+      start_date: recForm.start_date,
+      end_date: recForm.end_date || null,
+      category_id: recForm.category_id || null,
+      payment_method: recForm.payment_method.trim() || null,
+      notes: recForm.notes.trim() || null,
+      is_active: recForm.is_active,
+    };
+    let savedId: string | null = editingRec?.id ?? null;
+    if (editingRec) {
+      const { error } = await (supabase as any).from("recurring_expenses").update(payload).eq("id", editingRec.id);
+      if (error) { toast({ title: "Erro a guardar", description: error.message, variant: "destructive" }); return; }
+    } else {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await (supabase as any).from("recurring_expenses")
+        .insert({ ...payload, created_by: user?.id ?? null })
+        .select("id")
+        .single();
+      if (error) { toast({ title: "Erro a guardar", description: error.message, variant: "destructive" }); return; }
+      savedId = data?.id ?? null;
+    }
+    // Gerar automaticamente as ocorrências até final do ano em curso (+12 meses)
+    if (savedId && recForm.is_active) {
+      await (supabase as any).rpc("generate_recurring_expense_occurrences", { _recurring_id: savedId });
+    }
+    toast({ title: editingRec ? "Recorrência atualizada" : "Recorrência criada", description: "Despesas geradas automaticamente." });
+    setRecDialog(false);
+    fetchAll();
+  };
+  const confirmDeleteRec = async () => {
+    if (!deleteRec) return;
+    const { error } = await (supabase as any).from("recurring_expenses").delete().eq("id", deleteRec);
+    if (error) toast({ title: "Erro a apagar", description: error.message, variant: "destructive" });
+    else toast({ title: "Recorrência apagada", description: "Despesas já lançadas foram mantidas." });
+    setDeleteRec(null);
+    fetchAll();
+  };
+  const toggleRecActive = async (r: RecurringExpense) => {
+    const { error } = await (supabase as any).from("recurring_expenses")
+      .update({ is_active: !r.is_active }).eq("id", r.id);
+    if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); return; }
+    toast({ title: r.is_active ? "Recorrência pausada" : "Recorrência ativada" });
+    fetchAll();
+  };
+  const generateNow = async (r: RecurringExpense) => {
+    setGeneratingId(r.id);
+    const { data, error } = await (supabase as any).rpc("generate_recurring_expense_occurrences", { _recurring_id: r.id });
+    setGeneratingId(null);
+    if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Ocorrências geradas", description: `${data ?? 0} novas despesas lançadas.` });
+    fetchAll();
+  };
+
   const downloadReceipt = async (path: string) => {
     const { data, error } = await supabase.storage.from("expense-receipts").createSignedUrl(path, 60);
     if (error || !data?.signedUrl) { toast({ title: "Erro", description: error?.message, variant: "destructive" }); return; }
@@ -341,6 +478,7 @@ const Financas = () => {
         <Tabs defaultValue="expenses" className="w-full">
           <TabsList>
             <TabsTrigger value="expenses">Despesas</TabsTrigger>
+            <TabsTrigger value="recurring">Recorrentes</TabsTrigger>
             <TabsTrigger value="categories">Categorias</TabsTrigger>
           </TabsList>
 
@@ -393,6 +531,82 @@ const Financas = () => {
                             <td className="py-2 px-2 text-right">
                               <Button size="icon" variant="ghost" onClick={() => openEditExp(e)}><Pencil className="h-4 w-4" /></Button>
                               <Button size="icon" variant="ghost" onClick={() => setDeleteExp(e.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="recurring" className="space-y-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2"><Repeat className="h-5 w-5" /> Despesas recorrentes</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Salários, combustível, rendas, etc. Geram lançamentos automáticos contados no lucro.
+                  </p>
+                </div>
+                <Button onClick={openNewRec} size="sm" className="gap-2"><Plus className="h-4 w-4" /> Nova recorrência</Button>
+              </CardHeader>
+              <CardContent>
+                {recurring.length === 0 ? (
+                  <p className="text-center py-10 text-muted-foreground">Sem despesas recorrentes. Cria a primeira.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="py-2 px-2">Descrição</th>
+                          <th className="py-2 px-2">Categoria</th>
+                          <th className="py-2 px-2">Frequência</th>
+                          <th className="py-2 px-2">Valor</th>
+                          <th className="py-2 px-2">Início</th>
+                          <th className="py-2 px-2">Fim</th>
+                          <th className="py-2 px-2">Estado</th>
+                          <th className="py-2 px-2 text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recurring.map((r) => (
+                          <tr key={r.id} className="border-b hover:bg-muted/30">
+                            <td className="py-2 px-2 font-medium">{r.description}</td>
+                            <td className="py-2 px-2">
+                              {r.category ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs">
+                                  <span className="h-2 w-2 rounded-full" style={{ background: r.category.color ?? "#6366f1" }} />
+                                  {r.category.name}
+                                </span>
+                              ) : <span className="text-muted-foreground">—</span>}
+                            </td>
+                            <td className="py-2 px-2">
+                              <Badge variant="secondary">{FREQ_LABEL[r.frequency]}</Badge>
+                            </td>
+                            <td className="py-2 px-2 font-semibold text-rose-600">{fmtAOA(Number(r.amount))}</td>
+                            <td className="py-2 px-2">{new Date(r.start_date).toLocaleDateString("pt-PT")}</td>
+                            <td className="py-2 px-2">{r.end_date ? new Date(r.end_date).toLocaleDateString("pt-PT") : <span className="text-muted-foreground">indefinido</span>}</td>
+                            <td className="py-2 px-2">
+                              <Badge variant={r.is_active ? "default" : "outline"}>{r.is_active ? "Ativa" : "Pausada"}</Badge>
+                            </td>
+                            <td className="py-2 px-2 text-right">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                title="Gerar ocorrências em falta"
+                                onClick={() => generateNow(r)}
+                                disabled={generatingId === r.id}
+                              >
+                                {generatingId === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                              </Button>
+                              <Button size="icon" variant="ghost" title={r.is_active ? "Pausar" : "Ativar"} onClick={() => toggleRecActive(r)}>
+                                <Power className={`h-4 w-4 ${r.is_active ? "text-emerald-600" : "text-muted-foreground"}`} />
+                              </Button>
+                              <Button size="icon" variant="ghost" onClick={() => openEditRec(r)}><Pencil className="h-4 w-4" /></Button>
+                              <Button size="icon" variant="ghost" onClick={() => setDeleteRec(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                             </td>
                           </tr>
                         ))}
@@ -539,6 +753,108 @@ const Financas = () => {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeleteCat}>Apagar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* RECURRING DIALOG */}
+      <Dialog open={recDialog} onOpenChange={setRecDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editingRec ? "Editar recorrência" : "Nova despesa recorrente"}</DialogTitle>
+            <DialogDescription>
+              As ocorrências são geradas automaticamente como despesas, contando para o lucro mensal.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label>Descrição</Label>
+              <Input
+                value={recForm.description}
+                onChange={(e) => setRecForm({ ...recForm, description: e.target.value })}
+                placeholder="Ex: Salário do João, Combustível do gerador"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Valor (AOA)</Label>
+                <Input type="number" min="0" value={recForm.amount}
+                  onChange={(e) => setRecForm({ ...recForm, amount: e.target.value })} />
+              </div>
+              <div className="grid gap-2">
+                <Label>Frequência</Label>
+                <Select value={recForm.frequency} onValueChange={(v) => setRecForm({ ...recForm, frequency: v as RecurringFrequency })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mensal">Mensal</SelectItem>
+                    <SelectItem value="trimestral">Trimestral</SelectItem>
+                    <SelectItem value="semestral">Semestral</SelectItem>
+                    <SelectItem value="anual">Anual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Início</Label>
+                <Input type="date" value={recForm.start_date}
+                  onChange={(e) => setRecForm({ ...recForm, start_date: e.target.value })} />
+              </div>
+              <div className="grid gap-2">
+                <Label>Fim (opcional)</Label>
+                <Input type="date" value={recForm.end_date}
+                  onChange={(e) => setRecForm({ ...recForm, end_date: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Categoria</Label>
+                <Select value={recForm.category_id || "_none"} onValueChange={(v) => setRecForm({ ...recForm, category_id: v === "_none" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder="Sem categoria" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">Sem categoria</SelectItem>
+                    {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Método de pagamento</Label>
+                <Input value={recForm.payment_method}
+                  onChange={(e) => setRecForm({ ...recForm, payment_method: e.target.value })}
+                  placeholder="Ex: Transferência" />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label>Notas</Label>
+              <Textarea rows={2} value={recForm.notes}
+                onChange={(e) => setRecForm({ ...recForm, notes: e.target.value })} />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <p className="text-sm font-medium">Recorrência ativa</p>
+                <p className="text-xs text-muted-foreground">Quando ativa, gera novas ocorrências automaticamente.</p>
+              </div>
+              <Switch checked={recForm.is_active} onCheckedChange={(v) => setRecForm({ ...recForm, is_active: v })} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRecDialog(false)}>Cancelar</Button>
+            <Button onClick={saveRec}>Guardar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleteRec} onOpenChange={(o) => !o && setDeleteRec(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar despesa recorrente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Os lançamentos já criados nas despesas serão mantidos. Deixarão apenas de ser geradas novas ocorrências.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteRec}>Apagar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
