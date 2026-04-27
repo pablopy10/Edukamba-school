@@ -315,7 +315,7 @@ const Alunos = () => {
           { key: "phone", label: "Telefone", aliases: ["telemovel", "tel", "phone"], example: "924 000 000" },
           { key: "enrollment_number", label: "Nº Matrícula", aliases: ["matricula", "n matricula", "numero"], example: "2024-01-001" },
           { key: "birth_date", label: "Data de nascimento", aliases: ["data nascimento", "nascimento", "birth"], example: "2012-05-14" },
-          { key: "gender", label: "Género", aliases: ["genero", "sexo"], example: "M" },
+          { key: "gender", label: "Género", aliases: ["genero", "sexo"], example: "Masculino" },
           { key: "classroom", label: "Turma", aliases: ["turma", "classe", "classroom"], example: "5ª A" },
         ]}
         onImportRow={async (row) => {
