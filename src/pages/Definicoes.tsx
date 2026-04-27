@@ -1538,6 +1538,114 @@ const Definicoes = () => {
               </div>
             </SectionCard>
 
+            <SectionCard
+              title="Planos & Preços"
+              desc="Compare os planos disponíveis e o que cada um inclui."
+            >
+              <div className="grid gap-4 lg:grid-cols-3">
+                {[
+                  {
+                    name: "Essencial",
+                    price: "500 Kz",
+                    suffix: "/aluno · mês",
+                    tagline:
+                      "Organização administrativa básica e digitalização da secretaria.",
+                    features: [
+                      "Gestão Escolar Core: Alunos, Professores, Turmas e Disciplinas",
+                      "Secretaria Digital: Matrículas e Encarregados de Educação",
+                      "Controlo de Presenças: registo de faltas de alunos",
+                      "Horário Escolar: consulta de horários de turmas e professores",
+                      "Eventos: calendário escolar básico",
+                      "Pagamentos & Finanças: registo manual e fluxo de caixa simples",
+                      "Relatórios Básicos: listagens de alunos e aproveitamento",
+                      "Permissões: níveis de acesso básicos (Admin, Secretaria, Professor)",
+                    ],
+                    highlight: false,
+                  },
+                  {
+                    name: "Pro",
+                    price: "1.000 Kz",
+                    suffix: "/aluno · mês",
+                    tagline:
+                      "Para escolas que querem eliminar o papel e aproximar os pais.",
+                    features: [
+                      "Tudo do plano Essencial",
+                      "Mobile App completa para Pais, Alunos e Professores",
+                      "Notificações Push de notas, faltas e avisos sem custos de SMS",
+                      "Cobranças automáticas de propinas em atraso",
+                      "Chats em tempo real entre encarregados e escola",
+                      "Atividades extracurriculares: inscrições e cobranças",
+                      "Pedidos de ausência de funcionários e professores",
+                      "Timesheet: controlo de horas e assiduidade",
+                    ],
+                    highlight: true,
+                  },
+                  {
+                    name: "Enterprise",
+                    price: "1.300 Kz",
+                    suffix: "/aluno · mês",
+                    tagline:
+                      "Gestão 360º com foco em logística, segurança e auditoria total.",
+                    features: [
+                      "Tudo do plano Pro",
+                      "Gestão de Transportes: rotas, passageiros e cobrança de giros",
+                      "Stock & Pedidos de Material: inventário e pedidos aos pais",
+                      "Auditoria avançada (Logs): histórico completo de alterações",
+                      "Relatórios avançados: crescimento, retenção e previsões financeiras",
+                      "Suporte prioritário 24/7",
+                      "Backup personalizado: opções extras de segurança de dados",
+                    ],
+                    highlight: false,
+                  },
+                ].map((p) => {
+                  const isCurrent = sub.plan_type === p.name;
+                  return (
+                    <div
+                      key={p.name}
+                      className={cn(
+                        "relative flex flex-col gap-4 rounded-2xl border-2 p-5",
+                        p.highlight
+                          ? "border-pastel-blue bg-pastel-blue/10"
+                          : "border-border bg-card",
+                      )}
+                    >
+                      {p.highlight && (
+                        <span className="absolute -top-3 left-5 rounded-full bg-pastel-blue px-3 py-1 text-[11px] font-semibold text-pastel-blue-foreground">
+                          Mais popular
+                        </span>
+                      )}
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-bold text-foreground">{p.name}</h3>
+                        {isCurrent && (
+                          <span className="rounded-full bg-pastel-green px-2.5 py-1 text-[11px] font-semibold text-pastel-green-foreground">
+                            Plano atual
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{p.tagline}</p>
+                      <div className="flex items-baseline gap-1 border-y border-border/60 py-3">
+                        <span className="text-3xl font-bold tracking-tight text-foreground">
+                          {p.price}
+                        </span>
+                        <span className="text-xs text-muted-foreground">{p.suffix}</span>
+                      </div>
+                      <ul className="flex flex-1 flex-col gap-2 text-sm">
+                        {p.features.map((f) => (
+                          <li key={f} className="flex items-start gap-2">
+                            <Check
+                              className="mt-0.5 h-4 w-4 shrink-0 text-pastel-blue-foreground"
+                              strokeWidth={2.5}
+                            />
+                            <span className="leading-snug text-foreground/90">{f}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            </SectionCard>
+
             <SectionCard title="Ciclo de Pagamento" desc="Escolha como prefere ser cobrado pela plataforma.">
               <div className="flex flex-wrap gap-3">
                 {(["SEMESTRAL", "ANNUAL"] as const).map((c) => (
