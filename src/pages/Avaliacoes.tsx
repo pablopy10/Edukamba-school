@@ -507,6 +507,7 @@ const CalendarView = ({
               const events = eventsByDate.get(c.iso) ?? [];
               const isToday = c.iso === todayIso;
               const isSelected = c.iso === selectedDate;
+              const holiday = holidayForDate(c.iso);
               return (
                 <button
                   key={i}
@@ -514,6 +515,7 @@ const CalendarView = ({
                   className={cn(
                     "flex min-h-[92px] flex-col items-stretch gap-1 rounded-xl border p-2 text-left transition-all hover:-translate-y-0.5",
                     isSelected ? "border-pastel-blue-foreground bg-pastel-blue/30" : "border-border bg-background",
+                    holiday && !isSelected && "border-pastel-yellow-foreground/30 bg-pastel-yellow/20",
                   )}
                 >
                   <div className="flex items-center justify-between">
@@ -526,6 +528,11 @@ const CalendarView = ({
                     )}
                   </div>
                   <div className="flex flex-col gap-1">
+                    {holiday && (
+                      <span className="truncate rounded-md bg-pastel-yellow px-1.5 py-0.5 text-[10px] font-semibold text-pastel-yellow-foreground">
+                        🌴 {holiday.name}
+                      </span>
+                    )}
                     {events.slice(0, 2).map((e) => (
                       <span key={e.id} className={cn("truncate rounded-md px-1.5 py-0.5 text-[10px] font-semibold", meta(e.type).color, conflictIds.has(e.id) && "ring-1 ring-destructive")}>
                         {e.title}
@@ -556,6 +563,15 @@ const CalendarView = ({
         {selectedDate && selectedEvents.length === 0 && (
           <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
             Sem avaliações neste dia.
+          </div>
+        )}
+
+        {selectedHoliday && (
+          <div className="mb-3 rounded-xl border border-pastel-yellow-foreground/30 bg-pastel-yellow/30 p-3 text-sm">
+            <p className="flex items-center gap-2 font-semibold text-pastel-yellow-foreground">
+              <span>🌴</span> {selectedHoliday.name}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Período de férias dos alunos.</p>
           </div>
         )}
 
