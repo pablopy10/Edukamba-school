@@ -1112,7 +1112,7 @@ const Pagamentos = () => {
             <TabsTrigger value="fees">Propinas</TabsTrigger>
             <TabsTrigger value="activity-fees">Extracurriculares</TabsTrigger>
             <TabsTrigger value="transport-fees">Transporte</TabsTrigger>
-            <TabsTrigger value="family">Descontos por irmão</TabsTrigger>
+            <TabsTrigger value="family">Descontos por familiar</TabsTrigger>
             <TabsTrigger value="overrides">Descontos por aluno</TabsTrigger>
           </TabsList>
 
@@ -1843,7 +1843,7 @@ const Pagamentos = () => {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle>Desconto automático por irmão</CardTitle>
+                  <CardTitle>Desconto automático por familiar</CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">Quando um educador tem vários filhos na escola, aplica-se um desconto.</p>
                 </div>
                 <Button onClick={openNewFamily} size="sm" className="gap-2"><Plus className="h-4 w-4" /> Nova regra</Button>
@@ -1856,7 +1856,7 @@ const Pagamentos = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
-                          <th className="py-2 px-2">Posição do irmão</th>
+                          <th className="py-2 px-2">Posição do familiar</th>
                           <th className="py-2 px-2">Desconto</th>
                           <th className="py-2 px-2 text-right">Ações</th>
                         </tr>
@@ -1992,7 +1992,7 @@ const Pagamentos = () => {
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label>A partir do … irmão</Label>
+              <Label>A partir do … familiar</Label>
               <Input type="number" min="2" max="10" value={familyForm.sibling_position} onChange={(e) => setFamilyForm({ ...familyForm, sibling_position: e.target.value })} />
               <p className="text-xs text-muted-foreground">2 = aplicar ao 2º filho em diante; 3 = só ao 3º em diante; etc.</p>
             </div>
