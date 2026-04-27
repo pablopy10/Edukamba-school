@@ -166,11 +166,11 @@ export const TransportEnrollmentDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{initial ? "Editar inscrição" : "Inscrever aluno no transporte"}</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 overflow-y-auto flex-1 pr-2 -mr-2">
           <div>
             <Label>Rota *</Label>
             <Select value={form.route_id} onValueChange={(v) => setForm({ ...form, route_id: v, pickup_stop_id: "", dropoff_stop_id: "" })}>
@@ -264,7 +264,7 @@ export const TransportEnrollmentDialog = ({
             <Label>Gerar mensalidades automaticamente após guardar</Label>
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex-shrink-0">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={submit} disabled={saving}>{saving ? "A guardar..." : "Guardar"}</Button>
         </DialogFooter>
