@@ -434,6 +434,20 @@ const Extracurriculares = () => {
                     ) : null}
                   </div>
 
+                  {a.enrollment_fee && a.enrollment_fee > 0 && billingStatus[a.id] && billingStatus[a.id].enrolled > 0 && (
+                    billingStatus[a.id].billed >= billingStatus[a.id].enrolled ? (
+                      <div className="inline-flex items-center gap-1.5 rounded-lg bg-pastel-green px-2.5 py-1.5 text-[11px] font-semibold text-pastel-green-foreground w-fit">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Cobrança gerada para todos os inscritos
+                      </div>
+                    ) : billingStatus[a.id].billed > 0 ? (
+                      <div className="inline-flex items-center gap-1.5 rounded-lg bg-pastel-yellow px-2.5 py-1.5 text-[11px] font-semibold text-pastel-yellow-foreground w-fit">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Cobrança gerada para {billingStatus[a.id].billed} de {billingStatus[a.id].enrolled} inscritos
+                      </div>
+                    ) : null
+                  )}
+
                   {canEdit && (
                     <button
                       onClick={() => { setEnrollActivity(a); setEnrollOpen(true); }}
