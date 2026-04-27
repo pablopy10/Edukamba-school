@@ -782,6 +782,7 @@ const Pagamentos = () => {
         <Tabs defaultValue="rules" className="w-full">
           <TabsList>
             <TabsTrigger value="fees">Propinas</TabsTrigger>
+            <TabsTrigger value="activity-fees">Extracurriculares</TabsTrigger>
             <TabsTrigger value="rules">Regras de propina</TabsTrigger>
             <TabsTrigger value="family">Descontos por irmão</TabsTrigger>
             <TabsTrigger value="overrides">Descontos por aluno</TabsTrigger>
