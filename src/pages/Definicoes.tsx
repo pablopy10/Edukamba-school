@@ -1669,10 +1669,35 @@ const Definicoes = () => {
                           </li>
                         ))}
                       </ul>
+                      <button
+                        type="button"
+                        disabled={!isAdmin || isCurrent}
+                        onClick={() =>
+                          setPlanRequest({
+                            open: true,
+                            targetPlan: p.name as "Essencial" | "Pro" | "Enterprise",
+                            message: "",
+                            submitting: false,
+                          })
+                        }
+                        className={cn(
+                          "mt-2 inline-flex h-10 w-full items-center justify-center rounded-xl px-4 text-sm font-semibold transition-[var(--transition-smooth)] disabled:cursor-not-allowed disabled:opacity-50",
+                          isCurrent
+                            ? "bg-muted text-muted-foreground"
+                            : p.highlight
+                              ? "bg-pastel-blue text-pastel-blue-foreground hover:opacity-90"
+                              : "border border-border bg-card text-foreground hover:bg-accent",
+                        )}
+                      >
+                        {isCurrent ? "Plano atual" : `Solicitar plano ${p.name}`}
+                      </button>
                     </div>
                   );
                 })}
               </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                A ativação ou alteração do plano é feita pela equipa Edukamba após a assinatura do contrato. Ao solicitar um plano, será enviado um email para <span className="font-medium text-foreground">geral@edukamba.com</span> com o seu pedido.
+              </p>
             </SectionCard>
 
             <SectionCard title="Ciclo de Pagamento" desc="Escolha como prefere ser cobrado pela plataforma.">
