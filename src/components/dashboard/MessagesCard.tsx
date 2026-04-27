@@ -1,3 +1,5 @@
+import { useNavigate } from "react-router-dom";
+
 const palette = [
   "bg-pastel-pink text-pastel-pink-foreground",
   "bg-pastel-lilac text-pastel-lilac-foreground",
@@ -7,15 +9,25 @@ const palette = [
 ];
 
 interface MessagesCardProps {
-  messages: { id: string; name: string; initials: string; text: string; time: string; unread: boolean }[];
+  messages: { id: string; name: string; initials: string; text: string; time: string; unread: boolean; senderId: string | null }[];
 }
 
 export const MessagesCard = ({ messages }: MessagesCardProps) => {
+  const navigate = useNavigate();
+  const openChat = (senderId: string | null) => {
+    if (senderId) navigate(`/chat?to=${senderId}`);
+    else navigate("/chat");
+  };
   return (
     <div className="flex flex-col gap-4 rounded-2xl bg-card p-6 shadow-card">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-bold text-foreground">Mensagens</h3>
-        <button className="text-xs font-semibold text-primary hover:underline">Ver todas</button>
+        <button
+          onClick={() => navigate("/chat")}
+          className="text-xs font-semibold text-primary hover:underline"
+        >
+          Ver todas
+        </button>
       </div>
       <div className="flex flex-col gap-4">
         {messages.length === 0 && (
@@ -24,7 +36,12 @@ export const MessagesCard = ({ messages }: MessagesCardProps) => {
           </p>
         )}
         {messages.map((m, i) => (
-          <div key={m.id} className="flex items-start gap-3">
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => openChat(m.senderId)}
+            className="flex items-start gap-3 rounded-xl p-1 -m-1 text-left transition-colors hover:bg-muted/60"
+          >
             <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold ${palette[i % palette.length]}`}>
               {m.initials}
             </div>
@@ -38,7 +55,7 @@ export const MessagesCard = ({ messages }: MessagesCardProps) => {
             {m.unread && (
               <span className="ml-1 mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" aria-label="Não lida" />
             )}
-          </div>
+          </button>
         ))}
       </div>
     </div>
