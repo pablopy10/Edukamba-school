@@ -320,7 +320,7 @@ const Avaliacoes = () => {
               ))}
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Select value={subjectFilter} onValueChange={setSubjectFilter}>
               <SelectTrigger className="h-10 rounded-full"><SelectValue placeholder="Disciplina" /></SelectTrigger>
               <SelectContent>
@@ -342,6 +342,13 @@ const Avaliacoes = () => {
                 {classrooms.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            <Select value={termFilter} onValueChange={setTermFilter}>
+              <SelectTrigger className="h-10 rounded-full"><SelectValue placeholder="Trimestre" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os trimestres</SelectItem>
+                {terms.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -359,6 +366,7 @@ const Avaliacoes = () => {
             classroomMap={classroomMap}
             subjectMap={subjectMap}
             conflictIds={conflictIds}
+            holidays={holidays}
             onEdit={openEdit}
             onDelete={(id) => setDeleteId(id)}
             onOpen={(id) => navigate(`/avaliacoes/${id}/notas`)}
@@ -421,7 +429,7 @@ const TypeChip = ({
 /* ======================= Calendar View ======================= */
 const CalendarView = ({
   cursor, setCursor, evaluations, selectedDate, setSelectedDate,
-  classroomMap, subjectMap, conflictIds, onEdit, onDelete, onOpen,
+  classroomMap, subjectMap, conflictIds, holidays, onEdit, onDelete, onOpen,
 }: {
   cursor: Date;
   setCursor: (d: Date) => void;
@@ -431,6 +439,7 @@ const CalendarView = ({
   classroomMap: Map<string, string>;
   subjectMap: Map<string, string>;
   conflictIds: Set<string>;
+  holidays: Holiday[];
   onEdit: (a: Assessment) => void;
   onDelete: (id: string) => void;
   onOpen: (id: string) => void;
@@ -462,6 +471,10 @@ const CalendarView = ({
 
   const todayIso = new Date().toISOString().slice(0, 10);
   const selectedEvents = selectedDate ? eventsByDate.get(selectedDate) ?? [] : [];
+
+  const holidayForDate = (iso: string) =>
+    holidays.find((h) => iso >= h.start_date && iso <= h.end_date);
+  const selectedHoliday = selectedDate ? holidayForDate(selectedDate) : null;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
