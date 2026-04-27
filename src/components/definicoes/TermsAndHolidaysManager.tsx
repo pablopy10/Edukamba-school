@@ -206,6 +206,17 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
 
   return (
     <div className="flex flex-col gap-8">
+      {!academicYearId && (
+        <div className="rounded-xl border border-pastel-yellow/60 bg-pastel-yellow/20 p-3 text-xs text-pastel-yellow-foreground">
+          Selecione (ou crie) um ano letivo acima para configurar trimestres e férias específicos desse ano.
+        </div>
+      )}
+      {academicYearId && (
+        <div className="rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">
+          As datas abaixo aplicam-se apenas ao ano letivo atualmente selecionado. Cada ano letivo
+          (ex.: 2025/2026, 2026/2027) tem a sua própria configuração.
+        </div>
+      )}
       {/* TRIMESTRES */}
       <section className="flex flex-col gap-4">
         <div className="flex items-center gap-2">
