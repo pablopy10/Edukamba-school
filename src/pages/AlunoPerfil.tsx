@@ -197,7 +197,7 @@ const AlunoPerfil = () => {
       setLoading(true);
       const { data: s } = await supabase
         .from("students")
-        .select("id, full_name, email, phone, birth_date, gender, enrollment_number, avatar_color, classroom_id, parent_id, created_at, classrooms(id, name, courses(name))")
+        .select("id, full_name, email, phone, birth_date, gender, enrollment_number, avatar_color, classroom_id, parent_id, user_id, created_at, classrooms(id, name, grade_level, courses(name))")
         .eq("id", id)
         .maybeSingle();
       if (cancelled) return;
