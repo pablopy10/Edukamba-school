@@ -82,6 +82,11 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
   // Post-save: prompt to create student platform access when eligible
   const [accessPrompt, setAccessPrompt] = useState<{ studentId: string; studentName: string; defaultEmail: string | null } | null>(null);
 
+  const isClassroomEligible = (cId: string) => {
+    const c = yearClassrooms.find((x) => x.id === cId);
+    return !!(c?.grade_level && ELIGIBLE_GRADES.has(c.grade_level));
+  };
+
   useEffect(() => {
     if (open) {
       if (enrollment) {
