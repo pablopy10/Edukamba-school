@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 import {
   Select,
   SelectContent,
@@ -52,17 +53,19 @@ const dateLabel = (date: Date) => {
 };
 
 export const AgendaCard = ({ date }: AgendaCardProps) => {
+  const { selectedYearId } = useAcademicYear();
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [classroomId, setClassroomId] = useState<string>("ALL");
   const [items, setItems] = useState<AgendaItem[]>([]);
 
   useEffect(() => {
-    supabase
+    let query = supabase
       .from("classrooms")
       .select("id, name")
-      .order("name", { ascending: true })
-      .then(({ data }) => setClassrooms(data ?? []));
-  }, []);
+      .order("name", { ascending: true });
+    if (selectedYearId) query = query.eq("academic_year_id", selectedYearId);
+    query.then(({ data }) => setClassrooms(data ?? []));
+  }, [selectedYearId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +78,10 @@ export const AgendaCard = ({ date }: AgendaCardProps) => {
         )
         .eq("day_of_week", dow)
         .order("start_time", { ascending: true });
+
+      if (selectedYearId) {
+        query = query.eq("academic_year_id", selectedYearId);
+      }
 
       if (classroomId !== "ALL") {
         query = query.eq("classroom_id", classroomId);
@@ -101,7 +108,7 @@ export const AgendaCard = ({ date }: AgendaCardProps) => {
     return () => {
       cancelled = true;
     };
-  }, [date, classroomId]);
+  }, [date, classroomId, selectedYearId]);
 
   return (
     <div className="flex flex-col gap-4 rounded-2xl bg-card p-6 shadow-card">
