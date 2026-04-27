@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { ArrowLeft, Mail, Phone, MapPin, Calendar, GraduationCap, BookOpen, Clock, CheckCircle2, XCircle, AlertCircle, Users, FileText, Pencil, Loader2, TrendingUp, Wallet, Bell, Upload, Paperclip } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Calendar, GraduationCap, BookOpen, Clock, CheckCircle2, XCircle, AlertCircle, Users, FileText, Pencil, Loader2, TrendingUp, Wallet, Bell, Upload, Paperclip, History, ArrowRightLeft, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -111,6 +111,17 @@ interface FeeRow {
   month_index: number | null;
 }
 
+interface EnrollmentHistoryRow {
+  id: string;
+  enrolled_at: string | null;
+  status: string | null;
+  result: string | null;
+  result_notes: string | null;
+  result_published_at: string | null;
+  classroom: { id: string; name: string; grade_level: string | null } | null;
+  year: { id: string; label: string; start_date: string; end_date: string; is_active: boolean | null } | null;
+}
+
 interface PaymentRow {
   id: string;
   student_fee_id: string | null;
@@ -174,6 +185,7 @@ const AlunoPerfil = () => {
   const [proofNotes, setProofNotes] = useState("");
   const [proofAmount, setProofAmount] = useState("");
   const [proofUploading, setProofUploading] = useState(false);
+  const [enrollmentHistory, setEnrollmentHistory] = useState<EnrollmentHistoryRow[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -250,6 +262,41 @@ const AlunoPerfil = () => {
       if (!cancelled) {
         setGrades((grRes.data ?? []) as unknown as GradeRow[]);
         setAttendance((atRes.data ?? []) as unknown as AttendanceRow[]);
+      }
+
+      // Enrollment history (across all academic years)
+      const { data: histRows } = await supabase
+        .from("enrollments")
+        .select("id, enrolled_at, status, result, result_notes, result_published_at, classrooms(id, name, grade_level), academic_years(id, label, start_date, end_date, is_active)")
+        .eq("student_id", id);
+      if (!cancelled) {
+        const mapped = (histRows ?? []).map((r) => {
+          const row = r as unknown as {
+            id: string;
+            enrolled_at: string | null;
+            status: string | null;
+            result: string | null;
+            result_notes: string | null;
+            result_published_at: string | null;
+            classrooms: { id: string; name: string; grade_level: string | null } | null;
+            academic_years: { id: string; label: string; start_date: string; end_date: string; is_active: boolean | null } | null;
+          };
+          return {
+            id: row.id,
+            enrolled_at: row.enrolled_at,
+            status: row.status,
+            result: row.result,
+            result_notes: row.result_notes,
+            result_published_at: row.result_published_at,
+            classroom: row.classrooms,
+            year: row.academic_years,
+          } as EnrollmentHistoryRow;
+        }).sort((a, b) => {
+          const da = a.year?.start_date ?? "";
+          const db = b.year?.start_date ?? "";
+          return db.localeCompare(da);
+        });
+        setEnrollmentHistory(mapped);
       }
 
       const { data: feeRows } = await supabase
