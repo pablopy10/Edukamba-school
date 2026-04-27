@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Search, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, Loader2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,6 +8,7 @@ import { StudentFormDialog, StudentRow } from "@/components/alunos/StudentFormDi
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
+import { ExcelImportDialog, ImportField } from "@/components/shared/ExcelImportDialog";
 
 type ClassroomOpt = { id: string; name: string };
 
@@ -33,6 +34,7 @@ const Alunos = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<StudentRow | null>(null);
   const [deleting, setDeleting] = useState<StudentRow | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -119,6 +121,12 @@ const Alunos = () => {
               className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
               <Plus className="h-4 w-4" strokeWidth={2.25} />
               Novo Aluno
+            </button>
+            <button
+              onClick={() => setImportOpen(true)}
+              className="flex h-11 items-center gap-2 rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
+              <Upload className="h-4 w-4" strokeWidth={2.25} />
+              Importar Excel
             </button>
           </div>
         </div>
@@ -294,6 +302,60 @@ const Alunos = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ExcelImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="Importar Alunos"
+        description="Importe vários alunos a partir de um ficheiro Excel ou CSV."
+        templateSheetName="Alunos"
+        fields={[
+          { key: "full_name", label: "Nome completo", required: true, aliases: ["nome", "name", "aluno"], example: "Sara Miller" },
+          { key: "email", label: "Email", aliases: ["e-mail"], example: "sara@escola.ao" },
+          { key: "phone", label: "Telefone", aliases: ["telemovel", "tel", "phone"], example: "924 000 000" },
+          { key: "enrollment_number", label: "Nº Matrícula", aliases: ["matricula", "n matricula", "numero"], example: "2024-01-001" },
+          { key: "birth_date", label: "Data de nascimento", aliases: ["data nascimento", "nascimento", "birth"], example: "2012-05-14" },
+          { key: "gender", label: "Género", aliases: ["genero", "sexo"], example: "M" },
+          { key: "classroom", label: "Turma", aliases: ["turma", "classe", "classroom"], example: "5ª A" },
+        ]}
+        onImportRow={async (row) => {
+          if (!row.full_name) throw new Error("Nome em falta");
+          const { data: profile } = await supabase
+            .from("profiles").select("school_id")
+            .eq("id", (await supabase.auth.getUser()).data.user?.id ?? "")
+            .maybeSingle();
+          const schoolId = profile?.school_id;
+          if (!schoolId) throw new Error("Escola não encontrada");
+          let classroom_id: string | null = null;
+          if (row.classroom) {
+            const match = classrooms.find((c) => c.name.toLowerCase() === row.classroom.toLowerCase());
+            classroom_id = match?.id ?? null;
+          }
+          let gender: string | null = null;
+          if (row.gender) {
+            const g = row.gender.toLowerCase();
+            gender = g.startsWith("m") ? "M" : g.startsWith("f") ? "F" : null;
+          }
+          let birth_date: string | null = null;
+          if (row.birth_date) {
+            const d = new Date(row.birth_date);
+            if (!isNaN(d.getTime())) birth_date = d.toISOString().slice(0, 10);
+          }
+          const { error } = await supabase.from("students").insert({
+            full_name: row.full_name,
+            email: row.email || null,
+            phone: row.phone || null,
+            enrollment_number: row.enrollment_number || null,
+            birth_date,
+            gender,
+            classroom_id,
+            avatar_color: "blue",
+            school_id: schoolId,
+          });
+          if (error) throw new Error(error.message);
+        }}
+        onCompleted={load}
+      />
     </DashboardLayout>
   );
 };
