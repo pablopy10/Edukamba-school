@@ -279,8 +279,18 @@ const Definicoes = () => {
     due_date: string;
     paid_at: string | null;
     status: string;
+    proof_url?: string | null;
+    payment_method?: string | null;
+    notes?: string | null;
+    submitted_at?: string | null;
+    description?: string | null;
   };
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [proofInvoice, setProofInvoice] = useState<Invoice | null>(null);
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofMethod, setProofMethod] = useState<string>("transferencia");
+  const [proofNotes, setProofNotes] = useState<string>("");
+  const [proofUploading, setProofUploading] = useState(false);
 
   // ===== Initial load =====
   useEffect(() => {
