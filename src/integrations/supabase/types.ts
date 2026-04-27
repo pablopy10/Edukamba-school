@@ -1483,6 +1483,7 @@ export type Database = {
           status: string
           student_fee_id: string | null
           submitted_by: string | null
+          transport_fee_id: string | null
           validated_at: string | null
           validated_by: string | null
         }
@@ -1499,6 +1500,7 @@ export type Database = {
           status?: string
           student_fee_id?: string | null
           submitted_by?: string | null
+          transport_fee_id?: string | null
           validated_at?: string | null
           validated_by?: string | null
         }
@@ -1515,6 +1517,7 @@ export type Database = {
           status?: string
           student_fee_id?: string | null
           submitted_by?: string | null
+          transport_fee_id?: string | null
           validated_at?: string | null
           validated_by?: string | null
         }
@@ -1538,6 +1541,13 @@ export type Database = {
             columns: ["student_fee_id"]
             isOneToOne: false
             referencedRelation: "student_fees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_transport_fee_id_fkey"
+            columns: ["transport_fee_id"]
+            isOneToOne: false
+            referencedRelation: "transport_fees"
             referencedColumns: ["id"]
           },
           {
@@ -2445,6 +2455,290 @@ export type Database = {
           },
         ]
       }
+      transport_enrollments: {
+        Row: {
+          created_at: string
+          direction: string
+          dropoff_stop_id: string | null
+          end_date: string | null
+          id: string
+          monthly_fee_override: number | null
+          notes: string | null
+          pickup_stop_id: string | null
+          route_id: string
+          school_id: string
+          start_date: string
+          status: string
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          direction?: string
+          dropoff_stop_id?: string | null
+          end_date?: string | null
+          id?: string
+          monthly_fee_override?: number | null
+          notes?: string | null
+          pickup_stop_id?: string | null
+          route_id: string
+          school_id: string
+          start_date?: string
+          status?: string
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          direction?: string
+          dropoff_stop_id?: string | null
+          end_date?: string | null
+          id?: string
+          monthly_fee_override?: number | null
+          notes?: string | null
+          pickup_stop_id?: string | null
+          route_id?: string
+          school_id?: string
+          start_date?: string
+          status?: string
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transport_enrollments_dropoff_stop_id_fkey"
+            columns: ["dropoff_stop_id"]
+            isOneToOne: false
+            referencedRelation: "transport_stops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transport_enrollments_pickup_stop_id_fkey"
+            columns: ["pickup_stop_id"]
+            isOneToOne: false
+            referencedRelation: "transport_stops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transport_enrollments_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "transport_routes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transport_enrollments_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transport_enrollments_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transport_fees: {
+        Row: {
+          academic_year_id: string | null
+          amount_due: number
+          created_at: string
+          due_date: string
+          enrollment_id: string
+          id: string
+          is_paid: boolean
+          month_index: number | null
+          route_id: string
+          school_id: string
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          academic_year_id?: string | null
+          amount_due?: number
+          created_at?: string
+          due_date: string
+          enrollment_id: string
+          id?: string
+          is_paid?: boolean
+          month_index?: number | null
+          route_id: string
+          school_id: string
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          academic_year_id?: string | null
+          amount_due?: number
+          created_at?: string
+          due_date?: string
+          enrollment_id?: string
+          id?: string
+          is_paid?: boolean
+          month_index?: number | null
+          route_id?: string
+          school_id?: string
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transport_fees_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transport_fees_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "transport_enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transport_fees_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "transport_routes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transport_fees_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transport_fees_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transport_routes: {
+        Row: {
+          capacity: number
+          created_at: string
+          description: string | null
+          driver_name: string | null
+          driver_phone: string | null
+          id: string
+          is_active: boolean
+          monthly_fee: number
+          name: string
+          notes: string | null
+          school_id: string
+          shift: string
+          updated_at: string
+          vehicle_model: string | null
+          vehicle_plate: string | null
+        }
+        Insert: {
+          capacity?: number
+          created_at?: string
+          description?: string | null
+          driver_name?: string | null
+          driver_phone?: string | null
+          id?: string
+          is_active?: boolean
+          monthly_fee?: number
+          name: string
+          notes?: string | null
+          school_id: string
+          shift?: string
+          updated_at?: string
+          vehicle_model?: string | null
+          vehicle_plate?: string | null
+        }
+        Update: {
+          capacity?: number
+          created_at?: string
+          description?: string | null
+          driver_name?: string | null
+          driver_phone?: string | null
+          id?: string
+          is_active?: boolean
+          monthly_fee?: number
+          name?: string
+          notes?: string | null
+          school_id?: string
+          shift?: string
+          updated_at?: string
+          vehicle_model?: string | null
+          vehicle_plate?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transport_routes_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transport_stops: {
+        Row: {
+          address: string | null
+          created_at: string
+          dropoff_time: string | null
+          id: string
+          name: string
+          notes: string | null
+          pickup_time: string | null
+          position: number
+          route_id: string
+          school_id: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          dropoff_time?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          pickup_time?: string | null
+          position?: number
+          route_id: string
+          school_id: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          dropoff_time?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          pickup_time?: string | null
+          position?: number
+          route_id?: string
+          school_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transport_stops_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "transport_routes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transport_stops_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_permissions: {
         Row: {
           can_delete: boolean
@@ -2526,6 +2820,10 @@ export type Database = {
       }
       generate_student_fees_for_year: {
         Args: { _academic_year_id: string; _student_id: string }
+        Returns: number
+      }
+      generate_transport_fees: {
+        Args: { _enrollment_id: string }
         Returns: number
       }
       get_auth_role: {
