@@ -133,33 +133,12 @@ const Avaliacoes = () => {
       .order("start_date");
     let assessmentsQuery = supabase
       .from("assessments")
-      .select("id,title,type,date,start_time,end_time,room,weight,description,classroom_id,subject_id,teacher_id,term_id")
+      .select("id,title,type,date,start_time,end_time,room,weight,description,classroom_id,subject_id,teacher_id,term_id,academic_year_id")
       .eq("school_id", sid)
       .order("date", { ascending: true });
     if (yearId) {
-      // Include assessments whose date falls in the year window OR whose term belongs to that year.
-      // This ensures items created during holiday periods (between terms) still appear.
-      const { data: yearRow } = await supabase
-        .from("academic_years")
-        .select("start_date, end_date")
-        .eq("id", yearId)
-        .maybeSingle();
-      const { data: yearTerms } = await supabase
-        .from("academic_terms")
-        .select("id")
-        .eq("school_id", sid)
-        .eq("academic_year_id", yearId);
-      const termIds = (yearTerms ?? []).map((t: any) => t.id);
-      const filters: string[] = [];
-      if (yearRow?.start_date && yearRow?.end_date) {
-        filters.push(`and(date.gte.${yearRow.start_date},date.lte.${yearRow.end_date})`);
-      }
-      if (termIds.length > 0) {
-        filters.push(`term_id.in.(${termIds.join(",")})`);
-      }
-      if (filters.length > 0) {
-        assessmentsQuery = assessmentsQuery.or(filters.join(","));
-      }
+      // Filter assessments directly by academic_year_id (set automatically by DB trigger).
+      assessmentsQuery = assessmentsQuery.eq("academic_year_id", yearId);
     }
 
     const [aRes, cRes, sRes, tRes, termRes, holRes] = await Promise.all([
