@@ -487,7 +487,7 @@ const TypeChip = ({
 /* ======================= Calendar View ======================= */
 const CalendarView = ({
   cursor, setCursor, evaluations, selectedDate, setSelectedDate,
-  classroomMap, subjectMap, conflictIds, holidays, onEdit, onDelete, onOpen,
+  classroomMap, subjectMap, conflictIds, holidays, holidayConflicts, onEdit, onDelete, onOpen,
 }: {
   cursor: Date;
   setCursor: (d: Date) => void;
@@ -498,6 +498,7 @@ const CalendarView = ({
   subjectMap: Map<string, string>;
   conflictIds: Set<string>;
   holidays: Holiday[];
+  holidayConflicts: Map<string, string>;
   onEdit: (a: Assessment) => void;
   onDelete: (id: string) => void;
   onOpen: (id: string) => void;
@@ -670,6 +671,11 @@ const CalendarView = ({
                 {conflictIds.has(e.id) && (
                   <div className="mt-2 flex items-center gap-1 text-[11px] font-medium text-destructive">
                     <AlertTriangle className="h-3 w-3" /> Conflito detetado
+                  </div>
+                )}
+                {holidayConflicts.has(e.id) && (
+                  <div className="mt-2 flex items-center gap-1 text-[11px] font-medium text-pastel-yellow-foreground">
+                    <AlertTriangle className="h-3 w-3" /> Marcada em férias: {holidayConflicts.get(e.id)}
                   </div>
                 )}
                 <div className="mt-3 flex gap-2">
