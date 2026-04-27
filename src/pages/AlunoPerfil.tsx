@@ -669,6 +669,94 @@ const AlunoPerfil = () => {
           <StatPill label="Disciplinas" value={String(subjectsAvg.length)} color="yellow" />
         </div>
 
+        {/* Histórico de matrículas */}
+        <div className="rounded-2xl bg-card shadow-card">
+          <div className="flex items-center justify-between border-b border-border p-5">
+            <div className="flex items-center gap-2">
+              <History className="h-5 w-5 text-pastel-blue-foreground" strokeWidth={1.75} />
+              <h2 className="text-lg font-bold text-foreground">Histórico de Matrículas</h2>
+            </div>
+            <span className="text-xs text-muted-foreground">{enrollmentHistory.length} ano(s) lectivo(s)</span>
+          </div>
+          {enrollmentHistory.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">Sem histórico de matrículas.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-pastel-blue/30 text-left text-xs uppercase tracking-wider text-pastel-blue-foreground">
+                    <th className="py-3 pl-5 pr-4 font-semibold">Ano lectivo</th>
+                    <th className="py-3 pr-4 font-semibold">Turma</th>
+                    <th className="py-3 pr-4 font-semibold">Classe</th>
+                    <th className="py-3 pr-4 font-semibold">Estado</th>
+                    <th className="py-3 pr-5 font-semibold">Resultado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {enrollmentHistory.map((h, idx) => {
+                    const prev = enrollmentHistory[idx + 1];
+                    const promoted = prev && prev.result === "APROVADO" && prev.classroom?.grade_level !== h.classroom?.grade_level;
+                    return (
+                      <tr key={h.id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                        <td className="py-3 pl-5 pr-4">
+                          <div className="font-medium text-foreground">
+                            {h.year?.label ?? "—"}
+                            {h.year?.is_active && (
+                              <span className="ml-2 rounded-full bg-pastel-green/60 px-2 py-0.5 text-[10px] font-semibold text-pastel-green-foreground">Actual</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 pr-4">
+                          <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{h.classroom?.name ?? "—"}</span>
+                        </td>
+                        <td className="py-3 pr-4 text-muted-foreground">
+                          {h.classroom?.grade_level ?? "—"}
+                          {promoted && (
+                            <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-pastel-green/40 px-2 py-0.5 text-[10px] font-semibold text-pastel-green-foreground">
+                              <ArrowUpRight className="h-3 w-3" /> Subiu
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <span className={cn(
+                            "rounded-full px-3 py-1 text-xs font-medium",
+                            h.status === "ACTIVE" ? "bg-pastel-green text-pastel-green-foreground" :
+                            h.status === "PENDING" ? "bg-pastel-yellow text-pastel-yellow-foreground" :
+                            h.status === "CANCELLED" ? "bg-pastel-pink text-pastel-pink-foreground" :
+                            "bg-muted text-foreground"
+                          )}>
+                            {h.status === "ACTIVE" ? "Confirmada" : h.status === "PENDING" ? "Pendente" : h.status === "CANCELLED" ? "Cancelada" : (h.status ?? "—")}
+                          </span>
+                        </td>
+                        <td className="py-3 pr-5">
+                          {h.result === "APROVADO" ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-pastel-green px-3 py-1 text-xs font-semibold text-pastel-green-foreground">
+                              <CheckCircle2 className="h-3 w-3" /> Aprovado
+                            </span>
+                          ) : h.result === "REPROVADO" ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-pastel-pink px-3 py-1 text-xs font-semibold text-pastel-pink-foreground">
+                              <XCircle className="h-3 w-3" /> Reprovado
+                            </span>
+                          ) : h.result === "TRANSFERIDO" ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-pastel-blue px-3 py-1 text-xs font-semibold text-pastel-blue-foreground">
+                              <ArrowRightLeft className="h-3 w-3" /> Transferido
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">Em curso</span>
+                          )}
+                          {h.result_notes && (
+                            <p className="mt-1 max-w-xs truncate text-xs text-muted-foreground" title={h.result_notes}>{h.result_notes}</p>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
         {/* Pagamentos */}
         <div className="rounded-2xl bg-card shadow-card">
           <div className="flex items-center gap-2 border-b border-border p-5">
