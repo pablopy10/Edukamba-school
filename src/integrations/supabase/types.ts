@@ -2369,6 +2369,7 @@ export type Database = {
           profile_id: string | null
           school_id: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           avatar_color?: string | null
@@ -2385,6 +2386,7 @@ export type Database = {
           profile_id?: string | null
           school_id?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           avatar_color?: string | null
@@ -2401,6 +2403,7 @@ export type Database = {
           profile_id?: string | null
           school_id?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
