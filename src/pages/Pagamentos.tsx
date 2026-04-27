@@ -1692,6 +1692,56 @@ const Pagamentos = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* RECORD PAYMENT DIALOG (staff registers proof and validates immediately) */}
+      <Dialog open={!!recordDialog} onOpenChange={(o) => { if (!o && !recordUploading) setRecordDialog(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registar pagamento</DialogTitle>
+            <DialogDescription>
+              {recordDialog?.kind === "fee"
+                ? `Anexa o comprovativo da propina de ${recordDialog.fee.student?.full_name ?? ""}. Será marcado como pago e validado, e o encarregado será notificado.`
+                : recordDialog?.kind === "activity"
+                ? `Anexa o comprovativo da atividade ${recordDialog.fee.activity?.name ?? ""} de ${recordDialog.fee.student?.full_name ?? ""}. Será marcado como pago e validado.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid gap-2">
+              <Label htmlFor="record-file">Comprovativo (PDF ou imagem)</Label>
+              <Input id="record-file" type="file" accept="image/*,application/pdf" onChange={(e) => setRecordFile(e.target.files?.[0] ?? null)} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="record-amount">Valor pago (AOA)</Label>
+              <Input id="record-amount" type="number" min="0" value={recordAmount} onChange={(e) => setRecordAmount(e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <Label>Método</Label>
+              <Select value={recordMethod} onValueChange={setRecordMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="transferencia">Transferência</SelectItem>
+                  <SelectItem value="multicaixa">Multicaixa Express</SelectItem>
+                  <SelectItem value="numerario">Numerário</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                  <SelectItem value="outro">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="record-notes">Notas (opcional)</Label>
+              <Textarea id="record-notes" rows={2} value={recordNotes} onChange={(e) => setRecordNotes(e.target.value)} placeholder="Ex.: nº do recibo, observações..." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRecordDialog(null)} disabled={recordUploading}>Cancelar</Button>
+            <Button onClick={submitStaffPayment} disabled={recordUploading || !recordFile} className="gap-2">
+              {recordUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Registar e validar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
