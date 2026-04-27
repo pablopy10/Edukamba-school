@@ -29,6 +29,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/integrations/supabase/types";
 import { TermsAndHolidaysManager } from "@/components/definicoes/TermsAndHolidaysManager";
+import { NewAcademicYearWizard } from "@/components/definicoes/NewAcademicYearWizard";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -1167,6 +1168,13 @@ const Definicoes = () => {
               desc="Defina as datas dos 1º, 2º e 3º trimestres e marque os períodos de férias dos alunos."
             >
               <TermsAndHolidaysManager schoolId={schoolId} academicYearId={year.id ?? null} isAdmin={isAdmin} />
+            </SectionCard>
+
+            <SectionCard
+              title="Configuração de Novo Ano Letivo"
+              desc="Crie o próximo ciclo escolar e clone automaticamente a estrutura do ano anterior — turmas, cursos e tabela de preços — sem trabalho manual."
+            >
+              <NewAcademicYearWizard schoolId={schoolId} isAdmin={isAdmin} />
             </SectionCard>
 
             <SectionCard
