@@ -243,6 +243,13 @@ const Definicoes = () => {
     end_date: "",
   });
 
+  // Academic settings (stored on schools.settings jsonb)
+  const [academicSettings, setAcademicSettings] = useState({
+    honor_roll_min_average: 14,
+    grading_max_score: 20,
+  });
+  const [savingAcademicSettings, setSavingAcademicSettings] = useState(false);
+
   // Users
   type UserRow = {
     id: string;
@@ -354,6 +361,14 @@ const Definicoes = () => {
           logo_url: schoolRes.data.logo_url ?? "",
           primary_color: schoolRes.data.primary_color ?? "#A78BFA",
           secondary_color: schoolRes.data.secondary_color ?? "#7DD3FC",
+        });
+        const s = (schoolRes.data.settings ?? {}) as {
+          honor_roll_min_average?: number;
+          grading_max_score?: number;
+        };
+        setAcademicSettings({
+          honor_roll_min_average: typeof s.honor_roll_min_average === "number" ? s.honor_roll_min_average : 14,
+          grading_max_score: typeof s.grading_max_score === "number" ? s.grading_max_score : 20,
         });
       }
       if (yearRes.data) {
@@ -631,6 +646,31 @@ const Definicoes = () => {
       if (next) setSelectedYearId(next.id);
     }
     showToast("success", "Ano letivo eliminado.");
+  };
+
+  const handleSaveAcademicSettings = async () => {
+    if (!schoolId) return;
+    const min = Number(academicSettings.honor_roll_min_average);
+    const max = Number(academicSettings.grading_max_score);
+    if (Number.isNaN(min) || min < 0 || Number.isNaN(max) || max <= 0 || min > max) {
+      return showToast("error", "Verifique os valores: 0 ≤ média mínima ≤ nota máxima.");
+    }
+    setSavingAcademicSettings(true);
+    // Merge into existing settings to avoid wiping unrelated keys
+    const { data: current } = await supabase
+      .from("schools")
+      .select("settings")
+      .eq("id", schoolId)
+      .maybeSingle();
+    const merged = {
+      ...((current?.settings ?? {}) as Record<string, unknown>),
+      honor_roll_min_average: min,
+      grading_max_score: max,
+    };
+    const { error } = await supabase.from("schools").update({ settings: merged }).eq("id", schoolId);
+    setSavingAcademicSettings(false);
+    if (error) return showToast("error", error.message);
+    showToast("success", "Critérios académicos guardados.");
   };
 
   // ===== Users =====
@@ -1127,6 +1167,49 @@ const Definicoes = () => {
               desc="Defina as datas dos 1º, 2º e 3º trimestres e marque os períodos de férias dos alunos."
             >
               <TermsAndHolidaysManager schoolId={schoolId} academicYearId={year.id ?? null} isAdmin={isAdmin} />
+            </SectionCard>
+
+            <SectionCard
+              title="Quadro de Honra"
+              desc="Defina a média mínima para um aluno ser considerado no Quadro de Honra e a nota máxima da escala usada pela escola."
+            >
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <Field label="Média mínima do Quadro de Honra">
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    className={inputCls(false)}
+                    disabled={!isAdmin}
+                    value={academicSettings.honor_roll_min_average}
+                    onChange={(e) =>
+                      setAcademicSettings((s) => ({
+                        ...s,
+                        honor_roll_min_average: e.target.value === "" ? 0 : Number(e.target.value),
+                      }))
+                    }
+                  />
+                </Field>
+                <Field label="Nota máxima da escala">
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    className={inputCls(false)}
+                    disabled={!isAdmin}
+                    value={academicSettings.grading_max_score}
+                    onChange={(e) =>
+                      setAcademicSettings((s) => ({
+                        ...s,
+                        grading_max_score: e.target.value === "" ? 0 : Number(e.target.value),
+                      }))
+                    }
+                  />
+                </Field>
+              </div>
+              <div className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
+                <SaveBar onClick={handleSaveAcademicSettings} saving={savingAcademicSettings} isAdmin={isAdmin} />
+              </div>
             </SectionCard>
           </div>
         )}

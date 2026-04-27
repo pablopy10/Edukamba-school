@@ -25,6 +25,8 @@ export const HonorRollCard = () => {
   const [entries, setEntries] = useState<HonorEntry[]>([]);
   const [terms, setTerms] = useState<Term[]>([]);
   const [selectedTermId, setSelectedTermId] = useState<string>("all");
+  const [minAverage, setMinAverage] = useState<number>(14);
+  const [maxScore, setMaxScore] = useState<number>(20);
   const { selectedYearId, selectedYear } = useAcademicYear();
 
   useEffect(() => {
@@ -38,6 +40,19 @@ export const HonorRollCard = () => {
         .eq("id", user.id)
         .maybeSingle();
       if (!profile?.school_id) return;
+      // Read honor roll thresholds from school settings
+      const { data: schoolRow } = await supabase
+        .from("schools")
+        .select("settings")
+        .eq("id", profile.school_id)
+        .maybeSingle();
+      const s = (schoolRow?.settings ?? {}) as { honor_roll_min_average?: number; grading_max_score?: number };
+      if (typeof s.honor_roll_min_average === "number" && !Number.isNaN(s.honor_roll_min_average)) {
+        setMinAverage(s.honor_roll_min_average);
+      }
+      if (typeof s.grading_max_score === "number" && !Number.isNaN(s.grading_max_score)) {
+        setMaxScore(s.grading_max_score);
+      }
       // Restrict to terms of the currently selected academic year
       let q = supabase
         .from("academic_terms")
@@ -61,15 +76,9 @@ export const HonorRollCard = () => {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      let query = supabase
+      const { data } = await supabase
         .from("grades")
         .select("score, students(id, full_name), assessments!inner(date, term_id)");
-
-      if (selectedYear) {
-        query = query.gte("assessments.date", selectedYear.start_date).lte("assessments.date", selectedYear.end_date);
-      }
-
-      const { data } = await query;
 
       type Row = {
         score: number;
@@ -81,6 +90,14 @@ export const HonorRollCard = () => {
       ((data ?? []) as unknown as Row[]).forEach((g) => {
         const s = g.students;
         if (!s) return;
+        // Year scoping: include if date inside year window OR term linked to the selected year
+        if (selectedYear) {
+          const a = g.assessments;
+          const d = a?.date ?? null;
+          const inDate = d ? d >= selectedYear.start_date && d <= selectedYear.end_date : false;
+          const termInYear = a?.term_id ? terms.some((t) => t.id === a.term_id) : false;
+          if (!inDate && !termInYear) return;
+        }
         // Term filtering
         if (selectedTermId !== "all") {
           const a = g.assessments;
@@ -100,6 +117,7 @@ export const HonorRollCard = () => {
       const ranked: HonorEntry[] = [...buckets.entries()]
         .filter(([, b]) => b.count > 0)
         .map(([id, b]) => ({ id, name: b.name, avg: b.sum / b.count }))
+        .filter((e) => e.avg >= minAverage)
         .sort((a, b) => b.avg - a.avg)
         .slice(0, 20);
 
@@ -107,7 +125,7 @@ export const HonorRollCard = () => {
     };
     load();
     return () => { cancelled = true; };
-  }, [selectedTermId, terms, selectedYear]);
+  }, [selectedTermId, terms, selectedYear, minAverage]);
 
   return (
     <div className="flex h-full flex-col gap-4 rounded-2xl bg-card p-5 shadow-card">
@@ -118,7 +136,7 @@ export const HonorRollCard = () => {
           </div>
           <div>
             <h3 className="text-base font-bold text-foreground">Quadro de Honra</h3>
-            <p className="text-xs text-muted-foreground">Melhores médias</p>
+            <p className="text-xs text-muted-foreground">Média ≥ {minAverage}/{maxScore}</p>
           </div>
         </div>
         {terms.length > 0 && (
@@ -138,7 +156,7 @@ export const HonorRollCard = () => {
 
       {entries.length === 0 ? (
         <p className="rounded-xl bg-muted/50 p-4 text-center text-xs text-muted-foreground">
-          Sem notas registadas.
+          Nenhum aluno com média ≥ {minAverage}.
         </p>
       ) : (
         <ol className="flex max-h-64 flex-col gap-2 overflow-y-auto pr-2 -mr-2">

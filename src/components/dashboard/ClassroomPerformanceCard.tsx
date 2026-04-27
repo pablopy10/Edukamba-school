@@ -16,20 +16,40 @@ export const ClassroomPerformanceCard = ({ variant }: Props) => {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      let query = supabase
-        .from("grades")
-        .select("score, assessments!inner(date, classroom_id, classrooms(name))");
+      // Resolve the school + the set of term ids that belong to the selected year so we
+      // can include grades whose assessment date is inside the year window OR whose
+      // assessment is linked (via term) to the selected year.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("school_id")
+        .eq("id", user.id)
+        .maybeSingle();
+      const schoolId = profile?.school_id ?? null;
 
-      if (selectedYear) {
-        query = query.gte("assessments.date", selectedYear.start_date).lte("assessments.date", selectedYear.end_date);
+      let termIds: string[] = [];
+      if (selectedYear?.id && schoolId) {
+        const { data: ts } = await supabase
+          .from("academic_terms")
+          .select("id")
+          .eq("school_id", schoolId)
+          .eq("academic_year_id", selectedYear.id);
+        termIds = (ts ?? []).map((t) => t.id);
       }
 
-      const { data: grades } = await query;
+      const query = supabase
+        .from("grades")
+        .select("score, assessments!inner(date, term_id, classroom_id, school_id, classrooms(name))");
+      const { data: grades } = schoolId
+        ? await query.eq("assessments.school_id", schoolId)
+        : await query;
 
       type Row = {
         score: number;
         assessments: {
           date: string | null;
+          term_id: string | null;
           classroom_id: string | null;
           classrooms: { name: string | null } | null;
         } | null;
@@ -40,6 +60,13 @@ export const ClassroomPerformanceCard = ({ variant }: Props) => {
         const cid = g.assessments?.classroom_id;
         const cname = g.assessments?.classrooms?.name;
         if (!cid || !cname) return;
+        // Year scoping: include if date inside year window OR term linked to the year
+        if (selectedYear) {
+          const d = g.assessments?.date ?? null;
+          const inDate = d ? d >= selectedYear.start_date && d <= selectedYear.end_date : false;
+          const inTerm = g.assessments?.term_id ? termIds.includes(g.assessments.term_id) : false;
+          if (!inDate && !inTerm) return;
+        }
         const b = buckets.get(cid) ?? { name: cname, sum: 0, count: 0 };
         b.sum += Number(g.score) || 0;
         b.count += 1;
