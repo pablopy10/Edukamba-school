@@ -1319,10 +1319,15 @@ const Pagamentos = () => {
                                     </>
                                   )}
                                   {!f.is_paid && !pendingValidation && (
-                                    <Button size="sm" variant="outline" className="gap-2" onClick={() => sendActivityReminder(f)} disabled={remindingActFeeId === f.id || !f.student?.parent_id}>
-                                      {remindingActFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                                      Cobrar
-                                    </Button>
+                                    <>
+                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForActivity(f)}>
+                                        <Upload className="h-3.5 w-3.5" /> Registar pagamento
+                                      </Button>
+                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => sendActivityReminder(f)} disabled={remindingActFeeId === f.id || !f.student?.parent_id}>
+                                        {remindingActFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                        Cobrar
+                                      </Button>
+                                    </>
                                   )}
                                 </div>
                               </td>
