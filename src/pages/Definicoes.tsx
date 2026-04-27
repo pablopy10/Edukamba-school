@@ -1012,13 +1012,20 @@ const Definicoes = () => {
         {/* ACADÉMICO */}
         {activeTab === "academico" && (
           <div className="flex flex-col gap-6">
-            <SectionCard title="Ano letivo" desc="Ano letivo ativo da escola.">
-              {years.length > 0 && (
-                <div className="mb-5 max-w-sm">
+            <SectionCard
+              title="Anos letivos"
+              desc="Crie, edite ou elimine os anos letivos da escola. O ano selecionado é usado em toda a aplicação para filtrar a informação."
+            >
+              <div className="mb-5 flex flex-wrap items-end gap-3">
+                <div className="min-w-[240px] flex-1 max-w-sm">
                   <Field label="Ano em edição" icon={Calendar}>
-                    <Select value={selectedYearId ?? undefined} onValueChange={setSelectedYearId}>
+                    <Select
+                      value={selectedYearId ?? undefined}
+                      onValueChange={setSelectedYearId}
+                      disabled={years.length === 0}
+                    >
                       <SelectTrigger className="h-11 rounded-xl border-border bg-card shadow-soft">
-                        <SelectValue placeholder="Selecionar ano letivo" />
+                        <SelectValue placeholder="Sem anos letivos criados" />
                       </SelectTrigger>
                       <SelectContent>
                         {years.map((y) => (
@@ -1030,9 +1037,38 @@ const Definicoes = () => {
                     </Select>
                   </Field>
                 </div>
-              )}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={handleCreateAcademicYear}
+                    disabled={saving}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Plus className="h-4 w-4" strokeWidth={2} />
+                    Novo ano letivo
+                  </button>
+                )}
+                {isAdmin && year.id && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteYearId(year.id)}
+                    disabled={saving || years.find((y) => y.id === year.id)?.is_active === true}
+                    title={
+                      years.find((y) => y.id === year.id)?.is_active
+                        ? "Não é possível eliminar o ano letivo ativo."
+                        : "Eliminar ano letivo"
+                    }
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-pastel-pink-foreground/40 bg-card px-5 text-sm font-semibold text-pastel-pink-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-pastel-pink/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" strokeWidth={2} />
+                    Eliminar
+                  </button>
+                )}
+              </div>
               {!year.id ? (
-                <p className="text-sm text-muted-foreground">Sem ano letivo ativo.</p>
+                <p className="rounded-xl border border-dashed border-border bg-muted/40 p-5 text-sm text-muted-foreground">
+                  Sem anos letivos criados. Clique em <span className="font-semibold text-foreground">"Novo ano letivo"</span> para começar.
+                </p>
               ) : (
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                   <Field label="Ano letivo">
