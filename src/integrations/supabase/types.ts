@@ -543,7 +543,7 @@ export type Database = {
       }
       classrooms: {
         Row: {
-          academic_year_id: string | null
+          academic_year_id: string
           course_id: string | null
           created_at: string | null
           grade_level: string | null
@@ -553,7 +553,7 @@ export type Database = {
           school_id: string | null
         }
         Insert: {
-          academic_year_id?: string | null
+          academic_year_id: string
           course_id?: string | null
           created_at?: string | null
           grade_level?: string | null
@@ -563,7 +563,7 @@ export type Database = {
           school_id?: string | null
         }
         Update: {
-          academic_year_id?: string | null
+          academic_year_id?: string
           course_id?: string | null
           created_at?: string | null
           grade_level?: string | null
@@ -2914,6 +2914,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      clone_academic_year: {
+        Args: {
+          _clone_classrooms?: boolean
+          _clone_courses?: boolean
+          _clone_fee_rules?: boolean
+          _clone_subjects?: boolean
+          _new_end: string
+          _new_label: string
+          _new_start: string
+          _school_id: string
+          _set_active?: boolean
+          _source_year_id: string
+        }
+        Returns: Json
+      }
       create_school_with_admin: {
         Args: {
           _address: string
