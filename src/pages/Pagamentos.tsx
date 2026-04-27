@@ -73,6 +73,7 @@ type FeeListRow = {
 type PaymentListRow = {
   id: string;
   student_fee_id: string | null;
+  activity_fee_id: string | null;
   amount_paid: number;
   method: string | null;
   status: string;
@@ -81,6 +82,26 @@ type PaymentListRow = {
   notes: string | null;
   rejection_reason: string | null;
   submitted_by: string | null;
+};
+
+type ActivityFeeRow = {
+  id: string;
+  amount_due: number;
+  due_date: string;
+  is_paid: boolean | null;
+  month_index: number | null;
+  student_id: string;
+  activity_id: string;
+  enrollment_id: string;
+  academic_year_id: string | null;
+  student?: {
+    id: string;
+    full_name: string;
+    parent_id: string | null;
+    classroom_id: string | null;
+    classroom?: { id: string; name: string } | null;
+  } | null;
+  activity?: { id: string; name: string; category: string | null } | null;
 };
 
 const fmtAOA = (n: number) =>
