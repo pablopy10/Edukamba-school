@@ -21,6 +21,7 @@ import {
   Hash,
   Loader2,
   FileText,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
@@ -571,6 +572,59 @@ const Definicoes = () => {
     showToast("success", "Ano letivo ativo atualizado.");
   };
 
+  const handleCreateAcademicYear = async () => {
+    if (!schoolId) return;
+    // Suggest the next school year based on the most recent end_date.
+    const latest = years
+      .slice()
+      .sort((a, b) => (a.end_date < b.end_date ? 1 : -1))[0];
+    const baseYear = latest ? new Date(latest.end_date).getFullYear() : new Date().getFullYear();
+    const startYear = baseYear;
+    const endYear = baseYear + 1;
+    const label = `${startYear}/${endYear}`;
+    const start_date = `${startYear}-09-01`;
+    const end_date = `${endYear}-07-31`;
+    setSaving(true);
+    const { data, error } = await supabase
+      .from("academic_years")
+      .insert({ school_id: schoolId, label, start_date, end_date, is_active: false })
+      .select("id")
+      .maybeSingle();
+    setSaving(false);
+    if (error) return showToast("error", error.message);
+    await refreshAcademicYears();
+    if (data?.id) setSelectedYearId(data.id);
+    showToast("success", "Ano letivo criado. Edite os dados conforme necessário.");
+  };
+
+  const [confirmDeleteYearId, setConfirmDeleteYearId] = useState<string | null>(null);
+
+  const handleDeleteAcademicYear = async () => {
+    if (!schoolId || !confirmDeleteYearId) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from("academic_years")
+      .delete()
+      .eq("id", confirmDeleteYearId);
+    setSaving(false);
+    if (error) {
+      setConfirmDeleteYearId(null);
+      return showToast(
+        "error",
+        "Não foi possível eliminar. Existem dados associados a este ano letivo.",
+      );
+    }
+    const removed = confirmDeleteYearId;
+    setConfirmDeleteYearId(null);
+    await refreshAcademicYears();
+    // Pick another year if the removed one was selected.
+    if (selectedYearId === removed) {
+      const next = years.find((y) => y.id !== removed);
+      if (next) setSelectedYearId(next.id);
+    }
+    showToast("success", "Ano letivo eliminado.");
+  };
+
   // ===== Users =====
   const updateUserRole = async (id: string, role: Role) => {
     const { error } = await supabase.from("profiles").update({ role }).eq("id", id);
@@ -958,13 +1012,20 @@ const Definicoes = () => {
         {/* ACADÉMICO */}
         {activeTab === "academico" && (
           <div className="flex flex-col gap-6">
-            <SectionCard title="Ano letivo" desc="Ano letivo ativo da escola.">
-              {years.length > 0 && (
-                <div className="mb-5 max-w-sm">
+            <SectionCard
+              title="Anos letivos"
+              desc="Crie, edite ou elimine os anos letivos da escola. O ano selecionado é usado em toda a aplicação para filtrar a informação."
+            >
+              <div className="mb-5 flex flex-wrap items-end gap-3">
+                <div className="min-w-[240px] flex-1 max-w-sm">
                   <Field label="Ano em edição" icon={Calendar}>
-                    <Select value={selectedYearId ?? undefined} onValueChange={setSelectedYearId}>
+                    <Select
+                      value={selectedYearId ?? undefined}
+                      onValueChange={setSelectedYearId}
+                      disabled={years.length === 0}
+                    >
                       <SelectTrigger className="h-11 rounded-xl border-border bg-card shadow-soft">
-                        <SelectValue placeholder="Selecionar ano letivo" />
+                        <SelectValue placeholder="Sem anos letivos criados" />
                       </SelectTrigger>
                       <SelectContent>
                         {years.map((y) => (
@@ -976,9 +1037,38 @@ const Definicoes = () => {
                     </Select>
                   </Field>
                 </div>
-              )}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={handleCreateAcademicYear}
+                    disabled={saving}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Plus className="h-4 w-4" strokeWidth={2} />
+                    Novo ano letivo
+                  </button>
+                )}
+                {isAdmin && year.id && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteYearId(year.id)}
+                    disabled={saving || years.find((y) => y.id === year.id)?.is_active === true}
+                    title={
+                      years.find((y) => y.id === year.id)?.is_active
+                        ? "Não é possível eliminar o ano letivo ativo."
+                        : "Eliminar ano letivo"
+                    }
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-pastel-pink-foreground/40 bg-card px-5 text-sm font-semibold text-pastel-pink-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-pastel-pink/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" strokeWidth={2} />
+                    Eliminar
+                  </button>
+                )}
+              </div>
               {!year.id ? (
-                <p className="text-sm text-muted-foreground">Sem ano letivo ativo.</p>
+                <p className="rounded-xl border border-dashed border-border bg-muted/40 p-5 text-sm text-muted-foreground">
+                  Sem anos letivos criados. Clique em <span className="font-semibold text-foreground">"Novo ano letivo"</span> para começar.
+                </p>
               ) : (
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                   <Field label="Ano letivo">
@@ -1509,6 +1599,43 @@ const Definicoes = () => {
                   className="h-10 rounded-full bg-pastel-pink px-4 text-sm font-semibold text-pastel-pink-foreground shadow-soft hover:opacity-90"
                 >
                   Remover
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete academic year confirm modal */}
+        {confirmDeleteYearId && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setConfirmDeleteYearId(null)}
+          >
+            <div
+              className="w-full max-w-md rounded-2xl bg-card p-6 shadow-card"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-bold text-foreground">Eliminar ano letivo</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Vai eliminar o ano letivo{" "}
+                <span className="font-semibold text-foreground">
+                  {years.find((y) => y.id === confirmDeleteYearId)?.label}
+                </span>
+                . Só é possível eliminar se não existirem turmas, matrículas, avaliações ou outros dados associados.
+              </p>
+              <div className="mt-6 flex justify-end gap-2">
+                <button
+                  onClick={() => setConfirmDeleteYearId(null)}
+                  className="h-10 rounded-full border border-border px-4 text-sm font-medium text-foreground hover:bg-muted"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteAcademicYear}
+                  disabled={saving}
+                  className="h-10 rounded-full bg-pastel-pink px-4 text-sm font-semibold text-pastel-pink-foreground shadow-soft hover:opacity-90 disabled:opacity-50"
+                >
+                  Eliminar
                 </button>
               </div>
             </div>
