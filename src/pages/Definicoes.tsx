@@ -958,6 +958,24 @@ const Definicoes = () => {
         {activeTab === "academico" && (
           <div className="flex flex-col gap-6">
             <SectionCard title="Ano letivo" desc="Ano letivo ativo da escola.">
+              {years.length > 0 && (
+                <div className="mb-5 max-w-sm">
+                  <Field label="Ano em edição" icon={Calendar}>
+                    <Select value={selectedYearId ?? undefined} onValueChange={setSelectedYearId}>
+                      <SelectTrigger className="h-11 rounded-xl border-border bg-card shadow-soft">
+                        <SelectValue placeholder="Selecionar ano letivo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {years.map((y) => (
+                          <SelectItem key={y.id} value={y.id}>
+                            {y.label}{y.is_active ? " · ativo" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+              )}
               {!year.id ? (
                 <p className="text-sm text-muted-foreground">Sem ano letivo ativo.</p>
               ) : (
@@ -990,7 +1008,19 @@ const Definicoes = () => {
                   </Field>
                 </div>
               )}
-              <SaveBar onClick={handleSaveAcademic} disabled={!year.id} saving={saving} isAdmin={isAdmin} />
+              <div className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
+                {year.id && !years.find((y) => y.id === year.id)?.is_active && isAdmin && (
+                  <button
+                    type="button"
+                    onClick={handleSetActiveAcademic}
+                    disabled={saving}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-border bg-card px-5 text-sm font-semibold text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Tornar ativo
+                  </button>
+                )}
+                <SaveBar onClick={handleSaveAcademic} disabled={!year.id} saving={saving} isAdmin={isAdmin} />
+              </div>
             </SectionCard>
 
             <SectionCard
