@@ -22,6 +22,7 @@ export type AssessmentRecord = {
   room: string | null;
   weight: number;
   description: string | null;
+  term_id: string | null;
 };
 
 type Option = { id: string; name: string };
@@ -36,6 +37,8 @@ const TYPES = [
 const trimTime = (t: string) => (t ? t.slice(0, 5) : "");
 
 type Conflict = { id: string; title: string; reason: string };
+
+type Term = { id: string; term_number: number; name: string; start_date: string; end_date: string };
 
 type Props = {
   open: boolean;
@@ -60,6 +63,7 @@ const empty: AssessmentRecord = {
   room: "",
   weight: 0,
   description: "",
+  term_id: null,
 };
 
 export const AssessmentFormDialog = ({
@@ -75,10 +79,13 @@ export const AssessmentFormDialog = ({
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<AssessmentRecord>(empty);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
+  const [terms, setTerms] = useState<Term[]>([]);
+  const [termManuallyOverridden, setTermManuallyOverridden] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setConflicts([]);
+    setTermManuallyOverridden(!!initial?.term_id);
     setForm({
       ...empty,
       ...initial,
@@ -93,8 +100,27 @@ export const AssessmentFormDialog = ({
       room: initial?.room ?? "",
       weight: Number(initial?.weight ?? 0),
       description: initial?.description ?? "",
+      term_id: initial?.term_id ?? null,
     });
   }, [open, initial]);
+
+  // Load terms for the school
+  useEffect(() => {
+    if (!open || !schoolId) return;
+    supabase
+      .from("academic_terms")
+      .select("id, term_number, name, start_date, end_date")
+      .eq("school_id", schoolId)
+      .order("term_number")
+      .then(({ data }) => setTerms((data ?? []) as Term[]));
+  }, [open, schoolId]);
+
+  // Auto-derive term from date unless user manually overrode it
+  useEffect(() => {
+    if (!form.date || terms.length === 0 || termManuallyOverridden) return;
+    const matched = terms.find((t) => form.date >= t.start_date && form.date <= t.end_date);
+    setForm((f) => ({ ...f, term_id: matched?.id ?? null }));
+  }, [form.date, terms, termManuallyOverridden]);
 
   const update = <K extends keyof AssessmentRecord>(key: K, value: AssessmentRecord[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -186,6 +212,7 @@ export const AssessmentFormDialog = ({
       room: form.room?.trim() || null,
       weight: Number(form.weight) || 0,
       description: form.description?.trim() || null,
+      term_id: form.term_id,
     };
 
     const { error } = form.id
