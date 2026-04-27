@@ -40,12 +40,14 @@ import Chat from "./pages/Chat.tsx";
 import Pesquisa from "./pages/Pesquisa.tsx";
 import Transportes from "./pages/Transportes.tsx";
 import { ModulesProvider } from "./context/ModulesContext";
+import { AcademicYearProvider } from "./context/AcademicYearContext";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ModulesProvider>
+      <AcademicYearProvider>
       <TooltipProvider>
         <Toaster />
         <Sonner />
@@ -91,6 +93,7 @@ const App = () => (
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
+      </AcademicYearProvider>
     </ModulesProvider>
   </QueryClientProvider>
 );
