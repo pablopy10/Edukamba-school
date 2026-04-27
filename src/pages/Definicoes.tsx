@@ -1231,7 +1231,8 @@ const Definicoes = () => {
                       <th className="py-4 pr-4 font-semibold">Emissão</th>
                       <th className="py-4 pr-4 font-semibold">Vencimento</th>
                       <th className="py-4 pr-4 font-semibold">Valor</th>
-                      <th className="py-4 pr-5 font-semibold">Estado</th>
+                      <th className="py-4 pr-4 font-semibold">Estado</th>
+                      <th className="py-4 pr-5 font-semibold text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1243,7 +1244,7 @@ const Definicoes = () => {
                         <td className="py-3.5 pr-4 font-medium text-foreground">
                           {formatCurrency(Number(inv.amount), inv.currency)}
                         </td>
-                        <td className="py-3.5 pr-5">
+                        <td className="py-3.5 pr-4">
                           <span
                             className={cn(
                               "rounded-full px-3 py-1 text-xs font-medium",
@@ -1251,17 +1252,50 @@ const Definicoes = () => {
                                 ? "bg-pastel-green text-pastel-green-foreground"
                                 : inv.status === "overdue"
                                   ? "bg-pastel-pink text-pastel-pink-foreground"
-                                  : "bg-pastel-yellow text-pastel-yellow-foreground",
+                                  : inv.status === "submitted"
+                                    ? "bg-pastel-blue text-pastel-blue-foreground"
+                                    : "bg-pastel-yellow text-pastel-yellow-foreground",
                             )}
                           >
-                            {inv.status === "paid" ? "Pago" : inv.status === "overdue" ? "Em atraso" : "Pendente"}
+                            {inv.status === "paid"
+                              ? "Pago"
+                              : inv.status === "overdue"
+                                ? "Em atraso"
+                                : inv.status === "submitted"
+                                  ? "A validar"
+                                  : "Pendente"}
                           </span>
+                        </td>
+                        <td className="py-3.5 pr-5 text-right">
+                          <div className="flex justify-end gap-2">
+                            {inv.proof_url && (
+                              <button
+                                onClick={() => downloadProof(inv.proof_url!)}
+                                className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                              >
+                                Ver comprovativo
+                              </button>
+                            )}
+                            {isAdmin && inv.status !== "paid" && (
+                              <button
+                                onClick={() => {
+                                  setProofInvoice(inv);
+                                  setProofFile(null);
+                                  setProofMethod(inv.payment_method ?? "transferencia");
+                                  setProofNotes(inv.notes ?? "");
+                                }}
+                                className="rounded-lg bg-pastel-blue px-3 py-1.5 text-xs font-semibold text-pastel-blue-foreground hover:opacity-90"
+                              >
+                                {inv.proof_url ? "Substituir" : "Anexar comprovativo"}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
                     {invoices.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+                        <td colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
                           <FileText className="mx-auto mb-2 h-8 w-8 opacity-40" />
                           Sem faturas registadas.
                         </td>
