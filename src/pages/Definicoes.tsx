@@ -380,7 +380,8 @@ const Definicoes = () => {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, selectedYearId]);
 
   // ===== Permissions: load on tab/role/user change =====
   useEffect(() => {
