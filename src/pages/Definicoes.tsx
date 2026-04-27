@@ -369,10 +369,16 @@ const Definicoes = () => {
         const s = (schoolRes.data.settings ?? {}) as {
           honor_roll_min_average?: number;
           grading_max_score?: number;
+          late_fee_enabled?: boolean;
+          late_fee_type?: "fixed" | "percentage";
+          late_fee_value?: number;
         };
         setAcademicSettings({
           honor_roll_min_average: typeof s.honor_roll_min_average === "number" ? s.honor_roll_min_average : 14,
           grading_max_score: typeof s.grading_max_score === "number" ? s.grading_max_score : 20,
+          late_fee_enabled: typeof s.late_fee_enabled === "boolean" ? s.late_fee_enabled : false,
+          late_fee_type: s.late_fee_type === "percentage" ? "percentage" : "fixed",
+          late_fee_value: typeof s.late_fee_value === "number" ? s.late_fee_value : 0,
         });
       }
       if (yearRes.data) {
