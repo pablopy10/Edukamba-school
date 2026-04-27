@@ -2030,6 +2030,51 @@ const Definicoes = () => {
             {toast.msg}
           </div>
         )}
+
+        {/* Plan change request modal */}
+        {planRequest.open && planRequest.targetPlan && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => !planRequest.submitting && setPlanRequest({ open: false, targetPlan: null, message: "", submitting: false })}
+          >
+            <div
+              className="w-full max-w-md rounded-2xl bg-card p-6 shadow-card"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-bold text-foreground">
+                Solicitar plano {planRequest.targetPlan}
+              </h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Será enviado um email para <span className="font-medium text-foreground">geral@edukamba.com</span> a informar do seu interesse em ativar o plano <span className="font-medium text-foreground">{planRequest.targetPlan}</span>. A nossa equipa entrará em contacto para formalizar o contrato.
+              </p>
+              <label className="mt-4 block text-xs font-medium text-foreground">Mensagem (opcional)</label>
+              <textarea
+                value={planRequest.message}
+                onChange={(e) => setPlanRequest((p) => ({ ...p, message: e.target.value }))}
+                rows={4}
+                placeholder="Indique necessidades específicas, prazos, número de alunos, etc."
+                className="mt-1 w-full rounded-xl border border-border bg-card p-3 text-sm shadow-soft outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+              <div className="mt-6 flex justify-end gap-2">
+                <button
+                  onClick={() => setPlanRequest({ open: false, targetPlan: null, message: "", submitting: false })}
+                  disabled={planRequest.submitting}
+                  className="h-10 rounded-full border border-border px-4 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={submitPlanRequest}
+                  disabled={planRequest.submitting}
+                  className="inline-flex h-10 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft hover:opacity-90 disabled:opacity-50"
+                >
+                  {planRequest.submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Enviar pedido
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );
