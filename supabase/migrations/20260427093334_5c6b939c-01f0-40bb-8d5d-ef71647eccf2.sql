@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.clone_academic_year(uuid, uuid, text, date, date, boolean, boolean, boolean, boolean, boolean) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.clone_academic_year(uuid, uuid, text, date, date, boolean, boolean, boolean, boolean, boolean) TO authenticated;
