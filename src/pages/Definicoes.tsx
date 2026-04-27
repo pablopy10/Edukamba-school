@@ -279,8 +279,18 @@ const Definicoes = () => {
     due_date: string;
     paid_at: string | null;
     status: string;
+    proof_url?: string | null;
+    payment_method?: string | null;
+    notes?: string | null;
+    submitted_at?: string | null;
+    description?: string | null;
   };
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [proofInvoice, setProofInvoice] = useState<Invoice | null>(null);
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofMethod, setProofMethod] = useState<string>("transferencia");
+  const [proofNotes, setProofNotes] = useState<string>("");
+  const [proofUploading, setProofUploading] = useState(false);
 
   // ===== Initial load =====
   useEffect(() => {
@@ -640,22 +650,95 @@ const Definicoes = () => {
   const saveBillingCycle = async (cycle: "SEMESTRAL" | "ANNUAL") => {
     if (!schoolId) return;
     setSub((s) => ({ ...s, billing_cycle: cycle }));
+    let subId = sub.id;
     if (sub.id) {
       const { error } = await supabase
         .from("saas_subscriptions")
-        .update({ billing_cycle: cycle })
+        .update({ billing_cycle: cycle, last_generated_cycle_key: null })
         .eq("id", sub.id);
       if (error) return showToast("error", error.message);
     } else {
       const { data, error } = await supabase
         .from("saas_subscriptions")
-        .insert({ school_id: schoolId, plan_type: sub.plan_type, billing_cycle: cycle })
+        .insert({ school_id: schoolId, plan_type: sub.plan_type, billing_cycle: cycle, status: "ACTIVE" })
         .select()
         .maybeSingle();
       if (error) return showToast("error", error.message);
-      if (data) setSub((s) => ({ ...s, id: data.id }));
+      if (data) {
+        setSub((s) => ({ ...s, id: data.id }));
+        subId = data.id;
+      }
     }
-    showToast("success", "Ciclo de pagamento atualizado.");
+    // Gerar cobranças conforme o ciclo
+    const { data: genCount, error: genErr } = await supabase.rpc("generate_school_invoices", {
+      _school_id: schoolId,
+    });
+    if (genErr) {
+      showToast("error", `Ciclo guardado, mas falhou a geração: ${genErr.message}`);
+    } else {
+      await reloadInvoices();
+      const n = Number(genCount ?? 0);
+      showToast(
+        "success",
+        n > 0 ? `Ciclo atualizado. ${n} cobrança(s) gerada(s).` : "Ciclo atualizado.",
+      );
+    }
+    void subId;
+  };
+
+  const reloadInvoices = async () => {
+    if (!schoolId) return;
+    const { data } = await supabase
+      .from("school_invoices")
+      .select("*")
+      .eq("school_id", schoolId)
+      .order("issue_date", { ascending: false });
+    if (data) setInvoices(data as Invoice[]);
+  };
+
+  const submitProof = async () => {
+    if (!proofInvoice || !schoolId || !user) return;
+    if (!proofFile) return showToast("error", "Selecione o ficheiro do comprovativo.");
+    setProofUploading(true);
+    try {
+      const ext = proofFile.name.split(".").pop() || "pdf";
+      const path = `${schoolId}/${proofInvoice.id}-${Date.now()}.${ext}`;
+      const up = await supabase.storage
+        .from("school-invoice-proofs")
+        .upload(path, proofFile, { upsert: true, contentType: proofFile.type || undefined });
+      if (up.error) throw up.error;
+      const { error: updErr } = await supabase
+        .from("school_invoices")
+        .update({
+          proof_url: path,
+          payment_method: proofMethod,
+          notes: proofNotes || null,
+          submitted_at: new Date().toISOString(),
+          submitted_by: user.id,
+          status: "submitted",
+        })
+        .eq("id", proofInvoice.id);
+      if (updErr) throw updErr;
+      await reloadInvoices();
+      setProofInvoice(null);
+      setProofFile(null);
+      setProofMethod("transferencia");
+      setProofNotes("");
+      showToast("success", "Comprovativo enviado. Aguarda validação.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erro ao enviar comprovativo.";
+      showToast("error", msg);
+    } finally {
+      setProofUploading(false);
+    }
+  };
+
+  const downloadProof = async (path: string) => {
+    const { data, error } = await supabase.storage
+      .from("school-invoice-proofs")
+      .createSignedUrl(path, 60 * 5);
+    if (error || !data?.signedUrl) return showToast("error", "Não foi possível abrir o comprovativo.");
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   };
 
   const statusBadge = (active: boolean | null) => {
@@ -1148,7 +1231,8 @@ const Definicoes = () => {
                       <th className="py-4 pr-4 font-semibold">Emissão</th>
                       <th className="py-4 pr-4 font-semibold">Vencimento</th>
                       <th className="py-4 pr-4 font-semibold">Valor</th>
-                      <th className="py-4 pr-5 font-semibold">Estado</th>
+                      <th className="py-4 pr-4 font-semibold">Estado</th>
+                      <th className="py-4 pr-5 font-semibold text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1160,7 +1244,7 @@ const Definicoes = () => {
                         <td className="py-3.5 pr-4 font-medium text-foreground">
                           {formatCurrency(Number(inv.amount), inv.currency)}
                         </td>
-                        <td className="py-3.5 pr-5">
+                        <td className="py-3.5 pr-4">
                           <span
                             className={cn(
                               "rounded-full px-3 py-1 text-xs font-medium",
@@ -1168,17 +1252,50 @@ const Definicoes = () => {
                                 ? "bg-pastel-green text-pastel-green-foreground"
                                 : inv.status === "overdue"
                                   ? "bg-pastel-pink text-pastel-pink-foreground"
-                                  : "bg-pastel-yellow text-pastel-yellow-foreground",
+                                  : inv.status === "submitted"
+                                    ? "bg-pastel-blue text-pastel-blue-foreground"
+                                    : "bg-pastel-yellow text-pastel-yellow-foreground",
                             )}
                           >
-                            {inv.status === "paid" ? "Pago" : inv.status === "overdue" ? "Em atraso" : "Pendente"}
+                            {inv.status === "paid"
+                              ? "Pago"
+                              : inv.status === "overdue"
+                                ? "Em atraso"
+                                : inv.status === "submitted"
+                                  ? "A validar"
+                                  : "Pendente"}
                           </span>
+                        </td>
+                        <td className="py-3.5 pr-5 text-right">
+                          <div className="flex justify-end gap-2">
+                            {inv.proof_url && (
+                              <button
+                                onClick={() => downloadProof(inv.proof_url!)}
+                                className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                              >
+                                Ver comprovativo
+                              </button>
+                            )}
+                            {isAdmin && inv.status !== "paid" && (
+                              <button
+                                onClick={() => {
+                                  setProofInvoice(inv);
+                                  setProofFile(null);
+                                  setProofMethod(inv.payment_method ?? "transferencia");
+                                  setProofNotes(inv.notes ?? "");
+                                }}
+                                className="rounded-lg bg-pastel-blue px-3 py-1.5 text-xs font-semibold text-pastel-blue-foreground hover:opacity-90"
+                              >
+                                {inv.proof_url ? "Substituir" : "Anexar comprovativo"}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
                     {invoices.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+                        <td colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
                           <FileText className="mx-auto mb-2 h-8 w-8 opacity-40" />
                           Sem faturas registadas.
                         </td>
@@ -1231,6 +1348,73 @@ const Definicoes = () => {
                   className="h-10 rounded-full bg-pastel-blue px-4 text-sm font-semibold text-pastel-blue-foreground shadow-soft hover:opacity-90 disabled:opacity-50"
                 >
                   Guardar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Proof upload modal */}
+        {proofInvoice && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => !proofUploading && setProofInvoice(null)}
+          >
+            <div
+              className="w-full max-w-md rounded-2xl bg-card p-6 shadow-card"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-bold text-foreground">Anexar comprovativo</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Fatura <span className="font-medium text-foreground">{proofInvoice.invoice_number}</span> ·{" "}
+                {formatCurrency(Number(proofInvoice.amount), proofInvoice.currency)}
+              </p>
+              <div className="mt-5 flex flex-col gap-4">
+                <Field label="Método de pagamento" icon={CreditCard}>
+                  <select
+                    className={inputCls(false)}
+                    value={proofMethod}
+                    onChange={(e) => setProofMethod(e.target.value)}
+                  >
+                    <option value="transferencia">Transferência bancária</option>
+                    <option value="multibanco">Multibanco</option>
+                    <option value="mbway">MB WAY</option>
+                    <option value="numerario">Numerário</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                </Field>
+                <Field label="Ficheiro do comprovativo" icon={FileText}>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => setProofFile(e.target.files?.[0] ?? null)}
+                    className="block w-full text-sm text-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-pastel-blue/30 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-pastel-blue-foreground"
+                  />
+                </Field>
+                <Field label="Notas (opcional)">
+                  <textarea
+                    className={cn(inputCls(false), "min-h-[80px] py-2")}
+                    value={proofNotes}
+                    onChange={(e) => setProofNotes(e.target.value)}
+                    placeholder="Referência da transferência, data, etc."
+                  />
+                </Field>
+              </div>
+              <div className="mt-6 flex justify-end gap-2">
+                <button
+                  onClick={() => setProofInvoice(null)}
+                  disabled={proofUploading}
+                  className="h-10 rounded-full border border-border px-4 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={submitProof}
+                  disabled={proofUploading || !proofFile}
+                  className="flex h-10 items-center gap-2 rounded-full bg-pastel-blue px-4 text-sm font-semibold text-pastel-blue-foreground shadow-soft hover:opacity-90 disabled:opacity-50"
+                >
+                  {proofUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  Enviar para validação
                 </button>
               </div>
             </div>

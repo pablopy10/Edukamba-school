@@ -1729,6 +1729,7 @@ export type Database = {
           billing_cycle: string | null
           id: string
           last_billing_date: string | null
+          last_generated_cycle_key: string | null
           next_billing_date: string | null
           plan_type: string
           price_per_student: number | null
@@ -1739,6 +1740,7 @@ export type Database = {
           billing_cycle?: string | null
           id?: string
           last_billing_date?: string | null
+          last_generated_cycle_key?: string | null
           next_billing_date?: string | null
           plan_type: string
           price_per_student?: number | null
@@ -1749,6 +1751,7 @@ export type Database = {
           billing_cycle?: string | null
           id?: string
           last_billing_date?: string | null
+          last_generated_cycle_key?: string | null
           next_billing_date?: string | null
           plan_type?: string
           price_per_student?: number | null
@@ -1857,42 +1860,60 @@ export type Database = {
           amount: number
           created_at: string
           currency: string
+          cycle_key: string | null
           description: string | null
           due_date: string
           id: string
           invoice_number: string
           issue_date: string
+          notes: string | null
           paid_at: string | null
+          payment_method: string | null
+          proof_url: string | null
           school_id: string
           status: string
+          submitted_at: string | null
+          submitted_by: string | null
           updated_at: string
         }
         Insert: {
           amount?: number
           created_at?: string
           currency?: string
+          cycle_key?: string | null
           description?: string | null
           due_date: string
           id?: string
           invoice_number: string
           issue_date?: string
+          notes?: string | null
           paid_at?: string | null
+          payment_method?: string | null
+          proof_url?: string | null
           school_id: string
           status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
           updated_at?: string
         }
         Update: {
           amount?: number
           created_at?: string
           currency?: string
+          cycle_key?: string | null
           description?: string | null
           due_date?: string
           id?: string
           invoice_number?: string
           issue_date?: string
+          notes?: string | null
           paid_at?: string | null
+          payment_method?: string | null
+          proof_url?: string | null
           school_id?: string
           status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -2497,6 +2518,10 @@ export type Database = {
       }
       generate_recurring_expense_occurrences: {
         Args: { _recurring_id: string; _until?: string }
+        Returns: number
+      }
+      generate_school_invoices: {
+        Args: { _school_id: string }
         Returns: number
       }
       generate_student_fees_for_year: {
