@@ -308,9 +308,10 @@ const Turmas = () => {
         templateSheetName="Turmas"
         fields={[
           { key: "name", label: "Nome da turma", required: true, aliases: ["turma", "classe", "name"], example: "5ª A" },
-          { key: "grade_level", label: "Ano", aliases: ["ano", "grade", "nivel"], example: "5" },
-          { key: "period", label: "Período", aliases: ["periodo", "turno"], example: "Manhã" },
-          { key: "course", label: "Curso", aliases: ["curso", "course"], example: "Ensino Básico" },
+          { key: "grade_level", label: "Ano de escolaridade", required: true, aliases: ["ano", "ano de escolaridade", "grade", "nivel", "escolaridade"], example: "5" },
+          { key: "period", label: "Período", required: true, aliases: ["periodo", "turno"], example: "Manhã" },
+          { key: "course", label: "Curso", required: true, aliases: ["curso", "course"], example: "Ensino Básico" },
+          { key: "academic_year", label: "Ano letivo", aliases: ["ano letivo", "ano lectivo", "academic year", "ano_letivo"], example: "2025/2026" },
         ]}
         onImportRow={async (row) => {
           if (!row.name) throw new Error("Nome da turma em falta");
@@ -320,7 +321,14 @@ const Turmas = () => {
             .maybeSingle();
           const schoolId = profile?.school_id;
           if (!schoolId) throw new Error("Escola não encontrada");
-          const academicYearId = selectedYearId || years.find((y) => y.is_active)?.id || years[0]?.id;
+          let academicYearId: string | undefined;
+          if (row.academic_year) {
+            const match = years.find((y) => y.label.toLowerCase() === row.academic_year.toLowerCase());
+            if (!match) throw new Error(`Ano letivo "${row.academic_year}" não encontrado`);
+            academicYearId = match.id;
+          } else {
+            academicYearId = selectedYearId || years.find((y) => y.is_active)?.id || years[0]?.id;
+          }
           if (!academicYearId) throw new Error("Sem ano lectivo activo");
           let course_id: string | null = null;
           if (row.course) {
