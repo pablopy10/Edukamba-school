@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 export interface DashboardCounts {
   students: number;
@@ -48,6 +49,7 @@ const initials = (name: string) =>
     .join("") || "?";
 
 export const useDashboardData = () => {
+  const { selectedYearId } = useAcademicYear();
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState<DashboardCounts>({
     students: 0,
@@ -79,8 +81,22 @@ export const useDashboardData = () => {
         const { data: authData } = await supabase.auth.getUser();
         const currentUserId = authData.user?.id ?? null;
 
+        let classroomsQuery = supabase.from("classrooms").select("id", { count: "exact", head: true });
+        let schedulesQuery = supabase
+          .from("schedules")
+          .select("id, start_time, end_time, day_of_week, classrooms(name, grade_level), subjects(name)")
+          .eq("day_of_week", dow)
+          .order("start_time", { ascending: true })
+          .limit(6);
+
+        if (selectedYearId) {
+          classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
+          schedulesQuery = schedulesQuery.eq("academic_year_id", selectedYearId);
+        }
+
         const [
           studentsRes,
+          enrollmentsRes,
           teachersRes,
           staffRes,
           classroomsRes,
@@ -90,6 +106,9 @@ export const useDashboardData = () => {
           messagesRes,
         ] = await Promise.all([
           supabase.from("students").select("id", { count: "exact", head: true }),
+          selectedYearId
+            ? supabase.from("enrollments").select("student_id").eq("academic_year_id", selectedYearId)
+            : Promise.resolve({ data: null }),
           supabase
             .from("profiles")
             .select("id", { count: "exact", head: true })
@@ -98,19 +117,14 @@ export const useDashboardData = () => {
             .from("profiles")
             .select("id", { count: "exact", head: true })
             .in("role", ["ADMIN", "TEACHER"]),
-          supabase.from("classrooms").select("id", { count: "exact", head: true }),
-          supabase.from("students").select("gender"),
+          classroomsQuery,
+          supabase.from("students").select("id, gender"),
           supabase
             .from("attendance")
             .select("date, notes")
             .gte("date", fmt(weekStart))
             .lt("date", fmt(weekEnd)),
-          supabase
-            .from("schedules")
-            .select("id, start_time, end_time, day_of_week, classrooms(name, grade_level), subjects(name)")
-            .eq("day_of_week", dow)
-            .order("start_time", { ascending: true })
-            .limit(6),
+          schedulesQuery,
           supabase
             .from("messages")
             .select("id, content, created_at, is_read, sender_id, receiver_id, profiles!messages_sender_id_fkey(full_name)")
@@ -120,14 +134,19 @@ export const useDashboardData = () => {
 
         if (cancelled) return;
 
+        const enrolledStudentIds = new Set((enrollmentsRes.data ?? []).map((e) => e.student_id).filter(Boolean));
+        const scopedStudents = selectedYearId
+          ? (studentsGenderRes.data ?? []).filter((s) => enrolledStudentIds.has(s.id))
+          : (studentsGenderRes.data ?? []);
+
         setCounts({
-          students: studentsRes.count ?? 0,
+          students: selectedYearId ? enrolledStudentIds.size : studentsRes.count ?? 0,
           teachers: teachersRes.count ?? 0,
           staff: staffRes.count ?? 0,
           classrooms: classroomsRes.count ?? 0,
         });
 
-        const genders = studentsGenderRes.data ?? [];
+        const genders = scopedStudents;
         const male = genders.filter((g) => (g.gender ?? "").toUpperCase().startsWith("M")).length;
         const female = genders.filter((g) => (g.gender ?? "").toUpperCase().startsWith("F")).length;
         setGender({ male, female, total: genders.length });
@@ -227,7 +246,7 @@ export const useDashboardData = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedYearId]);
 
   return { loading, counts, gender, attendance, agenda, messages };
 };
