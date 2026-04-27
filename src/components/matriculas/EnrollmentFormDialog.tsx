@@ -51,6 +51,9 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
   const [classroomId, setClassroomId] = useState<string>("");
   const [yearId, setYearId] = useState<string>("");
   const [status, setStatus] = useState<string>("ACTIVE");
+  // classrooms filtered by selected year inside the dialog
+  const [yearClassrooms, setYearClassrooms] = useState<Opt[]>([]);
+  const [loadingClassrooms, setLoadingClassrooms] = useState(false);
   // new student fields
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -74,6 +77,41 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
       }
     }
   }, [open, enrollment, years, selectedYearId]);
+
+  // Fetch classrooms for the selected year inside the dialog
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const load = async () => {
+      if (!yearId) {
+        setYearClassrooms([]);
+        return;
+      }
+      setLoadingClassrooms(true);
+      const { data, error } = await supabase
+        .from("classrooms")
+        .select("id, name")
+        .eq("academic_year_id", yearId)
+        .order("name");
+      if (cancelled) return;
+      if (error) {
+        setYearClassrooms([]);
+      } else {
+        setYearClassrooms((data ?? []) as Opt[]);
+      }
+      setLoadingClassrooms(false);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [open, yearId]);
+
+  // Reset selected classroom if it no longer belongs to the selected year
+  useEffect(() => {
+    if (!open || loadingClassrooms) return;
+    if (classroomId && !yearClassrooms.some((c) => c.id === classroomId)) {
+      setClassroomId("");
+    }
+  }, [yearClassrooms, loadingClassrooms, open]);
 
   const handleSubmit = async () => {
     if (!classroomId) { toast({ title: "Turma obrigatória", variant: "destructive" }); return; }
@@ -223,10 +261,15 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <Label>Turma</Label>
-            <Select value={classroomId} onValueChange={setClassroomId}>
-              <SelectTrigger><SelectValue placeholder="Seleccionar turma..." /></SelectTrigger>
+            <Select value={classroomId} onValueChange={setClassroomId} disabled={!yearId || loadingClassrooms}>
+              <SelectTrigger>
+                <SelectValue placeholder={!yearId ? "Seleccione o ano lectivo primeiro" : (loadingClassrooms ? "A carregar turmas..." : "Seleccionar turma...")} />
+              </SelectTrigger>
               <SelectContent>
-                {classrooms.map((c) => (
+                {yearClassrooms.length === 0 && !loadingClassrooms && yearId && (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">Sem turmas para este ano lectivo.</div>
+                )}
+                {yearClassrooms.map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                 ))}
               </SelectContent>
