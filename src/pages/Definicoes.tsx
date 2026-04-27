@@ -1159,7 +1159,14 @@ const Definicoes = () => {
                     Tornar ativo
                   </button>
                 )}
-                <SaveBar onClick={handleSaveAcademic} disabled={!year.id} saving={saving} isAdmin={isAdmin} />
+                <button
+                  onClick={handleSaveAcademic}
+                  disabled={!year.id || saving || !isAdmin}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:opacity-50"
+                >
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" strokeWidth={2} />}
+                  Guardar Alterações
+                </button>
               </div>
             </SectionCard>
 
