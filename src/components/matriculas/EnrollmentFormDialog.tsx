@@ -119,6 +119,22 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
     try {
       if (isEdit && enrollment) {
         if (!studentId) { toast({ title: "Aluno obrigatório", variant: "destructive" }); setLoading(false); return; }
+        // Prevent duplicate: same student + same year on a different enrollment
+        if (yearId) {
+          const { data: dup, error: dErr } = await supabase
+            .from("enrollments")
+            .select("id")
+            .eq("student_id", studentId)
+            .eq("academic_year_id", yearId)
+            .neq("id", enrollment.id)
+            .limit(1);
+          if (dErr) throw dErr;
+          if (dup && dup.length > 0) {
+            toast({ title: "Aluno já matriculado", description: "Este aluno já tem uma matrícula no ano lectivo seleccionado.", variant: "destructive" });
+            setLoading(false);
+            return;
+          }
+        }
         const { error } = await supabase.from("enrollments").update({
           student_id: studentId,
           classroom_id: classroomId,
@@ -158,6 +174,21 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         toast({ title: "Aluno e matrícula criados" });
       } else {
         if (!studentId) { toast({ title: "Seleccione o aluno", variant: "destructive" }); setLoading(false); return; }
+        // Prevent duplicate enrollment on the same year
+        if (yearId) {
+          const { data: dup, error: dErr } = await supabase
+            .from("enrollments")
+            .select("id")
+            .eq("student_id", studentId)
+            .eq("academic_year_id", yearId)
+            .limit(1);
+          if (dErr) throw dErr;
+          if (dup && dup.length > 0) {
+            toast({ title: "Aluno já matriculado", description: "Este aluno já tem uma matrícula no ano lectivo seleccionado.", variant: "destructive" });
+            setLoading(false);
+            return;
+          }
+        }
         const { error } = await supabase.from("enrollments").insert({
           student_id: studentId,
           classroom_id: classroomId,
