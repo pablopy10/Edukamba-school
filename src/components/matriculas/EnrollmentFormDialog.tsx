@@ -6,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { useAcademicYear } from "@/context/AcademicYearContext";
@@ -17,6 +19,9 @@ export type EnrollmentRow = {
   academic_year_id: string | null;
   status: string | null;
   enrolled_at: string | null;
+  result?: string | null;
+  result_notes?: string | null;
+  result_published_at?: string | null;
   students?: { id: string; full_name: string; email: string | null; avatar_color: string | null } | null;
   classrooms?: { id: string; name: string } | null;
   academic_years?: { id: string; label: string } | null;
@@ -41,6 +46,13 @@ const STATUSES: { value: string; label: string }[] = [
   { value: "CANCELLED", label: "Cancelada" },
 ];
 
+const RESULTS: { value: string; label: string }[] = [
+  { value: "EM_CURSO", label: "Em curso (sem resultado)" },
+  { value: "APROVADO", label: "Aprovado (passou de classe)" },
+  { value: "REPROVADO", label: "Reprovado" },
+  { value: "TRANSFERIDO", label: "Transferido" },
+];
+
 export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms, years, enrollment, onSaved }: Props) => {
   const { selectedYearId } = useAcademicYear();
   const isEdit = !!enrollment;
@@ -51,6 +63,10 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
   const [classroomId, setClassroomId] = useState<string>("");
   const [yearId, setYearId] = useState<string>("");
   const [status, setStatus] = useState<string>("ACTIVE");
+  const [result, setResult] = useState<string>("EM_CURSO");
+  const [resultNotes, setResultNotes] = useState<string>("");
+  const [publishResult, setPublishResult] = useState<boolean>(false);
+  const [alreadyPublished, setAlreadyPublished] = useState<boolean>(false);
   // classrooms filtered by selected year inside the dialog
   const [yearClassrooms, setYearClassrooms] = useState<Opt[]>([]);
   const [loadingClassrooms, setLoadingClassrooms] = useState(false);
@@ -69,9 +85,14 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         setClassroomId(enrollment.classroom_id ?? "");
         setYearId(enrollment.academic_year_id ?? "");
         setStatus(enrollment.status ?? "ACTIVE");
+        setResult(enrollment.result ?? "EM_CURSO");
+        setResultNotes(enrollment.result_notes ?? "");
+        setAlreadyPublished(!!enrollment.result_published_at);
+        setPublishResult(!!enrollment.result_published_at);
       } else {
         const activeYear = years.find((y) => y.is_active);
         setStudentId(""); setClassroomId(""); setYearId(selectedYearId ?? activeYear?.id ?? ""); setStatus("ACTIVE");
+        setResult("EM_CURSO"); setResultNotes(""); setPublishResult(false); setAlreadyPublished(false);
         setTab("renew");
         setFullName(""); setEmail(""); setPhone(""); setBirthDate(""); setGender(""); setEnrollmentNumber("");
       }
@@ -135,14 +156,35 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
             return;
           }
         }
-        const { error } = await supabase.from("enrollments").update({
+        const { data: userRes } = await supabase.auth.getUser();
+        const shouldPublish = publishResult && result && result !== "EM_CURSO";
+        const updatePayload: {
+          student_id: string;
+          classroom_id: string;
+          academic_year_id: string | null;
+          status: string;
+          result: string | null;
+          result_notes: string | null;
+          result_published_at?: string | null;
+          result_published_by?: string | null;
+        } = {
           student_id: studentId,
           classroom_id: classroomId,
           academic_year_id: yearId || null,
           status,
-        }).eq("id", enrollment.id);
+          result: result === "EM_CURSO" ? null : result,
+          result_notes: resultNotes || null,
+        };
+        if (shouldPublish && !alreadyPublished) {
+          updatePayload.result_published_at = new Date().toISOString();
+          updatePayload.result_published_by = userRes.user?.id ?? null;
+        } else if (!shouldPublish && alreadyPublished) {
+          updatePayload.result_published_at = null;
+          updatePayload.result_published_by = null;
+        }
+        const { error } = await supabase.from("enrollments").update(updatePayload).eq("id", enrollment.id);
         if (error) throw error;
-        toast({ title: "Matrícula actualizada" });
+        toast({ title: "Matrícula actualizada", description: shouldPublish && !alreadyPublished ? "Resultado comunicado ao encarregado." : undefined });
       } else if (tab === "new") {
         if (!fullName.trim()) { toast({ title: "Nome do aluno obrigatório", variant: "destructive" }); setLoading(false); return; }
         // Need school_id for student creation
@@ -329,6 +371,38 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
             </Select>
           </div>
         </div>
+
+        {isEdit && (
+          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+            <div>
+              <Label className="text-sm font-semibold">Resultado do ano lectivo</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">Define se o aluno passou ou reprovou neste ano lectivo.</p>
+            </div>
+            <Select value={result} onValueChange={setResult}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {RESULTS.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {result !== "EM_CURSO" && (
+              <>
+                <div>
+                  <Label htmlFor="result-notes" className="text-xs">Observações para o encarregado (opcional)</Label>
+                  <Textarea id="result-notes" rows={3} value={resultNotes} onChange={(e) => setResultNotes(e.target.value)} placeholder="Ex.: passou com média de 14 valores, parabéns!" />
+                </div>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <Checkbox checked={publishResult} onCheckedChange={(v) => setPublishResult(!!v)} className="mt-0.5" />
+                  <span className="text-sm">
+                    Comunicar resultado ao encarregado de educação
+                    {alreadyPublished && <span className="block text-xs text-muted-foreground">Já comunicado anteriormente — desmarcar não retira a notificação enviada.</span>}
+                  </span>
+                </label>
+              </>
+            )}
+          </div>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancelar</Button>

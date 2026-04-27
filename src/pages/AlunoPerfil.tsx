@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { ArrowLeft, Mail, Phone, MapPin, Calendar, GraduationCap, BookOpen, Clock, CheckCircle2, XCircle, AlertCircle, Users, FileText, Pencil, Loader2, TrendingUp, Wallet, Bell, Upload, Paperclip } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Calendar, GraduationCap, BookOpen, Clock, CheckCircle2, XCircle, AlertCircle, Users, FileText, Pencil, Loader2, TrendingUp, Wallet, Bell, Upload, Paperclip, History, ArrowRightLeft, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -111,6 +111,17 @@ interface FeeRow {
   month_index: number | null;
 }
 
+interface EnrollmentHistoryRow {
+  id: string;
+  enrolled_at: string | null;
+  status: string | null;
+  result: string | null;
+  result_notes: string | null;
+  result_published_at: string | null;
+  classroom: { id: string; name: string; grade_level: string | null } | null;
+  year: { id: string; label: string; start_date: string; end_date: string; is_active: boolean | null } | null;
+}
+
 interface PaymentRow {
   id: string;
   student_fee_id: string | null;
@@ -174,6 +185,7 @@ const AlunoPerfil = () => {
   const [proofNotes, setProofNotes] = useState("");
   const [proofAmount, setProofAmount] = useState("");
   const [proofUploading, setProofUploading] = useState(false);
+  const [enrollmentHistory, setEnrollmentHistory] = useState<EnrollmentHistoryRow[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -250,6 +262,41 @@ const AlunoPerfil = () => {
       if (!cancelled) {
         setGrades((grRes.data ?? []) as unknown as GradeRow[]);
         setAttendance((atRes.data ?? []) as unknown as AttendanceRow[]);
+      }
+
+      // Enrollment history (across all academic years)
+      const { data: histRows } = await supabase
+        .from("enrollments")
+        .select("id, enrolled_at, status, result, result_notes, result_published_at, classrooms(id, name, grade_level), academic_years(id, label, start_date, end_date, is_active)")
+        .eq("student_id", id);
+      if (!cancelled) {
+        const mapped = (histRows ?? []).map((r) => {
+          const row = r as unknown as {
+            id: string;
+            enrolled_at: string | null;
+            status: string | null;
+            result: string | null;
+            result_notes: string | null;
+            result_published_at: string | null;
+            classrooms: { id: string; name: string; grade_level: string | null } | null;
+            academic_years: { id: string; label: string; start_date: string; end_date: string; is_active: boolean | null } | null;
+          };
+          return {
+            id: row.id,
+            enrolled_at: row.enrolled_at,
+            status: row.status,
+            result: row.result,
+            result_notes: row.result_notes,
+            result_published_at: row.result_published_at,
+            classroom: row.classrooms,
+            year: row.academic_years,
+          } as EnrollmentHistoryRow;
+        }).sort((a, b) => {
+          const da = a.year?.start_date ?? "";
+          const db = b.year?.start_date ?? "";
+          return db.localeCompare(da);
+        });
+        setEnrollmentHistory(mapped);
       }
 
       const { data: feeRows } = await supabase
@@ -620,6 +667,94 @@ const AlunoPerfil = () => {
           <StatPill label="Assiduidade" value={presenceRate} color="green" />
           <StatPill label="Avaliações" value={String(assessments.length)} color="blue" />
           <StatPill label="Disciplinas" value={String(subjectsAvg.length)} color="yellow" />
+        </div>
+
+        {/* Histórico de matrículas */}
+        <div className="rounded-2xl bg-card shadow-card">
+          <div className="flex items-center justify-between border-b border-border p-5">
+            <div className="flex items-center gap-2">
+              <History className="h-5 w-5 text-pastel-blue-foreground" strokeWidth={1.75} />
+              <h2 className="text-lg font-bold text-foreground">Histórico de Matrículas</h2>
+            </div>
+            <span className="text-xs text-muted-foreground">{enrollmentHistory.length} ano(s) lectivo(s)</span>
+          </div>
+          {enrollmentHistory.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">Sem histórico de matrículas.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-pastel-blue/30 text-left text-xs uppercase tracking-wider text-pastel-blue-foreground">
+                    <th className="py-3 pl-5 pr-4 font-semibold">Ano lectivo</th>
+                    <th className="py-3 pr-4 font-semibold">Turma</th>
+                    <th className="py-3 pr-4 font-semibold">Classe</th>
+                    <th className="py-3 pr-4 font-semibold">Estado</th>
+                    <th className="py-3 pr-5 font-semibold">Resultado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {enrollmentHistory.map((h, idx) => {
+                    const prev = enrollmentHistory[idx + 1];
+                    const promoted = prev && prev.result === "APROVADO" && prev.classroom?.grade_level !== h.classroom?.grade_level;
+                    return (
+                      <tr key={h.id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                        <td className="py-3 pl-5 pr-4">
+                          <div className="font-medium text-foreground">
+                            {h.year?.label ?? "—"}
+                            {h.year?.is_active && (
+                              <span className="ml-2 rounded-full bg-pastel-green/60 px-2 py-0.5 text-[10px] font-semibold text-pastel-green-foreground">Actual</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 pr-4">
+                          <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{h.classroom?.name ?? "—"}</span>
+                        </td>
+                        <td className="py-3 pr-4 text-muted-foreground">
+                          {h.classroom?.grade_level ?? "—"}
+                          {promoted && (
+                            <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-pastel-green/40 px-2 py-0.5 text-[10px] font-semibold text-pastel-green-foreground">
+                              <ArrowUpRight className="h-3 w-3" /> Subiu
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <span className={cn(
+                            "rounded-full px-3 py-1 text-xs font-medium",
+                            h.status === "ACTIVE" ? "bg-pastel-green text-pastel-green-foreground" :
+                            h.status === "PENDING" ? "bg-pastel-yellow text-pastel-yellow-foreground" :
+                            h.status === "CANCELLED" ? "bg-pastel-pink text-pastel-pink-foreground" :
+                            "bg-muted text-foreground"
+                          )}>
+                            {h.status === "ACTIVE" ? "Confirmada" : h.status === "PENDING" ? "Pendente" : h.status === "CANCELLED" ? "Cancelada" : (h.status ?? "—")}
+                          </span>
+                        </td>
+                        <td className="py-3 pr-5">
+                          {h.result === "APROVADO" ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-pastel-green px-3 py-1 text-xs font-semibold text-pastel-green-foreground">
+                              <CheckCircle2 className="h-3 w-3" /> Aprovado
+                            </span>
+                          ) : h.result === "REPROVADO" ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-pastel-pink px-3 py-1 text-xs font-semibold text-pastel-pink-foreground">
+                              <XCircle className="h-3 w-3" /> Reprovado
+                            </span>
+                          ) : h.result === "TRANSFERIDO" ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-pastel-blue px-3 py-1 text-xs font-semibold text-pastel-blue-foreground">
+                              <ArrowRightLeft className="h-3 w-3" /> Transferido
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">Em curso</span>
+                          )}
+                          {h.result_notes && (
+                            <p className="mt-1 max-w-xs truncate text-xs text-muted-foreground" title={h.result_notes}>{h.result_notes}</p>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Pagamentos */}
