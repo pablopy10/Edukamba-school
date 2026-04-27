@@ -34,6 +34,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { AssessmentFormDialog, type AssessmentRecord } from "@/components/avaliacoes/AssessmentFormDialog";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 type EvalType = "teste" | "exame" | "trabalho" | "oral";
 
@@ -84,6 +85,7 @@ const tt = (t?: string | null) => (t ? t.slice(0, 5) : "");
 
 const Avaliacoes = () => {
   const navigate = useNavigate();
+  const { selectedYearId } = useAcademicYear();
   const [view, setView] = useState<View>("calendario");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
@@ -116,14 +118,8 @@ const Avaliacoes = () => {
     setSchoolId(sid);
     if (!sid) { setLoading(false); return; }
 
-    // Restrict trimesters and holidays to the active academic year
-    const { data: activeYear } = await supabase
-      .from("academic_years")
-      .select("id")
-      .eq("school_id", sid)
-      .eq("is_active", true)
-      .maybeSingle();
-    const activeYearId = activeYear?.id ?? null;
+    // Restrict trimesters, holidays and assessments to the selected academic year
+    const yearId = selectedYearId;
 
     const termsBase = supabase
       .from("academic_terms")
@@ -135,14 +131,32 @@ const Avaliacoes = () => {
       .select("id, name, start_date, end_date")
       .eq("school_id", sid)
       .order("start_date");
+    let assessmentsQuery = supabase
+      .from("assessments")
+      .select("id,title,type,date,start_time,end_time,room,weight,description,classroom_id,subject_id,teacher_id,term_id")
+      .eq("school_id", sid)
+      .order("date", { ascending: true });
+    if (yearId) {
+      // Filter assessments by the year window via term linkage OR raw date range
+      const { data: yearRow } = await supabase
+        .from("academic_years")
+        .select("start_date, end_date")
+        .eq("id", yearId)
+        .maybeSingle();
+      if (yearRow?.start_date && yearRow?.end_date) {
+        assessmentsQuery = assessmentsQuery
+          .gte("date", yearRow.start_date)
+          .lte("date", yearRow.end_date);
+      }
+    }
 
     const [aRes, cRes, sRes, tRes, termRes, holRes] = await Promise.all([
-      supabase.from("assessments").select("id,title,type,date,start_time,end_time,room,weight,description,classroom_id,subject_id,teacher_id,term_id").eq("school_id", sid).order("date", { ascending: true }),
+      assessmentsQuery,
       supabase.from("classrooms").select("id, name").eq("school_id", sid).order("name"),
       supabase.from("subjects").select("id, name").eq("school_id", sid).order("name"),
       supabase.from("teachers").select("id, profile_id, profiles:profile_id(full_name)").eq("school_id", sid),
-      activeYearId ? termsBase.eq("academic_year_id", activeYearId) : termsBase,
-      activeYearId ? holidaysBase.eq("academic_year_id", activeYearId) : holidaysBase,
+      yearId ? termsBase.eq("academic_year_id", yearId) : termsBase,
+      yearId ? holidaysBase.eq("academic_year_id", yearId) : holidaysBase,
     ]);
 
     setAssessments((aRes.data ?? []) as Assessment[]);
@@ -159,7 +173,7 @@ const Avaliacoes = () => {
     setLoading(false);
   };
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => { loadAll(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [selectedYearId]);
 
   const classroomMap = useMemo(() => new Map(classrooms.map((c) => [c.id, c.name])), [classrooms]);
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s.name])), [subjects]);

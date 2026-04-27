@@ -28,6 +28,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/integrations/supabase/types";
 import { TermsAndHolidaysManager } from "@/components/definicoes/TermsAndHolidaysManager";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 type Tab =
   | "escola"
@@ -211,6 +212,7 @@ const schoolSchema = z.object({
 
 const Definicoes = () => {
   const { user } = useAuth();
+  const { selectedYearId } = useAcademicYear();
   const [activeTab, setActiveTab] = useState<Tab>("escola");
   const [toast, setToast] = useState<{ kind: "success" | "error"; msg: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -311,16 +313,19 @@ const Definicoes = () => {
       setSchoolId(profile.school_id);
       setMyRole((profile.role as Role) ?? null);
 
+      const yearQuery = selectedYearId
+        ? supabase.from("academic_years").select("*").eq("id", selectedYearId).maybeSingle()
+        : supabase
+            .from("academic_years")
+            .select("*")
+            .eq("school_id", profile.school_id)
+            .eq("is_active", true)
+            .order("start_date", { ascending: false })
+            .limit(1)
+            .maybeSingle();
       const [schoolRes, yearRes, usersRes, subRes, invRes] = await Promise.all([
         supabase.from("schools").select("*").eq("id", profile.school_id).maybeSingle(),
-        supabase
-          .from("academic_years")
-          .select("*")
-          .eq("school_id", profile.school_id)
-          .eq("is_active", true)
-          .order("start_date", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
+        yearQuery,
         supabase
           .from("profiles")
           .select("id, full_name, role, is_active, phone, avatar_url")
@@ -375,7 +380,8 @@ const Definicoes = () => {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, selectedYearId]);
 
   // ===== Permissions: load on tab/role/user change =====
   useEffect(() => {

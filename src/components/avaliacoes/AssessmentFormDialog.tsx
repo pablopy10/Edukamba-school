@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, AlertTriangle } from "lucide-react";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 export type AssessmentRecord = {
   id?: string;
@@ -105,25 +106,20 @@ export const AssessmentFormDialog = ({
   }, [open, initial]);
 
   // Load terms for the school
+  const { selectedYearId } = useAcademicYear();
   useEffect(() => {
     if (!open || !schoolId) return;
     (async () => {
-      const { data: activeYear } = await supabase
-        .from("academic_years")
-        .select("id")
-        .eq("school_id", schoolId)
-        .eq("is_active", true)
-        .maybeSingle();
       let q = supabase
         .from("academic_terms")
         .select("id, term_number, name, start_date, end_date")
         .eq("school_id", schoolId)
         .order("term_number");
-      if (activeYear?.id) q = q.eq("academic_year_id", activeYear.id);
+      if (selectedYearId) q = q.eq("academic_year_id", selectedYearId);
       const { data } = await q;
       setTerms((data ?? []) as Term[]);
     })();
-  }, [open, schoolId]);
+  }, [open, schoolId, selectedYearId]);
 
   // Auto-derive term from date unless user manually overrode it
   useEffect(() => {
