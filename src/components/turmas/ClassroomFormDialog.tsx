@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 export type ClassroomRow = {
   id: string;
@@ -38,6 +39,7 @@ const PERIODS = [
 ];
 
 export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classroom, onSaved }: Props) => {
+  const { selectedYearId } = useAcademicYear();
   const isEdit = !!classroom;
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState("");
@@ -56,10 +58,10 @@ export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classr
         setYearId(classroom.academic_year_id ?? "");
       } else {
         const activeYear = years.find((y) => y.is_active);
-        setName(""); setGradeLevel(""); setPeriod(""); setCourseId(""); setYearId(activeYear?.id ?? "");
+        setName(""); setGradeLevel(""); setPeriod(""); setCourseId(""); setYearId(selectedYearId ?? activeYear?.id ?? "");
       }
     }
-  }, [open, classroom, years]);
+  }, [open, classroom, years, selectedYearId]);
 
   const handleSubmit = async () => {
     if (!name.trim()) {
