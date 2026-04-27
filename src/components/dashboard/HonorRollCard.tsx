@@ -36,11 +36,20 @@ export const HonorRollCard = () => {
         .eq("id", user.id)
         .maybeSingle();
       if (!profile?.school_id) return;
-      const { data } = await supabase
+      // Restrict to terms of the active academic year
+      const { data: activeYear } = await supabase
+        .from("academic_years")
+        .select("id")
+        .eq("school_id", profile.school_id)
+        .eq("is_active", true)
+        .maybeSingle();
+      let q = supabase
         .from("academic_terms")
         .select("id, term_number, name, start_date, end_date")
         .eq("school_id", profile.school_id)
         .order("term_number");
+      if (activeYear?.id) q = q.eq("academic_year_id", activeYear.id);
+      const { data } = await q;
       if (cancelled) return;
       const ts = (data ?? []) as Term[];
       setTerms(ts);
