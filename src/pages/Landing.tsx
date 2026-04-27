@@ -72,6 +72,7 @@ const plans = [
       "Secretaria Digital: Matrículas e Encarregados de Educação",
       "Controlo de Presenças: registo de faltas de alunos",
       "Horário Escolar: consulta de horários de turmas e professores",
+      "Avaliações: lançamento de notas e pautas",
       "Eventos: calendário escolar básico",
       "Pagamentos & Finanças: registo manual e fluxo de caixa simples",
       "Relatórios Básicos: listagens de alunos e aproveitamento",
