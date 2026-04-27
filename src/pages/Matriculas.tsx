@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Search, Plus, Pencil, Trash2, Loader2, CheckCircle2, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -287,7 +288,16 @@ const Matriculas = () => {
                             {initials}
                           </div>
                           <div>
-                            <p className="font-semibold text-foreground">{name}</p>
+                            {e.students?.id ? (
+                              <Link
+                                to={`/alunos/${e.students.id}`}
+                                className="font-semibold text-foreground hover:text-primary hover:underline"
+                              >
+                                {name}
+                              </Link>
+                            ) : (
+                              <p className="font-semibold text-foreground">{name}</p>
+                            )}
                             <p className="text-xs text-muted-foreground">{e.students?.email ?? ""}</p>
                           </div>
                         </div>
