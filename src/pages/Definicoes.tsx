@@ -602,16 +602,24 @@ const Definicoes = () => {
   const handleDeleteAcademicYear = async () => {
     if (!schoolId || !confirmDeleteYearId) return;
     setSaving(true);
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("academic_years")
       .delete()
-      .eq("id", confirmDeleteYearId);
+      .eq("id", confirmDeleteYearId)
+      .select("id");
     setSaving(false);
     if (error) {
       setConfirmDeleteYearId(null);
+      const msg = /foreign key|violates|referenced/i.test(error.message)
+        ? "Não é possível eliminar: existem turmas, matrículas ou propinas associadas a este ano letivo."
+        : error.message;
+      return showToast("error", msg);
+    }
+    if (!data || data.length === 0) {
+      setConfirmDeleteYearId(null);
       return showToast(
         "error",
-        "Não foi possível eliminar. Existem dados associados a este ano letivo.",
+        "Sem permissão para eliminar este ano letivo. Apenas administradores podem fazê-lo.",
       );
     }
     const removed = confirmDeleteYearId;
