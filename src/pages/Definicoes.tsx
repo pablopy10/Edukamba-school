@@ -1168,6 +1168,49 @@ const Definicoes = () => {
             >
               <TermsAndHolidaysManager schoolId={schoolId} academicYearId={year.id ?? null} isAdmin={isAdmin} />
             </SectionCard>
+
+            <SectionCard
+              title="Quadro de Honra"
+              desc="Defina a média mínima para um aluno ser considerado no Quadro de Honra e a nota máxima da escala usada pela escola."
+            >
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <Field label="Média mínima do Quadro de Honra">
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    className={inputCls(false)}
+                    disabled={!isAdmin}
+                    value={academicSettings.honor_roll_min_average}
+                    onChange={(e) =>
+                      setAcademicSettings((s) => ({
+                        ...s,
+                        honor_roll_min_average: e.target.value === "" ? 0 : Number(e.target.value),
+                      }))
+                    }
+                  />
+                </Field>
+                <Field label="Nota máxima da escala">
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    className={inputCls(false)}
+                    disabled={!isAdmin}
+                    value={academicSettings.grading_max_score}
+                    onChange={(e) =>
+                      setAcademicSettings((s) => ({
+                        ...s,
+                        grading_max_score: e.target.value === "" ? 0 : Number(e.target.value),
+                      }))
+                    }
+                  />
+                </Field>
+              </div>
+              <div className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
+                <SaveBar onClick={handleSaveAcademicSettings} saving={savingAcademicSettings} isAdmin={isAdmin} />
+              </div>
+            </SectionCard>
           </div>
         )}
 
