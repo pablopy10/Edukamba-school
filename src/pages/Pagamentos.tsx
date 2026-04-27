@@ -16,7 +16,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
 
@@ -175,6 +175,115 @@ const Pagamentos = () => {
   const [actSearch, setActSearch] = useState("");
   const [activitiesList, setActivitiesList] = useState<Array<{ id: string; name: string }>>([]);
   const [remindingActFeeId, setRemindingActFeeId] = useState<string | null>(null);
+
+  // Staff "registar pagamento" dialog (works for both tuition and activity fees)
+  const [recordDialog, setRecordDialog] = useState<
+    | { kind: "fee"; fee: FeeListRow }
+    | { kind: "activity"; fee: ActivityFeeRow }
+    | null
+  >(null);
+  const [recordFile, setRecordFile] = useState<File | null>(null);
+  const [recordAmount, setRecordAmount] = useState("");
+  const [recordMethod, setRecordMethod] = useState("transferencia");
+  const [recordNotes, setRecordNotes] = useState("");
+  const [recordUploading, setRecordUploading] = useState(false);
+
+  const openRecordForFee = (fee: FeeListRow) => {
+    setRecordDialog({ kind: "fee", fee });
+    setRecordFile(null);
+    setRecordAmount(String(fee.amount_due));
+    setRecordMethod("transferencia");
+    setRecordNotes("");
+  };
+  const openRecordForActivity = (fee: ActivityFeeRow) => {
+    setRecordDialog({ kind: "activity", fee });
+    setRecordFile(null);
+    setRecordAmount(String(fee.amount_due));
+    setRecordMethod("transferencia");
+    setRecordNotes("");
+  };
+
+  const submitStaffPayment = async () => {
+    if (!recordDialog || !schoolId) return;
+    if (!recordFile) {
+      toast({ title: "Selecione um ficheiro", description: "É necessário anexar o comprovativo.", variant: "destructive" });
+      return;
+    }
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id;
+    if (!userId) { toast({ title: "Sessão expirada", variant: "destructive" }); return; }
+
+    const isFee = recordDialog.kind === "fee";
+    const fee = recordDialog.fee;
+    const studentId = isFee ? (fee as FeeListRow).student_id : (fee as ActivityFeeRow).student_id;
+    setRecordUploading(true);
+    const ext = recordFile.name.split(".").pop() || "bin";
+    const path = `${schoolId}/${studentId}/${fee.id}-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from("payment-proofs").upload(path, recordFile, { upsert: false });
+    if (upErr) {
+      setRecordUploading(false);
+      toast({ title: "Erro a enviar ficheiro", description: upErr.message, variant: "destructive" });
+      return;
+    }
+    const amount = Number(recordAmount) || Number(fee.amount_due);
+    const insertPayload = {
+      amount_paid: amount,
+      method: recordMethod,
+      proof_url: path,
+      status: "validado",
+      submitted_by: userId,
+      validated_by: userId,
+      validated_at: new Date().toISOString(),
+      school_id: schoolId,
+      notes: recordNotes || null,
+      student_fee_id: isFee ? fee.id : null,
+      activity_fee_id: isFee ? null : fee.id,
+    };
+    const { error: insErr } = await supabase.from("payments").insert(insertPayload);
+    if (insErr) {
+      setRecordUploading(false);
+      toast({ title: "Erro a registar pagamento", description: insErr.message, variant: "destructive" });
+      return;
+    }
+    const { error: feeErr } = isFee
+      ? await supabase.from("student_fees").update({ is_paid: true }).eq("id", fee.id)
+      : await supabase.from("activity_fees").update({ is_paid: true }).eq("id", fee.id);
+    if (feeErr) {
+      setRecordUploading(false);
+      toast({ title: "Pagamento registado mas falha a marcar como pago", description: feeErr.message, variant: "destructive" });
+      return;
+    }
+    // Notificar encarregado
+    const parentId = (fee as FeeListRow | ActivityFeeRow).student?.parent_id;
+    if (parentId) {
+      if (isFee) {
+        const f = fee as FeeListRow;
+        const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
+        await supabase.from("notifications").insert({
+          recipient_id: parentId,
+          school_id: schoolId,
+          title: `Pagamento registado — ${monthLabel}`.trim(),
+          description: `A escola registou o pagamento da propina de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}). Pode consultar o comprovativo no portal.`,
+          category: "pagamento",
+          link: "/financas",
+        });
+      } else {
+        const f = fee as ActivityFeeRow;
+        await supabase.from("notifications").insert({
+          recipient_id: parentId,
+          school_id: schoolId,
+          title: `Pagamento registado — ${f.activity?.name ?? "atividade"}`,
+          description: `A escola registou o pagamento da atividade ${f.activity?.name ?? ""} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}). Pode consultar o comprovativo no portal.`,
+          category: "pagamento",
+          link: "/extracurriculares",
+        });
+      }
+    }
+    setRecordUploading(false);
+    setRecordDialog(null);
+    toast({ title: "Pagamento registado e validado" });
+    await fetchAll();
+  };
 
   const fetchAll = async () => {
     setLoading(true);
@@ -781,9 +890,9 @@ const Pagamentos = () => {
 
         <Tabs defaultValue="rules" className="w-full">
           <TabsList>
+            <TabsTrigger value="rules">Regras de propina</TabsTrigger>
             <TabsTrigger value="fees">Propinas</TabsTrigger>
             <TabsTrigger value="activity-fees">Extracurriculares</TabsTrigger>
-            <TabsTrigger value="rules">Regras de propina</TabsTrigger>
             <TabsTrigger value="family">Descontos por irmão</TabsTrigger>
             <TabsTrigger value="overrides">Descontos por aluno</TabsTrigger>
           </TabsList>
@@ -986,10 +1095,15 @@ const Pagamentos = () => {
                                     </>
                                   )}
                                   {!f.is_paid && !pendingValidation && (
-                                    <Button size="sm" variant="outline" className="gap-2" onClick={() => sendReminder(f)} disabled={remindingFeeId === f.id || !f.student?.parent_id}>
-                                      {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                                      Cobrar
-                                    </Button>
+                                    <>
+                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForFee(f)}>
+                                        <Upload className="h-3.5 w-3.5" /> Registar pagamento
+                                      </Button>
+                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => sendReminder(f)} disabled={remindingFeeId === f.id || !f.student?.parent_id}>
+                                        {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                        Cobrar
+                                      </Button>
+                                    </>
                                   )}
                                 </div>
                               </td>
@@ -1205,10 +1319,15 @@ const Pagamentos = () => {
                                     </>
                                   )}
                                   {!f.is_paid && !pendingValidation && (
-                                    <Button size="sm" variant="outline" className="gap-2" onClick={() => sendActivityReminder(f)} disabled={remindingActFeeId === f.id || !f.student?.parent_id}>
-                                      {remindingActFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                                      Cobrar
-                                    </Button>
+                                    <>
+                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForActivity(f)}>
+                                        <Upload className="h-3.5 w-3.5" /> Registar pagamento
+                                      </Button>
+                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => sendActivityReminder(f)} disabled={remindingActFeeId === f.id || !f.student?.parent_id}>
+                                        {remindingActFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                        Cobrar
+                                      </Button>
+                                    </>
                                   )}
                                 </div>
                               </td>
@@ -1569,6 +1688,56 @@ const Pagamentos = () => {
             <Button variant="destructive" onClick={confirmReject} disabled={!!validatingId} className="gap-2">
               {validatingId ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
               Rejeitar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* RECORD PAYMENT DIALOG (staff registers proof and validates immediately) */}
+      <Dialog open={!!recordDialog} onOpenChange={(o) => { if (!o && !recordUploading) setRecordDialog(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registar pagamento</DialogTitle>
+            <DialogDescription>
+              {recordDialog?.kind === "fee"
+                ? `Anexa o comprovativo da propina de ${recordDialog.fee.student?.full_name ?? ""}. Será marcado como pago e validado, e o encarregado será notificado.`
+                : recordDialog?.kind === "activity"
+                ? `Anexa o comprovativo da atividade ${recordDialog.fee.activity?.name ?? ""} de ${recordDialog.fee.student?.full_name ?? ""}. Será marcado como pago e validado.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid gap-2">
+              <Label htmlFor="record-file">Comprovativo (PDF ou imagem)</Label>
+              <Input id="record-file" type="file" accept="image/*,application/pdf" onChange={(e) => setRecordFile(e.target.files?.[0] ?? null)} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="record-amount">Valor pago (AOA)</Label>
+              <Input id="record-amount" type="number" min="0" value={recordAmount} onChange={(e) => setRecordAmount(e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <Label>Método</Label>
+              <Select value={recordMethod} onValueChange={setRecordMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="transferencia">Transferência</SelectItem>
+                  <SelectItem value="multicaixa">Multicaixa Express</SelectItem>
+                  <SelectItem value="numerario">Numerário</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                  <SelectItem value="outro">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="record-notes">Notas (opcional)</Label>
+              <Textarea id="record-notes" rows={2} value={recordNotes} onChange={(e) => setRecordNotes(e.target.value)} placeholder="Ex.: nº do recibo, observações..." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRecordDialog(null)} disabled={recordUploading}>Cancelar</Button>
+            <Button onClick={submitStaffPayment} disabled={recordUploading || !recordFile} className="gap-2">
+              {recordUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Registar e validar
             </Button>
           </DialogFooter>
         </DialogContent>
