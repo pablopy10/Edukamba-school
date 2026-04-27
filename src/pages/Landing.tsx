@@ -63,32 +63,57 @@ const stats = [
 const plans = [
   {
     name: "Essencial",
-    price: "350 Kz",
+    price: "500 Kz",
     suffix: "/aluno · mês",
-    description: "Para escolas a começar a digitalizar.",
-    features: ["Gestão de alunos e turmas", "Presenças e horários", "Suporte por e-mail"],
+    description:
+      "Focado na organização administrativa básica e digitalização da secretaria.",
+    features: [
+      "Gestão Escolar Core: Alunos, Professores, Turmas e Disciplinas",
+      "Secretaria Digital: Matrículas e Encarregados de Educação",
+      "Controlo de Presenças: registo de faltas de alunos",
+      "Horário Escolar: consulta de horários de turmas e professores",
+      "Eventos: calendário escolar básico",
+      "Pagamentos & Finanças: registo manual e fluxo de caixa simples",
+      "Relatórios Básicos: listagens de alunos e aproveitamento",
+      "Permissões: níveis de acesso básicos (Admin, Secretaria, Professor)",
+    ],
     cta: "Começar agora",
     highlight: false,
   },
   {
     name: "Pro",
-    price: "600 Kz",
+    price: "1.000 Kz",
     suffix: "/aluno · mês",
-    description: "Para escolas em crescimento.",
+    description:
+      "Ideal para escolas modernas que querem eliminar o papel e aproximar os pais.",
     features: [
       "Tudo do plano Essencial",
-      "Pagamentos integrados",
-      "Relatórios avançados",
-      "Suporte prioritário",
+      "Mobile App completa para Pais, Alunos e Professores",
+      "Notificações Push de notas, faltas e avisos sem custos de SMS",
+      "Cobranças automáticas de propinas em atraso",
+      "Chats em tempo real entre encarregados e escola",
+      "Atividades extracurriculares: inscrições e cobranças",
+      "Pedidos de ausência de funcionários e professores",
+      "Timesheet: controlo de horas e assiduidade",
     ],
     cta: "Experimentar Pro",
     highlight: true,
   },
   {
-    name: "Instituição",
-    price: "Sob consulta",
-    description: "Para grupos e redes escolares.",
-    features: ["Multi-escola", "Domínio próprio", "Integrações dedicadas"],
+    name: "Enterprise",
+    price: "1.300 Kz",
+    suffix: "/aluno · mês",
+    description:
+      "Gestão 360º com foco em logística, segurança de dados e auditoria total.",
+    features: [
+      "Tudo do plano Pro",
+      "Gestão de Transportes: rotas, passageiros e cobrança de giros",
+      "Stock & Pedidos de Material: inventário e pedidos aos pais",
+      "Auditoria avançada (Logs): histórico completo de alterações",
+      "Relatórios avançados: crescimento, retenção e previsões financeiras",
+      "Suporte prioritário 24/7",
+      "Backup personalizado: opções extras de segurança de dados",
+    ],
     cta: "Falar connosco",
     highlight: false,
   },
@@ -279,17 +304,17 @@ const Landing = () => {
                   <h3 className="text-lg font-semibold">{plan.name}</h3>
                   <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
                 </div>
-                <div className="flex items-baseline gap-1">
+                <div className="flex items-baseline gap-1 border-y border-border/60 py-4">
                   <span className="text-4xl font-bold tracking-tight">{plan.price}</span>
                   {plan.suffix && (
                     <span className="text-sm text-muted-foreground">{plan.suffix}</span>
                   )}
                 </div>
-                <ul className="flex flex-col gap-3 text-sm">
+                <ul className="flex flex-1 flex-col gap-3 text-sm">
                   {plan.features.map((f) => (
-                    <li key={f} className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-pastel-blue-foreground" />
-                      <span>{f}</span>
+                    <li key={f} className="flex items-start gap-2">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-pastel-blue-foreground" />
+                      <span className="leading-snug">{f}</span>
                     </li>
                   ))}
                 </ul>
