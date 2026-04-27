@@ -29,6 +29,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/integrations/supabase/types";
 import { TermsAndHolidaysManager } from "@/components/definicoes/TermsAndHolidaysManager";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Tab =
   | "escola"
