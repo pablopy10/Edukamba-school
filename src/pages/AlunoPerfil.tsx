@@ -189,6 +189,7 @@ const AlunoPerfil = () => {
   const [proofAmount, setProofAmount] = useState("");
   const [proofUploading, setProofUploading] = useState(false);
   const [enrollmentHistory, setEnrollmentHistory] = useState<EnrollmentHistoryRow[]>([]);
+  const [accessDialogOpen, setAccessDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -618,6 +619,30 @@ const AlunoPerfil = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {(() => {
+                if (!student) return null;
+                if (student.user_id) {
+                  return (
+                    <span className="inline-flex h-10 items-center gap-2 rounded-full bg-pastel-green/40 px-4 text-xs font-semibold text-pastel-green-foreground">
+                      <ShieldCheck className="h-4 w-4" strokeWidth={2} /> Acesso à plataforma activo
+                    </span>
+                  );
+                }
+                const currentGrade = student.classrooms?.grade_level ?? null;
+                const eligibleNow = currentGrade ? ELIGIBLE_GRADES.has(currentGrade) : false;
+                const eligibleHistory = enrollmentHistory.some(
+                  (h) => h.status === "ACTIVE" && h.classroom?.grade_level && ELIGIBLE_GRADES.has(h.classroom.grade_level),
+                );
+                if (!eligibleNow && !eligibleHistory) return null;
+                return (
+                  <button
+                    onClick={() => setAccessDialogOpen(true)}
+                    className="flex h-10 items-center gap-2 rounded-full bg-pastel-lilac px-5 text-sm font-semibold text-pastel-lilac-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
+                  >
+                    <KeyRound className="h-4 w-4" strokeWidth={2} /> Criar acesso à plataforma
+                  </button>
+                );
+              })()}
               <Link to="/alunos" className="flex h-10 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
                 <Pencil className="h-4 w-4" strokeWidth={2} /> Editar
               </Link>
