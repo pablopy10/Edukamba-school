@@ -1171,6 +1171,13 @@ const Definicoes = () => {
             </SectionCard>
 
             <SectionCard
+              title="Configuração de Novo Ano Letivo"
+              desc="Crie o próximo ciclo escolar e clone automaticamente a estrutura do ano anterior — turmas, cursos e tabela de preços — sem trabalho manual."
+            >
+              <NewAcademicYearWizard schoolId={schoolId} isAdmin={isAdmin} />
+            </SectionCard>
+
+            <SectionCard
               title="Quadro de Honra"
               desc="Defina a média mínima para um aluno ser considerado no Quadro de Honra e a nota máxima da escala usada pela escola."
             >
