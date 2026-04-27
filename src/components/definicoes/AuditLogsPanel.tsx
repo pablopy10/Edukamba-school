@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Search, RefreshCw, ChevronLeft, ChevronRight, Eye } from "lucide-react";
+import { Loader2, Search, RefreshCw, ChevronLeft, ChevronRight, Eye, CalendarIcon, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { pt } from "date-fns/locale";
 
 type AuditLog = {
   id: string;
@@ -101,6 +105,8 @@ export const AuditLogsPanel = () => {
   const [search, setSearch] = useState("");
   const [tableFilter, setTableFilter] = useState<string>("all");
   const [actionFilter, setActionFilter] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const [selected, setSelected] = useState<AuditLog | null>(null);
 
   const fetchLogs = async () => {
@@ -115,6 +121,16 @@ export const AuditLogsPanel = () => {
       if (tableFilter !== "all") q = q.eq("table_name", tableFilter);
       if (actionFilter !== "all") q = q.eq("action", actionFilter);
       if (search.trim()) q = q.ilike("user_full_name", `%${search.trim()}%`);
+      if (dateFrom) {
+        const from = new Date(dateFrom);
+        from.setHours(0, 0, 0, 0);
+        q = q.gte("created_at", from.toISOString());
+      }
+      if (dateTo) {
+        const to = new Date(dateTo);
+        to.setHours(23, 59, 59, 999);
+        q = q.lte("created_at", to.toISOString());
+      }
 
       const { data, count, error } = await q;
       if (error) throw error;
@@ -132,7 +148,7 @@ export const AuditLogsPanel = () => {
   useEffect(() => {
     fetchLogs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, tableFilter, actionFilter]);
+  }, [page, tableFilter, actionFilter, dateFrom, dateTo]);
 
   const tableOptions = useMemo(() => {
     const set = new Set<string>(Object.keys(TABLE_LABELS));
@@ -193,6 +209,62 @@ export const AuditLogsPanel = () => {
                 <SelectItem value="DELETE">Eliminação</SelectItem>
               </SelectContent>
             </Select>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  className={cn(
+                    "flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-medium hover:bg-muted",
+                    !dateFrom && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="h-4 w-4" />
+                  {dateFrom ? format(dateFrom, "dd/MM/yyyy", { locale: pt }) : "Data inicial"}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dateFrom}
+                  onSelect={(d) => { setPage(0); setDateFrom(d); }}
+                  initialFocus
+                  className={cn("p-3 pointer-events-auto")}
+                />
+              </PopoverContent>
+            </Popover>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  className={cn(
+                    "flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-medium hover:bg-muted",
+                    !dateTo && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="h-4 w-4" />
+                  {dateTo ? format(dateTo, "dd/MM/yyyy", { locale: pt }) : "Data final"}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dateTo}
+                  onSelect={(d) => { setPage(0); setDateTo(d); }}
+                  initialFocus
+                  className={cn("p-3 pointer-events-auto")}
+                />
+              </PopoverContent>
+            </Popover>
+
+            {(dateFrom || dateTo) && (
+              <button
+                onClick={() => { setPage(0); setDateFrom(undefined); setDateTo(undefined); }}
+                className="flex h-10 items-center gap-1 rounded-xl border border-border bg-card px-3 text-sm font-medium hover:bg-muted"
+                title="Limpar datas"
+              >
+                <X className="h-4 w-4" /> Limpar datas
+              </button>
+            )}
 
             <button
               onClick={() => { setPage(0); fetchLogs(); }}
