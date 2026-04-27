@@ -941,6 +941,124 @@ const Pagamentos = () => {
     else toast({ title: `${rows.length} lembrete(s) enviado(s)` });
   };
 
+  // ===== Transport fees logic =====
+  const filteredTransportFees = useMemo(() => {
+    const now = Date.now();
+    const search = trSearch.trim().toLowerCase();
+    return allTransportFees.filter((f) => {
+      if (trYearFilter !== "all" && f.academic_year_id !== trYearFilter) return false;
+      if (trRouteFilter !== "all" && f.route_id !== trRouteFilter) return false;
+      if (trFilter === "paid" && !f.is_paid) return false;
+      if (trFilter === "pending" && f.is_paid) return false;
+      if (trFilter === "overdue" && (f.is_paid || new Date(f.due_date).getTime() >= now)) return false;
+      if (search && !(f.student?.full_name ?? "").toLowerCase().includes(search) && !(f.route?.name ?? "").toLowerCase().includes(search)) return false;
+      return true;
+    });
+  }, [allTransportFees, trFilter, trYearFilter, trRouteFilter, trSearch]);
+
+  const transportFeeStats = useMemo(() => {
+    const now = Date.now();
+    let paid = 0, pending = 0, overdue = 0;
+    allTransportFees.forEach((f) => {
+      if (f.is_paid) paid += Number(f.amount_due);
+      else {
+        pending += Number(f.amount_due);
+        if (new Date(f.due_date).getTime() < now) overdue += Number(f.amount_due);
+      }
+    });
+    return { paid, pending, overdue };
+  }, [allTransportFees]);
+
+  const latestPaymentByTransportFee = useMemo(() => {
+    const map = new Map<string, PaymentListRow>();
+    transportPayments.forEach((p) => {
+      if (!p.transport_fee_id) return;
+      if (!map.has(p.transport_fee_id)) map.set(p.transport_fee_id, p);
+    });
+    return map;
+  }, [transportPayments]);
+
+  const pendingTransportValidations = useMemo(() => {
+    return allTransportFees
+      .map((f) => ({ fee: f, payment: latestPaymentByTransportFee.get(f.id) }))
+      .filter((x) => x.payment && x.payment.status === "pendente") as Array<{ fee: TransportFeeRow; payment: PaymentListRow }>;
+  }, [allTransportFees, latestPaymentByTransportFee]);
+
+  const validateTransportPayment = async (fee: TransportFeeRow, payment: PaymentListRow) => {
+    if (!schoolId) return;
+    setValidatingId(payment.id);
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id ?? null;
+    const { error: payErr } = await supabase
+      .from("payments")
+      .update({ status: "validado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: null })
+      .eq("id", payment.id);
+    if (payErr) {
+      setValidatingId(null);
+      toast({ title: "Erro a validar", description: payErr.message, variant: "destructive" });
+      return;
+    }
+    const { error: feeErr } = await supabase.from("transport_fees").update({ is_paid: true }).eq("id", fee.id);
+    if (feeErr) {
+      setValidatingId(null);
+      toast({ title: "Erro a marcar cobrança", description: feeErr.message, variant: "destructive" });
+      return;
+    }
+    if (fee.student?.parent_id) {
+      await supabase.from("notifications").insert({
+        recipient_id: fee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento de transporte validado`,
+        description: `O pagamento do transporte (${fee.route?.name ?? "rota"}) de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
+        category: "pagamento",
+        link: "/transportes",
+      });
+    }
+    setValidatingId(null);
+    toast({ title: "Pagamento validado", description: "O encarregado foi notificado." });
+    await fetchAll();
+  };
+
+  const sendTransportReminder = async (fee: TransportFeeRow) => {
+    if (!schoolId) return;
+    const parentId = fee.student?.parent_id;
+    if (!parentId) {
+      toast({ title: "Aluno sem encarregado", description: "Não é possível enviar lembrete.", variant: "destructive" });
+      return;
+    }
+    setRemindingTrFeeId(fee.id);
+    const { error } = await supabase.from("notifications").insert({
+      recipient_id: parentId,
+      school_id: schoolId,
+      title: `Lembrete — Transporte (${fee.route?.name ?? "rota"})`,
+      description: `A cobrança do transporte de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      category: "pagamento",
+      link: "/transportes",
+    });
+    setRemindingTrFeeId(null);
+    if (error) toast({ title: "Erro a enviar lembrete", description: error.message, variant: "destructive" });
+    else toast({ title: "Lembrete enviado ao encarregado" });
+  };
+
+  const sendTransportBulkReminders = async () => {
+    const targets = filteredTransportFees.filter((f) => !f.is_paid && f.student?.parent_id);
+    if (targets.length === 0) {
+      toast({ title: "Sem destinatários", description: "Não há cobranças em dívida com encarregado associado." });
+      return;
+    }
+    const rows = targets.map((f) => ({
+      recipient_id: f.student!.parent_id!,
+      school_id: schoolId!,
+      title: `Lembrete — Transporte (${f.route?.name ?? "rota"})`,
+      description: `A cobrança do transporte de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      category: "pagamento",
+      link: "/transportes",
+    }));
+    const { error } = await supabase.from("notifications").insert(rows);
+    if (error) toast({ title: "Erro a enviar lembretes", description: error.message, variant: "destructive" });
+    else toast({ title: `${rows.length} lembrete(s) enviado(s)` });
+  };
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
