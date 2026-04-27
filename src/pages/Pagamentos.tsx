@@ -73,6 +73,7 @@ type FeeListRow = {
 type PaymentListRow = {
   id: string;
   student_fee_id: string | null;
+  activity_fee_id: string | null;
   amount_paid: number;
   method: string | null;
   status: string;
@@ -81,6 +82,26 @@ type PaymentListRow = {
   notes: string | null;
   rejection_reason: string | null;
   submitted_by: string | null;
+};
+
+type ActivityFeeRow = {
+  id: string;
+  amount_due: number;
+  due_date: string;
+  is_paid: boolean | null;
+  month_index: number | null;
+  student_id: string;
+  activity_id: string;
+  enrollment_id: string;
+  academic_year_id: string | null;
+  student?: {
+    id: string;
+    full_name: string;
+    parent_id: string | null;
+    classroom_id: string | null;
+    classroom?: { id: string; name: string } | null;
+  } | null;
+  activity?: { id: string; name: string; category: string | null } | null;
 };
 
 const fmtAOA = (n: number) =>
@@ -145,6 +166,16 @@ const Pagamentos = () => {
   const [rejectDialog, setRejectDialog] = useState<PaymentListRow | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
+  // Activity fees (extracurriculares)
+  const [allActivityFees, setAllActivityFees] = useState<ActivityFeeRow[]>([]);
+  const [activityPayments, setActivityPayments] = useState<PaymentListRow[]>([]);
+  const [actFilter, setActFilter] = useState<"all" | "paid" | "pending" | "overdue">("pending");
+  const [actYearFilter, setActYearFilter] = useState<string>("all");
+  const [actActivityFilter, setActActivityFilter] = useState<string>("all");
+  const [actSearch, setActSearch] = useState("");
+  const [activitiesList, setActivitiesList] = useState<Array<{ id: string; name: string }>>([]);
+  const [remindingActFeeId, setRemindingActFeeId] = useState<string | null>(null);
+
   const fetchAll = async () => {
     setLoading(true);
     const { data: profile } = await supabase
@@ -194,16 +225,46 @@ const Pagamentos = () => {
       if (feeIds.length > 0) {
         const { data: payRows } = await supabase
           .from("payments")
-          .select("id, student_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+          .select("id, student_fee_id, activity_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
           .in("student_fee_id", feeIds)
           .order("payment_date", { ascending: false });
         setPayments((payRows ?? []) as PaymentListRow[]);
       } else {
         setPayments([]);
       }
+
+      // Activity fees + lista de atividades para filtros
+      const [{ data: actFees }, { data: actsList }] = await Promise.all([
+        supabase
+          .from("activity_fees")
+          .select("id, amount_due, due_date, is_paid, month_index, student_id, activity_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), activity:extracurricular_activities(id, name, category)")
+          .eq("school_id", sId)
+          .order("due_date", { ascending: true }),
+        supabase
+          .from("extracurricular_activities")
+          .select("id, name")
+          .eq("school_id", sId)
+          .order("name"),
+      ]);
+      setAllActivityFees((actFees ?? []) as unknown as ActivityFeeRow[]);
+      setActivitiesList((actsList ?? []) as Array<{ id: string; name: string }>);
+
+      const actFeeIds = (actFees ?? []).map((f: { id: string }) => f.id);
+      if (actFeeIds.length > 0) {
+        const { data: actPayRows } = await supabase
+          .from("payments")
+          .select("id, student_fee_id, activity_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+          .in("activity_fee_id", actFeeIds)
+          .order("payment_date", { ascending: false });
+        setActivityPayments((actPayRows ?? []) as PaymentListRow[]);
+      } else {
+        setActivityPayments([]);
+      }
     } else {
       setAllFees([]);
       setPayments([]);
+      setAllActivityFees([]);
+      setActivityPayments([]);
     }
     setLoading(false);
   };
@@ -470,7 +531,8 @@ const Pagamentos = () => {
   const confirmReject = async () => {
     if (!rejectDialog || !schoolId) return;
     const payment = rejectDialog;
-    const fee = allFees.find((f) => f.id === payment.student_fee_id);
+    const fee = payment.student_fee_id ? allFees.find((f) => f.id === payment.student_fee_id) : null;
+    const actFee = payment.activity_fee_id ? allActivityFees.find((f) => f.id === payment.activity_fee_id) : null;
     setValidatingId(payment.id);
     const { data: userRes } = await supabase.auth.getUser();
     const userId = userRes.user?.id ?? null;
@@ -492,6 +554,16 @@ const Pagamentos = () => {
         description: `O comprovativo de pagamento de ${fee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}.` : ""} Por favor reenvie o comprovativo correto.`,
         category: "pagamento",
         link: "/financas",
+      });
+    }
+    if (actFee?.student?.parent_id) {
+      await supabase.from("notifications").insert({
+        recipient_id: actFee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento rejeitado — ${actFee.activity?.name ?? "atividade"}`,
+        description: `O comprovativo de pagamento da atividade ${actFee.activity?.name ?? ""} de ${actFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}.` : ""} Por favor reenvie o comprovativo correto.`,
+        category: "pagamento",
+        link: "/extracurriculares",
       });
     }
     setValidatingId(null);
@@ -536,6 +608,124 @@ const Pagamentos = () => {
       description: `A propina de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
       category: "pagamento",
       link: "/financas",
+    }));
+    const { error } = await supabase.from("notifications").insert(rows);
+    if (error) toast({ title: "Erro a enviar lembretes", description: error.message, variant: "destructive" });
+    else toast({ title: `${rows.length} lembrete(s) enviado(s)` });
+  };
+
+  // ===== Activity fees logic =====
+  const filteredActivityFees = useMemo(() => {
+    const now = Date.now();
+    const search = actSearch.trim().toLowerCase();
+    return allActivityFees.filter((f) => {
+      if (actYearFilter !== "all" && f.academic_year_id !== actYearFilter) return false;
+      if (actActivityFilter !== "all" && f.activity_id !== actActivityFilter) return false;
+      if (actFilter === "paid" && !f.is_paid) return false;
+      if (actFilter === "pending" && f.is_paid) return false;
+      if (actFilter === "overdue" && (f.is_paid || new Date(f.due_date).getTime() >= now)) return false;
+      if (search && !(f.student?.full_name ?? "").toLowerCase().includes(search) && !(f.activity?.name ?? "").toLowerCase().includes(search)) return false;
+      return true;
+    });
+  }, [allActivityFees, actFilter, actYearFilter, actActivityFilter, actSearch]);
+
+  const activityFeeStats = useMemo(() => {
+    const now = Date.now();
+    let paid = 0, pending = 0, overdue = 0;
+    allActivityFees.forEach((f) => {
+      if (f.is_paid) paid += Number(f.amount_due);
+      else {
+        pending += Number(f.amount_due);
+        if (new Date(f.due_date).getTime() < now) overdue += Number(f.amount_due);
+      }
+    });
+    return { paid, pending, overdue };
+  }, [allActivityFees]);
+
+  const latestPaymentByActivityFee = useMemo(() => {
+    const map = new Map<string, PaymentListRow>();
+    activityPayments.forEach((p) => {
+      if (!p.activity_fee_id) return;
+      if (!map.has(p.activity_fee_id)) map.set(p.activity_fee_id, p);
+    });
+    return map;
+  }, [activityPayments]);
+
+  const pendingActivityValidations = useMemo(() => {
+    return allActivityFees
+      .map((f) => ({ fee: f, payment: latestPaymentByActivityFee.get(f.id) }))
+      .filter((x) => x.payment && x.payment.status === "pendente") as Array<{ fee: ActivityFeeRow; payment: PaymentListRow }>;
+  }, [allActivityFees, latestPaymentByActivityFee]);
+
+  const validateActivityPayment = async (fee: ActivityFeeRow, payment: PaymentListRow) => {
+    if (!schoolId) return;
+    setValidatingId(payment.id);
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id ?? null;
+    const { error: payErr } = await supabase
+      .from("payments")
+      .update({ status: "validado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: null })
+      .eq("id", payment.id);
+    if (payErr) {
+      setValidatingId(null);
+      toast({ title: "Erro a validar", description: payErr.message, variant: "destructive" });
+      return;
+    }
+    const { error: feeErr } = await supabase.from("activity_fees").update({ is_paid: true }).eq("id", fee.id);
+    if (feeErr) {
+      setValidatingId(null);
+      toast({ title: "Erro a marcar cobrança", description: feeErr.message, variant: "destructive" });
+      return;
+    }
+    if (fee.student?.parent_id) {
+      await supabase.from("notifications").insert({
+        recipient_id: fee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento validado — ${fee.activity?.name ?? "atividade"}`,
+        description: `O pagamento da atividade ${fee.activity?.name ?? ""} de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
+        category: "pagamento",
+        link: "/extracurriculares",
+      });
+    }
+    setValidatingId(null);
+    toast({ title: "Pagamento validado", description: "O encarregado foi notificado." });
+    await fetchAll();
+  };
+
+  const sendActivityReminder = async (fee: ActivityFeeRow) => {
+    if (!schoolId) return;
+    const parentId = fee.student?.parent_id;
+    if (!parentId) {
+      toast({ title: "Aluno sem encarregado", description: "Não é possível enviar lembrete.", variant: "destructive" });
+      return;
+    }
+    setRemindingActFeeId(fee.id);
+    const { error } = await supabase.from("notifications").insert({
+      recipient_id: parentId,
+      school_id: schoolId,
+      title: `Lembrete — ${fee.activity?.name ?? "Atividade"}`,
+      description: `A cobrança da atividade ${fee.activity?.name ?? ""} de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      category: "pagamento",
+      link: "/extracurriculares",
+    });
+    setRemindingActFeeId(null);
+    if (error) toast({ title: "Erro a enviar lembrete", description: error.message, variant: "destructive" });
+    else toast({ title: "Lembrete enviado ao encarregado" });
+  };
+
+  const sendActivityBulkReminders = async () => {
+    const targets = filteredActivityFees.filter((f) => !f.is_paid && f.student?.parent_id);
+    if (targets.length === 0) {
+      toast({ title: "Sem destinatários", description: "Não há cobranças em dívida com encarregado associado." });
+      return;
+    }
+    const rows = targets.map((f) => ({
+      recipient_id: f.student!.parent_id!,
+      school_id: schoolId!,
+      title: `Lembrete — ${f.activity?.name ?? "Atividade"}`,
+      description: `A cobrança da atividade ${f.activity?.name ?? ""} de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      category: "pagamento",
+      link: "/extracurriculares",
     }));
     const { error } = await supabase.from("notifications").insert(rows);
     if (error) toast({ title: "Erro a enviar lembretes", description: error.message, variant: "destructive" });
@@ -592,6 +782,7 @@ const Pagamentos = () => {
         <Tabs defaultValue="rules" className="w-full">
           <TabsList>
             <TabsTrigger value="fees">Propinas</TabsTrigger>
+            <TabsTrigger value="activity-fees">Extracurriculares</TabsTrigger>
             <TabsTrigger value="rules">Regras de propina</TabsTrigger>
             <TabsTrigger value="family">Descontos por irmão</TabsTrigger>
             <TabsTrigger value="overrides">Descontos por aluno</TabsTrigger>
@@ -809,6 +1000,225 @@ const Pagamentos = () => {
                     </table>
                     {filteredFees.length > 200 && (
                       <p className="text-xs text-muted-foreground text-center py-3">A mostrar 200 de {filteredFees.length}. Refina os filtros para ver as restantes.</p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ACTIVITY FEES TAB (extracurriculares) */}
+          <TabsContent value="activity-fees" className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total recebido</CardTitle></CardHeader>
+                <CardContent><p className="text-2xl font-bold text-pastel-green-foreground">{fmtAOA(activityFeeStats.paid)}</p></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em dívida</CardTitle></CardHeader>
+                <CardContent><p className="text-2xl font-bold text-pastel-yellow-foreground">{fmtAOA(activityFeeStats.pending)}</p></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em atraso</CardTitle></CardHeader>
+                <CardContent><p className="text-2xl font-bold text-destructive">{fmtAOA(activityFeeStats.overdue)}</p></CardContent>
+              </Card>
+            </div>
+
+            {pendingActivityValidations.length > 0 && (
+              <Card className="border-pastel-blue/60">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <FileText className="h-4 w-4" /> Comprovativos a validar
+                    <Badge variant="secondary">{pendingActivityValidations.length}</Badge>
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">Comprovativos de atividades extracurriculares enviados pelos educadores.</p>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="py-2 px-2">Aluno</th>
+                          <th className="py-2 px-2">Atividade</th>
+                          <th className="py-2 px-2">Valor pago</th>
+                          <th className="py-2 px-2">Método</th>
+                          <th className="py-2 px-2">Submetido</th>
+                          <th className="py-2 px-2 text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pendingActivityValidations.map(({ fee, payment }) => (
+                          <tr key={payment.id} className="border-b hover:bg-muted/30">
+                            <td className="py-2 px-2 font-medium">{fee.student?.full_name ?? "—"}</td>
+                            <td className="py-2 px-2">{fee.activity?.name ?? "—"}</td>
+                            <td className="py-2 px-2 font-semibold">{fmtAOA(Number(payment.amount_paid))}</td>
+                            <td className="py-2 px-2 capitalize text-muted-foreground">{payment.method ?? "—"}</td>
+                            <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString("pt-PT") : "—"}</td>
+                            <td className="py-2 px-2">
+                              <div className="flex flex-wrap justify-end gap-2">
+                                {payment.proof_url && (
+                                  <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(payment.proof_url!)}>
+                                    <Eye className="h-3.5 w-3.5" /> Ver
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                                  disabled={validatingId === payment.id}
+                                  onClick={() => validateActivityPayment(fee, payment)}
+                                >
+                                  {validatingId === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                  Validar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1 text-destructive"
+                                  disabled={validatingId === payment.id}
+                                  onClick={() => { setRejectDialog(payment); setRejectReason(""); }}
+                                >
+                                  <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card>
+              <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <CardTitle>Cobranças de atividades extracurriculares</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">Controla o estado das cobranças e envia lembretes aos encarregados.</p>
+                </div>
+                <Button onClick={sendActivityBulkReminders} size="sm" variant="outline" className="gap-2">
+                  <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input className="pl-9" placeholder="Pesquisar aluno ou atividade..." value={actSearch} onChange={(e) => setActSearch(e.target.value)} />
+                  </div>
+                  <Select value={actFilter} onValueChange={(v) => setActFilter(v as typeof actFilter)}>
+                    <SelectTrigger className="md:w-44"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="pending">Não pagas</SelectItem>
+                      <SelectItem value="overdue">Em atraso</SelectItem>
+                      <SelectItem value="paid">Pagas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={actYearFilter} onValueChange={setActYearFilter}>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Ano letivo" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os anos</SelectItem>
+                      {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={actActivityFilter} onValueChange={setActActivityFilter}>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Atividade" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas as atividades</SelectItem>
+                      {activitiesList.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {loading ? (
+                  <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                ) : filteredActivityFees.length === 0 ? (
+                  <p className="text-center py-10 text-muted-foreground">Sem cobranças a apresentar.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="py-2 px-2">Aluno</th>
+                          <th className="py-2 px-2">Atividade</th>
+                          <th className="py-2 px-2">Mês</th>
+                          <th className="py-2 px-2">Vencimento</th>
+                          <th className="py-2 px-2">Valor</th>
+                          <th className="py-2 px-2">Estado</th>
+                          <th className="py-2 px-2 text-right">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredActivityFees.slice(0, 200).map((f) => {
+                          const overdue = !f.is_paid && new Date(f.due_date).getTime() < Date.now();
+                          const pay = latestPaymentByActivityFee.get(f.id);
+                          const pendingValidation = !!pay && pay.status === "pendente";
+                          const rejected = !!pay && pay.status === "rejeitado";
+                          return (
+                            <tr key={f.id} className="border-b hover:bg-muted/30">
+                              <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
+                              <td className="py-2 px-2">{f.activity?.name ?? "—"}</td>
+                              <td className="py-2 px-2">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
+                              <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
+                              <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
+                              <td className="py-2 px-2">
+                                {f.is_paid ? (
+                                  <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">Pago</Badge>
+                                ) : pendingValidation ? (
+                                  <Badge className="bg-pastel-blue text-pastel-blue-foreground hover:bg-pastel-blue">A validar</Badge>
+                                ) : rejected ? (
+                                  <Badge variant="outline" className="border-destructive text-destructive">Rejeitado</Badge>
+                                ) : overdue ? (
+                                  <Badge variant="destructive">Em atraso</Badge>
+                                ) : (
+                                  <Badge variant="secondary">Pendente</Badge>
+                                )}
+                              </td>
+                              <td className="py-2 px-2 text-right">
+                                <div className="flex flex-wrap justify-end gap-2">
+                                  {pendingValidation && pay && (
+                                    <>
+                                      {pay.proof_url && (
+                                        <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
+                                          <Eye className="h-3.5 w-3.5" /> Ver
+                                        </Button>
+                                      )}
+                                      <Button
+                                        size="sm"
+                                        className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                                        disabled={validatingId === pay.id}
+                                        onClick={() => validateActivityPayment(f, pay)}
+                                      >
+                                        {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                        Validar
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="gap-1 text-destructive"
+                                        disabled={validatingId === pay.id}
+                                        onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
+                                      >
+                                        <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                      </Button>
+                                    </>
+                                  )}
+                                  {!f.is_paid && !pendingValidation && (
+                                    <Button size="sm" variant="outline" className="gap-2" onClick={() => sendActivityReminder(f)} disabled={remindingActFeeId === f.id || !f.student?.parent_id}>
+                                      {remindingActFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                      Cobrar
+                                    </Button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {filteredActivityFees.length > 200 && (
+                      <p className="text-xs text-muted-foreground text-center py-3">A mostrar 200 de {filteredActivityFees.length}. Refina os filtros para ver as restantes.</p>
                     )}
                   </div>
                 )}

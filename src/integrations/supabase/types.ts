@@ -1461,6 +1461,7 @@ export type Database = {
       }
       payments: {
         Row: {
+          activity_fee_id: string | null
           amount_paid: number
           id: string
           method: string | null
@@ -1476,6 +1477,7 @@ export type Database = {
           validated_by: string | null
         }
         Insert: {
+          activity_fee_id?: string | null
           amount_paid: number
           id?: string
           method?: string | null
@@ -1491,6 +1493,7 @@ export type Database = {
           validated_by?: string | null
         }
         Update: {
+          activity_fee_id?: string | null
           amount_paid?: number
           id?: string
           method?: string | null
@@ -1506,6 +1509,13 @@ export type Database = {
           validated_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "payments_activity_fee_id_fkey"
+            columns: ["activity_fee_id"]
+            isOneToOne: false
+            referencedRelation: "activity_fees"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "payments_school_id_fkey"
             columns: ["school_id"]
