@@ -16,7 +16,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
 
@@ -175,6 +175,116 @@ const Pagamentos = () => {
   const [actSearch, setActSearch] = useState("");
   const [activitiesList, setActivitiesList] = useState<Array<{ id: string; name: string }>>([]);
   const [remindingActFeeId, setRemindingActFeeId] = useState<string | null>(null);
+
+  // Staff "registar pagamento" dialog (works for both tuition and activity fees)
+  const [recordDialog, setRecordDialog] = useState<
+    | { kind: "fee"; fee: FeeListRow }
+    | { kind: "activity"; fee: ActivityFeeRow }
+    | null
+  >(null);
+  const [recordFile, setRecordFile] = useState<File | null>(null);
+  const [recordAmount, setRecordAmount] = useState("");
+  const [recordMethod, setRecordMethod] = useState("transferencia");
+  const [recordNotes, setRecordNotes] = useState("");
+  const [recordUploading, setRecordUploading] = useState(false);
+
+  const openRecordForFee = (fee: FeeListRow) => {
+    setRecordDialog({ kind: "fee", fee });
+    setRecordFile(null);
+    setRecordAmount(String(fee.amount_due));
+    setRecordMethod("transferencia");
+    setRecordNotes("");
+  };
+  const openRecordForActivity = (fee: ActivityFeeRow) => {
+    setRecordDialog({ kind: "activity", fee });
+    setRecordFile(null);
+    setRecordAmount(String(fee.amount_due));
+    setRecordMethod("transferencia");
+    setRecordNotes("");
+  };
+
+  const submitStaffPayment = async () => {
+    if (!recordDialog || !schoolId) return;
+    if (!recordFile) {
+      toast({ title: "Selecione um ficheiro", description: "É necessário anexar o comprovativo.", variant: "destructive" });
+      return;
+    }
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id;
+    if (!userId) { toast({ title: "Sessão expirada", variant: "destructive" }); return; }
+
+    const isFee = recordDialog.kind === "fee";
+    const fee = recordDialog.fee;
+    const studentId = isFee ? (fee as FeeListRow).student_id : (fee as ActivityFeeRow).student_id;
+    setRecordUploading(true);
+    const ext = recordFile.name.split(".").pop() || "bin";
+    const path = `${schoolId}/${studentId}/${fee.id}-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from("payment-proofs").upload(path, recordFile, { upsert: false });
+    if (upErr) {
+      setRecordUploading(false);
+      toast({ title: "Erro a enviar ficheiro", description: upErr.message, variant: "destructive" });
+      return;
+    }
+    const amount = Number(recordAmount) || Number(fee.amount_due);
+    const insertPayload: Record<string, unknown> = {
+      amount_paid: amount,
+      method: recordMethod,
+      proof_url: path,
+      status: "validado",
+      submitted_by: userId,
+      validated_by: userId,
+      validated_at: new Date().toISOString(),
+      school_id: schoolId,
+      notes: recordNotes || null,
+    };
+    if (isFee) insertPayload.student_fee_id = fee.id;
+    else insertPayload.activity_fee_id = fee.id;
+
+    const { error: insErr } = await supabase.from("payments").insert(insertPayload);
+    if (insErr) {
+      setRecordUploading(false);
+      toast({ title: "Erro a registar pagamento", description: insErr.message, variant: "destructive" });
+      return;
+    }
+    const { error: feeErr } = isFee
+      ? await supabase.from("student_fees").update({ is_paid: true }).eq("id", fee.id)
+      : await supabase.from("activity_fees").update({ is_paid: true }).eq("id", fee.id);
+    if (feeErr) {
+      setRecordUploading(false);
+      toast({ title: "Pagamento registado mas falha a marcar como pago", description: feeErr.message, variant: "destructive" });
+      return;
+    }
+    // Notificar encarregado
+    const parentId = (fee as FeeListRow | ActivityFeeRow).student?.parent_id;
+    if (parentId) {
+      if (isFee) {
+        const f = fee as FeeListRow;
+        const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
+        await supabase.from("notifications").insert({
+          recipient_id: parentId,
+          school_id: schoolId,
+          title: `Pagamento registado — ${monthLabel}`.trim(),
+          description: `A escola registou o pagamento da propina de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}). Pode consultar o comprovativo no portal.`,
+          category: "pagamento",
+          link: "/financas",
+        });
+      } else {
+        const f = fee as ActivityFeeRow;
+        await supabase.from("notifications").insert({
+          recipient_id: parentId,
+          school_id: schoolId,
+          title: `Pagamento registado — ${f.activity?.name ?? "atividade"}`,
+          description: `A escola registou o pagamento da atividade ${f.activity?.name ?? ""} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}). Pode consultar o comprovativo no portal.`,
+          category: "pagamento",
+          link: "/extracurriculares",
+        });
+      }
+    }
+    setRecordUploading(false);
+    setRecordDialog(null);
+    toast({ title: "Pagamento registado e validado" });
+    await fetchAll();
+  };
 
   const fetchAll = async () => {
     setLoading(true);
