@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Search, Plus, Users, Presentation, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Search, Plus, Users, Presentation, Pencil, Trash2, Loader2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ClassroomFormDialog, ClassroomRow } from "@/components/turmas/ClassroomFormDialog";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { ExcelImportDialog } from "@/components/shared/ExcelImportDialog";
 
 type ClassroomWithJoins = ClassroomRow & {
   courses?: { id: string; name: string } | null;
@@ -44,6 +45,7 @@ const Turmas = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ClassroomRow | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -166,6 +168,13 @@ const Turmas = () => {
               <Plus className="h-4 w-4" strokeWidth={2.25} />
               Nova Turma
             </button>
+            <button
+              onClick={() => setImportOpen(true)}
+              className="flex h-11 items-center gap-2 rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
+            >
+              <Upload className="h-4 w-4" strokeWidth={2.25} />
+              Importar Excel
+            </button>
           </div>
         </div>
 
@@ -282,6 +291,51 @@ const Turmas = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ExcelImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="Importar Turmas"
+        description="Importe várias turmas a partir de um ficheiro Excel ou CSV."
+        templateSheetName="Turmas"
+        fields={[
+          { key: "name", label: "Nome da turma", required: true, aliases: ["turma", "classe", "name"], example: "5ª A" },
+          { key: "grade_level", label: "Ano", aliases: ["ano", "grade", "nivel"], example: "5" },
+          { key: "period", label: "Período", aliases: ["periodo", "turno"], example: "Manhã" },
+          { key: "course", label: "Curso", aliases: ["curso", "course"], example: "Ensino Básico" },
+        ]}
+        onImportRow={async (row) => {
+          if (!row.name) throw new Error("Nome da turma em falta");
+          const { data: profile } = await supabase
+            .from("profiles").select("school_id")
+            .eq("id", (await supabase.auth.getUser()).data.user?.id ?? "")
+            .maybeSingle();
+          const schoolId = profile?.school_id;
+          if (!schoolId) throw new Error("Escola não encontrada");
+          const academicYearId = selectedYearId || years.find((y) => y.is_active)?.id || years[0]?.id;
+          if (!academicYearId) throw new Error("Sem ano lectivo activo");
+          let course_id: string | null = null;
+          if (row.course) {
+            const match = courses.find((c) => c.name.toLowerCase() === row.course.toLowerCase());
+            course_id = match?.id ?? null;
+          }
+          let period: string | null = null;
+          if (row.period) {
+            const p = row.period.toLowerCase();
+            period = p.startsWith("m") ? "Manhã" : p.startsWith("t") ? "Tarde" : p.startsWith("n") ? "Noite" : null;
+          }
+          const { error } = await supabase.from("classrooms").insert({
+            name: row.name,
+            grade_level: row.grade_level || null,
+            period,
+            course_id,
+            academic_year_id: academicYearId,
+            school_id: schoolId,
+          });
+          if (error) throw new Error(error.message);
+        }}
+        onCompleted={load}
+      />
     </DashboardLayout>
   );
 };
