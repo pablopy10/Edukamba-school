@@ -2534,6 +2534,20 @@ export type Database = {
       }
       get_my_school: { Args: never; Returns: string }
       is_school_active: { Args: { _school_id: string }; Returns: boolean }
+      notify_user: {
+        Args: {
+          _actor_id?: string
+          _actor_name?: string
+          _category: string
+          _description: string
+          _link?: string
+          _recipient_id: string
+          _school_id: string
+          _title: string
+        }
+        Returns: undefined
+      }
+      run_daily_notifications: { Args: never; Returns: number }
       seed_default_time_slots: {
         Args: { _school_id: string }
         Returns: undefined
