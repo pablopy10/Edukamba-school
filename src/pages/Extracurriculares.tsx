@@ -554,7 +554,10 @@ const Extracurriculares = () => {
 
       <EnrollmentManagerDialog
         open={enrollOpen}
-        onOpenChange={setEnrollOpen}
+        onOpenChange={(o) => {
+          setEnrollOpen(o);
+          if (!o) loadBillingStatus(activities);
+        }}
         activity={enrollActivity}
         schoolId={schoolId}
         canEdit={canEdit}
