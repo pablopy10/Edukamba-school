@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 import {
   Select,
   SelectContent,
@@ -31,24 +32,33 @@ const monthShort = [
 ];
 
 export const AttendanceCard = () => {
+  const { selectedYear, selectedYearId } = useAcademicYear();
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [classroomId, setClassroomId] = useState<string>("ALL");
   const [data, setData] = useState<WeekBucket[]>([]);
 
   const yearRange = useMemo(() => {
+    if (selectedYear) {
+      return {
+        start: new Date(`${selectedYear.start_date}T00:00:00`),
+        end: new Date(`${selectedYear.end_date}T00:00:00`),
+        year: Number(selectedYear.start_date.slice(0, 4)),
+      };
+    }
     const now = new Date();
     const start = new Date(now.getFullYear(), 0, 1);
     const end = new Date(now.getFullYear() + 1, 0, 1);
     return { start, end, year: now.getFullYear() };
-  }, []);
+  }, [selectedYear]);
 
   useEffect(() => {
-    supabase
+    let query = supabase
       .from("classrooms")
       .select("id, name")
-      .order("name", { ascending: true })
-      .then(({ data }) => setClassrooms(data ?? []));
-  }, []);
+      .order("name", { ascending: true });
+    if (selectedYearId) query = query.eq("academic_year_id", selectedYearId);
+    query.then(({ data }) => setClassrooms(data ?? []));
+  }, [selectedYearId]);
 
   useEffect(() => {
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
