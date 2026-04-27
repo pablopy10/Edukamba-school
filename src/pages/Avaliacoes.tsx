@@ -50,7 +50,11 @@ type Assessment = {
   classroom_id: string | null;
   subject_id: string | null;
   teacher_id: string | null;
+  term_id: string | null;
 };
+
+type Term = { id: string; term_number: number; name: string; start_date: string; end_date: string };
+type Holiday = { id: string; name: string; start_date: string; end_date: string };
 
 type Option = { id: string; name: string };
 
@@ -85,6 +89,7 @@ const Avaliacoes = () => {
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
   const [teacherFilter, setTeacherFilter] = useState<string>("all");
   const [classroomFilter, setClassroomFilter] = useState<string>("all");
+  const [termFilter, setTermFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [cursor, setCursor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -95,6 +100,8 @@ const Avaliacoes = () => {
   const [classrooms, setClassrooms] = useState<Option[]>([]);
   const [subjects, setSubjects] = useState<Option[]>([]);
   const [teachers, setTeachers] = useState<Option[]>([]);
+  const [terms, setTerms] = useState<Term[]>([]);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Partial<AssessmentRecord> | null>(null);
@@ -109,11 +116,13 @@ const Avaliacoes = () => {
     setSchoolId(sid);
     if (!sid) { setLoading(false); return; }
 
-    const [aRes, cRes, sRes, tRes] = await Promise.all([
-      supabase.from("assessments").select("id,title,type,date,start_time,end_time,room,weight,description,classroom_id,subject_id,teacher_id").eq("school_id", sid).order("date", { ascending: true }),
+    const [aRes, cRes, sRes, tRes, termRes, holRes] = await Promise.all([
+      supabase.from("assessments").select("id,title,type,date,start_time,end_time,room,weight,description,classroom_id,subject_id,teacher_id,term_id").eq("school_id", sid).order("date", { ascending: true }),
       supabase.from("classrooms").select("id, name").eq("school_id", sid).order("name"),
       supabase.from("subjects").select("id, name").eq("school_id", sid).order("name"),
       supabase.from("teachers").select("id, profile_id, profiles:profile_id(full_name)").eq("school_id", sid),
+      supabase.from("academic_terms").select("id, term_number, name, start_date, end_date").eq("school_id", sid).order("term_number"),
+      supabase.from("school_holidays").select("id, name, start_date, end_date").eq("school_id", sid).order("start_date"),
     ]);
 
     setAssessments((aRes.data ?? []) as Assessment[]);
@@ -125,6 +134,8 @@ const Avaliacoes = () => {
         .map((t: any) => ({ id: t.profile_id, name: t.profiles?.full_name ?? "Sem nome" }))
         .sort((a, b) => a.name.localeCompare(b.name))
     );
+    setTerms((termRes.data ?? []) as Term[]);
+    setHolidays((holRes.data ?? []) as Holiday[]);
     setLoading(false);
   };
 
@@ -140,6 +151,15 @@ const Avaliacoes = () => {
       if (subjectFilter !== "all" && e.subject_id !== subjectFilter) return false;
       if (teacherFilter !== "all" && e.teacher_id !== teacherFilter) return false;
       if (classroomFilter !== "all" && e.classroom_id !== classroomFilter) return false;
+      if (termFilter !== "all") {
+        // Resolve effective term: stored term_id, otherwise derive from date
+        let effectiveTerm = e.term_id;
+        if (!effectiveTerm) {
+          const matched = terms.find((t) => e.date >= t.start_date && e.date <= t.end_date);
+          effectiveTerm = matched?.id ?? null;
+        }
+        if (effectiveTerm !== termFilter) return false;
+      }
       const q = search.trim().toLowerCase();
       if (!q) return true;
       const subjectName = e.subject_id ? subjectMap.get(e.subject_id) ?? "" : "";
@@ -152,7 +172,7 @@ const Avaliacoes = () => {
         teacherName.toLowerCase().includes(q)
       );
     });
-  }, [assessments, typeFilter, subjectFilter, teacherFilter, classroomFilter, search, subjectMap, classroomMap, teacherMap]);
+  }, [assessments, typeFilter, subjectFilter, teacherFilter, classroomFilter, termFilter, terms, search, subjectMap, classroomMap, teacherMap]);
 
   const stats = useMemo(() => ({
     total: filtered.length,
@@ -205,6 +225,7 @@ const Avaliacoes = () => {
       room: a.room,
       weight: Number(a.weight ?? 0),
       description: a.description,
+      term_id: a.term_id,
     });
     setDialogOpen(true);
   };
