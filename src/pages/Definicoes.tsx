@@ -1605,6 +1605,43 @@ const Definicoes = () => {
           </div>
         )}
 
+        {/* Delete academic year confirm modal */}
+        {confirmDeleteYearId && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setConfirmDeleteYearId(null)}
+          >
+            <div
+              className="w-full max-w-md rounded-2xl bg-card p-6 shadow-card"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-bold text-foreground">Eliminar ano letivo</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Vai eliminar o ano letivo{" "}
+                <span className="font-semibold text-foreground">
+                  {years.find((y) => y.id === confirmDeleteYearId)?.label}
+                </span>
+                . Só é possível eliminar se não existirem turmas, matrículas, avaliações ou outros dados associados.
+              </p>
+              <div className="mt-6 flex justify-end gap-2">
+                <button
+                  onClick={() => setConfirmDeleteYearId(null)}
+                  className="h-10 rounded-full border border-border px-4 text-sm font-medium text-foreground hover:bg-muted"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteAcademicYear}
+                  disabled={saving}
+                  className="h-10 rounded-full bg-pastel-pink px-4 text-sm font-semibold text-pastel-pink-foreground shadow-soft hover:opacity-90 disabled:opacity-50"
+                >
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Toast */}
         {toast && (
           <div
