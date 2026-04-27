@@ -139,28 +139,6 @@ const Turmas = () => {
                 className="h-11 w-72 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             </div>
-            <Select value={periodFilter} onValueChange={setPeriodFilter}>
-              <SelectTrigger className="h-11 w-40 rounded-full border-border bg-card shadow-soft">
-                <SelectValue placeholder="Período" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os períodos</SelectItem>
-                <SelectItem value="Manhã">Manhã</SelectItem>
-                <SelectItem value="Tarde">Tarde</SelectItem>
-                <SelectItem value="Noite">Noite</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={courseFilter} onValueChange={setCourseFilter}>
-              <SelectTrigger className="h-11 w-48 rounded-full border-border bg-card shadow-soft">
-                <SelectValue placeholder="Curso" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os cursos</SelectItem>
-                {courses.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <button
               onClick={() => { setEditing(null); setFormOpen(true); }}
               className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
@@ -175,6 +153,36 @@ const Turmas = () => {
               <Upload className="h-4 w-4" strokeWidth={2.25} />
               Importar Excel
             </button>
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-card p-5 shadow-card">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-semibold text-foreground">Filtros</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <Select value={periodFilter} onValueChange={setPeriodFilter}>
+                <SelectTrigger className="h-11 w-44 rounded-full border-border bg-background shadow-soft">
+                  <SelectValue placeholder="Período" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os períodos</SelectItem>
+                  <SelectItem value="Manhã">Manhã</SelectItem>
+                  <SelectItem value="Tarde">Tarde</SelectItem>
+                  <SelectItem value="Noite">Noite</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={courseFilter} onValueChange={setCourseFilter}>
+                <SelectTrigger className="h-11 w-52 rounded-full border-border bg-background shadow-soft">
+                  <SelectValue placeholder="Curso" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os cursos</SelectItem>
+                  {courses.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
