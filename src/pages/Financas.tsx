@@ -125,7 +125,7 @@ const Financas = () => {
     const [eRes, cRes, fRes, rRes] = await Promise.all([
       supabase.from("expenses").select("*, category:expense_categories(name, color)")
         .eq("school_id", sId).gte("expense_date", yearStart).lte("expense_date", yearEnd)
-        .order("expense_date", { ascending: false }),
+        .order("expense_date", { ascending: true }),
       supabase.from("expense_categories").select("*").eq("school_id", sId).order("name"),
       supabase.from("student_fees").select("amount_due, due_date, is_paid")
         .gte("due_date", yearStart).lte("due_date", yearEnd),
