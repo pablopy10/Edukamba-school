@@ -1247,6 +1247,72 @@ const Definicoes = () => {
                 <SaveBar onClick={handleSaveAcademicSettings} saving={savingAcademicSettings} isAdmin={isAdmin} />
               </div>
             </SectionCard>
+
+            <SectionCard
+              title="Multas por Atraso de Propinas"
+              desc="Aplicada automaticamente no dia 11 de cada mês a propinas vencidas e ainda não pagas. Pode ser um valor fixo (Kz) ou uma percentagem do valor da propina."
+            >
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+                <Field label="Cobrar multa por atraso?">
+                  <select
+                    className={inputCls(false)}
+                    disabled={!isAdmin}
+                    value={academicSettings.late_fee_enabled ? "yes" : "no"}
+                    onChange={(e) =>
+                      setAcademicSettings((s) => ({ ...s, late_fee_enabled: e.target.value === "yes" }))
+                    }
+                  >
+                    <option value="no">Não cobrar</option>
+                    <option value="yes">Sim, cobrar multa</option>
+                  </select>
+                </Field>
+                <Field label="Tipo de multa">
+                  <select
+                    className={inputCls(false)}
+                    disabled={!isAdmin || !academicSettings.late_fee_enabled}
+                    value={academicSettings.late_fee_type}
+                    onChange={(e) =>
+                      setAcademicSettings((s) => ({
+                        ...s,
+                        late_fee_type: e.target.value === "percentage" ? "percentage" : "fixed",
+                      }))
+                    }
+                  >
+                    <option value="fixed">Valor fixo (Kz)</option>
+                    <option value="percentage">Percentagem (%)</option>
+                  </select>
+                </Field>
+                <Field
+                  label={
+                    academicSettings.late_fee_type === "percentage"
+                      ? "Percentagem da multa (%)"
+                      : "Valor da multa (Kz)"
+                  }
+                >
+                  <input
+                    type="number"
+                    min={0}
+                    step={academicSettings.late_fee_type === "percentage" ? 0.5 : 100}
+                    className={inputCls(false)}
+                    disabled={!isAdmin || !academicSettings.late_fee_enabled}
+                    value={academicSettings.late_fee_value}
+                    onChange={(e) =>
+                      setAcademicSettings((s) => ({
+                        ...s,
+                        late_fee_value: e.target.value === "" ? 0 : Number(e.target.value),
+                      }))
+                    }
+                  />
+                </Field>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                A multa é aplicada uma única vez por propina em atraso, no dia 11. As propinas pagas antes do
+                vencimento ou já regularizadas não são afetadas.
+              </p>
+              <div className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
+                <SaveBar onClick={handleSaveAcademicSettings} saving={savingAcademicSettings} isAdmin={isAdmin} />
+              </div>
+            </SectionCard>
           </div>
         )}
 
