@@ -362,6 +362,14 @@ const Definicoes = () => {
           primary_color: schoolRes.data.primary_color ?? "#A78BFA",
           secondary_color: schoolRes.data.secondary_color ?? "#7DD3FC",
         });
+        const s = (schoolRes.data.settings ?? {}) as {
+          honor_roll_min_average?: number;
+          grading_max_score?: number;
+        };
+        setAcademicSettings({
+          honor_roll_min_average: typeof s.honor_roll_min_average === "number" ? s.honor_roll_min_average : 14,
+          grading_max_score: typeof s.grading_max_score === "number" ? s.grading_max_score : 20,
+        });
       }
       if (yearRes.data) {
         setYear({
