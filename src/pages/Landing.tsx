@@ -304,17 +304,17 @@ const Landing = () => {
                   <h3 className="text-lg font-semibold">{plan.name}</h3>
                   <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
                 </div>
-                <div className="flex items-baseline gap-1">
+                <div className="flex items-baseline gap-1 border-y border-border/60 py-4">
                   <span className="text-4xl font-bold tracking-tight">{plan.price}</span>
                   {plan.suffix && (
                     <span className="text-sm text-muted-foreground">{plan.suffix}</span>
                   )}
                 </div>
-                <ul className="flex flex-col gap-3 text-sm">
+                <ul className="flex flex-1 flex-col gap-3 text-sm">
                   {plan.features.map((f) => (
-                    <li key={f} className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-pastel-blue-foreground" />
-                      <span>{f}</span>
+                    <li key={f} className="flex items-start gap-2">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-pastel-blue-foreground" />
+                      <span className="leading-snug">{f}</span>
                     </li>
                   ))}
                 </ul>
