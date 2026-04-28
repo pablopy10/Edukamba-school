@@ -1265,11 +1265,14 @@ const Pagamentos = () => {
                       {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <Select value={feeClassroomFilter} onValueChange={setFeeClassroomFilter}>
+                  <Select value={feeClassroomFilter} onValueChange={setFeeClassroomFilter} disabled={isParent}>
                     <SelectTrigger className="md:w-52"><SelectValue placeholder="Turma" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todas as turmas</SelectItem>
-                      {classrooms.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                      {!isParent && <SelectItem value="all">Todas as turmas</SelectItem>}
+                      {(isParent
+                        ? classrooms.filter((c) => parentClassroomIds.includes(c.id))
+                        : classrooms
+                      ).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
