@@ -1188,6 +1188,107 @@ const Pagamentos = () => {
     else toast({ title: `${rows.length} lembrete(s) enviado(s)` });
   };
 
+  // ===== Enrollment fees helpers =====
+  const filteredEnrollmentFees = useMemo(() => {
+    const now = Date.now();
+    const search = enSearch.trim().toLowerCase();
+    return allEnrollmentFees.filter((f) => {
+      if (enYearFilter !== "all" && f.academic_year_id !== enYearFilter) return false;
+      if (enTypeFilter !== "all" && f.fee_type !== enTypeFilter) return false;
+      if (enFilter === "paid" && !f.is_paid) return false;
+      if (enFilter === "pending" && f.is_paid) return false;
+      if (enFilter === "overdue" && (f.is_paid || new Date(f.due_date).getTime() >= now)) return false;
+      if (search && !(f.student?.full_name ?? "").toLowerCase().includes(search)) return false;
+      return true;
+    });
+  }, [allEnrollmentFees, enFilter, enYearFilter, enTypeFilter, enSearch]);
+
+  const enrollmentFeeStats = useMemo(() => {
+    const now = Date.now();
+    let paid = 0, pending = 0, overdue = 0;
+    allEnrollmentFees.forEach((f) => {
+      if (f.is_paid) paid += Number(f.amount_due);
+      else {
+        pending += Number(f.amount_due);
+        if (new Date(f.due_date).getTime() < now) overdue += Number(f.amount_due);
+      }
+    });
+    return { paid, pending, overdue };
+  }, [allEnrollmentFees]);
+
+  const latestPaymentByEnrollmentFee = useMemo(() => {
+    const map = new Map<string, PaymentListRow>();
+    enrollmentPayments.forEach((p) => {
+      if (!p.enrollment_fee_id) return;
+      if (!map.has(p.enrollment_fee_id)) map.set(p.enrollment_fee_id, p);
+    });
+    return map;
+  }, [enrollmentPayments]);
+
+  const pendingEnrollmentValidations = useMemo(() => {
+    return allEnrollmentFees
+      .map((f) => ({ fee: f, payment: latestPaymentByEnrollmentFee.get(f.id) }))
+      .filter((x) => x.payment && x.payment.status === "pendente") as Array<{ fee: EnrollmentFeeRow; payment: PaymentListRow }>;
+  }, [allEnrollmentFees, latestPaymentByEnrollmentFee]);
+
+  const validateEnrollmentPayment = async (fee: EnrollmentFeeRow, payment: PaymentListRow) => {
+    if (!schoolId) return;
+    setValidatingId(payment.id);
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id ?? null;
+    const { error: payErr } = await supabase
+      .from("payments")
+      .update({ status: "validado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: null })
+      .eq("id", payment.id);
+    if (payErr) {
+      setValidatingId(null);
+      toast({ title: "Erro a validar", description: payErr.message, variant: "destructive" });
+      return;
+    }
+    const { error: feeErr } = await supabase.from("enrollment_fees").update({ is_paid: true }).eq("id", fee.id);
+    if (feeErr) {
+      setValidatingId(null);
+      toast({ title: "Erro a marcar cobrança", description: feeErr.message, variant: "destructive" });
+      return;
+    }
+    if (fee.student?.parent_id) {
+      const label = fee.fee_type === "RENEWAL" ? "renovação de matrícula" : "matrícula";
+      await supabase.from("notifications").insert({
+        recipient_id: fee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento de ${label} validado`,
+        description: `O pagamento da ${label} de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
+        category: "pagamento",
+        link: "/pagamentos",
+      });
+    }
+    setValidatingId(null);
+    toast({ title: "Pagamento validado", description: "O encarregado foi notificado." });
+    await fetchAll();
+  };
+
+  const sendEnrollmentReminder = async (fee: EnrollmentFeeRow) => {
+    if (!schoolId) return;
+    const parentId = fee.student?.parent_id;
+    if (!parentId) {
+      toast({ title: "Aluno sem encarregado", description: "Não é possível enviar lembrete.", variant: "destructive" });
+      return;
+    }
+    setRemindingEnFeeId(fee.id);
+    const label = fee.fee_type === "RENEWAL" ? "renovação de matrícula" : "matrícula";
+    const { error } = await supabase.from("notifications").insert({
+      recipient_id: parentId,
+      school_id: schoolId,
+      title: `Lembrete — ${label}`,
+      description: `A ${label} de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} está por pagar (vencimento: ${new Date(fee.due_date).toLocaleDateString("pt-PT")}).`,
+      category: "pagamento",
+      link: "/pagamentos",
+    });
+    setRemindingEnFeeId(null);
+    if (error) toast({ title: "Erro a enviar lembrete", description: error.message, variant: "destructive" });
+    else toast({ title: "Lembrete enviado ao encarregado" });
+  };
+
   if (parentLoading) return <PageLoadingSkeleton />;
 
   return (
