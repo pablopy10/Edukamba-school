@@ -146,7 +146,6 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
   }, [yearClassrooms, loadingClassrooms, open]);
 
   const handleSubmit = async () => {
-    if (!classroomId) { toast({ title: "Turma obrigatória", variant: "destructive" }); return; }
     setLoading(true);
     let triggeredAccessPrompt = false;
     try {
@@ -213,20 +212,20 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
           birth_date: birthDate || null,
           gender: gender || null,
           enrollment_number: enrollmentNumber || null,
-          classroom_id: classroomId,
+          classroom_id: classroomId || null,
           school_id: schoolId,
         }).select("id").single();
         if (sErr) throw sErr;
 
         const { error: eErr } = await supabase.from("enrollments").insert({
           student_id: created.id,
-          classroom_id: classroomId,
+          classroom_id: classroomId || null,
           academic_year_id: yearId || null,
           status,
         });
         if (eErr) throw eErr;
         toast({ title: "Aluno e matrícula criados" });
-        if (isClassroomEligible(classroomId)) {
+        if (classroomId && isClassroomEligible(classroomId)) {
           setAccessPrompt({ studentId: created.id, studentName: fullName.trim(), defaultEmail: email || null });
           triggeredAccessPrompt = true;
         }
@@ -249,13 +248,13 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         }
         const { error } = await supabase.from("enrollments").insert({
           student_id: studentId,
-          classroom_id: classroomId,
+          classroom_id: classroomId || null,
           academic_year_id: yearId || null,
           status,
         });
         if (error) throw error;
         toast({ title: "Matrícula renovada" });
-        if (isClassroomEligible(classroomId)) {
+        if (classroomId && isClassroomEligible(classroomId)) {
           const { data: st } = await supabase
             .from("students")
             .select("full_name, email, user_id")
