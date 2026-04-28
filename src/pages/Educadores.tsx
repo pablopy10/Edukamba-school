@@ -272,9 +272,37 @@ const Educadores = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="py-4 pr-4 text-foreground">{g.student_name ?? "—"}</td>
+                      <td className="py-4 pr-4 text-foreground">
+                        {g.student_names.length === 0 ? (
+                          "—"
+                        ) : g.student_names.length === 1 ? (
+                          g.student_names[0]
+                        ) : (
+                          <span title={g.student_names.join(", ")}>
+                            {g.student_names[0]}{" "}
+                            <span className="ml-1 inline-flex items-center rounded-full bg-pastel-blue/40 px-2 py-0.5 text-[10px] font-semibold text-pastel-blue-foreground">
+                              +{g.student_names.length - 1}
+                            </span>
+                          </span>
+                        )}
+                      </td>
                       <td className="py-4 pr-4">
-                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{classroomName(g.classroom_id)}</span>
+                        {g.classroom_ids.length === 0 ? (
+                          <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">—</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {g.classroom_ids.slice(0, 2).map((cid) => (
+                              <span key={cid} className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
+                                {classroomName(cid)}
+                              </span>
+                            ))}
+                            {g.classroom_ids.length > 2 && (
+                              <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
+                                +{g.classroom_ids.length - 2}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="py-4 pr-4">
                         <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{g.phone ?? "—"}</span>
