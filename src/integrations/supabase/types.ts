@@ -2464,7 +2464,6 @@ export type Database = {
           id: string
           parent_id: string | null
           phone: string | null
-          profile_id: string | null
           school_id: string | null
           updated_at: string
           user_id: string | null
@@ -2481,7 +2480,6 @@ export type Database = {
           id?: string
           parent_id?: string | null
           phone?: string | null
-          profile_id?: string | null
           school_id?: string | null
           updated_at?: string
           user_id?: string | null
@@ -2498,7 +2496,6 @@ export type Database = {
           id?: string
           parent_id?: string | null
           phone?: string | null
-          profile_id?: string | null
           school_id?: string | null
           updated_at?: string
           user_id?: string | null
@@ -2514,13 +2511,6 @@ export type Database = {
           {
             foreignKeyName: "students_parent_id_fkey"
             columns: ["parent_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "students_profile_id_fkey"
-            columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
