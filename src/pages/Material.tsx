@@ -128,12 +128,32 @@ const Material = () => {
     return Array.from(set).sort();
   }, [stock]);
 
-  const stats = useMemo(() => ({
-    totalItens: stock.reduce((a, s) => a + (s.quantity || 0), 0),
-    baixoStock: stock.filter((s) => s.quantity < s.min_quantity).length,
-    pedidosAtivos: requests.length,
-    entregasMarcadas: deliveries.filter((d) => d.brought).length,
-  }), [stock, requests, deliveries]);
+  // For parent stats we count only requests scoped to their selected child.
+  const parentScopedRequests = useMemo(() => {
+    if (!isParent) return requests;
+    const childSet = new Set(childIds);
+    const classSet = new Set(classroomIds);
+    return requests.filter((r) => {
+      const targetsChild = r.student_id ? childSet.has(r.student_id) : false;
+      const targetsClass = !r.student_id && r.classroom_id ? classSet.has(r.classroom_id) : false;
+      return targetsChild || targetsClass;
+    });
+  }, [requests, isParent, childIds, classroomIds]);
+
+  const stats = useMemo(() => {
+    const reqList = isParent ? parentScopedRequests : requests;
+    const reqIds = new Set(reqList.map((r) => r.id));
+    const childSet = new Set(childIds);
+    const relevantDeliveries = isParent
+      ? deliveries.filter((d) => reqIds.has(d.request_id) && childSet.has(d.student_id))
+      : deliveries;
+    return {
+      totalItens: stock.reduce((a, s) => a + (s.quantity || 0), 0),
+      baixoStock: stock.filter((s) => s.quantity < s.min_quantity).length,
+      pedidosAtivos: reqList.length,
+      entregasMarcadas: relevantDeliveries.filter((d) => d.brought).length,
+    };
+  }, [stock, requests, deliveries, isParent, parentScopedRequests, childIds]);
 
   // Compute target students for a request and delivery progress.
   const targetStudentsFor = (r: RequestRow) => {
