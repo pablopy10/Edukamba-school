@@ -255,6 +255,8 @@ const Definicoes = () => {
     late_fee_enabled: false,
     late_fee_type: "fixed" as "fixed" | "percentage",
     late_fee_value: 0,
+    enrollment_fee_new: 0,
+    enrollment_fee_renewal: 0,
   });
   const [savingAcademicSettings, setSavingAcademicSettings] = useState(false);
 
@@ -383,6 +385,8 @@ const Definicoes = () => {
           late_fee_enabled?: boolean;
           late_fee_type?: "fixed" | "percentage";
           late_fee_value?: number;
+          enrollment_fee_new?: number;
+          enrollment_fee_renewal?: number;
         };
         setAcademicSettings({
           honor_roll_min_average: typeof s.honor_roll_min_average === "number" ? s.honor_roll_min_average : 14,
@@ -390,6 +394,8 @@ const Definicoes = () => {
           late_fee_enabled: typeof s.late_fee_enabled === "boolean" ? s.late_fee_enabled : false,
           late_fee_type: s.late_fee_type === "percentage" ? "percentage" : "fixed",
           late_fee_value: typeof s.late_fee_value === "number" ? s.late_fee_value : 0,
+          enrollment_fee_new: typeof s.enrollment_fee_new === "number" ? s.enrollment_fee_new : 0,
+          enrollment_fee_renewal: typeof s.enrollment_fee_renewal === "number" ? s.enrollment_fee_renewal : 0,
         });
       }
       if (yearRes.data) {
@@ -699,6 +705,8 @@ const Definicoes = () => {
       late_fee_enabled: academicSettings.late_fee_enabled,
       late_fee_type: academicSettings.late_fee_type,
       late_fee_value: academicSettings.late_fee_enabled ? lateValue : 0,
+      enrollment_fee_new: Math.max(0, Number(academicSettings.enrollment_fee_new) || 0),
+      enrollment_fee_renewal: Math.max(0, Number(academicSettings.enrollment_fee_renewal) || 0),
     };
     const { error } = await supabase.from("schools").update({ settings: merged }).eq("id", schoolId);
     setSavingAcademicSettings(false);
