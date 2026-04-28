@@ -1095,11 +1095,13 @@ const Pagamentos = () => {
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Pagamentos</h1>
-            <p className="text-sm text-muted-foreground">Gere as propinas, descontos e cobranças mensais.</p>
+            <p className="text-sm text-muted-foreground">{isParent ? "Consulte as cobranças do(s) seu(s) educando(s) e anexe os comprovativos." : "Gere as propinas, descontos e cobranças mensais."}</p>
           </div>
-          <Button onClick={() => setGenerateOpen(true)} className="gap-2">
-            <PlayCircle className="h-4 w-4" /> Gerar propinas do ano
-          </Button>
+          {!isParent && (
+            <Button onClick={() => setGenerateOpen(true)} className="gap-2">
+              <PlayCircle className="h-4 w-4" /> Gerar propinas do ano
+            </Button>
+          )}
         </div>
 
         {/* KPIs */}
@@ -1136,14 +1138,14 @@ const Pagamentos = () => {
           </Card>
         </div>
 
-        <Tabs defaultValue="rules" className="w-full">
+        <Tabs defaultValue={isParent ? "fees" : "rules"} className="w-full">
           <TabsList>
-            <TabsTrigger value="rules">Regras de propina</TabsTrigger>
+            {!isParent && <TabsTrigger value="rules">Regras de propina</TabsTrigger>}
             <TabsTrigger value="fees">Propinas</TabsTrigger>
             <TabsTrigger value="activity-fees">Extracurriculares</TabsTrigger>
             <TabsTrigger value="transport-fees">Transporte</TabsTrigger>
-            <TabsTrigger value="family">Descontos por familiar</TabsTrigger>
-            <TabsTrigger value="overrides">Descontos por aluno</TabsTrigger>
+            {!isParent && <TabsTrigger value="family">Descontos por familiar</TabsTrigger>}
+            {!isParent && <TabsTrigger value="overrides">Descontos por aluno</TabsTrigger>}
           </TabsList>
 
           {/* FEES TAB */}
