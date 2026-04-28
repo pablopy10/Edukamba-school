@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
-  Plus, Search, Boxes, ClipboardList, Check, X, AlertTriangle, Pencil, Trash2,
+  Plus, Search, Boxes, ClipboardList, Check, AlertTriangle, Pencil, Trash2, ListChecks,
   BookOpen, Beaker, Palette, Dumbbell, Laptop, Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -10,11 +10,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { MaterialFormDialog, type MaterialRow } from "@/components/material/MaterialFormDialog";
 import { MaterialRequestFormDialog, type RequestRow } from "@/components/material/MaterialRequestFormDialog";
 
 type Category = "papelaria" | "laboratorio" | "artes" | "desporto" | "tecnologia";
-type Status = "pendente" | "aprovado" | "rejeitado" | "entregue";
 
 const categoryMeta: Record<string, { label: string; color: string; icon: typeof BookOpen }> = {
   papelaria: { label: "Papelaria", color: "bg-pastel-blue text-pastel-blue-foreground", icon: BookOpen },
@@ -26,12 +28,14 @@ const categoryMeta: Record<string, { label: string; color: string; icon: typeof 
 const catFallback = { label: "Outro", color: "bg-muted text-foreground", icon: Package };
 const meta = (c: string) => categoryMeta[c] ?? catFallback;
 
-const statusMeta: Record<Status, { label: string; color: string }> = {
-  pendente: { label: "Pendente", color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-  aprovado: { label: "Aprovado", color: "bg-pastel-green text-pastel-green-foreground" },
-  rejeitado: { label: "Rejeitado", color: "bg-pastel-pink text-pastel-pink-foreground" },
-  entregue: { label: "Entregue", color: "bg-pastel-blue text-pastel-blue-foreground" },
+type DeliveryRow = {
+  id: string;
+  request_id: string;
+  student_id: string;
+  brought: boolean;
 };
+
+type DeliveryFilter = "all" | "pendente" | "completo";
 
 type Tab = "stock" | "pedidos";
 
@@ -45,6 +49,7 @@ const Material = () => {
 
   const [stock, setStock] = useState<MaterialRow[]>([]);
   const [requests, setRequests] = useState<RequestRow[]>([]);
+  const [deliveries, setDeliveries] = useState<DeliveryRow[]>([]);
   const [classrooms, setClassrooms] = useState<{ id: string; name: string }[]>([]);
   const [students, setStudents] = useState<{ id: string; full_name: string; classroom_id: string | null }[]>([]);
   const [teachers, setTeachers] = useState<{ id: string; name: string }[]>([]);
@@ -55,7 +60,7 @@ const Material = () => {
   const [stockLowOnly, setStockLowOnly] = useState(false);
   const [stockLocation, setStockLocation] = useState<string>("all");
 
-  const [reqStatusFilter, setReqStatusFilter] = useState<string>("all");
+  const [reqDeliveryFilter, setReqDeliveryFilter] = useState<DeliveryFilter>("all");
   const [reqTeacherFilter, setReqTeacherFilter] = useState<string>("all");
 
   // Dialog state
@@ -63,8 +68,10 @@ const Material = () => {
   const [editingMaterial, setEditingMaterial] = useState<MaterialRow | null>(null);
   const [showRequestDialog, setShowRequestDialog] = useState(false);
   const [editingRequest, setEditingRequest] = useState<RequestRow | null>(null);
+  const [deliveryDialog, setDeliveryDialog] = useState<RequestRow | null>(null);
 
   const isAdmin = userRole === "ADMIN";
+  const canMarkDeliveries = userRole === "ADMIN" || userRole === "TEACHER";
   const canRequest = userRole === "ADMIN" || userRole === "TEACHER";
 
   const loadAll = async () => {
@@ -82,16 +89,18 @@ const Material = () => {
     setUserRole(profile.role);
     setUserName(profile.full_name ?? "");
 
-    const [m, r, c, s] = await Promise.all([
+    const [m, r, c, s, d] = await Promise.all([
       supabase.from("materials").select("*").eq("school_id", profile.school_id).order("name"),
       supabase.from("material_requests").select("*").eq("school_id", profile.school_id).order("created_at", { ascending: false }),
       supabase.from("classrooms").select("id, name").eq("school_id", profile.school_id).order("name"),
       supabase.from("students").select("id, full_name, classroom_id").eq("school_id", profile.school_id).order("full_name"),
+      supabase.from("material_request_deliveries").select("id, request_id, student_id, brought").eq("school_id", profile.school_id),
     ]);
     setStock((m.data as MaterialRow[]) ?? []);
     setRequests((r.data as RequestRow[]) ?? []);
     setClassrooms(c.data ?? []);
     setStudents(s.data ?? []);
+    setDeliveries(((d.data ?? []) as DeliveryRow[]));
     setLoading(false);
   };
 
@@ -115,9 +124,25 @@ const Material = () => {
   const stats = useMemo(() => ({
     totalItens: stock.reduce((a, s) => a + (s.quantity || 0), 0),
     baixoStock: stock.filter((s) => s.quantity < s.min_quantity).length,
-    pendentes: requests.filter((r) => r.status === "pendente").length,
-    entregues: requests.filter((r) => r.status === "entregue").length,
-  }), [stock, requests]);
+    pedidosAtivos: requests.length,
+    entregasMarcadas: deliveries.filter((d) => d.brought).length,
+  }), [stock, requests, deliveries]);
+
+  // Compute target students for a request and delivery progress.
+  const targetStudentsFor = (r: RequestRow) => {
+    if (r.student_id) return students.filter((s) => s.id === r.student_id);
+    if (r.classroom_id) return students.filter((s) => s.classroom_id === r.classroom_id);
+    return [] as typeof students;
+  };
+  const progressFor = (r: RequestRow) => {
+    const target = targetStudentsFor(r);
+    const total = target.length;
+    const broughtIds = new Set(
+      deliveries.filter((d) => d.request_id === r.id && d.brought).map((d) => d.student_id),
+    );
+    const brought = target.filter((s) => broughtIds.has(s.id)).length;
+    return { brought, total };
+  };
 
   const filteredStock = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -133,7 +158,12 @@ const Material = () => {
   const filteredRequests = useMemo(() => {
     const q = search.trim().toLowerCase();
     return requests.filter((r) => {
-      if (reqStatusFilter !== "all" && r.status !== reqStatusFilter) return false;
+      if (reqDeliveryFilter !== "all") {
+        const { brought, total } = progressFor(r);
+        const isComplete = total > 0 && brought === total;
+        if (reqDeliveryFilter === "completo" && !isComplete) return false;
+        if (reqDeliveryFilter === "pendente" && isComplete) return false;
+      }
       if (reqTeacherFilter !== "all" && r.requester_id !== reqTeacherFilter) return false;
       if (q) {
         const studentName = students.find((s) => s.id === r.student_id)?.full_name ?? "";
@@ -143,23 +173,13 @@ const Material = () => {
       }
       return true;
     });
-  }, [requests, search, reqStatusFilter, reqTeacherFilter, students, classrooms]);
+  }, [requests, search, reqDeliveryFilter, reqTeacherFilter, students, classrooms, deliveries]);
 
   const removeMaterial = async (id: string) => {
     if (!confirm("Remover este material?")) return;
     const { error } = await supabase.from("materials").delete().eq("id", id);
     if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
     toast({ title: "Material removido" });
-    loadAll();
-  };
-
-  const updateRequestStatus = async (id: string, status: Status) => {
-    const { error } = await supabase
-      .from("material_requests")
-      .update({ status, decided_by: user?.id ?? null, decided_at: new Date().toISOString() })
-      .eq("id", id);
-    if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
-    toast({ title: `Pedido ${statusMeta[status].label.toLowerCase()}` });
     loadAll();
   };
 
@@ -209,8 +229,8 @@ const Material = () => {
           {[
             { label: "Itens em Stock", value: stats.totalItens, color: "bg-pastel-blue text-pastel-blue-foreground" },
             { label: "Stock Baixo", value: stats.baixoStock, color: "bg-pastel-pink text-pastel-pink-foreground" },
-            { label: "Pedidos Pendentes", value: stats.pendentes, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-            { label: "Pedidos Entregues", value: stats.entregues, color: "bg-pastel-green text-pastel-green-foreground" },
+            { label: "Pedidos ativos", value: stats.pedidosAtivos, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+            { label: "Materiais entregues", value: stats.entregasMarcadas, color: "bg-pastel-green text-pastel-green-foreground" },
           ].map((s) => (
             <div key={s.label} className="rounded-2xl bg-card p-5 shadow-card">
               <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", s.color)}>{s.label}</span>
@@ -262,11 +282,12 @@ const Material = () => {
               </div>
             ) : (
               <div className="flex flex-wrap items-center gap-2">
-                <Select value={reqStatusFilter} onValueChange={setReqStatusFilter}>
-                  <SelectTrigger className="h-10 w-40 rounded-full"><SelectValue placeholder="Estado" /></SelectTrigger>
+                <Select value={reqDeliveryFilter} onValueChange={(v) => setReqDeliveryFilter(v as DeliveryFilter)}>
+                  <SelectTrigger className="h-10 w-44 rounded-full"><SelectValue placeholder="Entregas" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todos os estados</SelectItem>
-                    {(Object.keys(statusMeta) as Status[]).map((s) => <SelectItem key={s} value={s}>{statusMeta[s].label}</SelectItem>)}
+                    <SelectItem value="all">Todas as entregas</SelectItem>
+                    <SelectItem value="pendente">Por completar</SelectItem>
+                    <SelectItem value="completo">Concluídas</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={reqTeacherFilter} onValueChange={setReqTeacherFilter}>
@@ -297,9 +318,11 @@ const Material = () => {
             students={students}
             isAdmin={isAdmin}
             currentUserId={user?.id ?? null}
+            canMarkDeliveries={canMarkDeliveries}
+            progressFor={progressFor}
             onEdit={(r) => { setEditingRequest(r); setShowRequestDialog(true); }}
             onRemove={removeRequest}
-            onUpdateStatus={updateRequestStatus}
+            onMarkDeliveries={(r) => setDeliveryDialog(r)}
           />
         )}
       </div>
@@ -320,6 +343,15 @@ const Material = () => {
         request={editingRequest}
         classrooms={classrooms}
         students={students}
+        onSaved={loadAll}
+      />
+      <DeliveryDialog
+        request={deliveryDialog}
+        targetStudents={deliveryDialog ? targetStudentsFor(deliveryDialog) : []}
+        deliveries={deliveries.filter((d) => deliveryDialog && d.request_id === deliveryDialog.id)}
+        schoolId={schoolId}
+        userId={user?.id ?? null}
+        onClose={() => setDeliveryDialog(null)}
         onSaved={loadAll}
       />
     </DashboardLayout>
@@ -417,16 +449,18 @@ const StockTable = ({
 
 /* ====================== Requests Table ====================== */
 const RequestsTable = ({
-  requests, classrooms, students, isAdmin, currentUserId, onEdit, onRemove, onUpdateStatus,
+  requests, classrooms, students, isAdmin, currentUserId, canMarkDeliveries, progressFor, onEdit, onRemove, onMarkDeliveries,
 }: {
   requests: RequestRow[];
   classrooms: { id: string; name: string }[];
   students: { id: string; full_name: string; classroom_id: string | null }[];
   isAdmin: boolean;
   currentUserId: string | null;
+  canMarkDeliveries: boolean;
+  progressFor: (r: RequestRow) => { brought: number; total: number };
   onEdit: (r: RequestRow) => void;
   onRemove: (id: string) => void;
-  onUpdateStatus: (id: string, status: Status) => void;
+  onMarkDeliveries: (r: RequestRow) => void;
 }) => {
   const classroomName = (id: string | null) => classrooms.find((c) => c.id === id)?.name ?? "—";
   const studentName = (id: string | null) => students.find((s) => s.id === id)?.full_name ?? null;
@@ -448,8 +482,7 @@ const RequestsTable = ({
                 <th className="px-6 py-3">Professor</th>
                 <th className="px-6 py-3">Destino</th>
                 <th className="px-6 py-3">Data</th>
-                <th className="px-6 py-3">Educador</th>
-                <th className="px-6 py-3">Estado</th>
+                <th className="px-6 py-3">Entregas</th>
                 <th className="px-6 py-3 text-right">Ações</th>
               </tr>
             </thead>
@@ -457,9 +490,10 @@ const RequestsTable = ({
               {requests.map((r) => {
                 const m = meta(r.category);
                 const Icon = m.icon;
-                const st = statusMeta[(r.status as Status)] ?? statusMeta.pendente;
                 const sName = studentName(r.student_id);
-                const canEdit = isAdmin || (r.requester_id === currentUserId && r.status === "pendente");
+                const canEdit = isAdmin || r.requester_id === currentUserId;
+                const { brought, total } = progressFor(r);
+                const complete = total > 0 && brought === total;
                 return (
                   <tr key={r.id} className="border-b border-border/60 text-sm transition-colors hover:bg-muted/30 align-top">
                     <td className="px-6 py-4">
@@ -495,25 +529,33 @@ const RequestsTable = ({
                         ? new Date(r.needed_date).toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric" })
                         : "—"}
                     </td>
-                    <td className="px-6 py-4 text-muted-foreground">{r.recipient ?? "—"}</td>
                     <td className="px-6 py-4">
-                      <span className={cn("rounded-full px-3 py-1 text-xs font-medium", st.color)}>{st.label}</span>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold",
+                            complete
+                              ? "bg-pastel-green text-pastel-green-foreground"
+                              : brought > 0
+                                ? "bg-pastel-yellow text-pastel-yellow-foreground"
+                                : "bg-muted text-foreground",
+                          )}
+                        >
+                          {complete && <Check className="h-3 w-3" strokeWidth={2.25} />}
+                          {brought} / {total}
+                        </span>
+                        <span className="text-xs text-muted-foreground">trouxeram</span>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-1">
-                        {isAdmin && r.status === "pendente" && (
-                          <>
-                            <button onClick={() => onUpdateStatus(r.id, "aprovado")} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-green hover:text-pastel-green-foreground" title="Aprovar">
-                              <Check className="h-4 w-4" strokeWidth={2} />
-                            </button>
-                            <button onClick={() => onUpdateStatus(r.id, "rejeitado")} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title="Rejeitar">
-                              <X className="h-4 w-4" strokeWidth={2} />
-                            </button>
-                          </>
-                        )}
-                        {isAdmin && r.status === "aprovado" && (
-                          <button onClick={() => onUpdateStatus(r.id, "entregue")} className="inline-flex h-8 items-center gap-1 rounded-full bg-pastel-blue px-3 text-xs font-medium text-pastel-blue-foreground" title="Marcar como entregue">
-                            <Check className="h-3 w-3" strokeWidth={2} /> Entregar
+                        {canMarkDeliveries && total > 0 && (
+                          <button
+                            onClick={() => onMarkDeliveries(r)}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-pastel-blue px-3 text-xs font-semibold text-pastel-blue-foreground transition-colors hover:opacity-90"
+                            title="Marcar entregas"
+                          >
+                            <ListChecks className="h-3.5 w-3.5" strokeWidth={2} /> Marcar
                           </button>
                         )}
                         {canEdit && (
@@ -540,3 +582,125 @@ const RequestsTable = ({
 };
 
 export default Material;
+
+/* ====================== Delivery Dialog ====================== */
+const DeliveryDialog = ({
+  request, targetStudents, deliveries, schoolId, userId, onClose, onSaved,
+}: {
+  request: RequestRow | null;
+  targetStudents: { id: string; full_name: string; classroom_id: string | null }[];
+  deliveries: DeliveryRow[];
+  schoolId: string | null;
+  userId: string | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) => {
+  const [marks, setMarks] = useState<Record<string, boolean>>({});
+  const [search, setSearch] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!request) return;
+    const initial: Record<string, boolean> = {};
+    targetStudents.forEach((s) => {
+      const d = deliveries.find((x) => x.student_id === s.id);
+      initial[s.id] = d?.brought ?? false;
+    });
+    setMarks(initial);
+    setSearch("");
+  }, [request?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!request) return null;
+
+  const filtered = targetStudents
+    .filter((s) => !search.trim() || s.full_name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => a.full_name.localeCompare(b.full_name, undefined, { numeric: true, sensitivity: "base" }));
+
+  const toggleAll = (value: boolean) => {
+    const next: Record<string, boolean> = { ...marks };
+    filtered.forEach((s) => { next[s.id] = value; });
+    setMarks(next);
+  };
+
+  const broughtCount = Object.values(marks).filter(Boolean).length;
+
+  const save = async () => {
+    if (!schoolId || !userId) return;
+    setSaving(true);
+    const now = new Date().toISOString();
+    const payload = targetStudents.map((s) => ({
+      request_id: request.id,
+      student_id: s.id,
+      school_id: schoolId,
+      brought: !!marks[s.id],
+      marked_by: userId,
+      marked_at: now,
+    }));
+    const { error } = await supabase
+      .from("material_request_deliveries")
+      .upsert(payload, { onConflict: "request_id,student_id" });
+    setSaving(false);
+    if (error) {
+      toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Entregas atualizadas" });
+    onSaved();
+    onClose();
+  };
+
+  return (
+    <Dialog open={!!request} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Marcar entregas — {request.item_name}</DialogTitle>
+          <DialogDescription>
+            Marque os alunos que trouxeram o material. {broughtCount} de {targetStudents.length} marcados.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Pesquisar aluno..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <Button type="button" variant="outline" size="sm" onClick={() => toggleAll(true)}>Todos</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => toggleAll(false)}>Nenhum</Button>
+        </div>
+
+        <div className="mt-2 max-h-72 overflow-y-auto rounded-md border border-border">
+          {filtered.length === 0 ? (
+            <p className="p-4 text-center text-sm text-muted-foreground">Sem alunos.</p>
+          ) : (
+            filtered.map((s) => {
+              const checked = !!marks[s.id];
+              return (
+                <label
+                  key={s.id}
+                  className="flex cursor-pointer items-center justify-between gap-3 border-b border-border px-3 py-2 last:border-0 hover:bg-muted/50"
+                >
+                  <span className="text-sm text-foreground">{s.full_name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={cn("text-xs", checked ? "text-pastel-green-foreground" : "text-muted-foreground")}>
+                      {checked ? "Trouxe" : "Não trouxe"}
+                    </span>
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(v) => setMarks((m) => ({ ...m, [s.id]: !!v }))}
+                    />
+                  </div>
+                </label>
+              );
+            })
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button onClick={save} disabled={saving}>{saving ? "A guardar..." : "Guardar entregas"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
