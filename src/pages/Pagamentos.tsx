@@ -20,6 +20,7 @@ import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell
 import { Textarea } from "@/components/ui/textarea";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
 import { useParentChildren } from "@/hooks/useParentChildren";
+import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 
 type FeeRule = {
   id: string;
@@ -1097,6 +1098,8 @@ const Pagamentos = () => {
     else toast({ title: `${rows.length} lembrete(s) enviado(s)` });
   };
 
+  if (parentLoading) return <PageLoadingSkeleton />;
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
@@ -1849,6 +1852,7 @@ const Pagamentos = () => {
           </TabsContent>
 
           {/* RULES TAB */}
+          {!isParent && (
           <TabsContent value="rules" className="space-y-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
@@ -1897,6 +1901,7 @@ const Pagamentos = () => {
               </CardContent>
             </Card>
           </TabsContent>
+          )}
 
           {/* FAMILY TAB */}
           <TabsContent value="family" className="space-y-4">

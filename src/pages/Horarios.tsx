@@ -6,6 +6,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useParentChildren } from "@/hooks/useParentChildren";
+import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScheduleFormDialog, type ScheduleRecord } from "@/components/horarios/ScheduleFormDialog";
@@ -314,6 +315,8 @@ const Horarios = () => {
   };
 
   const ShiftIcon = SHIFT_META[shiftView].icon;
+
+  if (parentLoading) return <PageLoadingSkeleton />;
 
   return (
     <DashboardLayout>

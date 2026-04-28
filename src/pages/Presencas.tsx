@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { useParentChildren } from "@/hooks/useParentChildren";
+import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 
 type Status = "PRESENT" | "ABSENT" | "LATE" | "JUSTIFIED";
 
@@ -329,6 +330,8 @@ const Presencas = () => {
       rate: total ? Math.round((present / total) * 100) : 0,
     };
   }, [students, visibleDays, attendance]);
+
+  if (parentLoading) return <PageLoadingSkeleton />;
 
   return (
     <DashboardLayout>

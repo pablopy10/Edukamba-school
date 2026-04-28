@@ -41,6 +41,7 @@ import Pesquisa from "./pages/Pesquisa.tsx";
 import Transportes from "./pages/Transportes.tsx";
 import { ModulesProvider } from "./context/ModulesContext";
 import { AcademicYearProvider } from "./context/AcademicYearContext";
+import { UserRoleProvider } from "./hooks/useUserRole";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ModulesProvider>
       <AcademicYearProvider>
+      <UserRoleProvider>
       <TooltipProvider>
         <Toaster />
         <Sonner />
@@ -93,6 +95,7 @@ const App = () => (
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
+      </UserRoleProvider>
       </AcademicYearProvider>
     </ModulesProvider>
   </QueryClientProvider>

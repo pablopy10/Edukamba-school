@@ -12,13 +12,15 @@ import { ComplaintsCard } from "@/components/dashboard/ComplaintsCard";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { useState } from "react";
 import { useUserRole } from "@/hooks/useUserRole";
+import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 
 const Index = () => {
   const { counts, gender, messages } = useDashboardData();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const { role } = useUserRole();
+  const { role, loading: roleLoading } = useUserRole();
   const isParent = role === "PARENT";
   const fmt = (n: number) => n.toLocaleString("pt-PT");
+  if (roleLoading) return <PageLoadingSkeleton />;
   return (
     <DashboardLayout>
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_320px]">
