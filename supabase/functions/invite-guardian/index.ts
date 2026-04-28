@@ -10,6 +10,7 @@ interface InvitePayload {
   full_name: string;
   phone?: string | null;
   student_id?: string | null; // optional: link as parent to this student
+  student_ids?: string[] | null; // optional: link as parent to multiple students
   password?: string | null;   // if provided, create immediately
 }
 
@@ -95,9 +96,12 @@ Deno.serve(async (req) => {
       phone: body.phone ?? null,
     }).eq("id", userId);
 
-    // Optionally link as parent on a student
-    if (body.student_id) {
-      await admin.from("students").update({ parent_id: userId }).eq("id", body.student_id);
+    // Optionally link as parent on one or many students
+    const studentIds: string[] = Array.isArray(body.student_ids) && body.student_ids.length > 0
+      ? body.student_ids.filter((s): s is string => typeof s === "string" && !!s)
+      : (body.student_id ? [body.student_id] : []);
+    if (studentIds.length > 0) {
+      await admin.from("students").update({ parent_id: userId }).in("id", studentIds);
     }
 
     return new Response(JSON.stringify({ user_id: userId }), {
