@@ -421,6 +421,7 @@ const Avaliacoes = () => {
             onEdit={openEdit}
             onDelete={(id) => setDeleteId(id)}
             onOpen={(id) => navigate(`/avaliacoes/${id}/notas`)}
+            readOnly={isParent}
           />
         ) : (
           <ListView
@@ -433,6 +434,7 @@ const Avaliacoes = () => {
             onEdit={openEdit}
             onDelete={(id) => setDeleteId(id)}
             onOpen={(id) => navigate(`/avaliacoes/${id}/notas`)}
+            readOnly={isParent}
           />
         )}
       </div>
@@ -481,7 +483,7 @@ const TypeChip = ({
 /* ======================= Calendar View ======================= */
 const CalendarView = ({
   cursor, setCursor, evaluations, selectedDate, setSelectedDate,
-  classroomMap, subjectMap, conflictIds, holidays, holidayConflicts, onEdit, onDelete, onOpen,
+  classroomMap, subjectMap, conflictIds, holidays, holidayConflicts, onEdit, onDelete, onOpen, readOnly,
 }: {
   cursor: Date;
   setCursor: (d: Date) => void;
@@ -496,6 +498,7 @@ const CalendarView = ({
   onEdit: (a: Assessment) => void;
   onDelete: (id: string) => void;
   onOpen: (id: string) => void;
+  readOnly?: boolean;
 }) => {
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -676,12 +679,16 @@ const CalendarView = ({
                   <button onClick={(ev) => { ev.stopPropagation(); onOpen(e.id); }} className="inline-flex items-center gap-1 rounded-full bg-pastel-blue px-3 py-1 text-xs font-medium text-pastel-blue-foreground hover:opacity-90">
                     <GraduationCap className="h-3 w-3" /> Notas
                   </button>
-                  <button onClick={(ev) => { ev.stopPropagation(); onEdit(e); }} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground hover:bg-accent">
-                    <Pencil className="h-3 w-3" /> Editar
-                  </button>
-                  <button onClick={(ev) => { ev.stopPropagation(); onDelete(e.id); }} className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/20">
-                    <Trash2 className="h-3 w-3" /> Eliminar
-                  </button>
+                  {!readOnly && (
+                    <>
+                      <button onClick={(ev) => { ev.stopPropagation(); onEdit(e); }} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground hover:bg-accent">
+                        <Pencil className="h-3 w-3" /> Editar
+                      </button>
+                      <button onClick={(ev) => { ev.stopPropagation(); onDelete(e.id); }} className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/20">
+                        <Trash2 className="h-3 w-3" /> Eliminar
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             );
@@ -694,7 +701,7 @@ const CalendarView = ({
 
 /* ======================= List View ======================= */
 const ListView = ({
-  evaluations, classroomMap, subjectMap, teacherMap, conflictIds, holidayConflicts, onEdit, onDelete, onOpen,
+  evaluations, classroomMap, subjectMap, teacherMap, conflictIds, holidayConflicts, onEdit, onDelete, onOpen, readOnly,
 }: {
   evaluations: Assessment[];
   classroomMap: Map<string, string>;
@@ -705,6 +712,7 @@ const ListView = ({
   onEdit: (a: Assessment) => void;
   onDelete: (id: string) => void;
   onOpen: (id: string) => void;
+  readOnly?: boolean;
 }) => {
   const sorted = [...evaluations].sort((a, b) => a.date.localeCompare(b.date));
 
