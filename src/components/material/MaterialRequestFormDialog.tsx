@@ -197,7 +197,7 @@ export const MaterialRequestFormDialog = ({
               <Select value={form.classroom_id} onValueChange={(v) => setForm({ ...form, classroom_id: v })}>
                 <SelectTrigger><SelectValue placeholder="Selecionar turma..." /></SelectTrigger>
                 <SelectContent>
-                  {classrooms.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  {sortByName(classrooms).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -211,7 +211,7 @@ export const MaterialRequestFormDialog = ({
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas</SelectItem>
-                    {classrooms.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    {sortByName(classrooms).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
