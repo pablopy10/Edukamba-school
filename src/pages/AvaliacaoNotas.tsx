@@ -5,6 +5,8 @@ import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useUserRole } from "@/hooks/useUserRole";
+import { useStudentSelf } from "@/hooks/useStudentSelf";
 
 type AssessmentInfo = {
   id: string;
@@ -55,6 +57,9 @@ const avatarClass = (c?: string | null) => avatarColorMap[c ?? "blue"] ?? avatar
 const AvaliacaoNotas = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { role } = useUserRole();
+  const { isStudent, studentId } = useStudentSelf();
+  const readOnly = isStudent || role === "PARENT";
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -104,7 +109,11 @@ const AvaliacaoNotas = () => {
     ]);
 
     const studentList = (stuRes.data ?? []) as Student[];
-    setStudents(studentList);
+    // Students only see their own row.
+    const visible = isStudent && studentId
+      ? studentList.filter((s) => s.id === studentId)
+      : studentList;
+    setStudents(visible);
 
     const map: Record<string, GradeRow> = {};
     studentList.forEach((s) => {
@@ -126,7 +135,7 @@ const AvaliacaoNotas = () => {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [id, isStudent, studentId]);
 
   const filteredStudents = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -157,7 +166,7 @@ const AvaliacaoNotas = () => {
   };
 
   const handleSave = async () => {
-    if (!assessment) return;
+    if (!assessment || readOnly) return;
     setSaving(true);
 
     const toInsert: any[] = [];
@@ -274,6 +283,7 @@ const AvaliacaoNotas = () => {
                 </p>
               </div>
             </div>
+            {!readOnly && (
             <button
               onClick={handleSave}
               disabled={saving}
@@ -282,6 +292,7 @@ const AvaliacaoNotas = () => {
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {saving ? "A guardar..." : "Guardar notas"}
             </button>
+            )}
           </div>
         </div>
 
@@ -363,6 +374,8 @@ const AvaliacaoNotas = () => {
                             value={r?.score ?? ""}
                             onChange={(e) => updateRow(s.id, { score: e.target.value })}
                             placeholder="—"
+                            readOnly={readOnly}
+                            disabled={readOnly}
                             className={cn(
                               "h-10 w-24 rounded-full border bg-background px-4 text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-2",
                               passed && "border-pastel-green-foreground/40 bg-pastel-green/30 focus:ring-pastel-green-foreground/40",
@@ -377,6 +390,8 @@ const AvaliacaoNotas = () => {
                             value={r?.teacher_comment ?? ""}
                             onChange={(e) => updateRow(s.id, { teacher_comment: e.target.value })}
                             placeholder="Comentário (opcional)"
+                            readOnly={readOnly}
+                            disabled={readOnly}
                             className="h-10 w-full rounded-full border border-border bg-background px-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-pastel-blue/40"
                           />
                         </td>
