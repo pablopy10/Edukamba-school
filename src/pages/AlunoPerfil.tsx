@@ -1194,7 +1194,7 @@ const AlunoPerfil = () => {
               <Link to="/presencas" className="text-xs font-medium text-pastel-green-foreground hover:underline">Ver todas</Link>
             </div>
             {attendanceStats.total > 0 && (
-              <div className="grid grid-cols-2 gap-3 border-b border-border p-5 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 border-b border-border p-5 sm:grid-cols-5">
                 <div className="rounded-xl bg-pastel-green/40 p-3">
                   <p className="text-xs text-muted-foreground">Presenças</p>
                   <p className="text-xl font-bold text-foreground">{attendanceStats.present}</p>
@@ -1210,6 +1210,10 @@ const AlunoPerfil = () => {
                 <div className="rounded-xl bg-pastel-blue/40 p-3">
                   <p className="text-xs text-muted-foreground">Justificadas</p>
                   <p className="text-xl font-bold text-foreground">{attendanceStats.justified}</p>
+                </div>
+                <div className="rounded-xl bg-pastel-lilac/40 p-3">
+                  <p className="text-xs text-muted-foreground">Indisciplinares</p>
+                  <p className="text-xl font-bold text-foreground">{attendanceStats.disciplinary}</p>
                 </div>
               </div>
             )}
