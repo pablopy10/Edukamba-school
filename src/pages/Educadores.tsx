@@ -365,6 +365,53 @@ const Educadores = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!viewing} onOpenChange={(o) => !o && setViewing(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Detalhes do Educador</DialogTitle>
+            <DialogDescription>Informações de contacto e alunos associados.</DialogDescription>
+          </DialogHeader>
+          {viewing && (
+            <div className="flex flex-col gap-5">
+              <div className="flex items-center gap-4">
+                <div className={cn("flex h-16 w-16 items-center justify-center rounded-full text-lg font-bold", avatarStyles[colorFor(viewing.profile_id)])}>
+                  {initialsOf(viewing.full_name) || "??"}
+                </div>
+                <div>
+                  <p className="text-base font-semibold text-foreground">{viewing.full_name}</p>
+                  <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Phone className="h-3.5 w-3.5" />
+                    {viewing.phone ?? "—"}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Alunos</p>
+                {viewing.student_names.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Sem alunos associados.</p>
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {viewing.student_names.map((name, idx) => {
+                      const cid = viewing.student_ids[idx]
+                        ? students.find((s) => s.id === viewing.student_ids[idx])?.classroom_id ?? null
+                        : null;
+                      return (
+                        <li key={idx} className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
+                          <span className="text-sm font-medium text-foreground">{name}</span>
+                          <span className="rounded-full bg-pastel-blue/40 px-2.5 py-0.5 text-xs font-semibold text-pastel-blue-foreground">
+                            {classroomName(cid)}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
