@@ -264,7 +264,7 @@ const Turmas = () => {
                     )}
                     {c.grade_level && (
                       <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
-                        {c.grade_level}º ano
+                        {c.grade_level}
                       </span>
                     )}
                     {c.academic_years?.label && (
