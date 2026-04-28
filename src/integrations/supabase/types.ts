@@ -3100,7 +3100,9 @@ export type Database = {
         Args: { _date: string; _school_id: string }
         Returns: string
       }
+      is_parent_of_student: { Args: { _student_id: string }; Returns: boolean }
       is_school_active: { Args: { _school_id: string }; Returns: boolean }
+      is_self_student: { Args: { _student_id: string }; Returns: boolean }
       notify_low_stock_materials: { Args: never; Returns: Json }
       notify_user: {
         Args: {
