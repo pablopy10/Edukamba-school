@@ -88,8 +88,22 @@ export const EarningsCard = () => {
               }}
               formatter={(value: number) => value.toLocaleString("pt-PT", { style: "currency", currency: "AOA", maximumFractionDigits: 0 })}
             />
-            <Area type="monotone" dataKey="income" stroke="hsl(var(--pastel-blue-foreground))" strokeWidth={2.5} fill="url(#incomeFill)" />
-            <Area type="monotone" dataKey="expense" stroke="hsl(var(--pastel-lilac-foreground))" strokeWidth={2.5} fill="url(#expenseFill)" />
+            <Area
+              type="monotone"
+              dataKey="income"
+              name="Recebido"
+              stroke="hsl(var(--pastel-blue-foreground))"
+              strokeWidth={2.5}
+              fill="url(#incomeFill)"
+            />
+            <Area
+              type="monotone"
+              dataKey="expense"
+              name="Previsto"
+              stroke="hsl(var(--pastel-lilac-foreground))"
+              strokeWidth={2.5}
+              fill="url(#expenseFill)"
+            />
           </AreaChart>
         </ResponsiveContainer>
       </div>
