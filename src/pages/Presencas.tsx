@@ -64,7 +64,7 @@ const STATUS_CONFIG: Record<Status, { bg: string; Icon: typeof Check; label: str
   ABSENT: { bg: "bg-destructive text-white", Icon: X, label: "Falta" },
   LATE: { bg: "bg-pastel-yellow text-pastel-yellow-foreground", Icon: Clock, label: "Atrasado" },
   JUSTIFIED: { bg: "bg-pastel-green text-pastel-green-foreground", Icon: Check, label: "Justificado" },
-  DISCIPLINARY: { bg: "bg-pastel-lilac text-pastel-lilac-foreground", Icon: AlertTriangle, label: "Falta indisciplinar" },
+  DISCIPLINARY: { bg: "bg-pastel-lilac text-pastel-lilac-foreground", Icon: AlertTriangle, label: "Falta disciplinar" },
 };
 
 // Build days range for a given month/year and a chosen "week" (1..n)
@@ -148,7 +148,7 @@ const AttendancePopover = ({
           </Button>
           <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={() => handle("DISCIPLINARY")}>
             <span className="flex h-4 w-4 items-center justify-center rounded-full bg-pastel-lilac text-pastel-lilac-foreground"><AlertTriangle className="h-3 w-3" strokeWidth={3} /></span>
-            Falta indisciplinar
+            Falta disciplinar
           </Button>
           {(status === "ABSENT" || status === "LATE" || status === "JUSTIFIED" || status === "DISCIPLINARY") && (
             <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={() => { setOpen(false); onJustify(); }}>
@@ -694,7 +694,7 @@ const Presencas = () => {
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-pastel-lilac text-pastel-lilac-foreground">
               <AlertTriangle className="h-3 w-3" strokeWidth={3} />
             </span>
-            Falta indisciplinar
+            Falta disciplinar
           </div>
           <div className="flex items-center gap-2">
             <span className="text-base">—</span>
