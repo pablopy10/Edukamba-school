@@ -19,7 +19,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-type Option = { id: string; name: string };
+type Option = { id: string; name: string; subjectId?: string | null };
 type TimeSlotRow = {
   id: string;
   shift: "MORNING" | "AFTERNOON" | "EVENING";
