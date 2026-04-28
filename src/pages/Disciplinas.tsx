@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Search, Filter, Plus, Pencil, Trash2, Contact, Loader2 } from "lucide-react";
+import { Search, Filter, Plus, Pencil, Trash2, Contact, Loader2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -10,6 +10,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ExcelImportDialog, type ImportField } from "@/components/shared/ExcelImportDialog";
 
 const colorPalette = ["lilac", "blue", "yellow", "green", "pink"] as const;
 const colorStyles: Record<typeof colorPalette[number], string> = {
@@ -29,6 +30,7 @@ const Disciplinas = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<SubjectRow | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const fetchSubjects = async () => {
     setLoading(true);
@@ -73,6 +75,26 @@ const Disciplinas = () => {
 
   const handleEdit = (s: SubjectRow) => { setEditing(s); setDialogOpen(true); };
   const handleNew = () => { setEditing(null); setDialogOpen(true); };
+
+  const importFields: ImportField[] = [
+    { key: "name", label: "Nome", required: true, aliases: ["disciplina", "nome da disciplina"], example: "Matemática" },
+    { key: "code", label: "Código", aliases: ["codigo", "cod"], example: "MAT-01" },
+  ];
+
+  const handleImportRow = async (row: Record<string, string>) => {
+    const name = row.name?.trim();
+    if (!name) throw new Error("Nome é obrigatório");
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Sessão inválida");
+    const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", user.id).maybeSingle();
+    if (!profile?.school_id) throw new Error("Escola não encontrada");
+    const { error } = await supabase.from("subjects").insert({
+      name,
+      code: row.code?.trim() || null,
+      school_id: profile.school_id,
+    });
+    if (error) throw new Error(error.message);
+  };
 
   const confirmDelete = async () => {
     if (!deleteId) return;
@@ -136,6 +158,13 @@ const Disciplinas = () => {
             >
               <Plus className="h-4 w-4" strokeWidth={2.25} />
               Nova Disciplina
+            </button>
+            <button
+              onClick={() => setImportOpen(true)}
+              className="flex h-11 items-center gap-2 rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
+            >
+              <Upload className="h-4 w-4" strokeWidth={2.25} />
+              Importar Excel
             </button>
           </div>
         </div>
@@ -250,6 +279,17 @@ const Disciplinas = () => {
         onOpenChange={setDialogOpen}
         subject={editing}
         onSaved={fetchSubjects}
+      />
+
+      <ExcelImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="Importar Disciplinas"
+        description="Importe disciplinas a partir de um ficheiro Excel."
+        templateSheetName="Disciplinas"
+        fields={importFields}
+        onImportRow={handleImportRow}
+        onCompleted={fetchSubjects}
       />
 
       <AlertDialog open={!!deleteId} onOpenChange={(v) => !v && setDeleteId(null)}>
