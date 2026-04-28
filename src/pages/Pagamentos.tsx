@@ -442,11 +442,19 @@ const Pagamentos = () => {
 
       // Transport fees + lista de rotas para filtros
       const [{ data: trFees }, { data: rtsList }] = await Promise.all([
-        supabase
+        (isParent
+          ? supabase
+              .from("transport_fees")
+              .select("id, amount_due, due_date, is_paid, month_index, student_id, route_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), route:transport_routes(id, name)")
+              .eq("school_id", sId)
+              .in("student_id", scopedStudentIds)
+              .order("due_date", { ascending: true })
+          : supabase
           .from("transport_fees")
           .select("id, amount_due, due_date, is_paid, month_index, student_id, route_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), route:transport_routes(id, name)")
           .eq("school_id", sId)
-          .order("due_date", { ascending: true }),
+          .order("due_date", { ascending: true })
+        ),
         supabase
           .from("transport_routes")
           .select("id, name")
