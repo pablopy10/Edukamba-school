@@ -209,8 +209,8 @@ const Material = () => {
           {[
             { label: "Itens em Stock", value: stats.totalItens, color: "bg-pastel-blue text-pastel-blue-foreground" },
             { label: "Stock Baixo", value: stats.baixoStock, color: "bg-pastel-pink text-pastel-pink-foreground" },
-            { label: "Pedidos Pendentes", value: stats.pendentes, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-            { label: "Pedidos Entregues", value: stats.entregues, color: "bg-pastel-green text-pastel-green-foreground" },
+            { label: "Pedidos ativos", value: stats.pedidosAtivos, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+            { label: "Materiais entregues", value: stats.entregasMarcadas, color: "bg-pastel-green text-pastel-green-foreground" },
           ].map((s) => (
             <div key={s.label} className="rounded-2xl bg-card p-5 shadow-card">
               <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", s.color)}>{s.label}</span>
