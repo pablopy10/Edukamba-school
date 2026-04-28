@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { sortByName } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -279,7 +280,7 @@ export const AssessmentFormDialog = ({
             <Select value={form.classroom_id ?? ""} onValueChange={(v) => update("classroom_id", v)}>
               <SelectTrigger><SelectValue placeholder="Escolher turma" /></SelectTrigger>
               <SelectContent>
-                {classrooms.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                {sortByName(classrooms).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

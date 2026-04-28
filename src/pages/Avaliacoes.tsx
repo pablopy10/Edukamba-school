@@ -19,7 +19,7 @@ import {
   AlertTriangle,
   Loader2,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, sortByName } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -393,7 +393,7 @@ const Avaliacoes = () => {
               <SelectTrigger className="h-10 rounded-full"><SelectValue placeholder="Turma" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas as turmas</SelectItem>
-                {classrooms.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                {sortByName(classrooms).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={termFilter} onValueChange={setTermFilter}>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Plus, Settings2, User, MapPin, Pencil, Trash2, Sun, Sunset, Moon, Loader2, AlertCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, sortByName } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";

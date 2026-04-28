@@ -18,7 +18,7 @@ import {
   Calendar,
   ShieldAlert,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, sortByName } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";

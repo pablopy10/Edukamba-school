@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { sortByName } from "@/lib/utils";
 import {
   Select,
   SelectContent,

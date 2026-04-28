@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, AlertTriangle } from "lucide-react";
+import { sortByName } from "@/lib/utils";
 
 export type ScheduleRecord = {
   id?: string;
@@ -170,7 +171,7 @@ export const ScheduleFormDialog = ({
             <Select value={form.classroom_id ?? ""} onValueChange={(v) => update("classroom_id", v)}>
               <SelectTrigger><SelectValue placeholder="Escolher turma" /></SelectTrigger>
               <SelectContent>
-                {classrooms.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                {sortByName(classrooms).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

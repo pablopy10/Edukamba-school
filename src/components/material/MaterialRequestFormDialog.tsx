@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { sortByName } from "@/lib/utils";
 
 export type RequestRow = {
   id: string;
@@ -197,7 +198,7 @@ export const MaterialRequestFormDialog = ({
               <Select value={form.classroom_id} onValueChange={(v) => setForm({ ...form, classroom_id: v })}>
                 <SelectTrigger><SelectValue placeholder="Selecionar turma..." /></SelectTrigger>
                 <SelectContent>
-                  {classrooms.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  {sortByName(classrooms).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -211,7 +212,7 @@ export const MaterialRequestFormDialog = ({
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas</SelectItem>
-                    {classrooms.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    {sortByName(classrooms).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
