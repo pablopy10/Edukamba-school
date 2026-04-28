@@ -168,6 +168,8 @@ const StatPill = ({ label, value, color }: { label: string; value: string; color
 
 const AlunoPerfil = () => {
   const { id } = useParams<{ id: string }>();
+  const { role } = useUserRole();
+  const isTeacher = role === "TEACHER";
   const [loading, setLoading] = useState(true);
   const [student, setStudent] = useState<StudentRow | null>(null);
   const [guardian, setGuardian] = useState<{ full_name: string; phone: string | null } | null>(null);
