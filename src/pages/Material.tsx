@@ -283,8 +283,8 @@ const Material = () => {
         </div>
 
         {/* Stats */}
-        <div className={cn("grid gap-4", isParent ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-4")}>
-          {(isParent
+        <div className={cn("grid gap-4", (isParent || isTeacher) ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-4")}>
+          {((isParent || isTeacher)
             ? [
                 { label: "Pedidos ativos", value: stats.pedidosAtivos, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
                 { label: "Materiais entregues", value: stats.entregasMarcadas, color: "bg-pastel-green text-pastel-green-foreground" },
