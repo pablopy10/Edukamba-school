@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,13 +17,21 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet, AlertCircle, RefreshCw, Repeat, Power } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet, AlertCircle, RefreshCw, Repeat, Power, FileSpreadsheet } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   LineChart, Line,
 } from "recharts";
+import { useUserRole } from "@/hooks/useUserRole";
+import {
+  buildErpExportRows,
+  downloadRawXlsx,
+  loadFeeMetaForPayments,
+  resolveStudentsForPayments,
+  type ErpConfigFields,
+} from "@/lib/erpExport";
 
 type Expense = {
   id: string;
@@ -108,6 +117,28 @@ const Financas = () => {
   const [deleteRec, setDeleteRec] = useState<string | null>(null);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
 
+  const { role } = useUserRole();
+  const staffCanExportErp =
+    role === "ADMIN" || role === "SUPER_ADMIN" || role === "TEACHER";
+
+  type ErpPaymentLine = {
+    id: string;
+    amount_paid: number;
+    method: string | null;
+    payment_date: string | null;
+    erp_exported_at: string | null;
+    student_fee_id: string | null;
+    activity_fee_id: string | null;
+    transport_fee_id: string | null;
+    enrollment_fee_id: string | null;
+    studentName: string;
+  };
+
+  const [erpPaymentLines, setErpPaymentLines] = useState<ErpPaymentLine[]>([]);
+  const [erpLoading, setErpLoading] = useState(false);
+  const [erpExportFilter, setErpExportFilter] = useState<"all" | "pending" | "exported">("all");
+  const [erpExporting, setErpExporting] = useState(false);
+
   const fetchAll = async () => {
     setLoading(true);
     const { data: profile } = await supabase
@@ -158,6 +189,108 @@ const Financas = () => {
   };
 
   useEffect(() => { fetchAll(); /* eslint-disable-next-line */ }, [year]);
+
+  const loadErpPayments = useCallback(async () => {
+    if (!schoolId || !staffCanExportErp) {
+      setErpPaymentLines([]);
+      return;
+    }
+    setErpLoading(true);
+    const start = `${year}-01-01`;
+    const end = `${year}-12-31`;
+    const { data, error } = await supabase
+      .from("payments")
+      .select(
+        "id, amount_paid, method, payment_date, erp_exported_at, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id",
+      )
+      .eq("school_id", schoolId)
+      .eq("status", "validado")
+      .gte("payment_date", start)
+      .lte("payment_date", end)
+      .order("payment_date", { ascending: false });
+
+    if (error) {
+      toast({ title: "Erro a carregar pagamentos", description: error.message, variant: "destructive" });
+      setErpLoading(false);
+      return;
+    }
+    const rows = (data ?? []) as Omit<ErpPaymentLine, "studentName">[];
+    const studentMap = await resolveStudentsForPayments(supabase, rows);
+    const enriched: ErpPaymentLine[] = rows.map((p) => {
+      let st;
+      if (p.student_fee_id) st = studentMap.get(`sf:${p.student_fee_id}`);
+      else if (p.activity_fee_id) st = studentMap.get(`af:${p.activity_fee_id}`);
+      else if (p.transport_fee_id) st = studentMap.get(`tf:${p.transport_fee_id}`);
+      else if (p.enrollment_fee_id) st = studentMap.get(`ef:${p.enrollment_fee_id}`);
+      return { ...p, studentName: st?.full_name ?? "—" };
+    });
+    setErpPaymentLines(enriched);
+    setErpLoading(false);
+  }, [schoolId, year, staffCanExportErp]);
+
+  useEffect(() => {
+    loadErpPayments();
+  }, [loadErpPayments]);
+
+  const filteredErpPayments = useMemo(() => {
+    if (erpExportFilter === "pending") {
+      return erpPaymentLines.filter((p) => !p.erp_exported_at);
+    }
+    if (erpExportFilter === "exported") {
+      return erpPaymentLines.filter((p) => !!p.erp_exported_at);
+    }
+    return erpPaymentLines;
+  }, [erpPaymentLines, erpExportFilter]);
+
+  const exportPaymentsToErp = async () => {
+    if (!schoolId || filteredErpPayments.length === 0) {
+      toast({ title: "Nada a exportar", description: "Não há pagamentos validados no filtro seleccionado.", variant: "destructive" });
+      return;
+    }
+    setErpExporting(true);
+    const { data: cfgRow } = await supabase.from("erp_export_configs").select("*").eq("school_id", schoolId).maybeSingle();
+    const cfg = cfgRow as ErpConfigFields | null;
+
+    const payload = filteredErpPayments.map((p) => ({
+      id: p.id,
+      amount_paid: p.amount_paid,
+      method: p.method,
+      payment_date: p.payment_date,
+      erp_exported_at: p.erp_exported_at,
+      student_fee_id: p.student_fee_id,
+      activity_fee_id: p.activity_fee_id,
+      transport_fee_id: p.transport_fee_id,
+      enrollment_fee_id: p.enrollment_fee_id,
+    }));
+
+    const studentMap = await resolveStudentsForPayments(supabase, payload);
+    const meta = await loadFeeMetaForPayments(supabase, payload);
+    const { headers, rows } = buildErpExportRows(
+      payload,
+      studentMap,
+      cfg,
+      meta.activityCodeByFeeId,
+      meta.enrollmentTypeByFeeId,
+    );
+    const fname = `erp-pagamentos-${year}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    downloadRawXlsx(fname, "Pagamentos", headers, rows);
+
+    const ids = filteredErpPayments.map((p) => p.id);
+    const { error: upErr } = await supabase
+      .from("payments")
+      .update({ erp_exported_at: new Date().toISOString() })
+      .in("id", ids);
+    setErpExporting(false);
+    if (upErr) {
+      toast({ title: "Ficheiro gerado; erro ao marcar exportação", description: upErr.message, variant: "destructive" });
+      return;
+    }
+    toast({
+      title: "Exportação concluída",
+      description: `${ids.length} linha(s). Os registos foram marcados como exportados.`,
+    });
+    await loadErpPayments();
+  };
 
   const expByMonth = useMemo(() => {
     const map: Record<number, number> = {};
@@ -476,10 +609,15 @@ const Financas = () => {
         </div>
 
         <Tabs defaultValue="expenses" className="w-full">
-          <TabsList>
+          <TabsList className="flex h-auto flex-wrap gap-1">
             <TabsTrigger value="expenses">Despesas</TabsTrigger>
             <TabsTrigger value="recurring">Recorrentes</TabsTrigger>
             <TabsTrigger value="categories">Categorias</TabsTrigger>
+            {staffCanExportErp && (
+              <TabsTrigger value="erp-payments" className="gap-1.5">
+                <FileSpreadsheet className="h-3.5 w-3.5" /> Pagamentos ERP
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="expenses" className="space-y-4">
@@ -649,6 +787,101 @@ const Financas = () => {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {staffCanExportErp && (
+            <TabsContent value="erp-payments" className="space-y-4">
+              <Card>
+                <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <CardTitle>Exportação para ERP</CardTitle>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Lista pagamentos validados no ano seleccionado ({year}). Os valores no Excel são números e datas em formato ISO (YYYY-MM-DD), sem formatação extra.
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Configure os nomes das colunas em{" "}
+                      <Link to="/pagamentos" className="font-medium text-primary underline-offset-4 hover:underline">
+                        Pagamentos → Exportação ERP
+                      </Link>
+                      .
+                    </p>
+                  </div>
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                    <Select value={erpExportFilter} onValueChange={(v) => setErpExportFilter(v as typeof erpExportFilter)}>
+                      <SelectTrigger className="w-full sm:w-[220px]">
+                        <SelectValue placeholder="Filtro" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os pagamentos</SelectItem>
+                        <SelectItem value="pending">Ainda não exportados</SelectItem>
+                        <SelectItem value="exported">Já exportados</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      className="gap-2"
+                      disabled={erpExporting || filteredErpPayments.length === 0}
+                      onClick={exportPaymentsToErp}
+                    >
+                      {erpExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+                      Exportar para ERP
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {erpLoading ? (
+                    <div className="flex justify-center py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : filteredErpPayments.length === 0 ? (
+                    <p className="py-10 text-center text-muted-foreground">
+                      Nenhum pagamento validado corresponde ao filtro neste ano.
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-left text-muted-foreground">
+                            <th className="py-2 px-2">Data</th>
+                            <th className="py-2 px-2">Aluno</th>
+                            <th className="py-2 px-2">Valor</th>
+                            <th className="py-2 px-2">Método</th>
+                            <th className="py-2 px-2">Status de exportação</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredErpPayments.map((p) => (
+                            <tr key={p.id} className="border-b hover:bg-muted/30">
+                              <td className="py-2 px-2 whitespace-nowrap font-mono text-xs">
+                                {p.payment_date ? p.payment_date.slice(0, 10) : "—"}
+                              </td>
+                              <td className="py-2 px-2 font-medium">{p.studentName}</td>
+                              <td className="py-2 px-2">{fmtAOA(Number(p.amount_paid))}</td>
+                              <td className="py-2 px-2">{p.method ?? "—"}</td>
+                              <td className="py-2 px-2">
+                                {p.erp_exported_at ? (
+                                  <Badge variant="secondary" className="font-normal">
+                                    Exportado em{" "}
+                                    {new Date(p.erp_exported_at).toLocaleString("pt-PT", {
+                                      dateStyle: "short",
+                                      timeStyle: "short",
+                                    })}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="border-amber-500/50 text-amber-800 dark:text-amber-200">
+                                    Pendente
+                                  </Badge>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
         </Tabs>
       </div>
 

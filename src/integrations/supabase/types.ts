@@ -846,6 +846,59 @@ export type Database = {
           },
         ]
       }
+      erp_export_configs: {
+        Row: {
+          created_at: string
+          default_article_code_propina: string | null
+          header_amount_paid: string | null
+          header_article_code: string | null
+          header_payment_date: string | null
+          header_payment_method: string | null
+          header_student_id: string | null
+          header_student_name: string | null
+          header_tax_id: string | null
+          id: string
+          school_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_article_code_propina?: string | null
+          header_amount_paid?: string | null
+          header_article_code?: string | null
+          header_payment_date?: string | null
+          header_payment_method?: string | null
+          header_student_id?: string | null
+          header_student_name?: string | null
+          header_tax_id?: string | null
+          id?: string
+          school_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_article_code_propina?: string | null
+          header_amount_paid?: string | null
+          header_article_code?: string | null
+          header_payment_date?: string | null
+          header_payment_method?: string | null
+          header_student_id?: string | null
+          header_student_name?: string | null
+          header_tax_id?: string | null
+          id?: string
+          school_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "erp_export_configs_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: true
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           audience: string | null
@@ -1691,6 +1744,7 @@ export type Database = {
           activity_fee_id: string | null
           amount_paid: number
           enrollment_fee_id: string | null
+          erp_exported_at: string | null
           id: string
           method: string | null
           notes: string | null
@@ -1709,6 +1763,7 @@ export type Database = {
           activity_fee_id?: string | null
           amount_paid: number
           enrollment_fee_id?: string | null
+          erp_exported_at?: string | null
           id?: string
           method?: string | null
           notes?: string | null
@@ -1727,6 +1782,7 @@ export type Database = {
           activity_fee_id?: string | null
           amount_paid?: number
           enrollment_fee_id?: string | null
+          erp_exported_at?: string | null
           id?: string
           method?: string | null
           notes?: string | null
@@ -2549,6 +2605,7 @@ export type Database = {
           parent_id: string | null
           phone: string | null
           school_id: string | null
+          tax_id: string | null
           updated_at: string
           user_id: string | null
         }
@@ -2565,6 +2622,7 @@ export type Database = {
           parent_id?: string | null
           phone?: string | null
           school_id?: string | null
+          tax_id?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -2581,6 +2639,7 @@ export type Database = {
           parent_id?: string | null
           phone?: string | null
           school_id?: string | null
+          tax_id?: string | null
           updated_at?: string
           user_id?: string | null
         }

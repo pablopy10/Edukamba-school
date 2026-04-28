@@ -16,7 +16,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap, FileSpreadsheet } from "lucide-react";
+import { ErpExportMappingSection } from "@/components/pagamentos/ErpExportMappingSection";
 import { Textarea } from "@/components/ui/textarea";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
 import { useParentChildren } from "@/hooks/useParentChildren";
@@ -1361,6 +1362,11 @@ const Pagamentos = () => {
             <TabsTrigger value="transport-fees">Transporte</TabsTrigger>
             {!isParent && <TabsTrigger value="family">Descontos por familiar</TabsTrigger>}
             {!isParent && <TabsTrigger value="overrides">Descontos por aluno</TabsTrigger>}
+            {!isParent && (
+              <TabsTrigger value="erp-export" className="gap-1.5">
+                <FileSpreadsheet className="h-3.5 w-3.5" /> Exportação ERP
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* FEES TAB */}
@@ -2424,6 +2430,10 @@ const Pagamentos = () => {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="erp-export" className="space-y-4">
+            <ErpExportMappingSection schoolId={schoolId} />
           </TabsContent>
         </Tabs>
       </div>
