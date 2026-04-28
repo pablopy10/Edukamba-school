@@ -16,7 +16,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
 import { useParentChildren } from "@/hooks/useParentChildren";
@@ -77,6 +77,7 @@ type PaymentListRow = {
   student_fee_id: string | null;
   activity_fee_id: string | null;
   transport_fee_id: string | null;
+  enrollment_fee_id?: string | null;
   amount_paid: number;
   method: string | null;
   status: string;
@@ -125,6 +126,25 @@ type TransportFeeRow = {
     classroom?: { id: string; name: string } | null;
   } | null;
   route?: { id: string; name: string } | null;
+};
+
+type EnrollmentFeeRow = {
+  id: string;
+  amount_due: number;
+  due_date: string;
+  is_paid: boolean | null;
+  fee_type: "NEW" | "RENEWAL";
+  student_id: string;
+  enrollment_id: string | null;
+  academic_year_id: string | null;
+  student?: {
+    id: string;
+    full_name: string;
+    parent_id: string | null;
+    classroom_id: string | null;
+    classroom?: { id: string; name: string } | null;
+  } | null;
+  academic_year?: { id: string; label: string } | null;
 };
 
 const fmtAOA = (n: number) =>
