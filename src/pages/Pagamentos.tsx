@@ -1331,7 +1331,7 @@ const Pagamentos = () => {
                               </td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
-                                  {pendingValidation && pay && (
+                                  {pendingValidation && pay && !isParent && (
                                     <>
                                       {pay.proof_url && (
                                         <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
@@ -1361,12 +1361,14 @@ const Pagamentos = () => {
                                   {!f.is_paid && !pendingValidation && (
                                     <>
                                       <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForFee(f)}>
-                                        <Upload className="h-3.5 w-3.5" /> Registar pagamento
+                                        <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
                                       </Button>
-                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => sendReminder(f)} disabled={remindingFeeId === f.id || !f.student?.parent_id}>
-                                        {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                                        Cobrar
-                                      </Button>
+                                      {!isParent && (
+                                        <Button size="sm" variant="outline" className="gap-2" onClick={() => sendReminder(f)} disabled={remindingFeeId === f.id || !f.student?.parent_id}>
+                                          {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                          Cobrar
+                                        </Button>
+                                      )}
                                     </>
                                   )}
                                 </div>
@@ -1557,7 +1559,7 @@ const Pagamentos = () => {
                               </td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
-                                  {pendingValidation && pay && (
+                                  {pendingValidation && pay && !isParent && (
                                     <>
                                       {pay.proof_url && (
                                         <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
@@ -1587,12 +1589,14 @@ const Pagamentos = () => {
                                   {!f.is_paid && !pendingValidation && (
                                     <>
                                       <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForActivity(f)}>
-                                        <Upload className="h-3.5 w-3.5" /> Registar pagamento
+                                        <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
                                       </Button>
-                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => sendActivityReminder(f)} disabled={remindingActFeeId === f.id || !f.student?.parent_id}>
-                                        {remindingActFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                                        Cobrar
-                                      </Button>
+                                      {!isParent && (
+                                        <Button size="sm" variant="outline" className="gap-2" onClick={() => sendActivityReminder(f)} disabled={remindingActFeeId === f.id || !f.student?.parent_id}>
+                                          {remindingActFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                          Cobrar
+                                        </Button>
+                                      )}
                                     </>
                                   )}
                                 </div>
@@ -1783,7 +1787,7 @@ const Pagamentos = () => {
                               </td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
-                                  {pendingValidation && pay && (
+                                  {pendingValidation && pay && !isParent && (
                                     <>
                                       {pay.proof_url && (
                                         <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
@@ -1813,12 +1817,14 @@ const Pagamentos = () => {
                                   {!f.is_paid && !pendingValidation && (
                                     <>
                                       <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForTransport(f)}>
-                                        <Upload className="h-3.5 w-3.5" /> Registar pagamento
+                                        <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
                                       </Button>
-                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => sendTransportReminder(f)} disabled={remindingTrFeeId === f.id || !f.student?.parent_id}>
-                                        {remindingTrFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                                        Cobrar
-                                      </Button>
+                                      {!isParent && (
+                                        <Button size="sm" variant="outline" className="gap-2" onClick={() => sendTransportReminder(f)} disabled={remindingTrFeeId === f.id || !f.student?.parent_id}>
+                                          {remindingTrFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                          Cobrar
+                                        </Button>
+                                      )}
                                     </>
                                   )}
                                 </div>
