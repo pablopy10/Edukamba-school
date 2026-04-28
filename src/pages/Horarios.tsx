@@ -500,6 +500,7 @@ const SlotRow = ({
   onDelete,
   onCreate,
   onDropMove,
+  readOnly,
 }: {
   slot: TimeSlotRow;
   schedules: ScheduleRow[];
@@ -512,6 +513,7 @@ const SlotRow = ({
   onDelete: (id: string) => void;
   onCreate: (day: number, slot: TimeSlotRow) => void;
   onDropMove: (scheduleId: string, day: number, slot: TimeSlotRow) => void;
+  readOnly?: boolean;
 }) => {
   const [dragOver, setDragOver] = useState<number | null>(null);
 
@@ -557,6 +559,14 @@ const SlotRow = ({
         const cells = cellsByDay(d.value);
         const isOver = dragOver === d.value;
         if (cells.length === 0) {
+          if (readOnly) {
+            return (
+              <div
+                key={d.value}
+                className="flex min-h-[100px] items-center justify-center rounded-xl border border-dashed border-border bg-muted/10 text-xs text-muted-foreground/60"
+              />
+            );
+          }
           return (
             <button
               key={d.value}
@@ -578,12 +588,12 @@ const SlotRow = ({
         return (
           <div
             key={d.value}
-            onDragOver={(e) => handleDragOver(e, d.value)}
-            onDragLeave={() => setDragOver(null)}
-            onDrop={(e) => handleDrop(e, d.value)}
+            onDragOver={readOnly ? undefined : (e) => handleDragOver(e, d.value)}
+            onDragLeave={readOnly ? undefined : () => setDragOver(null)}
+            onDrop={readOnly ? undefined : (e) => handleDrop(e, d.value)}
             className={cn(
               "flex min-h-[100px] flex-col gap-1 rounded-xl transition-colors",
-              isOver && "bg-primary/10 ring-2 ring-primary/40",
+              !readOnly && isOver && "bg-primary/10 ring-2 ring-primary/40",
             )}
           >
             {cells.map((s) => (
@@ -597,6 +607,7 @@ const SlotRow = ({
                 hasConflict={conflicts.has(s.id)}
                 onEdit={() => onEdit(s)}
                 onDelete={() => onDelete(s.id)}
+                readOnly={readOnly}
               />
             ))}
           </div>
@@ -615,6 +626,7 @@ const ScheduleCell = ({
   hasConflict,
   onEdit,
   onDelete,
+  readOnly,
 }: {
   schedule: ScheduleRow;
   subjectName: string;
@@ -624,16 +636,18 @@ const ScheduleCell = ({
   hasConflict: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  readOnly?: boolean;
 }) => {
   return (
     <div
-      draggable
-      onDragStart={(e) => {
+      draggable={!readOnly}
+      onDragStart={readOnly ? undefined : (e) => {
         e.dataTransfer.setData("application/x-schedule-id", schedule.id);
         e.dataTransfer.effectAllowed = "move";
       }}
       className={cn(
-        "group relative flex flex-1 cursor-grab flex-col justify-between rounded-xl p-3 text-left active:cursor-grabbing",
+        "group relative flex flex-1 flex-col justify-between rounded-xl p-3 text-left",
+        readOnly ? "cursor-default" : "cursor-grab active:cursor-grabbing",
         colorClass,
         hasConflict && "ring-2 ring-destructive ring-offset-2 ring-offset-card",
       )}
@@ -643,6 +657,7 @@ const ScheduleCell = ({
           <p className="truncate text-sm font-bold leading-tight">{subjectName}</p>
           <p className="truncate text-[11px] opacity-80">{classroomName} · {schedule.start_time}–{schedule.end_time}</p>
         </div>
+        {!readOnly && (
         <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           <button onClick={onEdit} className="rounded-md bg-background/40 p-1 hover:bg-background/70" aria-label="Editar">
             <Pencil className="h-3 w-3" />
@@ -651,6 +666,7 @@ const ScheduleCell = ({
             <Trash2 className="h-3 w-3" />
           </button>
         </div>
+        )}
       </div>
       <div className="mt-1 flex flex-col gap-0.5 text-[11px] opacity-80">
         <span className="inline-flex items-center gap-1 truncate">
