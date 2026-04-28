@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Search, Plus, Mail, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Search, Plus, Mail, Pencil, Trash2, Loader2, Eye, Phone } from "lucide-react";
 import { cn, sortByName } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,6 +9,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "@/hooks/use-toast";
 import { GuardianFormDialog, GuardianRow } from "@/components/educadores/GuardianFormDialog";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 type ClassroomOpt = { id: string; name: string };
 type StudentOpt = { id: string; full_name: string; classroom_id: string | null; parent_id: string | null };
@@ -40,6 +41,7 @@ const Educadores = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<GuardianRow | null>(null);
   const [deleting, setDeleting] = useState<GuardianRow | null>(null);
+  const [viewing, setViewing] = useState<GuardianRow | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -309,6 +311,9 @@ const Educadores = () => {
                       </td>
                       <td className="py-4 pr-5">
                         <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => setViewing(g)} title="Ver detalhes" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-lilac/50 hover:text-pastel-lilac-foreground">
+                            <Eye className="h-4 w-4" strokeWidth={1.75} />
+                          </button>
                           <button onClick={() => openChat(g.profile_id)} title="Conversar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/40 hover:text-pastel-blue-foreground">
                             <Mail className="h-4 w-4" strokeWidth={1.75} />
                           </button>
@@ -360,6 +365,53 @@ const Educadores = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!viewing} onOpenChange={(o) => !o && setViewing(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Detalhes do Educador</DialogTitle>
+            <DialogDescription>Informações de contacto e alunos associados.</DialogDescription>
+          </DialogHeader>
+          {viewing && (
+            <div className="flex flex-col gap-5">
+              <div className="flex items-center gap-4">
+                <div className={cn("flex h-16 w-16 items-center justify-center rounded-full text-lg font-bold", avatarStyles[colorFor(viewing.profile_id)])}>
+                  {initialsOf(viewing.full_name) || "??"}
+                </div>
+                <div>
+                  <p className="text-base font-semibold text-foreground">{viewing.full_name}</p>
+                  <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Phone className="h-3.5 w-3.5" />
+                    {viewing.phone ?? "—"}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Alunos</p>
+                {viewing.student_names.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Sem alunos associados.</p>
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {viewing.student_names.map((name, idx) => {
+                      const cid = viewing.student_ids[idx]
+                        ? students.find((s) => s.id === viewing.student_ids[idx])?.classroom_id ?? null
+                        : null;
+                      return (
+                        <li key={idx} className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
+                          <span className="text-sm font-medium text-foreground">{name}</span>
+                          <span className="rounded-full bg-pastel-blue/40 px-2.5 py-0.5 text-xs font-semibold text-pastel-blue-foreground">
+                            {classroomName(cid)}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
