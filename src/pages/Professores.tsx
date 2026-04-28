@@ -78,11 +78,17 @@ const Professores = () => {
 
   const handleDelete = async () => {
     if (!deleting) return;
-    const { error } = await supabase.from("teachers").delete().eq("id", deleting.id);
-    if (error) {
-      toast({ title: "Erro a eliminar", description: error.message, variant: "destructive" });
+    const { data, error } = await supabase.functions.invoke("delete-teacher", {
+      body: { teacher_id: deleting.id },
+    });
+    if (error || (data as any)?.error) {
+      toast({
+        title: "Erro a eliminar",
+        description: (data as any)?.error ?? error?.message,
+        variant: "destructive",
+      });
     } else {
-      toast({ title: "Professor removido" });
+      toast({ title: "Professor removido", description: "Conta de acesso também foi eliminada." });
       setDeleting(null);
       load();
     }
