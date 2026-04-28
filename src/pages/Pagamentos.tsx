@@ -486,7 +486,7 @@ const Pagamentos = () => {
     setLoading(false);
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { if (!parentLoading) fetchAll(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [parentLoading, isParent, childIds.join(",")]);
 
   // Fee rules
   const openNewRule = () => {
