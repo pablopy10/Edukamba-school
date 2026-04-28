@@ -61,7 +61,7 @@ export const Sidebar = () => {
   const visibleMenu = menu.filter((item) => {
     // Module toggles still apply
     if (item.moduleKey && !modules[item.moduleKey]) return false;
-    // While role still loading, render nothing to avoid flashing the full menu
+    // While role still loading, render nothing here (skeleton is shown instead)
     if (roleLoading || role === null) return false;
     if (isPrivileged) return true;
     const allowed = roleAllowedRoutes[role as Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">] ?? [];
@@ -116,12 +116,26 @@ export const Sidebar = () => {
 
       <div className="flex flex-col gap-1">
         <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Menu</p>
-        {visibleMenu.map(renderItem)}
+        {roleLoading || role === null
+          ? Array.from({ length: 8 }).map((_, i) => (
+              <div
+                key={`menu-skel-${i}`}
+                className="mx-1 my-1 h-9 rounded-xl bg-sidebar-accent/40 animate-pulse"
+              />
+            ))
+          : visibleMenu.map(renderItem)}
       </div>
 
       <div className="mt-auto flex flex-col gap-1">
         <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Outros</p>
-        {visibleOther.map(renderItem)}
+        {roleLoading || role === null
+          ? Array.from({ length: 2 }).map((_, i) => (
+              <div
+                key={`other-skel-${i}`}
+                className="mx-1 my-1 h-9 rounded-xl bg-sidebar-accent/40 animate-pulse"
+              />
+            ))
+          : visibleOther.map(renderItem)}
         <button
           type="button"
           onClick={handleLogout}
