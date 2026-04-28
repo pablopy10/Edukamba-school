@@ -2061,6 +2061,230 @@ const Pagamentos = () => {
             </Card>
           </TabsContent>
 
+          {/* ENROLLMENT FEES TAB */}
+          <TabsContent value="enrollment-fees" className="space-y-4">
+            {!isParent && (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total recebido</CardTitle></CardHeader>
+                <CardContent><p className="text-2xl font-bold text-pastel-green-foreground">{fmtAOA(enrollmentFeeStats.paid)}</p></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em dívida</CardTitle></CardHeader>
+                <CardContent><p className="text-2xl font-bold text-pastel-yellow-foreground">{fmtAOA(enrollmentFeeStats.pending)}</p></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em atraso</CardTitle></CardHeader>
+                <CardContent><p className="text-2xl font-bold text-destructive">{fmtAOA(enrollmentFeeStats.overdue)}</p></CardContent>
+              </Card>
+            </div>
+            )}
+
+            {!isParent && pendingEnrollmentValidations.length > 0 && (
+              <Card className="border-pastel-blue/60">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <FileText className="h-4 w-4" /> Comprovativos a validar
+                    <Badge variant="secondary">{pendingEnrollmentValidations.length}</Badge>
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">Comprovativos de matrícula/renovação enviados pelos educadores.</p>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="py-2 px-2">Aluno</th>
+                          <th className="py-2 px-2">Tipo</th>
+                          <th className="py-2 px-2">Valor pago</th>
+                          <th className="py-2 px-2">Método</th>
+                          <th className="py-2 px-2">Submetido</th>
+                          <th className="py-2 px-2 text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pendingEnrollmentValidations.map(({ fee, payment }) => (
+                          <tr key={payment.id} className="border-b hover:bg-muted/30">
+                            <td className="py-2 px-2 font-medium">{fee.student?.full_name ?? "—"}</td>
+                            <td className="py-2 px-2">{fee.fee_type === "RENEWAL" ? "Renovação" : "Matrícula"}</td>
+                            <td className="py-2 px-2 font-semibold">{fmtAOA(Number(payment.amount_paid))}</td>
+                            <td className="py-2 px-2 capitalize text-muted-foreground">{payment.method ?? "—"}</td>
+                            <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString("pt-PT") : "—"}</td>
+                            <td className="py-2 px-2">
+                              <div className="flex flex-wrap justify-end gap-2">
+                                {payment.proof_url && (
+                                  <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(payment.proof_url!)}>
+                                    <Eye className="h-3.5 w-3.5" /> Ver
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                                  disabled={validatingId === payment.id}
+                                  onClick={() => validateEnrollmentPayment(fee, payment)}
+                                >
+                                  {validatingId === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                  Validar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1 text-destructive"
+                                  disabled={validatingId === payment.id}
+                                  onClick={() => { setRejectDialog(payment); setRejectReason(""); }}
+                                >
+                                  <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><GraduationCap className="h-4 w-4" /> Custos de matrícula e renovação</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">Custos únicos cobrados ao matricular um aluno ou ao renovar a matrícula num novo ano letivo.</p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input className="pl-9" placeholder="Pesquisar aluno..." value={enSearch} onChange={(e) => setEnSearch(e.target.value)} />
+                  </div>
+                  <Select value={enFilter} onValueChange={(v) => setEnFilter(v as typeof enFilter)}>
+                    <SelectTrigger className="md:w-44"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="pending">Não pagas</SelectItem>
+                      <SelectItem value="overdue">Em atraso</SelectItem>
+                      <SelectItem value="paid">Pagas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={enYearFilter} onValueChange={setEnYearFilter}>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Ano letivo" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os anos</SelectItem>
+                      {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={enTypeFilter} onValueChange={(v) => setEnTypeFilter(v as typeof enTypeFilter)}>
+                    <SelectTrigger className="md:w-44"><SelectValue placeholder="Tipo" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os tipos</SelectItem>
+                      <SelectItem value="NEW">Matrícula nova</SelectItem>
+                      <SelectItem value="RENEWAL">Renovação</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {loading ? (
+                  <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                ) : filteredEnrollmentFees.length === 0 ? (
+                  <p className="text-center py-10 text-muted-foreground">Sem custos de matrícula a apresentar.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="py-2 px-2">Aluno</th>
+                          <th className="py-2 px-2">Tipo</th>
+                          <th className="py-2 px-2">Ano letivo</th>
+                          <th className="py-2 px-2">Vencimento</th>
+                          <th className="py-2 px-2">Valor</th>
+                          <th className="py-2 px-2">Estado</th>
+                          <th className="py-2 px-2 text-right">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredEnrollmentFees.slice(0, 200).map((f) => {
+                          const overdue = !f.is_paid && new Date(f.due_date).getTime() < Date.now();
+                          const pay = latestPaymentByEnrollmentFee.get(f.id);
+                          const pendingValidation = !!pay && pay.status === "pendente";
+                          const rejected = !!pay && pay.status === "rejeitado";
+                          return (
+                            <tr key={f.id} className="border-b hover:bg-muted/30">
+                              <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
+                              <td className="py-2 px-2">{f.fee_type === "RENEWAL" ? "Renovação" : "Matrícula"}</td>
+                              <td className="py-2 px-2 text-muted-foreground">{f.academic_year?.label ?? "—"}</td>
+                              <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
+                              <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
+                              <td className="py-2 px-2">
+                                {f.is_paid ? (
+                                  <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">Pago</Badge>
+                                ) : pendingValidation ? (
+                                  <Badge className="bg-pastel-blue text-pastel-blue-foreground hover:bg-pastel-blue">A validar</Badge>
+                                ) : rejected ? (
+                                  <Badge variant="outline" className="border-destructive text-destructive">Rejeitado</Badge>
+                                ) : overdue ? (
+                                  <Badge variant="destructive">Em atraso</Badge>
+                                ) : (
+                                  <Badge variant="secondary">Pendente</Badge>
+                                )}
+                              </td>
+                              <td className="py-2 px-2 text-right">
+                                <div className="flex flex-wrap justify-end gap-2">
+                                  {pendingValidation && pay && !isParent && (
+                                    <>
+                                      {pay.proof_url && (
+                                        <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
+                                          <Eye className="h-3.5 w-3.5" /> Ver
+                                        </Button>
+                                      )}
+                                      <Button
+                                        size="sm"
+                                        className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                                        disabled={validatingId === pay.id}
+                                        onClick={() => validateEnrollmentPayment(f, pay)}
+                                      >
+                                        {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                        Validar
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="gap-1 text-destructive"
+                                        disabled={validatingId === pay.id}
+                                        onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
+                                      >
+                                        <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                      </Button>
+                                    </>
+                                  )}
+                                  {!f.is_paid && !pendingValidation && (
+                                    <>
+                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForEnrollment(f)}>
+                                        <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
+                                      </Button>
+                                      {!isParent && (
+                                        <Button size="sm" variant="outline" className="gap-2" onClick={() => sendEnrollmentReminder(f)} disabled={remindingEnFeeId === f.id || !f.student?.parent_id}>
+                                          {remindingEnFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                          Cobrar
+                                        </Button>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {filteredEnrollmentFees.length > 200 && (
+                      <p className="text-xs text-muted-foreground text-center py-3">A mostrar 200 de {filteredEnrollmentFees.length}. Refina os filtros para ver os restantes.</p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* RULES TAB */}
           {!isParent && (
           <TabsContent value="rules" className="space-y-4">
