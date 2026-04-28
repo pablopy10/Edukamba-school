@@ -380,7 +380,7 @@ const Presencas = () => {
   };
 
   const stats = useMemo(() => {
-    let present = 0, absent = 0, late = 0, total = 0;
+    let present = 0, absent = 0, late = 0, disciplinary = 0, total = 0;
     students.forEach((s) => {
       visibleDays.forEach((d) => {
         const isWk = d.getDay() === 0 || d.getDay() === 6;
@@ -390,12 +390,14 @@ const Presencas = () => {
         if (row?.status === "PRESENT") present++;
         else if (row?.status === "ABSENT") absent++;
         else if (row?.status === "LATE") late++;
+        else if (row?.status === "DISCIPLINARY") disciplinary++;
       });
     });
     return {
       present,
       absent,
       late,
+      disciplinary,
       rate: total ? Math.round((present / total) * 100) : 0,
     };
   }, [students, visibleDays, attendance]);
