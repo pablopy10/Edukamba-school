@@ -17,6 +17,7 @@ import { MaterialFormDialog, type MaterialRow } from "@/components/material/Mate
 import { MaterialRequestFormDialog, type RequestRow } from "@/components/material/MaterialRequestFormDialog";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
+import { useStudentSelf } from "@/hooks/useStudentSelf";
 
 type Category = "papelaria" | "laboratorio" | "artes" | "desporto" | "tecnologia";
 
@@ -45,6 +46,7 @@ const Material = () => {
   const { user } = useAuth();
   const { isParent, childIds, classroomIds, selectedChild } = useParentChildren();
   const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
+  const { isStudent, studentId, classroomId: studentClassroomId } = useStudentSelf();
   const [tab, setTab] = useState<Tab>("stock");
   const [loading, setLoading] = useState(true);
   const [schoolId, setSchoolId] = useState<string | null>(null);
@@ -75,8 +77,8 @@ const Material = () => {
   const [deliveryDialog, setDeliveryDialog] = useState<RequestRow | null>(null);
 
   const isAdmin = userRole === "ADMIN";
-  const canMarkDeliveries = userRole === "ADMIN" || userRole === "TEACHER";
-  const canRequest = userRole === "ADMIN" || userRole === "TEACHER";
+  const canMarkDeliveries = (userRole === "ADMIN" || userRole === "TEACHER") && !isStudent;
+  const canRequest = (userRole === "ADMIN" || userRole === "TEACHER") && !isStudent;
 
   // Parents never see stock; force them onto the requests tab.
   useEffect(() => {
@@ -87,6 +89,11 @@ const Material = () => {
   useEffect(() => {
     if (isTeacher && tab !== "pedidos") setTab("pedidos");
   }, [isTeacher, tab]);
+
+  // Students never see stock either.
+  useEffect(() => {
+    if (isStudent && tab !== "pedidos") setTab("pedidos");
+  }, [isStudent, tab]);
 
   const loadAll = async () => {
     if (!user) return;
@@ -216,6 +223,12 @@ const Material = () => {
       }
       // Teachers only see their own requests.
       if (isTeacher && r.requester_id !== user?.id) return false;
+      // Students see requests targeting them or their classroom.
+      if (isStudent) {
+        const targetsSelf = r.student_id ? r.student_id === studentId : false;
+        const targetsClass = !r.student_id && r.classroom_id ? r.classroom_id === studentClassroomId : false;
+        if (!targetsSelf && !targetsClass) return false;
+      }
       if (reqDeliveryFilter !== "all") {
         const { brought, total } = progressFor(r);
         const isComplete = total > 0 && brought === total;
@@ -231,7 +244,7 @@ const Material = () => {
       }
       return true;
     });
-  }, [requests, search, reqDeliveryFilter, reqTeacherFilter, students, classrooms, deliveries, isParent, childIds, classroomIds, isTeacher, user?.id]);
+  }, [requests, search, reqDeliveryFilter, reqTeacherFilter, students, classrooms, deliveries, isParent, childIds, classroomIds, isTeacher, user?.id, isStudent, studentId, studentClassroomId]);
 
   const removeMaterial = async (id: string) => {
     if (!confirm("Remover este material?")) return;
@@ -263,7 +276,7 @@ const Material = () => {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {!isParent && !isTeacher && (
+            {!isParent && !isTeacher && !isStudent && (
             <div className="inline-flex h-11 items-center rounded-full border border-border bg-card p-1 shadow-soft">
               <button onClick={() => setTab("stock")} className={cn("flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors", tab === "stock" ? "bg-pastel-blue text-pastel-blue-foreground" : "text-muted-foreground hover:text-foreground")}>
                 <Boxes className="h-4 w-4" strokeWidth={1.75} /> Stock
@@ -287,8 +300,8 @@ const Material = () => {
         </div>
 
         {/* Stats */}
-        <div className={cn("grid gap-4", (isParent || isTeacher) ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-4")}>
-          {((isParent || isTeacher)
+        <div className={cn("grid gap-4", (isParent || isTeacher || isStudent) ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-4")}>
+          {((isParent || isTeacher || isStudent)
             ? [
                 { label: "Pedidos ativos", value: stats.pedidosAtivos, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
                 { label: "Materiais entregues", value: stats.entregasMarcadas, color: "bg-pastel-green text-pastel-green-foreground" },
