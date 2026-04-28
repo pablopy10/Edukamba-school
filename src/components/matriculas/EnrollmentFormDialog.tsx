@@ -248,9 +248,9 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         }
         const { error } = await supabase.from("enrollments").insert({
           student_id: studentId,
-          classroom_id: classroomId || null,
+          classroom_id: isParent ? null : (classroomId || null),
           academic_year_id: yearId || null,
-          status,
+          status: isParent ? "PENDING" : status,
         });
         if (error) throw error;
         toast({ title: "Matrícula renovada" });
@@ -371,6 +371,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {!isParent && (
           <div className="sm:col-span-2">
             <Label>Turma</Label>
             <Select value={classroomId} onValueChange={setClassroomId} disabled={!yearId || loadingClassrooms}>
@@ -387,6 +388,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
               </SelectContent>
             </Select>
           </div>
+          )}
           <div>
             <Label>Ano lectivo</Label>
             <Select value={yearId} onValueChange={setYearId}>
@@ -398,6 +400,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
               </SelectContent>
             </Select>
           </div>
+          {!isParent && (
           <div>
             <Label>Estado</Label>
             <Select value={status} onValueChange={setStatus}>
@@ -409,6 +412,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
               </SelectContent>
             </Select>
           </div>
+          )}
         </div>
 
         {isEdit && (
