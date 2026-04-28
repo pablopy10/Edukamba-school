@@ -19,6 +19,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { useParentChildren } from "@/hooks/useParentChildren";
 
 type Status = "PRESENT" | "ABSENT" | "LATE" | "JUSTIFIED";
 
@@ -142,6 +143,7 @@ const AttendancePopover = ({
 const Presencas = () => {
   const { user } = useAuth();
   const { selectedYearId } = useAcademicYear();
+  const { isParent, childIds, loading: parentLoading } = useParentChildren();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month0, setMonth0] = useState(today.getMonth());
@@ -156,7 +158,7 @@ const Presencas = () => {
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
-  const canEdit = userRole === "ADMIN" || userRole === "TEACHER";
+  const canEdit = (userRole === "ADMIN" || userRole === "TEACHER") && !isParent;
 
   // Load profile (school + role)
   useEffect(() => {
@@ -203,6 +205,7 @@ const Presencas = () => {
   // Load students only when school or classroom filter changes (not on month change)
   useEffect(() => {
     if (!schoolId) return;
+    if (isParent && parentLoading) return;
     let cancelled = false;
     setStudentsLoading(true);
     (async () => {
@@ -214,13 +217,21 @@ const Presencas = () => {
       if (classroomId !== "all") {
         studentsQuery = studentsQuery.eq("classroom_id", classroomId);
       }
+      if (isParent) {
+        if (childIds.length === 0) {
+          setStudents([]);
+          setStudentsLoading(false);
+          return;
+        }
+        studentsQuery = studentsQuery.in("id", childIds);
+      }
       const { data } = await studentsQuery;
       if (cancelled) return;
       setStudents(data ?? []);
       setStudentsLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [schoolId, classroomId]);
+  }, [schoolId, classroomId, isParent, parentLoading, childIds]);
 
   // Load attendance separately when month/year/school/classroom changes
   useEffect(() => {
@@ -333,6 +344,7 @@ const Presencas = () => {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            {!isParent && (<>
             {/* Month */}
             <Select value={String(month0)} onValueChange={(v) => setMonth0(Number(v))}>
               <SelectTrigger className="w-[140px] rounded-full bg-card">
@@ -369,6 +381,7 @@ const Presencas = () => {
                 ))}
               </SelectContent>
             </Select>
+            </>)}
           </div>
         </div>
 
