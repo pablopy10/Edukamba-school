@@ -726,7 +726,13 @@ const Pagamentos = () => {
       toast({ title: "Erro a abrir comprovativo", description: error?.message ?? "Sem URL", variant: "destructive" });
       return;
     }
-    window.open(data.signedUrl, "_blank");
+    const a = document.createElement("a");
+    a.href = data.signedUrl;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const validatePayment = async (fee: FeeListRow, payment: PaymentListRow) => {
