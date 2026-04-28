@@ -17,17 +17,17 @@ const fetchRole = (userId: string): Promise<UserRole> => {
   if (roleCache.has(userId)) return Promise.resolve(roleCache.get(userId) ?? null);
   const existing = inflight.get(userId);
   if (existing) return existing;
-  const p = supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", userId)
-    .maybeSingle()
-    .then(({ data }) => {
-      const r = (data?.role as UserRole) ?? null;
-      roleCache.set(userId, r);
-      inflight.delete(userId);
-      return r;
-    });
+  const p = (async () => {
+    const { data } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .maybeSingle();
+    const r = (data?.role as UserRole) ?? null;
+    roleCache.set(userId, r);
+    inflight.delete(userId);
+    return r;
+  })();
   inflight.set(userId, p);
   return p;
 };
