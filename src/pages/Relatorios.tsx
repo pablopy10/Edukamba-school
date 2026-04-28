@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -62,6 +63,7 @@ const fmtDate = (d: string | null | undefined) =>
 
 const Relatorios = () => {
   const { user } = useAuth();
+  const { selectedYearId } = useAcademicYear();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [schoolName, setSchoolName] = useState<string>("");
   const [role, setRole] = useState<string | null>(null);
@@ -108,7 +110,9 @@ const Relatorios = () => {
       const [school, st, cls, crs, prof, att, gr, asm, sub, tch, abs, mr, mat, ev, act] = await Promise.all([
         supabase.from("schools").select("name").eq("id", sid).maybeSingle(),
         supabase.from("students").select("*").eq("school_id", sid),
-        supabase.from("classrooms").select("id, name, course_id").eq("school_id", sid),
+        (selectedYearId
+          ? supabase.from("classrooms").select("id, name, course_id").eq("school_id", sid).eq("academic_year_id", selectedYearId)
+          : supabase.from("classrooms").select("id, name, course_id").eq("school_id", sid)),
         supabase.from("courses").select("id, name").eq("school_id", sid),
         supabase.from("profiles").select("id, full_name").eq("school_id", sid),
         supabase.from("attendance").select("*").eq("school_id", sid),
@@ -142,7 +146,7 @@ const Relatorios = () => {
       setLoading(false);
     };
     load();
-  }, [user?.id]);
+  }, [user?.id, selectedYearId]);
 
   const isAdmin = role === "ADMIN";
 

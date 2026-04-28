@@ -153,7 +153,9 @@ const Avaliacoes = () => {
 
     const [aRes, cRes, sRes, tRes, termRes, holRes] = await Promise.all([
       assessmentsQuery,
-      supabase.from("classrooms").select("id, name").eq("school_id", sid).order("name"),
+      (yearId
+        ? supabase.from("classrooms").select("id, name").eq("school_id", sid).eq("academic_year_id", yearId).order("name")
+        : supabase.from("classrooms").select("id, name").eq("school_id", sid).order("name")),
       supabase.from("subjects").select("id, name").eq("school_id", sid).order("name"),
       supabase.from("teachers").select("id, profile_id, profiles:profile_id(full_name)").eq("school_id", sid),
       yearId ? termsBase.eq("academic_year_id", yearId) : termsBase,

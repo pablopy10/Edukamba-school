@@ -6,6 +6,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useParentChildren } from "@/hooks/useParentChildren";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -67,8 +68,9 @@ const ALL = "__ALL__";
 const Horarios = () => {
   const { user } = useAuth();
   const { isParent, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
+  const { selectedYearId } = useAcademicYear();
   const [schoolId, setSchoolId] = useState<string | null>(null);
-  const [academicYearId, setAcademicYearId] = useState<string | null>(null);
+  const academicYearId = selectedYearId;
 
   const [classrooms, setClassrooms] = useState<Option[]>([]);
   const [subjects, setSubjects] = useState<Option[]>([]);
@@ -105,8 +107,10 @@ const Horarios = () => {
     if (!schoolId) return;
     if (parentLoading) return;
     setLoading(true);
-    const [classroomsRes, subjectsRes, teachersRes, slotsRes, schedulesRes, yearRes] = await Promise.all([
-      supabase.from("classrooms").select("id, name").eq("school_id", schoolId).order("name"),
+    let classroomsQuery = supabase.from("classrooms").select("id, name").eq("school_id", schoolId).order("name");
+    if (selectedYearId) classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
+    const [classroomsRes, subjectsRes, teachersRes, slotsRes, schedulesRes] = await Promise.all([
+      classroomsQuery,
       supabase.from("subjects").select("id, name").eq("school_id", schoolId).order("name"),
       supabase
         .from("teachers")
@@ -114,14 +118,6 @@ const Horarios = () => {
         .eq("school_id", schoolId),
       supabase.from("school_time_slots").select("*").eq("school_id", schoolId).order("shift").order("position"),
       supabase.from("schedules").select("*").eq("school_id", schoolId),
-      supabase
-        .from("academic_years")
-        .select("id, is_active, start_date")
-        .eq("school_id", schoolId)
-        .order("is_active", { ascending: false })
-        .order("start_date", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
     ]);
 
     let classroomList = (classroomsRes.data ?? []).map((c) => ({ id: c.id, name: c.name }));
@@ -129,7 +125,6 @@ const Horarios = () => {
       classroomList = classroomList.filter((c) => parentClassroomIds.includes(c.id));
     }
     setClassrooms(classroomList);
-    setAcademicYearId(yearRes.data?.id ?? null);
     // Pre-select first classroom if none selected or current selection is not valid
     setClassroomFilter((prev) => {
       if (prev && classroomList.some((c) => c.id === prev)) return prev;
@@ -170,7 +165,7 @@ const Horarios = () => {
       })),
     );
     setLoading(false);
-  }, [schoolId, isParent, parentClassroomIds.join(","), parentLoading]);
+  }, [schoolId, isParent, parentClassroomIds.join(","), parentLoading, selectedYearId]);
 
   useEffect(() => { void loadAll(); }, [loadAll]);
 
