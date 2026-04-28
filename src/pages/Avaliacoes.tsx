@@ -854,12 +854,16 @@ const ListView = ({
                       <button onClick={(ev) => { ev.stopPropagation(); onOpen(e.id); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/30 hover:text-foreground" title="Atribuir notas">
                         <GraduationCap className="h-4 w-4" strokeWidth={1.75} />
                       </button>
-                      <button onClick={(ev) => { ev.stopPropagation(); onEdit(e); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
-                        <Pencil className="h-4 w-4" strokeWidth={1.75} />
-                      </button>
-                      <button onClick={(ev) => { ev.stopPropagation(); onDelete(e.id); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Eliminar">
-                        <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                      </button>
+                      {!readOnly && (
+                        <>
+                          <button onClick={(ev) => { ev.stopPropagation(); onEdit(e); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
+                            <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                          </button>
+                          <button onClick={(ev) => { ev.stopPropagation(); onDelete(e.id); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Eliminar">
+                            <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
