@@ -566,7 +566,7 @@ const Presencas = () => {
               Sem alunos para mostrar.
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="table-scroll overflow-x-auto">
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-pastel-blue/30">

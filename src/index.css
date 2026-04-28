@@ -101,6 +101,34 @@ All colors MUST be HSL.
     background-color: hsl(var(--sidebar-primary));
   }
 
+  /* Table horizontal scroll — matches sidebar style, visible on hover only */
+  .table-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 0.25s ease;
+  }
+  .table-scroll::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+  }
+  .table-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .table-scroll::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 9999px;
+    transition: background-color 0.25s ease;
+  }
+  .table-scroll:hover {
+    scrollbar-color: hsl(var(--sidebar-primary)) transparent;
+  }
+  .table-scroll:hover::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--sidebar-primary));
+  }
+  .table-scroll:hover::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--sidebar-primary));
+  }
+
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
