@@ -721,7 +721,7 @@ const Pagamentos = () => {
   }, [allFees, latestPaymentByFee]);
 
   const viewProof = async (path: string) => {
-    const { data, error } = await supabase.storage.from("payment-proofs").createSignedUrl(path, 60);
+    const { data, error } = await supabase.storage.from("payment-proofs").createSignedUrl(path, 3600);
     if (error || !data?.signedUrl) {
       toast({ title: "Erro a abrir comprovativo", description: error?.message ?? "Sem URL", variant: "destructive" });
       return;
