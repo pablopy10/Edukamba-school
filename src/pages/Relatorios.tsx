@@ -63,6 +63,7 @@ const fmtDate = (d: string | null | undefined) =>
 
 const Relatorios = () => {
   const { user } = useAuth();
+  const { selectedYearId } = useAcademicYear();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [schoolName, setSchoolName] = useState<string>("");
   const [role, setRole] = useState<string | null>(null);
