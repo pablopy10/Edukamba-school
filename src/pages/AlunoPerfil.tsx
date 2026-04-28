@@ -272,6 +272,23 @@ const AlunoPerfil = () => {
         setAttendance((atRes.data ?? []) as unknown as AttendanceRow[]);
       }
 
+      // Aggregate attendance stats over ALL records (not just recent 10)
+      const { data: allAttRows } = await supabase
+        .from("attendance")
+        .select("status")
+        .eq("student_id", id);
+      if (!cancelled) {
+        const rows = (allAttRows ?? []) as { status: string }[];
+        const stats = { total: rows.length, present: 0, late: 0, absent: 0, justified: 0 };
+        rows.forEach((r) => {
+          if (r.status === "PRESENT") stats.present += 1;
+          else if (r.status === "LATE") stats.late += 1;
+          else if (r.status === "JUSTIFIED") stats.justified += 1;
+          else stats.absent += 1;
+        });
+        setAttendanceStats(stats);
+      }
+
       // Enrollment history (across all academic years)
       const { data: histRows } = await supabase
         .from("enrollments")
