@@ -185,8 +185,6 @@ const Presencas = () => {
   const [justifySaving, setJustifySaving] = useState(false);
 
   const canEdit = (userRole === "ADMIN" || userRole === "TEACHER") && !isParent;
-  const isStudent = userRole === "STUDENT";
-  const canJustify = isParent || isStudent || canEdit;
 
   // Load profile (school + role)
   useEffect(() => {
