@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from "@/components/ui/button";
 import { MaterialFormDialog, type MaterialRow } from "@/components/material/MaterialFormDialog";
 import { MaterialRequestFormDialog, type RequestRow } from "@/components/material/MaterialRequestFormDialog";
+import { useParentChildren } from "@/hooks/useParentChildren";
 
 type Category = "papelaria" | "laboratorio" | "artes" | "desporto" | "tecnologia";
 
@@ -41,6 +42,7 @@ type Tab = "stock" | "pedidos";
 
 const Material = () => {
   const { user } = useAuth();
+  const { isParent, childIds, classroomIds, selectedChild } = useParentChildren();
   const [tab, setTab] = useState<Tab>("stock");
   const [loading, setLoading] = useState(true);
   const [schoolId, setSchoolId] = useState<string | null>(null);
@@ -73,6 +75,11 @@ const Material = () => {
   const isAdmin = userRole === "ADMIN";
   const canMarkDeliveries = userRole === "ADMIN" || userRole === "TEACHER";
   const canRequest = userRole === "ADMIN" || userRole === "TEACHER";
+
+  // Parents never see stock; force them onto the requests tab.
+  useEffect(() => {
+    if (isParent && tab !== "pedidos") setTab("pedidos");
+  }, [isParent, tab]);
 
   const loadAll = async () => {
     if (!user) return;
@@ -158,6 +165,14 @@ const Material = () => {
   const filteredRequests = useMemo(() => {
     const q = search.trim().toLowerCase();
     return requests.filter((r) => {
+      // Parents only see requests targeting their selected child or its classroom.
+      if (isParent) {
+        const childSet = new Set(childIds);
+        const classSet = new Set(classroomIds);
+        const targetsChild = r.student_id ? childSet.has(r.student_id) : false;
+        const targetsClass = !r.student_id && r.classroom_id ? classSet.has(r.classroom_id) : false;
+        if (!targetsChild && !targetsClass) return false;
+      }
       if (reqDeliveryFilter !== "all") {
         const { brought, total } = progressFor(r);
         const isComplete = total > 0 && brought === total;
@@ -173,7 +188,7 @@ const Material = () => {
       }
       return true;
     });
-  }, [requests, search, reqDeliveryFilter, reqTeacherFilter, students, classrooms, deliveries]);
+  }, [requests, search, reqDeliveryFilter, reqTeacherFilter, students, classrooms, deliveries, isParent, childIds, classroomIds]);
 
   const removeMaterial = async (id: string) => {
     if (!confirm("Remover este material?")) return;
