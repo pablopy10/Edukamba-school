@@ -171,7 +171,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         const shouldPublish = publishResult && result && result !== "EM_CURSO";
         const updatePayload: {
           student_id: string;
-          classroom_id: string;
+          classroom_id: string | null;
           academic_year_id: string | null;
           status: string;
           result: string | null;
