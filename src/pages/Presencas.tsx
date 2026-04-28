@@ -144,7 +144,7 @@ const AttendancePopover = ({
 const Presencas = () => {
   const { user } = useAuth();
   const { selectedYearId } = useAcademicYear();
-  const { isParent, childIds, loading: parentLoading } = useParentChildren();
+  const { isParent, childIds, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month0, setMonth0] = useState(today.getMonth());
@@ -180,24 +180,34 @@ const Presencas = () => {
   // Load classrooms
   useEffect(() => {
     if (!schoolId) return;
+    if (isParent && parentLoading) return;
     if (!selectedYearId) {
       setClassrooms([]);
       setClassroomId("all");
       return;
     }
     (async () => {
-      const { data } = await supabase
+      let q = supabase
         .from("classrooms")
         .select("id, name")
         .eq("school_id", schoolId)
         .eq("academic_year_id", selectedYearId)
         .order("name");
+      if (isParent) {
+        if (parentClassroomIds.length === 0) {
+          setClassrooms([]);
+          setClassroomId("all");
+          return;
+        }
+        q = q.in("id", parentClassroomIds);
+      }
+      const { data } = await q;
       const list = data ?? [];
       setClassrooms(list);
       // Pre-select first classroom by ascending name; fall back to "all" if none.
       setClassroomId(list[0]?.id ?? "all");
     })();
-  }, [schoolId, selectedYearId]);
+  }, [schoolId, selectedYearId, isParent, parentLoading, parentClassroomIds.join(",")]);
 
   // Compute month days
   const monthDays = useMemo(() => getMonthDays(year, month0), [year, month0]);
@@ -347,7 +357,6 @@ const Presencas = () => {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {!isParent && (<>
             {/* Month */}
             <Select value={String(month0)} onValueChange={(v) => setMonth0(Number(v))}>
               <SelectTrigger className="w-[140px] rounded-full bg-card">
@@ -373,18 +382,17 @@ const Presencas = () => {
             </Select>
 
             {/* Classroom */}
-            <Select value={classroomId} onValueChange={setClassroomId}>
+            <Select value={classroomId} onValueChange={setClassroomId} disabled={isParent}>
               <SelectTrigger className="w-[180px] rounded-full bg-card">
                 <SelectValue placeholder="Turma" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas as turmas</SelectItem>
+                {!isParent && <SelectItem value="all">Todas as turmas</SelectItem>}
                 {classrooms.map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            </>)}
           </div>
         </div>
 
