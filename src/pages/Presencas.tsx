@@ -691,6 +691,12 @@ const Presencas = () => {
             Falta
           </div>
           <div className="flex items-center gap-2">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-pastel-lilac text-pastel-lilac-foreground">
+              <AlertTriangle className="h-3 w-3" strokeWidth={3} />
+            </span>
+            Falta indisciplinar
+          </div>
+          <div className="flex items-center gap-2">
             <span className="text-base">—</span>
             Sem registo / Fim de semana
           </div>
