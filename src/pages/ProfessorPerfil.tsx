@@ -55,7 +55,7 @@ interface TeacherRow {
   employee_id: string | null;
   avatar_color: string | null;
   is_active: boolean | null;
-  profiles: { full_name: string; phone: string | null; avatar_url: string | null } | null;
+  profiles: { full_name: string; phone: string | null; avatar_url: string | null; email: string | null } | null;
   subjects: { name: string } | null;
 }
 
@@ -122,7 +122,7 @@ const ProfessorPerfil = () => {
       setCurrentUserId(auth.user?.id ?? null);
       const { data: t } = await supabase
         .from("teachers")
-        .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, is_active, profiles(full_name, phone, avatar_url), subjects(name)")
+        .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, is_active, profiles(full_name, phone, avatar_url, email), subjects(name)")
         .eq("id", id)
         .maybeSingle();
       if (cancelled) return;
@@ -312,7 +312,7 @@ const ProfessorPerfil = () => {
               </div>
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Email</p>
-                <p className="truncate text-sm font-medium text-foreground">—</p>
+                <p className="truncate text-sm font-medium text-foreground">{teacher.profiles?.email || "—"}</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
