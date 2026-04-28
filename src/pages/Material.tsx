@@ -158,19 +158,23 @@ const Material = () => {
   }, [requests, isParent, childIds, classroomIds]);
 
   const stats = useMemo(() => {
-    const reqList = isParent ? parentScopedRequests : requests;
+    let reqList = requests;
+    if (isParent) reqList = parentScopedRequests;
+    else if (isTeacher) reqList = requests.filter((r) => r.requester_id === user?.id);
     const reqIds = new Set(reqList.map((r) => r.id));
     const childSet = new Set(childIds);
     const relevantDeliveries = isParent
       ? deliveries.filter((d) => reqIds.has(d.request_id) && childSet.has(d.student_id))
-      : deliveries;
+      : isTeacher
+        ? deliveries.filter((d) => reqIds.has(d.request_id))
+        : deliveries;
     return {
       totalItens: stock.reduce((a, s) => a + (s.quantity || 0), 0),
       baixoStock: stock.filter((s) => s.quantity < s.min_quantity).length,
       pedidosAtivos: reqList.length,
       entregasMarcadas: relevantDeliveries.filter((d) => d.brought).length,
     };
-  }, [stock, requests, deliveries, isParent, parentScopedRequests, childIds]);
+  }, [stock, requests, deliveries, isParent, parentScopedRequests, childIds, isTeacher, user?.id]);
 
   // Compute target students for a request and delivery progress.
   const targetStudentsFor = (r: RequestRow) => {
