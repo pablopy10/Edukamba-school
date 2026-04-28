@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useParentChildren } from "@/hooks/useParentChildren";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScheduleFormDialog, type ScheduleRecord } from "@/components/horarios/ScheduleFormDialog";
@@ -64,6 +65,7 @@ const ALL = "__ALL__";
 
 const Horarios = () => {
   const { user } = useAuth();
+  const { isParent, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [academicYearId, setAcademicYearId] = useState<string | null>(null);
 
@@ -100,6 +102,7 @@ const Horarios = () => {
 
   const loadAll = useCallback(async () => {
     if (!schoolId) return;
+    if (parentLoading) return;
     setLoading(true);
     const [classroomsRes, subjectsRes, teachersRes, slotsRes, schedulesRes, yearRes] = await Promise.all([
       supabase.from("classrooms").select("id, name").eq("school_id", schoolId).order("name"),
@@ -120,7 +123,10 @@ const Horarios = () => {
         .maybeSingle(),
     ]);
 
-    const classroomList = (classroomsRes.data ?? []).map((c) => ({ id: c.id, name: c.name }));
+    let classroomList = (classroomsRes.data ?? []).map((c) => ({ id: c.id, name: c.name }));
+    if (isParent) {
+      classroomList = classroomList.filter((c) => parentClassroomIds.includes(c.id));
+    }
     setClassrooms(classroomList);
     setAcademicYearId(yearRes.data?.id ?? null);
     // Pre-select first classroom if none selected or current selection is not valid
@@ -163,7 +169,7 @@ const Horarios = () => {
       })),
     );
     setLoading(false);
-  }, [schoolId]);
+  }, [schoolId, isParent, parentClassroomIds.join(","), parentLoading]);
 
   useEffect(() => { void loadAll(); }, [loadAll]);
 
@@ -317,9 +323,12 @@ const Horarios = () => {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Horários</h1>
             <p className="text-sm text-muted-foreground">
-              Gerir horário semanal por turma, professor ou disciplina, com deteção de conflitos.
+              {isParent
+                ? "Consulte o horário semanal do seu educando."
+                : "Gerir horário semanal por turma, professor ou disciplina, com deteção de conflitos."}
             </p>
           </div>
+          {!isParent && (
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => setOpenSlots(true)}>
               <Settings2 className="mr-2 h-4 w-4" /> Blocos da escola
@@ -328,9 +337,11 @@ const Horarios = () => {
               <Plus className="mr-2 h-4 w-4" /> Nova aula
             </Button>
           </div>
+          )}
         </div>
 
         {/* Filters */}
+        {!isParent && (
         <div className="grid grid-cols-1 gap-3 rounded-2xl bg-card p-4 shadow-card sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label className="mb-1 block text-xs font-semibold text-muted-foreground">Turma</label>
@@ -373,8 +384,9 @@ const Horarios = () => {
             </Select>
           </div>
         </div>
+        )}
 
-        {conflicts.size > 0 && (
+        {!isParent && conflicts.size > 0 && (
           <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
             <AlertCircle className="h-4 w-4" />
             <span>{conflicts.size} aula(s) com conflitos de turma, professor ou sala — assinaladas a vermelho.</span>
@@ -430,6 +442,7 @@ const Horarios = () => {
                       onDelete={(id) => setDeletingId(id)}
                       onCreate={handleNewAt}
                       onDropMove={handleDropMove}
+                      readOnly={isParent}
                     />
                   ))}
                 </div>
@@ -487,6 +500,7 @@ const SlotRow = ({
   onDelete,
   onCreate,
   onDropMove,
+  readOnly,
 }: {
   slot: TimeSlotRow;
   schedules: ScheduleRow[];
@@ -499,6 +513,7 @@ const SlotRow = ({
   onDelete: (id: string) => void;
   onCreate: (day: number, slot: TimeSlotRow) => void;
   onDropMove: (scheduleId: string, day: number, slot: TimeSlotRow) => void;
+  readOnly?: boolean;
 }) => {
   const [dragOver, setDragOver] = useState<number | null>(null);
 
@@ -544,6 +559,14 @@ const SlotRow = ({
         const cells = cellsByDay(d.value);
         const isOver = dragOver === d.value;
         if (cells.length === 0) {
+          if (readOnly) {
+            return (
+              <div
+                key={d.value}
+                className="flex min-h-[100px] items-center justify-center rounded-xl border border-dashed border-border bg-muted/10 text-xs text-muted-foreground/60"
+              />
+            );
+          }
           return (
             <button
               key={d.value}
@@ -565,12 +588,12 @@ const SlotRow = ({
         return (
           <div
             key={d.value}
-            onDragOver={(e) => handleDragOver(e, d.value)}
-            onDragLeave={() => setDragOver(null)}
-            onDrop={(e) => handleDrop(e, d.value)}
+            onDragOver={readOnly ? undefined : (e) => handleDragOver(e, d.value)}
+            onDragLeave={readOnly ? undefined : () => setDragOver(null)}
+            onDrop={readOnly ? undefined : (e) => handleDrop(e, d.value)}
             className={cn(
               "flex min-h-[100px] flex-col gap-1 rounded-xl transition-colors",
-              isOver && "bg-primary/10 ring-2 ring-primary/40",
+              !readOnly && isOver && "bg-primary/10 ring-2 ring-primary/40",
             )}
           >
             {cells.map((s) => (
@@ -584,6 +607,7 @@ const SlotRow = ({
                 hasConflict={conflicts.has(s.id)}
                 onEdit={() => onEdit(s)}
                 onDelete={() => onDelete(s.id)}
+                readOnly={readOnly}
               />
             ))}
           </div>
@@ -602,6 +626,7 @@ const ScheduleCell = ({
   hasConflict,
   onEdit,
   onDelete,
+  readOnly,
 }: {
   schedule: ScheduleRow;
   subjectName: string;
@@ -611,16 +636,18 @@ const ScheduleCell = ({
   hasConflict: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  readOnly?: boolean;
 }) => {
   return (
     <div
-      draggable
-      onDragStart={(e) => {
+      draggable={!readOnly}
+      onDragStart={readOnly ? undefined : (e) => {
         e.dataTransfer.setData("application/x-schedule-id", schedule.id);
         e.dataTransfer.effectAllowed = "move";
       }}
       className={cn(
-        "group relative flex flex-1 cursor-grab flex-col justify-between rounded-xl p-3 text-left active:cursor-grabbing",
+        "group relative flex flex-1 flex-col justify-between rounded-xl p-3 text-left",
+        readOnly ? "cursor-default" : "cursor-grab active:cursor-grabbing",
         colorClass,
         hasConflict && "ring-2 ring-destructive ring-offset-2 ring-offset-card",
       )}
@@ -630,6 +657,7 @@ const ScheduleCell = ({
           <p className="truncate text-sm font-bold leading-tight">{subjectName}</p>
           <p className="truncate text-[11px] opacity-80">{classroomName} · {schedule.start_time}–{schedule.end_time}</p>
         </div>
+        {!readOnly && (
         <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           <button onClick={onEdit} className="rounded-md bg-background/40 p-1 hover:bg-background/70" aria-label="Editar">
             <Pencil className="h-3 w-3" />
@@ -638,6 +666,7 @@ const ScheduleCell = ({
             <Trash2 className="h-3 w-3" />
           </button>
         </div>
+        )}
       </div>
       <div className="mt-1 flex flex-col gap-0.5 text-[11px] opacity-80">
         <span className="inline-flex items-center gap-1 truncate">

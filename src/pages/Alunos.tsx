@@ -10,6 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "@/hooks/use-toast";
 import { ExcelImportDialog, ImportField } from "@/components/shared/ExcelImportDialog";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { useParentChildren } from "@/hooks/useParentChildren";
 
 type ClassroomOpt = { id: string; name: string };
 
@@ -26,6 +27,7 @@ const initialsOf = (name: string) =>
 
 const Alunos = () => {
   const { selectedYearId } = useAcademicYear();
+  const { isParent, childIds, loading: parentLoading } = useParentChildren();
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [classrooms, setClassrooms] = useState<ClassroomOpt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,11 +44,19 @@ const Alunos = () => {
     setLoading(true);
     let classroomsQuery = supabase.from("classrooms").select("id, name, academic_year_id").order("name");
     if (selectedYearId) classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
+    let studentsQuery = supabase
+      .from("students")
+      .select("id, full_name, email, phone, birth_date, gender, enrollment_number, classroom_id, avatar_color, school_id, classrooms(id, name)")
+      .order("created_at", { ascending: false });
+    if (isParent) {
+      if (childIds.length === 0) {
+        setStudents([]); setClassrooms([]); setLoading(false);
+        return;
+      }
+      studentsQuery = studentsQuery.in("id", childIds);
+    }
     const [{ data: sData, error: sErr }, { data: cData }] = await Promise.all([
-      supabase
-        .from("students")
-        .select("id, full_name, email, phone, birth_date, gender, enrollment_number, classroom_id, avatar_color, school_id, classrooms(id, name)")
-        .order("created_at", { ascending: false }),
+      studentsQuery,
       classroomsQuery,
     ]);
     if (sErr) {
@@ -57,7 +67,10 @@ const Alunos = () => {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [selectedYearId]);
+  useEffect(() => {
+    if (parentLoading) return;
+    load();
+  }, [selectedYearId, parentLoading, isParent, childIds.join(",")]);
 
   const classroomName = (id: string | null) => classrooms.find((c) => c.id === id)?.name ?? "—";
 
@@ -120,22 +133,27 @@ const Alunos = () => {
                 className="h-11 w-72 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             </div>
-            <button
-              onClick={() => { setEditing(null); setFormOpen(true); }}
-              className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
-              <Plus className="h-4 w-4" strokeWidth={2.25} />
-              Novo Aluno
-            </button>
-            <button
-              onClick={() => setImportOpen(true)}
-              className="flex h-11 items-center gap-2 rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
-              <Upload className="h-4 w-4" strokeWidth={2.25} />
-              Importar Excel
-            </button>
+            {!isParent && (
+              <>
+                <button
+                  onClick={() => { setEditing(null); setFormOpen(true); }}
+                  className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
+                  <Plus className="h-4 w-4" strokeWidth={2.25} />
+                  Novo Aluno
+                </button>
+                <button
+                  onClick={() => setImportOpen(true)}
+                  className="flex h-11 items-center gap-2 rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
+                  <Upload className="h-4 w-4" strokeWidth={2.25} />
+                  Importar Excel
+                </button>
+              </>
+            )}
           </div>
         </div>
 
         {/* Filters row */}
+        {!isParent && (
         <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card">
           <div className="min-w-[200px] flex-1">
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Turma</label>
@@ -156,8 +174,10 @@ const Alunos = () => {
             >Limpar filtros</button>
           )}
         </div>
+        )}
 
         {/* Stats row */}
+        {!isParent && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             { label: "Total de Alunos", value: String(stats.total), color: "bg-pastel-blue text-pastel-blue-foreground" },
@@ -173,6 +193,7 @@ const Alunos = () => {
             </div>
           ))}
         </div>
+        )}
 
         {/* Table card */}
         <div className="rounded-2xl bg-card shadow-card">
@@ -257,12 +278,16 @@ const Alunos = () => {
                       </td>
                       <td className="py-4 pr-5">
                         <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => { setEditing(s); setFormOpen(true); }} title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
-                            <Pencil className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                          <button onClick={() => setDeleting(s)} title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
-                            <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
+                          {!isParent && (
+                            <>
+                              <button onClick={() => { setEditing(s); setFormOpen(true); }} title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
+                                <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                              </button>
+                              <button onClick={() => setDeleting(s)} title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
+                                <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>

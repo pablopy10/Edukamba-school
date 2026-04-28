@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { useParentChildren } from "@/hooks/useParentChildren";
 
 type Opt = { id: string; name: string };
 type YearOpt = { id: string; label: string; is_active: boolean | null };
@@ -36,6 +37,7 @@ const initialsOf = (name: string) =>
 
 const Matriculas = () => {
   const { selectedYearId } = useAcademicYear();
+  const { isParent, childIds, loading: parentLoading } = useParentChildren();
   const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([]);
   const [students, setStudents] = useState<Opt[]>([]);
   const [classrooms, setClassrooms] = useState<Opt[]>([]);
@@ -63,6 +65,13 @@ const Matriculas = () => {
       enrollmentsQuery = enrollmentsQuery.eq("academic_year_id", selectedYearId);
       classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
     }
+    if (isParent) {
+      if (childIds.length === 0) {
+        setEnrollments([]); setStudents([]); setClassrooms([]); setYears([]); setLoading(false);
+        return;
+      }
+      enrollmentsQuery = enrollmentsQuery.in("student_id", childIds);
+    }
     const [{ data: eData, error: eErr }, { data: sData }, { data: cData }, { data: yData }] = await Promise.all([
       enrollmentsQuery,
       supabase.from("students").select("id, full_name").order("full_name"),
@@ -81,8 +90,9 @@ const Matriculas = () => {
 
   useEffect(() => {
     setFilterYear(selectedYearId ?? "all");
+    if (parentLoading) return;
     load();
-  }, [selectedYearId]);
+  }, [selectedYearId, parentLoading, isParent, childIds.join(",")]);
 
   const filtered = useMemo(() => {
     return enrollments.filter((e) => {
@@ -146,18 +156,21 @@ const Matriculas = () => {
               onClick={() => { setEditing(null); setFormOpen(true); }}
               className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
               <Plus className="h-4 w-4" strokeWidth={2.25} />
-              Nova Matrícula
+              {isParent ? "Renovar Matrícula" : "Nova Matrícula"}
             </button>
-            <button
-              onClick={() => setPublishOpen(true)}
-              className="flex h-11 items-center gap-2 rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
-              <GraduationCap className="h-4 w-4" strokeWidth={2.25} />
-              Publicar resultados
-            </button>
+            {!isParent && (
+              <button
+                onClick={() => setPublishOpen(true)}
+                className="flex h-11 items-center gap-2 rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
+                <GraduationCap className="h-4 w-4" strokeWidth={2.25} />
+                Publicar resultados
+              </button>
+            )}
           </div>
         </div>
 
         {/* Filters */}
+        {!isParent && (
         <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card">
           <div className="min-w-[180px] flex-1">
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Turma</label>
@@ -202,7 +215,9 @@ const Matriculas = () => {
             >Limpar filtros</button>
           )}
         </div>
+        )}
 
+        {!isParent && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             { label: "Total de Matrículas", value: String(stats.total), color: "bg-pastel-blue text-pastel-blue-foreground" },
@@ -218,10 +233,11 @@ const Matriculas = () => {
             </div>
           ))}
         </div>
+        )}
 
         <div className="rounded-2xl bg-card shadow-card">
           <div className="flex items-center justify-between border-b border-border p-5">
-            <h2 className="text-lg font-bold text-foreground">Lista de Matrículas</h2>
+            <h2 className="text-lg font-bold text-foreground">{isParent ? "Histórico de Matrículas" : "Lista de Matrículas"}</h2>
             {selected.length > 0 && (
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-muted-foreground">{selected.length} selecionadas</span>
@@ -317,12 +333,16 @@ const Matriculas = () => {
                       </td>
                       <td className="py-4 pr-5">
                         <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => { setEditing(e); setFormOpen(true); }} title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
-                            <Pencil className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                          <button onClick={() => setDeleting(e)} title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
-                            <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
+                          {!isParent && (
+                            <>
+                              <button onClick={() => { setEditing(e); setFormOpen(true); }} title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
+                                <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                              </button>
+                              <button onClick={() => setDeleting(e)} title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
+                                <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>

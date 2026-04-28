@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { useParentChildren } from "@/hooks/useParentChildren";
 import {
   Select,
   SelectContent,
@@ -54,16 +55,24 @@ const dateLabel = (date: Date) => {
 
 export const AgendaCard = ({ date }: AgendaCardProps) => {
   const { selectedYearId } = useAcademicYear();
+  const { isParent, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [classroomId, setClassroomId] = useState<string>("");
   const [items, setItems] = useState<AgendaItem[]>([]);
 
   useEffect(() => {
+    if (parentLoading) return;
     let query = supabase
       .from("classrooms")
       .select("id, name")
       .order("name", { ascending: true });
     if (selectedYearId) query = query.eq("academic_year_id", selectedYearId);
+    if (isParent) {
+      if (parentClassroomIds.length === 0) {
+        setClassrooms([]); setClassroomId(""); return;
+      }
+      query = query.in("id", parentClassroomIds);
+    }
     query.then(({ data }) => {
       const list = data ?? [];
       setClassrooms(list);
@@ -72,7 +81,7 @@ export const AgendaCard = ({ date }: AgendaCardProps) => {
         return list[0]?.id ?? "";
       });
     });
-  }, [selectedYearId]);
+  }, [selectedYearId, isParent, parentClassroomIds.join(","), parentLoading]);
 
   useEffect(() => {
     let cancelled = false;
@@ -129,7 +138,7 @@ export const AgendaCard = ({ date }: AgendaCardProps) => {
         <Select
           value={classroomId}
           onValueChange={setClassroomId}
-          disabled={classrooms.length === 0}
+          disabled={classrooms.length === 0 || (isParent && classrooms.length <= 1)}
         >
           <SelectTrigger className="h-8 w-auto min-w-[120px] rounded-full border-border bg-background px-3 text-xs font-medium">
             <SelectValue placeholder="Turma" />
