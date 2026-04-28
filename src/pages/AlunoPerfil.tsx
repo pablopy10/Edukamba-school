@@ -622,6 +622,8 @@ const AlunoPerfil = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {!isTeacher && (
+              <>
               {(() => {
                 if (!student) return null;
                 if (student.user_id) {
@@ -649,6 +651,8 @@ const AlunoPerfil = () => {
               <Link to="/alunos" className="flex h-10 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
                 <Pencil className="h-4 w-4" strokeWidth={2} /> Editar
               </Link>
+              </>
+              )}
             </div>
           </div>
 
