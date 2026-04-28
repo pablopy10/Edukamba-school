@@ -1251,6 +1251,60 @@ export type Database = {
           },
         ]
       }
+      material_request_deliveries: {
+        Row: {
+          brought: boolean
+          created_at: string
+          id: string
+          marked_at: string | null
+          marked_by: string | null
+          notes: string | null
+          request_id: string
+          school_id: string
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          brought?: boolean
+          created_at?: string
+          id?: string
+          marked_at?: string | null
+          marked_by?: string | null
+          notes?: string | null
+          request_id: string
+          school_id: string
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          brought?: boolean
+          created_at?: string
+          id?: string
+          marked_at?: string | null
+          marked_by?: string | null
+          notes?: string | null
+          request_id?: string
+          school_id?: string
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_request_deliveries_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "material_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_request_deliveries_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       material_requests: {
         Row: {
           category: string
