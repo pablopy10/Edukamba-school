@@ -52,6 +52,10 @@ type Props = {
   teachers: Option[];
   initial?: Partial<AssessmentRecord> | null;
   onSaved: () => void;
+  /** When set, locks the teacher field to this profile id (used for TEACHER role). */
+  lockTeacherId?: string | null;
+  /** When set, locks the subject field to this subject id (used for TEACHER role). */
+  lockSubjectId?: string | null;
 };
 
 const empty: AssessmentRecord = {
@@ -78,6 +82,8 @@ export const AssessmentFormDialog = ({
   teachers,
   initial,
   onSaved,
+  lockTeacherId,
+  lockSubjectId,
 }: Props) => {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<AssessmentRecord>(empty);
@@ -96,8 +102,8 @@ export const AssessmentFormDialog = ({
       title: initial?.title ?? "",
       type: initial?.type ?? "teste",
       classroom_id: initial?.classroom_id ?? null,
-      subject_id: initial?.subject_id ?? null,
-      teacher_id: initial?.teacher_id ?? null,
+      subject_id: lockSubjectId ?? initial?.subject_id ?? null,
+      teacher_id: lockTeacherId ?? initial?.teacher_id ?? null,
       date: initial?.date ?? new Date().toISOString().slice(0, 10),
       start_time: trimTime(initial?.start_time ?? "08:00"),
       end_time: trimTime(initial?.end_time ?? "09:30"),
@@ -106,7 +112,7 @@ export const AssessmentFormDialog = ({
       description: initial?.description ?? "",
       term_id: initial?.term_id ?? null,
     });
-  }, [open, initial]);
+  }, [open, initial, lockTeacherId, lockSubjectId]);
 
   // Load terms for the school
   const { selectedYearId } = useAcademicYear();
@@ -287,7 +293,11 @@ export const AssessmentFormDialog = ({
 
           <div className="space-y-2">
             <Label>Disciplina *</Label>
-            <Select value={form.subject_id ?? ""} onValueChange={(v) => update("subject_id", v)}>
+            <Select
+              value={form.subject_id ?? ""}
+              onValueChange={(v) => update("subject_id", v)}
+              disabled={!!lockSubjectId}
+            >
               <SelectTrigger><SelectValue placeholder="Escolher disciplina" /></SelectTrigger>
               <SelectContent>
                 {subjects.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
@@ -297,7 +307,11 @@ export const AssessmentFormDialog = ({
 
           <div className="space-y-2">
             <Label>Professor *</Label>
-            <Select value={form.teacher_id ?? ""} onValueChange={(v) => update("teacher_id", v)}>
+            <Select
+              value={form.teacher_id ?? ""}
+              onValueChange={(v) => update("teacher_id", v)}
+              disabled={!!lockTeacherId}
+            >
               <SelectTrigger><SelectValue placeholder="Escolher professor" /></SelectTrigger>
               <SelectContent>
                 {teachers.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
