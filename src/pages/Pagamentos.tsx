@@ -2647,6 +2647,8 @@ const Pagamentos = () => {
                 ? `Anexa o comprovativo da atividade ${recordDialog.fee.activity?.name ?? ""} de ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Ficará à espera de validação pela escola." : "Será marcado como pago e validado."}`
                 : recordDialog?.kind === "transport"
                 ? `Anexa o comprovativo do transporte (${recordDialog.fee.route?.name ?? ""}) de ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Ficará à espera de validação pela escola." : "Será marcado como pago e validado."}`
+                : recordDialog?.kind === "enrollment"
+                ? `Anexa o comprovativo da ${recordDialog.fee.fee_type === "RENEWAL" ? "renovação de matrícula" : "matrícula"} de ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Ficará à espera de validação pela escola." : "Será marcado como pago e validado."}`
                 : ""}
             </DialogDescription>
           </DialogHeader>
