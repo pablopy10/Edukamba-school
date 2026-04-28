@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
+import { useParentChildren } from "@/hooks/useParentChildren";
 
 type FeeRule = {
   id: string;
@@ -135,6 +136,7 @@ const monthNames = [
 
 const Pagamentos = () => {
   const [schoolId, setSchoolId] = useState<string | null>(null);
+  const { isParent, childIds, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const [years, setYears] = useState<AcademicYear[]>([]);
   const [activeYearId, setActiveYearId] = useState<string | null>(null);
   const [rules, setRules] = useState<FeeRule[]>([]);
