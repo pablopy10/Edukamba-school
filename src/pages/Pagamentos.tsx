@@ -1161,6 +1161,7 @@ const Pagamentos = () => {
 
           {/* FEES TAB */}
           <TabsContent value="fees" className="space-y-4">
+            {!isParent && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Card>
                 <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total recebido</CardTitle></CardHeader>
@@ -1175,6 +1176,7 @@ const Pagamentos = () => {
                 <CardContent><p className="text-2xl font-bold text-destructive">{fmtAOA(feeStats.overdue)}</p></CardContent>
               </Card>
             </div>
+            )}
 
             {!isParent && pendingValidations.length > 0 && (
               <Card className="border-pastel-blue/60">
@@ -1397,6 +1399,7 @@ const Pagamentos = () => {
 
           {/* ACTIVITY FEES TAB (extracurriculares) */}
           <TabsContent value="activity-fees" className="space-y-4">
+            {!isParent && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Card>
                 <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total recebido</CardTitle></CardHeader>
@@ -1411,6 +1414,7 @@ const Pagamentos = () => {
                 <CardContent><p className="text-2xl font-bold text-destructive">{fmtAOA(activityFeeStats.overdue)}</p></CardContent>
               </Card>
             </div>
+            )}
 
             {!isParent && pendingActivityValidations.length > 0 && (
               <Card className="border-pastel-blue/60">
@@ -1625,6 +1629,7 @@ const Pagamentos = () => {
 
           {/* TRANSPORT FEES TAB */}
           <TabsContent value="transport-fees" className="space-y-4">
+            {!isParent && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Card>
                 <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total recebido</CardTitle></CardHeader>
@@ -1639,6 +1644,7 @@ const Pagamentos = () => {
                 <CardContent><p className="text-2xl font-bold text-destructive">{fmtAOA(transportFeeStats.overdue)}</p></CardContent>
               </Card>
             </div>
+            )}
 
             {!isParent && pendingTransportValidations.length > 0 && (
               <Card className="border-pastel-blue/60">
