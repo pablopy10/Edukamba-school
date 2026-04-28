@@ -242,7 +242,7 @@ const Presencas = () => {
       setStudentsLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [schoolId, classroomId, isParent, parentLoading, childIds]);
+  }, [schoolId, classroomId, isParent, parentLoading, childIds.join(",")]);
 
   // Load attendance separately when month/year/school/classroom changes
   useEffect(() => {
@@ -397,6 +397,7 @@ const Presencas = () => {
         </div>
 
         {/* Stats */}
+        {!isParent && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
           <div className="rounded-2xl bg-pastel-blue p-5 shadow-card">
             <p className="text-xs font-semibold uppercase tracking-wider text-pastel-blue-foreground/80">Total de Alunos</p>
@@ -419,6 +420,7 @@ const Presencas = () => {
             <p className="mt-2 text-3xl font-bold text-pastel-lilac-foreground">{stats.rate}%</p>
           </div>
         </div>
+        )}
 
         {/* Attendance table */}
         <div className="overflow-hidden rounded-2xl bg-card shadow-card">
