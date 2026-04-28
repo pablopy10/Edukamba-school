@@ -177,6 +177,7 @@ const AlunoPerfil = () => {
   const [assessments, setAssessments] = useState<AssessmentRow[]>([]);
   const [grades, setGrades] = useState<GradeRow[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRow[]>([]);
+  const [attendanceStats, setAttendanceStats] = useState<{ total: number; present: number; late: number; absent: number; justified: number }>({ total: 0, present: 0, late: 0, absent: 0, justified: 0 });
   const [teachers, setTeachers] = useState<{ id: string; full_name: string; subject: string | null; phone: string | null }[]>([]);
   const [fees, setFees] = useState<FeeRow[]>([]);
   const [remindingFeeId, setRemindingFeeId] = useState<string | null>(null);
@@ -269,6 +270,23 @@ const AlunoPerfil = () => {
       if (!cancelled) {
         setGrades((grRes.data ?? []) as unknown as GradeRow[]);
         setAttendance((atRes.data ?? []) as unknown as AttendanceRow[]);
+      }
+
+      // Aggregate attendance stats over ALL records (not just recent 10)
+      const { data: allAttRows } = await supabase
+        .from("attendance")
+        .select("status")
+        .eq("student_id", id);
+      if (!cancelled) {
+        const rows = (allAttRows ?? []) as { status: string }[];
+        const stats = { total: rows.length, present: 0, late: 0, absent: 0, justified: 0 };
+        rows.forEach((r) => {
+          if (r.status === "PRESENT") stats.present += 1;
+          else if (r.status === "LATE") stats.late += 1;
+          else if (r.status === "JUSTIFIED") stats.justified += 1;
+          else stats.absent += 1;
+        });
+        setAttendanceStats(stats);
       }
 
       // Enrollment history (across all academic years)
@@ -488,10 +506,20 @@ const AlunoPerfil = () => {
   }, [grades]);
 
   const presenceRate = useMemo(() => {
-    if (attendance.length === 0) return "—";
-    const present = attendance.filter((a) => a.status === "PRESENT" || a.status === "LATE").length;
-    return `${Math.round((present / attendance.length) * 100)}%`;
-  }, [attendance]);
+    if (attendanceStats.total === 0) return "—";
+    const present = attendanceStats.present + attendanceStats.late + attendanceStats.justified;
+    return `${Math.round((present / attendanceStats.total) * 100)}%`;
+  }, [attendanceStats]);
+
+  const subjectsCount = useMemo(() => {
+    const set = new Set<string>();
+    schedule.forEach((s) => {
+      const n = s.subjects?.name;
+      if (n) set.add(n);
+    });
+    if (set.size > 0) return set.size;
+    return subjectsAvg.length;
+  }, [schedule, subjectsAvg]);
 
   const feesSummary = useMemo(() => {
     const paid = fees.filter((f) => f.is_paid).reduce((s, f) => s + Number(f.amount_due), 0);
@@ -701,7 +729,7 @@ const AlunoPerfil = () => {
           <StatPill label="Média Geral" value={overallAverage} color="lilac" />
           <StatPill label="Assiduidade" value={presenceRate} color="green" />
           <StatPill label="Avaliações" value={String(assessments.length)} color="blue" />
-          <StatPill label="Disciplinas" value={String(subjectsAvg.length)} color="yellow" />
+          <StatPill label="Disciplinas" value={String(subjectsCount)} color="yellow" />
         </div>
 
         {/* Histórico de matrículas */}
@@ -1162,6 +1190,26 @@ const AlunoPerfil = () => {
               </div>
               <Link to="/presencas" className="text-xs font-medium text-pastel-green-foreground hover:underline">Ver todas</Link>
             </div>
+            {attendanceStats.total > 0 && (
+              <div className="grid grid-cols-2 gap-3 border-b border-border p-5 sm:grid-cols-4">
+                <div className="rounded-xl bg-pastel-green/40 p-3">
+                  <p className="text-xs text-muted-foreground">Presenças</p>
+                  <p className="text-xl font-bold text-foreground">{attendanceStats.present}</p>
+                </div>
+                <div className="rounded-xl bg-pastel-yellow/40 p-3">
+                  <p className="text-xs text-muted-foreground">Atrasos</p>
+                  <p className="text-xl font-bold text-foreground">{attendanceStats.late}</p>
+                </div>
+                <div className="rounded-xl bg-pastel-pink/40 p-3">
+                  <p className="text-xs text-muted-foreground">Faltas</p>
+                  <p className="text-xl font-bold text-foreground">{attendanceStats.absent}</p>
+                </div>
+                <div className="rounded-xl bg-pastel-blue/40 p-3">
+                  <p className="text-xs text-muted-foreground">Justificadas</p>
+                  <p className="text-xl font-bold text-foreground">{attendanceStats.justified}</p>
+                </div>
+              </div>
+            )}
             {attendance.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">Sem registos de presença.</p>
             ) : (
