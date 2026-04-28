@@ -4,8 +4,22 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useModules, ModuleKey } from "@/context/ModulesContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useUserRole, UserRole } from "@/hooks/useUserRole";
 
 type Item = { icon: React.ElementType; label: string; to: string; hasArrow?: boolean; moduleKey?: ModuleKey };
+
+// Role-based visible routes. Admin/SuperAdmin see everything (subject to module toggles).
+const roleAllowedRoutes: Record<Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">, string[]> = {
+  TEACHER: ["/dashboard", "/turmas", "/avaliacoes", "/presencas", "/horario", "/material", "/pedidos", "/eventos"],
+  PARENT: ["/dashboard", "/alunos", "/avaliacoes", "/pagamentos", "/horario", "/matriculas", "/eventos"],
+  STUDENT: ["/dashboard", "/avaliacoes", "/horario"],
+};
+
+const roleAllowedOther: Record<Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">, string[]> = {
+  TEACHER: ["/perfil"],
+  PARENT: ["/perfil"],
+  STUDENT: ["/perfil"],
+};
 
 const menu: Item[] = [
   { icon: Home, label: "Painel de Controlo", to: "/dashboard" },
@@ -40,7 +54,24 @@ export const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { modules } = useModules();
-  const visibleMenu = menu.filter((i) => !i.moduleKey || modules[i.moduleKey]);
+  const { role } = useUserRole();
+
+  const isPrivileged = role === "ADMIN" || role === "SUPER_ADMIN" || role === null;
+
+  const visibleMenu = menu.filter((item) => {
+    // Module toggles still apply
+    if (item.moduleKey && !modules[item.moduleKey]) return false;
+    // Admins (or while role is loading) see all enabled modules
+    if (isPrivileged) return true;
+    const allowed = roleAllowedRoutes[role as Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">] ?? [];
+    return allowed.includes(item.to);
+  });
+
+  const visibleOther = other.filter((item) => {
+    if (isPrivileged) return true;
+    const allowed = roleAllowedOther[role as Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">] ?? [];
+    return allowed.includes(item.to);
+  });
 
   const handleLogout = async () => {
     try {
@@ -88,7 +119,7 @@ export const Sidebar = () => {
 
       <div className="mt-auto flex flex-col gap-1">
         <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Outros</p>
-        {other.map(renderItem)}
+        {visibleOther.map(renderItem)}
         <button
           type="button"
           onClick={handleLogout}
