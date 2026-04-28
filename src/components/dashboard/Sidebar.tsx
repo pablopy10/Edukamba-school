@@ -10,7 +10,7 @@ type Item = { icon: React.ElementType; label: string; to: string; hasArrow?: boo
 
 // Role-based visible routes. Admin/SuperAdmin see everything (subject to module toggles).
 const roleAllowedRoutes: Record<Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">, string[]> = {
-  TEACHER: ["/dashboard", "/turmas", "/avaliacoes", "/presencas", "/horario", "/material", "/pedidos", "/eventos"],
+  TEACHER: ["/dashboard", "/alunos", "/turmas", "/avaliacoes", "/presencas", "/horario", "/material", "/pedidos", "/eventos"],
   PARENT: ["/dashboard", "/alunos", "/avaliacoes", "/pagamentos", "/horario", "/matriculas", "/eventos", "/presencas", "/material"],
   STUDENT: ["/dashboard", "/avaliacoes", "/horario"],
 };
