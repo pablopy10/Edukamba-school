@@ -275,15 +275,16 @@ const AlunoPerfil = () => {
       // Aggregate attendance stats over ALL records (not just recent 10)
       const { data: allAttRows } = await supabase
         .from("attendance")
-        .select("status")
+        .select("status, notes")
         .eq("student_id", id);
       if (!cancelled) {
-        const rows = (allAttRows ?? []) as { status: string }[];
+        const rows = (allAttRows ?? []) as { status: string; notes: string | null }[];
         const stats = { total: rows.length, present: 0, late: 0, absent: 0, justified: 0 };
         rows.forEach((r) => {
+          const hasJustification = !!r.notes && r.notes.trim().length > 0;
           if (r.status === "PRESENT") stats.present += 1;
+          else if (r.status === "JUSTIFIED" || hasJustification) stats.justified += 1;
           else if (r.status === "LATE") stats.late += 1;
-          else if (r.status === "JUSTIFIED") stats.justified += 1;
           else stats.absent += 1;
         });
         setAttendanceStats(stats);
