@@ -541,6 +541,34 @@ const Pagamentos = () => {
       } else {
         setTransportPayments([]);
       }
+
+      // Enrollment fees (matrículas / renovações)
+      const { data: enFees } = await (isParent
+        ? supabase
+            .from("enrollment_fees")
+            .select("id, amount_due, due_date, is_paid, fee_type, student_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), academic_year:academic_years(id, label)")
+            .eq("school_id", sId)
+            .in("student_id", scopedStudentIds)
+            .order("due_date", { ascending: true })
+        : supabase
+            .from("enrollment_fees")
+            .select("id, amount_due, due_date, is_paid, fee_type, student_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), academic_year:academic_years(id, label)")
+            .eq("school_id", sId)
+            .order("due_date", { ascending: true })
+      );
+      setAllEnrollmentFees((enFees ?? []) as unknown as EnrollmentFeeRow[]);
+
+      const enFeeIds = (enFees ?? []).map((f: { id: string }) => f.id);
+      if (enFeeIds.length > 0) {
+        const { data: enPayRows } = await supabase
+          .from("payments")
+          .select("id, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+          .in("enrollment_fee_id", enFeeIds)
+          .order("payment_date", { ascending: false });
+        setEnrollmentPayments((enPayRows ?? []) as PaymentListRow[]);
+      } else {
+        setEnrollmentPayments([]);
+      }
     } else {
       setAllFees([]);
       setPayments([]);
@@ -548,6 +576,8 @@ const Pagamentos = () => {
       setActivityPayments([]);
       setAllTransportFees([]);
       setTransportPayments([]);
+      setAllEnrollmentFees([]);
+      setEnrollmentPayments([]);
     }
     setLoading(false);
   };
