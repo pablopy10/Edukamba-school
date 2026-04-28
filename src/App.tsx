@@ -42,6 +42,7 @@ import Transportes from "./pages/Transportes.tsx";
 import { ModulesProvider } from "./context/ModulesContext";
 import { AcademicYearProvider } from "./context/AcademicYearContext";
 import { UserRoleProvider } from "./hooks/useUserRole";
+import { SelectedChildProvider } from "./context/SelectedChildContext";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +51,7 @@ const App = () => (
     <ModulesProvider>
       <AcademicYearProvider>
       <UserRoleProvider>
+      <SelectedChildProvider>
       <TooltipProvider>
         <Toaster />
         <Sonner />
@@ -95,6 +97,7 @@ const App = () => (
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
+      </SelectedChildProvider>
       </UserRoleProvider>
       </AcademicYearProvider>
     </ModulesProvider>

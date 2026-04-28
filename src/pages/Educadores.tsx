@@ -60,14 +60,14 @@ const Educadores = () => {
     const studentsArr = (stus ?? []) as StudentOpt[];
     const classroomsArr = (clas ?? []) as ClassroomOpt[];
     const rows: GuardianRow[] = (profs ?? []).map((p: any) => {
-      const s = studentsArr.find((st) => st.parent_id === p.id) ?? null;
+      const linked = studentsArr.filter((st) => st.parent_id === p.id);
       return {
         profile_id: p.id,
         full_name: p.full_name,
         phone: p.phone,
-        student_id: s?.id ?? null,
-        student_name: s?.full_name ?? null,
-        classroom_id: s?.classroom_id ?? null,
+        student_ids: linked.map((s) => s.id),
+        student_names: linked.map((s) => s.full_name),
+        classroom_ids: linked.map((s) => s.classroom_id).filter((x): x is string => !!x),
       };
     });
     setGuardians(rows);
@@ -90,9 +90,11 @@ const Educadores = () => {
 
   const filtered = useMemo(() => {
     return guardians.filter((g) => {
-      const matchSearch = !search || [g.full_name, g.phone ?? "", g.student_name ?? "", classroomName(g.classroom_id)]
+      const classNames = g.classroom_ids.map((id) => classroomName(id)).join(" ");
+      const studentNames = g.student_names.join(" ");
+      const matchSearch = !search || [g.full_name, g.phone ?? "", studentNames, classNames]
         .some((f) => f.toLowerCase().includes(search.toLowerCase()));
-      const matchClass = filterClassroom === "all" || g.classroom_id === filterClassroom;
+      const matchClass = filterClassroom === "all" || g.classroom_ids.includes(filterClassroom);
       return matchSearch && matchClass;
     });
   }, [guardians, search, filterClassroom, classrooms]);
@@ -105,7 +107,7 @@ const Educadores = () => {
   const handleDelete = async () => {
     if (!deleting) return;
     // Unlink any student first
-    if (deleting.student_id) {
+    if (deleting.student_ids.length > 0) {
       await supabase.from("students").update({ parent_id: null }).eq("parent_id", deleting.profile_id);
     }
     // We can't delete auth users from client; demote profile so it stops appearing as guardian.
@@ -128,9 +130,9 @@ const Educadores = () => {
 
   const stats = useMemo(() => ({
     total: guardians.length,
-    withStudent: guardians.filter((g) => g.student_id).length,
-    withoutStudent: guardians.filter((g) => !g.student_id).length,
-    classes: new Set(guardians.map((g) => g.classroom_id).filter(Boolean)).size,
+    withStudent: guardians.filter((g) => g.student_ids.length > 0).length,
+    withoutStudent: guardians.filter((g) => g.student_ids.length === 0).length,
+    classes: new Set(guardians.flatMap((g) => g.classroom_ids)).size,
   }), [guardians]);
 
   return (
@@ -270,9 +272,37 @@ const Educadores = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="py-4 pr-4 text-foreground">{g.student_name ?? "—"}</td>
+                      <td className="py-4 pr-4 text-foreground">
+                        {g.student_names.length === 0 ? (
+                          "—"
+                        ) : g.student_names.length === 1 ? (
+                          g.student_names[0]
+                        ) : (
+                          <span title={g.student_names.join(", ")}>
+                            {g.student_names[0]}{" "}
+                            <span className="ml-1 inline-flex items-center rounded-full bg-pastel-blue/40 px-2 py-0.5 text-[10px] font-semibold text-pastel-blue-foreground">
+                              +{g.student_names.length - 1}
+                            </span>
+                          </span>
+                        )}
+                      </td>
                       <td className="py-4 pr-4">
-                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{classroomName(g.classroom_id)}</span>
+                        {g.classroom_ids.length === 0 ? (
+                          <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">—</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {g.classroom_ids.slice(0, 2).map((cid) => (
+                              <span key={cid} className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
+                                {classroomName(cid)}
+                              </span>
+                            ))}
+                            {g.classroom_ids.length > 2 && (
+                              <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
+                                +{g.classroom_ids.length - 2}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="py-4 pr-4">
                         <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{g.phone ?? "—"}</span>

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Search, MessageSquare, Bell, Clock, CalendarDays } from "lucide-react";
+import { Search, MessageSquare, Bell, Clock, CalendarDays, Baby } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { useSelectedChild } from "@/context/SelectedChildContext";
 import {
   Select,
   SelectContent,
@@ -33,6 +34,7 @@ export const Topbar = () => {
   const [q, setQ] = useState("");
   const { user } = useAuth();
   const { years, selectedYearId, setSelectedYearId } = useAcademicYear();
+  const { isParent, children: kids, selectedChildId, setSelectedChildId } = useSelectedChild();
   const [profile, setProfile] = useState<{ full_name: string; role: string | null; avatar_url: string | null } | null>(null);
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
 
@@ -92,6 +94,27 @@ export const Topbar = () => {
       </form>
 
       <div className="flex items-center gap-3">
+        {isParent && kids.length > 0 && (
+          <div className="hidden items-center md:flex" title="Filho(a) em consulta">
+            <Select
+              value={selectedChildId ?? undefined}
+              onValueChange={(v) => setSelectedChildId(v)}
+            >
+              <SelectTrigger className="h-11 w-auto gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-soft hover:bg-accent">
+                <Baby className="h-4 w-4 text-pastel-pink-foreground" strokeWidth={1.75} />
+                <SelectValue placeholder="Filho(a)" />
+              </SelectTrigger>
+              <SelectContent>
+                {kids.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.full_name}
+                    {c.classroom_name ? ` · ${c.classroom_name}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         {years.length > 0 && (
           <div className="hidden items-center md:flex" title="Ano letivo em gestão">
             <Select value={selectedYearId ?? undefined} onValueChange={setSelectedYearId}>
