@@ -12,7 +12,7 @@ type Item = { icon: React.ElementType; label: string; to: string; hasArrow?: boo
 const roleAllowedRoutes: Record<Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">, string[]> = {
   TEACHER: ["/dashboard", "/alunos", "/turmas", "/avaliacoes", "/presencas", "/horario", "/material", "/pedidos", "/eventos"],
   PARENT: ["/dashboard", "/alunos", "/avaliacoes", "/pagamentos", "/horario", "/matriculas", "/eventos", "/presencas", "/material"],
-  STUDENT: ["/dashboard", "/avaliacoes", "/horario"],
+  STUDENT: ["/dashboard", "/avaliacoes", "/horario", "/presencas"],
 };
 
 const roleAllowedOther: Record<Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">, string[]> = {
