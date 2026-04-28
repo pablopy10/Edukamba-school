@@ -405,8 +405,8 @@ const Material = () => {
         userId={user?.id ?? null}
         userName={userName}
         request={editingRequest}
-        classrooms={classrooms}
-        students={students}
+        classrooms={visibleClassrooms}
+        students={visibleStudents}
         onSaved={loadAll}
       />
       <DeliveryDialog
