@@ -146,6 +146,7 @@ const Horarios = () => {
         .map((t: any) => ({
           id: t.profile_id,
           name: t.profiles?.full_name ?? "Sem nome",
+          subjectId: t.subject_id ?? null,
         })),
     );
     setTimeSlots(
