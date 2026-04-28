@@ -729,7 +729,7 @@ const AlunoPerfil = () => {
           <StatPill label="Média Geral" value={overallAverage} color="lilac" />
           <StatPill label="Assiduidade" value={presenceRate} color="green" />
           <StatPill label="Avaliações" value={String(assessments.length)} color="blue" />
-          <StatPill label="Disciplinas" value={String(subjectsAvg.length)} color="yellow" />
+          <StatPill label="Disciplinas" value={String(subjectsCount)} color="yellow" />
         </div>
 
         {/* Histórico de matrículas */}
