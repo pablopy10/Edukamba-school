@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { GuardianFormDialog, GuardianRow } from "@/components/educadores/GuardianFormDialog";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 type ClassroomOpt = { id: string; name: string };
 type StudentOpt = { id: string; full_name: string; classroom_id: string | null; parent_id: string | null };
@@ -27,6 +28,7 @@ const initialsOf = (name: string) =>
 
 const Educadores = () => {
   const navigate = useNavigate();
+  const { selectedYearId } = useAcademicYear();
   const [guardians, setGuardians] = useState<GuardianRow[]>([]);
   const [classrooms, setClassrooms] = useState<ClassroomOpt[]>([]);
   const [students, setStudents] = useState<StudentOpt[]>([]);
@@ -41,6 +43,8 @@ const Educadores = () => {
 
   const load = async () => {
     setLoading(true);
+    let classroomsQuery = supabase.from("classrooms").select("id, name, academic_year_id").order("name");
+    if (selectedYearId) classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
     const [{ data: profs, error: pErr }, { data: stus }, { data: clas }] = await Promise.all([
       supabase
         .from("profiles")
@@ -48,7 +52,7 @@ const Educadores = () => {
         .eq("role", "PARENT")
         .order("full_name", { ascending: true }),
       supabase.from("students").select("id, full_name, classroom_id, parent_id"),
-      supabase.from("classrooms").select("id, name").order("name"),
+      classroomsQuery,
     ]);
     if (pErr) {
       toast({ title: "Erro a carregar educadores", description: pErr.message, variant: "destructive" });
@@ -72,7 +76,14 @@ const Educadores = () => {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [selectedYearId]);
+
+  // Reset classroom filter if no longer in current year list
+  useEffect(() => {
+    if (filterClassroom !== "all" && !classrooms.some((c) => c.id === filterClassroom)) {
+      setFilterClassroom("all");
+    }
+  }, [classrooms, filterClassroom]);
 
   const classroomName = (id: string | null) =>
     classrooms.find((c) => c.id === id)?.name ?? "—";
