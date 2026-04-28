@@ -1105,7 +1105,7 @@ const Pagamentos = () => {
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {!isParent && (<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Regras de propina</CardTitle>
@@ -1136,7 +1136,7 @@ const Pagamentos = () => {
               <p className="text-xs text-muted-foreground">overrides ativos</p>
             </CardContent>
           </Card>
-        </div>
+        </div>)}
 
         <Tabs defaultValue={isParent ? "fees" : "rules"} className="w-full">
           <TabsList>
