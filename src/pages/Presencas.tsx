@@ -414,7 +414,7 @@ const Presencas = () => {
     // Parents/students can only justify their own absences/lates
     if (canEdit) return false;
     if (!row) return false;
-    return !(row.status === "ABSENT" || row.status === "LATE" || row.status === "JUSTIFIED");
+    return !(row.status === "ABSENT" || row.status === "LATE" || row.status === "JUSTIFIED" || row.status === "DISCIPLINARY");
   })();
 
   const submitJustification = async () => {
@@ -631,7 +631,7 @@ const Presencas = () => {
                                 onSelect={(next) => applyStatus(s, d, next)}
                                 onJustify={() => openJustify(s, d)}
                               />
-                            ) : !isWk && row && (status === "ABSENT" || status === "LATE" || status === "JUSTIFIED") ? (
+                            ) : !isWk && row && (status === "ABSENT" || status === "LATE" || status === "JUSTIFIED" || status === "DISCIPLINARY") ? (
                               <button
                                 type="button"
                                 onClick={() => openJustify(s, d)}
