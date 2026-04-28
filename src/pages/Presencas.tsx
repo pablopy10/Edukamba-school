@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Check, X, Clock, Loader2, MinusCircle, FileText } from "lucide-react";
+import { Check, X, Clock, Loader2, MinusCircle, FileText, AlertTriangle } from "lucide-react";
 import { cn, sortByName } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -33,7 +33,7 @@ import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton"
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 
-type Status = "PRESENT" | "ABSENT" | "LATE" | "JUSTIFIED";
+type Status = "PRESENT" | "ABSENT" | "LATE" | "JUSTIFIED" | "DISCIPLINARY";
 
 interface Student {
   id: string;
@@ -64,6 +64,7 @@ const STATUS_CONFIG: Record<Status, { bg: string; Icon: typeof Check; label: str
   ABSENT: { bg: "bg-destructive text-white", Icon: X, label: "Falta" },
   LATE: { bg: "bg-pastel-yellow text-pastel-yellow-foreground", Icon: Clock, label: "Atrasado" },
   JUSTIFIED: { bg: "bg-pastel-green text-pastel-green-foreground", Icon: Check, label: "Justificado" },
+  DISCIPLINARY: { bg: "bg-pastel-lilac text-pastel-lilac-foreground", Icon: AlertTriangle, label: "Falta indisciplinar" },
 };
 
 // Build days range for a given month/year and a chosen "week" (1..n)
@@ -145,7 +146,11 @@ const AttendancePopover = ({
             <span className="flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-white"><X className="h-3 w-3" strokeWidth={3} /></span>
             Falta
           </Button>
-          {(status === "ABSENT" || status === "LATE" || status === "JUSTIFIED") && (
+          <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={() => handle("DISCIPLINARY")}>
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-pastel-lilac text-pastel-lilac-foreground"><AlertTriangle className="h-3 w-3" strokeWidth={3} /></span>
+            Falta indisciplinar
+          </Button>
+          {(status === "ABSENT" || status === "LATE" || status === "JUSTIFIED" || status === "DISCIPLINARY") && (
             <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={() => { setOpen(false); onJustify(); }}>
               <FileText className="h-4 w-4" />
               {hasNotes ? "Ver justificação" : "Justificar"}
@@ -375,7 +380,7 @@ const Presencas = () => {
   };
 
   const stats = useMemo(() => {
-    let present = 0, absent = 0, late = 0, total = 0;
+    let present = 0, absent = 0, late = 0, disciplinary = 0, total = 0;
     students.forEach((s) => {
       visibleDays.forEach((d) => {
         const isWk = d.getDay() === 0 || d.getDay() === 6;
@@ -385,12 +390,14 @@ const Presencas = () => {
         if (row?.status === "PRESENT") present++;
         else if (row?.status === "ABSENT") absent++;
         else if (row?.status === "LATE") late++;
+        else if (row?.status === "DISCIPLINARY") disciplinary++;
       });
     });
     return {
       present,
       absent,
       late,
+      disciplinary,
       rate: total ? Math.round((present / total) * 100) : 0,
     };
   }, [students, visibleDays, attendance]);
@@ -409,7 +416,7 @@ const Presencas = () => {
     // Parents/students can only justify their own absences/lates
     if (canEdit) return false;
     if (!row) return false;
-    return !(row.status === "ABSENT" || row.status === "LATE" || row.status === "JUSTIFIED");
+    return !(row.status === "ABSENT" || row.status === "LATE" || row.status === "JUSTIFIED" || row.status === "DISCIPLINARY");
   })();
 
   const submitJustification = async () => {
@@ -520,7 +527,7 @@ const Presencas = () => {
 
         {/* Stats */}
         {!isParent && (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
           <div className="rounded-2xl bg-pastel-blue p-5 shadow-card">
             <p className="text-xs font-semibold uppercase tracking-wider text-pastel-blue-foreground/80">Total de Alunos</p>
             <p className="mt-2 text-3xl font-bold text-pastel-blue-foreground">{students.length}</p>
@@ -536,6 +543,10 @@ const Presencas = () => {
           <div className="rounded-2xl bg-pastel-pink p-5 shadow-card">
             <p className="text-xs font-semibold uppercase tracking-wider text-pastel-pink-foreground/80">Faltas</p>
             <p className="mt-2 text-3xl font-bold text-pastel-pink-foreground">{stats.absent}</p>
+          </div>
+          <div className="rounded-2xl bg-pastel-lilac p-5 shadow-card">
+            <p className="text-xs font-semibold uppercase tracking-wider text-pastel-lilac-foreground/80">Indisciplinares</p>
+            <p className="mt-2 text-3xl font-bold text-pastel-lilac-foreground">{stats.disciplinary}</p>
           </div>
           <div className="rounded-2xl bg-pastel-lilac p-5 shadow-card">
             <p className="text-xs font-semibold uppercase tracking-wider text-pastel-lilac-foreground/80">Taxa Presença</p>
@@ -626,7 +637,7 @@ const Presencas = () => {
                                 onSelect={(next) => applyStatus(s, d, next)}
                                 onJustify={() => openJustify(s, d)}
                               />
-                            ) : !isWk && row && (status === "ABSENT" || status === "LATE" || status === "JUSTIFIED") ? (
+                            ) : !isWk && row && (status === "ABSENT" || status === "LATE" || status === "JUSTIFIED" || status === "DISCIPLINARY") ? (
                               <button
                                 type="button"
                                 onClick={() => openJustify(s, d)}
@@ -678,6 +689,12 @@ const Presencas = () => {
               <X className="h-3 w-3" strokeWidth={3} />
             </span>
             Falta
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-pastel-lilac text-pastel-lilac-foreground">
+              <AlertTriangle className="h-3 w-3" strokeWidth={3} />
+            </span>
+            Falta indisciplinar
           </div>
           <div className="flex items-center gap-2">
             <span className="text-base">—</span>

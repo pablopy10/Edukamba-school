@@ -177,7 +177,7 @@ const AlunoPerfil = () => {
   const [assessments, setAssessments] = useState<AssessmentRow[]>([]);
   const [grades, setGrades] = useState<GradeRow[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRow[]>([]);
-  const [attendanceStats, setAttendanceStats] = useState<{ total: number; present: number; late: number; absent: number; justified: number }>({ total: 0, present: 0, late: 0, absent: 0, justified: 0 });
+  const [attendanceStats, setAttendanceStats] = useState<{ total: number; present: number; late: number; absent: number; justified: number; disciplinary: number }>({ total: 0, present: 0, late: 0, absent: 0, justified: 0, disciplinary: 0 });
   const [teachers, setTeachers] = useState<{ id: string; full_name: string; subject: string | null; phone: string | null }[]>([]);
   const [fees, setFees] = useState<FeeRow[]>([]);
   const [remindingFeeId, setRemindingFeeId] = useState<string | null>(null);
@@ -279,12 +279,13 @@ const AlunoPerfil = () => {
         .eq("student_id", id);
       if (!cancelled) {
         const rows = (allAttRows ?? []) as { status: string; notes: string | null }[];
-        const stats = { total: rows.length, present: 0, late: 0, absent: 0, justified: 0 };
+        const stats = { total: rows.length, present: 0, late: 0, absent: 0, justified: 0, disciplinary: 0 };
         rows.forEach((r) => {
           const hasJustification = !!r.notes && r.notes.trim().length > 0;
           if (r.status === "PRESENT") stats.present += 1;
           else if (r.status === "JUSTIFIED" || hasJustification) stats.justified += 1;
           else if (r.status === "LATE") stats.late += 1;
+          else if (r.status === "DISCIPLINARY") stats.disciplinary += 1;
           else stats.absent += 1;
         });
         setAttendanceStats(stats);
@@ -582,6 +583,7 @@ const AlunoPerfil = () => {
       ABSENT: { label: "Falta", cls: "bg-pastel-pink text-pastel-pink-foreground" },
       LATE: { label: "Atraso", cls: "bg-pastel-yellow text-pastel-yellow-foreground" },
       JUSTIFIED: { label: "Justificada", cls: "bg-pastel-blue text-pastel-blue-foreground" },
+      DISCIPLINARY: { label: "Falta indisciplinar", cls: "bg-pastel-lilac text-pastel-lilac-foreground" },
     };
     const v = map[status] ?? { label: status, cls: "bg-muted text-foreground" };
     return <span className={cn("rounded-full px-3 py-1 text-xs font-medium", v.cls)}>{v.label}</span>;
@@ -1192,7 +1194,7 @@ const AlunoPerfil = () => {
               <Link to="/presencas" className="text-xs font-medium text-pastel-green-foreground hover:underline">Ver todas</Link>
             </div>
             {attendanceStats.total > 0 && (
-              <div className="grid grid-cols-2 gap-3 border-b border-border p-5 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 border-b border-border p-5 sm:grid-cols-5">
                 <div className="rounded-xl bg-pastel-green/40 p-3">
                   <p className="text-xs text-muted-foreground">Presenças</p>
                   <p className="text-xl font-bold text-foreground">{attendanceStats.present}</p>
@@ -1208,6 +1210,10 @@ const AlunoPerfil = () => {
                 <div className="rounded-xl bg-pastel-blue/40 p-3">
                   <p className="text-xs text-muted-foreground">Justificadas</p>
                   <p className="text-xl font-bold text-foreground">{attendanceStats.justified}</p>
+                </div>
+                <div className="rounded-xl bg-pastel-lilac/40 p-3">
+                  <p className="text-xs text-muted-foreground">Indisciplinares</p>
+                  <p className="text-xl font-bold text-foreground">{attendanceStats.disciplinary}</p>
                 </div>
               </div>
             )}
