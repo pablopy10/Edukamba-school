@@ -177,7 +177,7 @@ const AlunoPerfil = () => {
   const [assessments, setAssessments] = useState<AssessmentRow[]>([]);
   const [grades, setGrades] = useState<GradeRow[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRow[]>([]);
-  const [attendanceStats, setAttendanceStats] = useState<{ total: number; present: number; late: number; absent: number; justified: number }>({ total: 0, present: 0, late: 0, absent: 0, justified: 0 });
+  const [attendanceStats, setAttendanceStats] = useState<{ total: number; present: number; late: number; absent: number; justified: number; disciplinary: number }>({ total: 0, present: 0, late: 0, absent: 0, justified: 0, disciplinary: 0 });
   const [teachers, setTeachers] = useState<{ id: string; full_name: string; subject: string | null; phone: string | null }[]>([]);
   const [fees, setFees] = useState<FeeRow[]>([]);
   const [remindingFeeId, setRemindingFeeId] = useState<string | null>(null);
@@ -279,12 +279,13 @@ const AlunoPerfil = () => {
         .eq("student_id", id);
       if (!cancelled) {
         const rows = (allAttRows ?? []) as { status: string; notes: string | null }[];
-        const stats = { total: rows.length, present: 0, late: 0, absent: 0, justified: 0 };
+        const stats = { total: rows.length, present: 0, late: 0, absent: 0, justified: 0, disciplinary: 0 };
         rows.forEach((r) => {
           const hasJustification = !!r.notes && r.notes.trim().length > 0;
           if (r.status === "PRESENT") stats.present += 1;
           else if (r.status === "JUSTIFIED" || hasJustification) stats.justified += 1;
           else if (r.status === "LATE") stats.late += 1;
+          else if (r.status === "DISCIPLINARY") stats.disciplinary += 1;
           else stats.absent += 1;
         });
         setAttendanceStats(stats);
