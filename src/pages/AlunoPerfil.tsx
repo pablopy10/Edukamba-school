@@ -506,10 +506,20 @@ const AlunoPerfil = () => {
   }, [grades]);
 
   const presenceRate = useMemo(() => {
-    if (attendance.length === 0) return "—";
-    const present = attendance.filter((a) => a.status === "PRESENT" || a.status === "LATE").length;
-    return `${Math.round((present / attendance.length) * 100)}%`;
-  }, [attendance]);
+    if (attendanceStats.total === 0) return "—";
+    const present = attendanceStats.present + attendanceStats.late + attendanceStats.justified;
+    return `${Math.round((present / attendanceStats.total) * 100)}%`;
+  }, [attendanceStats]);
+
+  const subjectsCount = useMemo(() => {
+    const set = new Set<string>();
+    schedule.forEach((s) => {
+      const n = s.subjects?.name;
+      if (n) set.add(n);
+    });
+    if (set.size > 0) return set.size;
+    return subjectsAvg.length;
+  }, [schedule, subjectsAvg]);
 
   const feesSummary = useMemo(() => {
     const paid = fees.filter((f) => f.is_paid).reduce((s, f) => s + Number(f.amount_due), 0);
