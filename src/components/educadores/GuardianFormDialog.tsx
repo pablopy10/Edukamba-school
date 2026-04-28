@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
-import { sortByName } from "@/lib/utils";
+// (no extra imports needed)
 
 export type GuardianRow = {
   profile_id: string;
@@ -119,11 +119,13 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
     }
   };
 
-  const filteredStudents = sortByName(
-    students.filter((s) =>
+  const filteredStudents = [...students]
+    .filter((s) =>
       !studentSearch.trim() || s.full_name.toLowerCase().includes(studentSearch.toLowerCase()),
-    ),
-  );
+    )
+    .sort((a, b) =>
+      a.full_name.localeCompare(b.full_name, undefined, { numeric: true, sensitivity: "base" }),
+    );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
