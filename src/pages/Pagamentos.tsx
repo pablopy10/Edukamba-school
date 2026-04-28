@@ -499,6 +499,14 @@ const Pagamentos = () => {
 
   useEffect(() => { if (!parentLoading) fetchAll(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [parentLoading, isParent, childIds.join(",")]);
 
+  // Lock classroom filter to parent's child classroom
+  useEffect(() => {
+    if (!isParent) return;
+    if (parentClassroomIds.length > 0) {
+      setFeeClassroomFilter(parentClassroomIds[0]);
+    }
+  }, [isParent, parentClassroomIds.join(",")]);
+
   // Fee rules
   const openNewRule = () => {
     setEditingRule(null);
