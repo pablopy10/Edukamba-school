@@ -793,6 +793,7 @@ const AlunoPerfil = () => {
         </div>
 
         {/* Pagamentos */}
+        {!isTeacher && (
         <div className="rounded-2xl bg-card shadow-card">
           <div className="flex items-center gap-2 border-b border-border p-5">
             <Wallet className="h-5 w-5 text-pastel-yellow-foreground" strokeWidth={1.75} />
@@ -1008,6 +1009,7 @@ const AlunoPerfil = () => {
             </TabsContent>
           </Tabs>
         </div>
+        )}
 
         {/* Schedule + guardian */}
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
