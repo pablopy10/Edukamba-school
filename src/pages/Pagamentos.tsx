@@ -2200,14 +2200,14 @@ const Pagamentos = () => {
       <Dialog open={!!recordDialog} onOpenChange={(o) => { if (!o && !recordUploading) setRecordDialog(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Registar pagamento</DialogTitle>
+            <DialogTitle>{isParent ? "Anexar comprovativo" : "Registar pagamento"}</DialogTitle>
             <DialogDescription>
               {recordDialog?.kind === "fee"
-                ? `Anexa o comprovativo da propina de ${recordDialog.fee.student?.full_name ?? ""}. Será marcado como pago e validado, e o encarregado será notificado.`
+                ? `Anexa o comprovativo da propina de ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Ficará à espera de validação pela escola." : "Será marcado como pago e validado, e o encarregado será notificado."}`
                 : recordDialog?.kind === "activity"
-                ? `Anexa o comprovativo da atividade ${recordDialog.fee.activity?.name ?? ""} de ${recordDialog.fee.student?.full_name ?? ""}. Será marcado como pago e validado.`
+                ? `Anexa o comprovativo da atividade ${recordDialog.fee.activity?.name ?? ""} de ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Ficará à espera de validação pela escola." : "Será marcado como pago e validado."}`
                 : recordDialog?.kind === "transport"
-                ? `Anexa o comprovativo do transporte (${recordDialog.fee.route?.name ?? ""}) de ${recordDialog.fee.student?.full_name ?? ""}. Será marcado como pago e validado.`
+                ? `Anexa o comprovativo do transporte (${recordDialog.fee.route?.name ?? ""}) de ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Ficará à espera de validação pela escola." : "Será marcado como pago e validado."}`
                 : ""}
             </DialogDescription>
           </DialogHeader>
