@@ -527,7 +527,7 @@ const Presencas = () => {
 
         {/* Stats */}
         {!isParent && (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
           <div className="rounded-2xl bg-pastel-blue p-5 shadow-card">
             <p className="text-xs font-semibold uppercase tracking-wider text-pastel-blue-foreground/80">Total de Alunos</p>
             <p className="mt-2 text-3xl font-bold text-pastel-blue-foreground">{students.length}</p>
@@ -543,6 +543,10 @@ const Presencas = () => {
           <div className="rounded-2xl bg-pastel-pink p-5 shadow-card">
             <p className="text-xs font-semibold uppercase tracking-wider text-pastel-pink-foreground/80">Faltas</p>
             <p className="mt-2 text-3xl font-bold text-pastel-pink-foreground">{stats.absent}</p>
+          </div>
+          <div className="rounded-2xl bg-pastel-lilac p-5 shadow-card">
+            <p className="text-xs font-semibold uppercase tracking-wider text-pastel-lilac-foreground/80">Indisciplinares</p>
+            <p className="mt-2 text-3xl font-bold text-pastel-lilac-foreground">{stats.disciplinary}</p>
           </div>
           <div className="rounded-2xl bg-pastel-lilac p-5 shadow-card">
             <p className="text-xs font-semibold uppercase tracking-wider text-pastel-lilac-foreground/80">Taxa Presença</p>
