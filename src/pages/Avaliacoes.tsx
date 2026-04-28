@@ -477,6 +477,8 @@ const Avaliacoes = () => {
         teachers={teachers}
         initial={editing}
         onSaved={loadAll}
+        lockTeacherId={isTeacher ? user?.id ?? null : null}
+        lockSubjectId={isTeacher ? teacherSubjectId : null}
       />
 
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
