@@ -1852,6 +1852,7 @@ const Pagamentos = () => {
           </TabsContent>
 
           {/* RULES TAB */}
+          {!isParent && (
           <TabsContent value="rules" className="space-y-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
@@ -1900,6 +1901,7 @@ const Pagamentos = () => {
               </CardContent>
             </Card>
           </TabsContent>
+          )}
 
           {/* FAMILY TAB */}
           <TabsContent value="family" className="space-y-4">
