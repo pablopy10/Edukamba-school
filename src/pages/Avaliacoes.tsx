@@ -38,6 +38,7 @@ import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { useAuth } from "@/hooks/useAuth";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 
@@ -95,6 +96,14 @@ const Avaliacoes = () => {
   const { user } = useAuth();
   const { role } = useUserRole();
   const { isTeacher, classroomIds: teacherClassroomIds, subjectId: teacherSubjectId, loading: teacherLoading } = useTeacherClassrooms();
+  const {
+    isStudent,
+    classroomId: studentClassroomId,
+    subjectIds: studentSubjectIds,
+    teacherIds: studentTeacherIds,
+    loading: studentLoading,
+  } = useStudentSelf();
+  const studentReadOnly = isParent || isStudent;
   const [view, setView] = useState<View>("calendario");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
@@ -163,6 +172,13 @@ const Avaliacoes = () => {
       }
       assessmentsQuery = assessmentsQuery.in("classroom_id", teacherClassroomIds);
     }
+    if (isStudent) {
+      if (!studentClassroomId) {
+        setAssessments([]); setClassrooms([]); setSubjects([]); setTeachers([]); setTerms([]); setHolidays([]); setLoading(false);
+        return;
+      }
+      assessmentsQuery = assessmentsQuery.eq("classroom_id", studentClassroomId);
+    }
 
     const [aRes, cRes, sRes, tRes, termRes, holRes] = await Promise.all([
       assessmentsQuery,
@@ -181,15 +197,26 @@ const Avaliacoes = () => {
       if (isTeacher) {
         classroomList = classroomList.filter((c) => teacherClassroomIds.includes(c.id));
       }
+      if (isStudent && studentClassroomId) {
+        classroomList = classroomList.filter((c) => c.id === studentClassroomId);
+      }
       setClassrooms(classroomList);
     }
-    setSubjects(sRes.data ?? []);
-    setTeachers(
-      (tRes.data ?? [])
+    {
+      let subjectList = sRes.data ?? [];
+      let teacherList = (tRes.data ?? [])
         .filter((t: any) => !!t.profile_id)
         .map((t: any) => ({ id: t.profile_id, name: t.profiles?.full_name ?? "Sem nome" }))
-        .sort((a, b) => a.name.localeCompare(b.name))
-    );
+        .sort((a, b) => a.name.localeCompare(b.name));
+      if (isStudent) {
+        const subjSet = new Set(studentSubjectIds);
+        const teachSet = new Set(studentTeacherIds);
+        subjectList = subjectList.filter((s) => subjSet.has(s.id));
+        teacherList = teacherList.filter((t) => teachSet.has(t.id));
+      }
+      setSubjects(subjectList);
+      setTeachers(teacherList);
+    }
     setTerms((termRes.data ?? []) as Term[]);
     setHolidays((holRes.data ?? []) as Holiday[]);
     setLoading(false);
@@ -198,9 +225,16 @@ const Avaliacoes = () => {
   useEffect(() => {
     if (parentLoading) return;
     if (isTeacher && teacherLoading) return;
+    if (isStudent && studentLoading) return;
     loadAll();
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [selectedYearId, parentLoading, isParent, parentClassroomIds.join(","), isTeacher, teacherLoading, teacherClassroomIds.join(",")]);
+  }, [selectedYearId, parentLoading, isParent, parentClassroomIds.join(","), isTeacher, teacherLoading, teacherClassroomIds.join(","), isStudent, studentLoading, studentClassroomId, studentSubjectIds.join(","), studentTeacherIds.join(",")]);
+
+  // Lock filters to the student's own scope
+  useEffect(() => {
+    if (!isStudent) return;
+    if (studentClassroomId) setClassroomFilter(studentClassroomId);
+  }, [isStudent, studentClassroomId]);
 
   const classroomMap = useMemo(() => new Map(classrooms.map((c) => [c.id, c.name])), [classrooms]);
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s.name])), [subjects]);
@@ -314,7 +348,7 @@ const Avaliacoes = () => {
     setAssessments((prev) => prev.filter((a) => a.id !== id));
   };
 
-  if (parentLoading) return <PageLoadingSkeleton />;
+  if (parentLoading || (isStudent && studentLoading)) return <PageLoadingSkeleton />;
 
   return (
     <DashboardLayout>
@@ -347,7 +381,7 @@ const Avaliacoes = () => {
                 Lista
               </button>
             </div>
-            {!isParent && (
+            {!studentReadOnly && (
               <button
                 onClick={openCreate}
                 className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
@@ -360,7 +394,7 @@ const Avaliacoes = () => {
         </div>
 
         {/* Stats */}
-        {!isParent && (
+        {!studentReadOnly && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             { label: "Total", value: stats.total, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
@@ -399,21 +433,21 @@ const Avaliacoes = () => {
             </div>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+            <Select value={subjectFilter} onValueChange={setSubjectFilter} disabled={isStudent}>
               <SelectTrigger className="h-10 rounded-full"><SelectValue placeholder="Disciplina" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas as disciplinas</SelectItem>
                 {subjects.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Select value={teacherFilter} onValueChange={setTeacherFilter}>
+            <Select value={teacherFilter} onValueChange={setTeacherFilter} disabled={isStudent}>
               <SelectTrigger className="h-10 rounded-full"><SelectValue placeholder="Professor" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os professores</SelectItem>
                 {teachers.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Select value={classroomFilter} onValueChange={setClassroomFilter}>
+            <Select value={classroomFilter} onValueChange={setClassroomFilter} disabled={isStudent}>
               <SelectTrigger className="h-10 rounded-full"><SelectValue placeholder="Turma" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas as turmas</SelectItem>
@@ -450,7 +484,7 @@ const Avaliacoes = () => {
             onEdit={openEdit}
             onDelete={(id) => setDeleteId(id)}
             onOpen={(id) => navigate(`/avaliacoes/${id}/notas`)}
-            readOnly={isParent}
+            readOnly={studentReadOnly}
           />
         ) : (
           <ListView
@@ -463,7 +497,7 @@ const Avaliacoes = () => {
             onEdit={openEdit}
             onDelete={(id) => setDeleteId(id)}
             onOpen={(id) => navigate(`/avaliacoes/${id}/notas`)}
-            readOnly={isParent}
+            readOnly={studentReadOnly}
           />
         )}
       </div>
@@ -820,12 +854,16 @@ const ListView = ({
                       <button onClick={(ev) => { ev.stopPropagation(); onOpen(e.id); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/30 hover:text-foreground" title="Atribuir notas">
                         <GraduationCap className="h-4 w-4" strokeWidth={1.75} />
                       </button>
-                      <button onClick={(ev) => { ev.stopPropagation(); onEdit(e); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
-                        <Pencil className="h-4 w-4" strokeWidth={1.75} />
-                      </button>
-                      <button onClick={(ev) => { ev.stopPropagation(); onDelete(e.id); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Eliminar">
-                        <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                      </button>
+                      {!readOnly && (
+                        <>
+                          <button onClick={(ev) => { ev.stopPropagation(); onEdit(e); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
+                            <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                          </button>
+                          <button onClick={(ev) => { ev.stopPropagation(); onDelete(e.id); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Eliminar">
+                            <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

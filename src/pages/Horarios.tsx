@@ -9,6 +9,7 @@ import { useParentChildren } from "@/hooks/useParentChildren";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -74,6 +75,14 @@ const Horarios = () => {
   const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
   const isAdmin = role === "ADMIN";
   const { subjectId: teacherSubjectId } = useTeacherClassrooms();
+  const {
+    isStudent,
+    classroomId: studentClassroomId,
+    subjectIds: studentSubjectIds,
+    teacherIds: studentTeacherIds,
+    shift: studentShift,
+    loading: studentLoading,
+  } = useStudentSelf();
   const { selectedYearId } = useAcademicYear();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const academicYearId = selectedYearId;
@@ -113,6 +122,7 @@ const Horarios = () => {
     if (!schoolId) return;
     if (parentLoading) return;
     if (isTeacher && teacherLoading) return;
+    if (isStudent && studentLoading) return;
     setLoading(true);
     let classroomsQuery = supabase.from("classrooms").select("id, name").eq("school_id", schoolId).order("name");
     if (selectedYearId) classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
@@ -134,22 +144,31 @@ const Horarios = () => {
     if (isTeacher) {
       classroomList = classroomList.filter((c) => teacherClassroomIds.includes(c.id));
     }
+    if (isStudent) {
+      classroomList = classroomList.filter((c) => c.id === studentClassroomId);
+    }
     setClassrooms(classroomList);
     // Pre-select first classroom if none selected or current selection is not valid
     setClassroomFilter((prev) => {
       if (prev && classroomList.some((c) => c.id === prev)) return prev;
       return classroomList[0]?.id ?? "";
     });
-    setSubjects((subjectsRes.data ?? []).map((s) => ({ id: s.id, name: s.name })));
-    setTeachers(
-      (teachersRes.data ?? [])
+    let subjectList = (subjectsRes.data ?? []).map((s) => ({ id: s.id, name: s.name }));
+    let teacherList = (teachersRes.data ?? [])
         .filter((t: any) => !!t.profile_id)
         .map((t: any) => ({
           id: t.profile_id,
           name: t.profiles?.full_name ?? "Sem nome",
           subjectId: t.subject_id ?? null,
-        })),
-    );
+      }));
+    if (isStudent) {
+      const subjSet = new Set(studentSubjectIds);
+      const teachSet = new Set(studentTeacherIds);
+      subjectList = subjectList.filter((s) => subjSet.has(s.id));
+      teacherList = teacherList.filter((t) => teachSet.has(t.id));
+    }
+    setSubjects(subjectList);
+    setTeachers(teacherList);
     setTimeSlots(
       (slotsRes.data ?? []).map((s: any) => ({
         id: s.id,
@@ -176,7 +195,7 @@ const Horarios = () => {
       })),
     );
     setLoading(false);
-  }, [schoolId, isParent, parentClassroomIds.join(","), parentLoading, selectedYearId, isTeacher, teacherClassroomIds.join(","), teacherLoading]);
+  }, [schoolId, isParent, parentClassroomIds.join(","), parentLoading, selectedYearId, isTeacher, teacherClassroomIds.join(","), teacherLoading, isStudent, studentLoading, studentClassroomId, studentSubjectIds.join(","), studentTeacherIds.join(",")]);
 
   useEffect(() => { void loadAll(); }, [loadAll]);
 
@@ -186,6 +205,12 @@ const Horarios = () => {
     setTeacherFilter(user.id);
     if (teacherSubjectId) setSubjectFilter(teacherSubjectId);
   }, [isTeacher, user?.id, teacherSubjectId]);
+
+  // For students, lock the shift to the dominant shift of their classroom.
+  useEffect(() => {
+    if (!isStudent) return;
+    if (studentShift) setShiftView(studentShift);
+  }, [isStudent, studentShift]);
 
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s.name])), [subjects]);
   const teacherMap = useMemo(() => new Map(teachers.map((t) => [t.id, t.name])), [teachers]);
@@ -344,7 +369,7 @@ const Horarios = () => {
                 : "Gerir horário semanal por turma, professor ou disciplina, com deteção de conflitos."}
             </p>
           </div>
-          {!isParent && isAdmin && (
+          {!isParent && !isStudent && isAdmin && (
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => setOpenSlots(true)}>
               <Settings2 className="mr-2 h-4 w-4" /> Blocos da escola
@@ -361,7 +386,7 @@ const Horarios = () => {
         <div className="grid grid-cols-1 gap-3 rounded-2xl bg-card p-4 shadow-card sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label className="mb-1 block text-xs font-semibold text-muted-foreground">Turma</label>
-            <Select value={classroomFilter} onValueChange={setClassroomFilter} disabled={classrooms.length === 0}>
+            <Select value={classroomFilter} onValueChange={setClassroomFilter} disabled={classrooms.length === 0 || isStudent}>
               <SelectTrigger><SelectValue placeholder="Selecionar turma" /></SelectTrigger>
               <SelectContent>
                 {classrooms.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
@@ -370,7 +395,7 @@ const Horarios = () => {
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold text-muted-foreground">Disciplina</label>
-            <Select value={subjectFilter} onValueChange={setSubjectFilter} disabled={isTeacher}>
+            <Select value={subjectFilter} onValueChange={setSubjectFilter} disabled={isTeacher || isStudent}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>Todas as disciplinas</SelectItem>
@@ -380,7 +405,7 @@ const Horarios = () => {
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold text-muted-foreground">Professor</label>
-            <Select value={teacherFilter} onValueChange={setTeacherFilter} disabled={isTeacher}>
+            <Select value={teacherFilter} onValueChange={setTeacherFilter} disabled={isTeacher || isStudent}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>Todos os professores</SelectItem>
@@ -390,7 +415,7 @@ const Horarios = () => {
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold text-muted-foreground">Turno</label>
-            <Select value={shiftView} onValueChange={(v) => setShiftView(v as typeof shiftView)}>
+            <Select value={shiftView} onValueChange={(v) => setShiftView(v as typeof shiftView)} disabled={isStudent}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="MORNING">Manhã</SelectItem>
@@ -458,7 +483,7 @@ const Horarios = () => {
                       onDelete={(id) => setDeletingId(id)}
                       onCreate={handleNewAt}
                       onDropMove={handleDropMove}
-                      readOnly={isParent || !isAdmin}
+                       readOnly={isParent || isStudent || !isAdmin}
                     />
                   ))}
                 </div>

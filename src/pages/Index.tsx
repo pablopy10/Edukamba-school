@@ -12,6 +12,7 @@ import { ComplaintsCard } from "@/components/dashboard/ComplaintsCard";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { useState } from "react";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 
 const Index = () => {
@@ -19,8 +20,10 @@ const Index = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const { role, loading: roleLoading } = useUserRole();
   const isParent = role === "PARENT";
+  const isStudent = role === "STUDENT";
+  const { studentId, loading: studentLoading } = useStudentSelf();
   const fmt = (n: number) => n.toLocaleString("pt-PT");
-  if (roleLoading) return <PageLoadingSkeleton />;
+  if (roleLoading || (isStudent && studentLoading)) return <PageLoadingSkeleton />;
   return (
     <DashboardLayout>
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_320px]">
@@ -28,7 +31,7 @@ const Index = () => {
             <div className="flex flex-col gap-6">
               <h1 className="sr-only">Painel Edukamba</h1>
 
-              {!isParent && (
+              {!isParent && !isStudent && (
                 <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                   <StatCard label="Alunos" value={fmt(counts.students)} delta={0} variant="lilac" />
                   <StatCard label="Professores" value={fmt(counts.teachers)} delta={0} variant="yellow" />
@@ -37,14 +40,14 @@ const Index = () => {
                 </section>
               )}
 
-              {!isParent && (
+              {!isParent && !isStudent && (
                 <section className="grid grid-cols-1 gap-6 lg:grid-cols-[340px_1fr]">
                   <StudentsCard male={gender.male} female={gender.female} total={gender.total} />
                   <AttendanceCard />
                 </section>
               )}
 
-              {isParent ? (
+              {isParent || isStudent ? (
                 <section className="grid grid-cols-1 gap-6">
                   <HonorRollCard />
                 </section>
@@ -56,9 +59,9 @@ const Index = () => {
                 </section>
               )}
 
-              {isParent ? (
+              {isParent || isStudent ? (
                 <section className="grid grid-cols-1 gap-6">
-                  <ComplaintsCard />
+                  <ComplaintsCard studentScopeId={isStudent ? studentId : undefined} />
                 </section>
               ) : (
                 <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -72,7 +75,7 @@ const Index = () => {
             <aside className="flex flex-col gap-6">
               <CalendarCard selectedDate={selectedDate} onSelect={setSelectedDate} />
               <AgendaCard date={selectedDate} />
-              <MessagesCard messages={messages} />
+              {!isStudent && <MessagesCard messages={messages} />}
             </aside>
       </div>
     </DashboardLayout>

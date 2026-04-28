@@ -31,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
+import { useStudentSelf } from "@/hooks/useStudentSelf";
 
 type Status = "PRESENT" | "ABSENT" | "LATE" | "JUSTIFIED";
 
@@ -167,6 +168,7 @@ const Presencas = () => {
   const { selectedYearId } = useAcademicYear();
   const { isParent, childIds, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
+  const { isStudent, studentId, classroomId: studentClassroomId, loading: studentLoading } = useStudentSelf();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month0, setMonth0] = useState(today.getMonth());
@@ -184,7 +186,7 @@ const Presencas = () => {
   const [justifyText, setJustifyText] = useState("");
   const [justifySaving, setJustifySaving] = useState(false);
 
-  const canEdit = (userRole === "ADMIN" || userRole === "TEACHER") && !isParent;
+  const canEdit = (userRole === "ADMIN" || userRole === "TEACHER") && !isParent && !isStudent;
 
   // Load profile (school + role)
   useEffect(() => {
@@ -207,6 +209,7 @@ const Presencas = () => {
     if (!schoolId) return;
     if (isParent && parentLoading) return;
     if (isTeacher && teacherLoading) return;
+    if (isStudent && studentLoading) return;
     if (!selectedYearId) {
       setClassrooms([]);
       setClassroomId("all");
@@ -235,13 +238,21 @@ const Presencas = () => {
         }
         q = q.in("id", teacherClassroomIds);
       }
+      if (isStudent) {
+        if (!studentClassroomId) {
+          setClassrooms([]);
+          setClassroomId("all");
+          return;
+        }
+        q = q.eq("id", studentClassroomId);
+      }
       const { data } = await q;
       const list = data ?? [];
       setClassrooms(list);
       // Pre-select first classroom by ascending name; fall back to "all" if none.
       setClassroomId(list[0]?.id ?? "all");
     })();
-  }, [schoolId, selectedYearId, isParent, parentLoading, parentClassroomIds.join(","), isTeacher, teacherLoading, teacherClassroomIds.join(",")]);
+  }, [schoolId, selectedYearId, isParent, parentLoading, parentClassroomIds.join(","), isTeacher, teacherLoading, teacherClassroomIds.join(","), isStudent, studentLoading, studentClassroomId]);
 
   // Compute month days
   const monthDays = useMemo(() => getMonthDays(year, month0), [year, month0]);
@@ -251,6 +262,7 @@ const Presencas = () => {
   useEffect(() => {
     if (!schoolId) return;
     if (isParent && parentLoading) return;
+    if (isStudent && studentLoading) return;
     let cancelled = false;
     setStudentsLoading(true);
     (async () => {
@@ -270,13 +282,21 @@ const Presencas = () => {
         }
         studentsQuery = studentsQuery.in("id", childIds);
       }
+      if (isStudent) {
+        if (!studentId) {
+          setStudents([]);
+          setStudentsLoading(false);
+          return;
+        }
+        studentsQuery = studentsQuery.eq("id", studentId);
+      }
       const { data } = await studentsQuery;
       if (cancelled) return;
       setStudents(data ?? []);
       setStudentsLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [schoolId, classroomId, isParent, parentLoading, childIds.join(",")]);
+  }, [schoolId, classroomId, isParent, parentLoading, childIds.join(","), isStudent, studentLoading, studentId]);
 
   // Load attendance separately when month/year/school/classroom changes
   useEffect(() => {
@@ -375,7 +395,7 @@ const Presencas = () => {
     };
   }, [students, visibleDays, attendance]);
 
-  if (parentLoading) return <PageLoadingSkeleton />;
+  if (parentLoading || (isStudent && studentLoading)) return <PageLoadingSkeleton />;
 
   const openJustify = (student: Student, date: Date) => {
     const key = `${student.id}__${fmtISO(date)}`;
@@ -484,12 +504,12 @@ const Presencas = () => {
             </Select>
 
             {/* Classroom */}
-            <Select value={classroomId} onValueChange={setClassroomId} disabled={isParent}>
+            <Select value={classroomId} onValueChange={setClassroomId} disabled={isParent || isStudent}>
               <SelectTrigger className="w-[180px] rounded-full bg-card">
                 <SelectValue placeholder="Turma" />
               </SelectTrigger>
               <SelectContent>
-                {!isParent && <SelectItem value="all">Todas as turmas</SelectItem>}
+                {!isParent && !isStudent && <SelectItem value="all">Todas as turmas</SelectItem>}
                 {classrooms.map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                 ))}
