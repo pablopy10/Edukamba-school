@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { sortByName } from "@/lib/utils";
 
 export type StudentRow = {
   id: string;
@@ -161,7 +162,7 @@ export const StudentFormDialog = ({ open, onOpenChange, classrooms, student, onS
             <Select value={classroomId} onValueChange={setClassroomId}>
               <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
               <SelectContent>
-                {classrooms.map((c) => (
+                {sortByName(classrooms).map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                 ))}
               </SelectContent>
