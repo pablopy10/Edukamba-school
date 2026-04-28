@@ -214,10 +214,13 @@ const Material = () => {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Material</h1>
             <p className="text-sm text-muted-foreground">
-              Gerir stock da escola e pedidos de material para encarregados de educação.
+              {isParent
+                ? `Pedidos de material${selectedChild ? ` para ${selectedChild.full_name}` : ""}.`
+                : "Gerir stock da escola e pedidos de material para encarregados de educação."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            {!isParent && (
             <div className="inline-flex h-11 items-center rounded-full border border-border bg-card p-1 shadow-soft">
               <button onClick={() => setTab("stock")} className={cn("flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors", tab === "stock" ? "bg-pastel-blue text-pastel-blue-foreground" : "text-muted-foreground hover:text-foreground")}>
                 <Boxes className="h-4 w-4" strokeWidth={1.75} /> Stock
@@ -226,6 +229,7 @@ const Material = () => {
                 <ClipboardList className="h-4 w-4" strokeWidth={1.75} /> Pedidos
               </button>
             </div>
+            )}
             {tab === "stock" && isAdmin && (
               <button onClick={() => { setEditingMaterial(null); setShowMaterialDialog(true); }} className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
                 <Plus className="h-4 w-4" strokeWidth={2.25} /> Novo Material
