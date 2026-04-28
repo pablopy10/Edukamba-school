@@ -274,6 +274,13 @@ const Pagamentos = () => {
     setRecordMethod("transferencia");
     setRecordNotes("");
   };
+  const openRecordForEnrollment = (fee: EnrollmentFeeRow) => {
+    setRecordDialog({ kind: "enrollment", fee });
+    setRecordFile(null);
+    setRecordAmount(String(fee.amount_due));
+    setRecordMethod("transferencia");
+    setRecordNotes("");
+  };
 
   const submitStaffPayment = async () => {
     if (!recordDialog || !schoolId) return;
@@ -292,7 +299,9 @@ const Pagamentos = () => {
         ? (fee as FeeListRow).student_id
         : kind === "activity"
         ? (fee as ActivityFeeRow).student_id
-        : (fee as TransportFeeRow).student_id;
+        : kind === "transport"
+        ? (fee as TransportFeeRow).student_id
+        : (fee as EnrollmentFeeRow).student_id;
     setRecordUploading(true);
     const ext = recordFile.name.split(".").pop() || "bin";
     const path = `${schoolId}/${studentId}/${fee.id}-${Date.now()}.${ext}`;
@@ -314,6 +323,7 @@ const Pagamentos = () => {
       student_fee_id: kind === "fee" ? fee.id : null,
       activity_fee_id: kind === "activity" ? fee.id : null,
       transport_fee_id: kind === "transport" ? fee.id : null,
+      enrollment_fee_id: kind === "enrollment" ? fee.id : null,
     } : {
       amount_paid: amount,
       method: recordMethod,
@@ -327,6 +337,7 @@ const Pagamentos = () => {
       student_fee_id: kind === "fee" ? fee.id : null,
       activity_fee_id: kind === "activity" ? fee.id : null,
       transport_fee_id: kind === "transport" ? fee.id : null,
+      enrollment_fee_id: kind === "enrollment" ? fee.id : null,
     };
     const { error: insErr } = await supabase.from("payments").insert(insertPayload);
     if (insErr) {
@@ -339,14 +350,16 @@ const Pagamentos = () => {
         ? await supabase.from("student_fees").update({ is_paid: true }).eq("id", fee.id)
         : kind === "activity"
         ? await supabase.from("activity_fees").update({ is_paid: true }).eq("id", fee.id)
-        : await supabase.from("transport_fees").update({ is_paid: true }).eq("id", fee.id);
+        : kind === "transport"
+        ? await supabase.from("transport_fees").update({ is_paid: true }).eq("id", fee.id)
+        : await supabase.from("enrollment_fees").update({ is_paid: true }).eq("id", fee.id);
     if (feeErr) {
       setRecordUploading(false);
       toast({ title: "Pagamento registado mas falha a marcar como pago", description: feeErr.message, variant: "destructive" });
       return;
     }
     // Notificar encarregado
-    const parentId = isParent ? null : (fee as FeeListRow | ActivityFeeRow | TransportFeeRow).student?.parent_id;
+    const parentId = isParent ? null : (fee as FeeListRow | ActivityFeeRow | TransportFeeRow | EnrollmentFeeRow).student?.parent_id;
     if (parentId) {
       if (kind === "fee") {
         const f = fee as FeeListRow;
@@ -369,7 +382,7 @@ const Pagamentos = () => {
           category: "pagamento",
           link: "/extracurriculares",
         });
-      } else {
+      } else if (kind === "transport") {
         const f = fee as TransportFeeRow;
         const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
         await supabase.from("notifications").insert({
@@ -379,6 +392,17 @@ const Pagamentos = () => {
           description: `A escola registou o pagamento do transporte (${f.route?.name ?? "rota"}) de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).`,
           category: "pagamento",
           link: "/transportes",
+        });
+      } else {
+        const f = fee as EnrollmentFeeRow;
+        const label = f.fee_type === "RENEWAL" ? "renovação de matrícula" : "matrícula";
+        await supabase.from("notifications").insert({
+          recipient_id: parentId,
+          school_id: schoolId,
+          title: `Pagamento de ${label} registado`,
+          description: `A escola registou o pagamento da ${label} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).`,
+          category: "pagamento",
+          link: "/pagamentos",
         });
       }
     }
