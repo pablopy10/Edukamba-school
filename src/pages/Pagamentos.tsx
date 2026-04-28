@@ -1165,7 +1165,7 @@ const Pagamentos = () => {
               </Card>
             </div>
 
-            {pendingValidations.length > 0 && (
+            {!isParent && pendingValidations.length > 0 && (
               <Card className="border-pastel-blue/60">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
@@ -1389,7 +1389,7 @@ const Pagamentos = () => {
               </Card>
             </div>
 
-            {pendingActivityValidations.length > 0 && (
+            {!isParent && pendingActivityValidations.length > 0 && (
               <Card className="border-pastel-blue/60">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
@@ -1613,7 +1613,7 @@ const Pagamentos = () => {
               </Card>
             </div>
 
-            {pendingTransportValidations.length > 0 && (
+            {!isParent && pendingTransportValidations.length > 0 && (
               <Card className="border-pastel-blue/60">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
