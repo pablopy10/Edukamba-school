@@ -10,6 +10,7 @@ import { toast } from "@/hooks/use-toast";
 import { GuardianFormDialog, GuardianRow } from "@/components/educadores/GuardianFormDialog";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 
 type ClassroomOpt = { id: string; name: string };
 type StudentOpt = { id: string; full_name: string; classroom_id: string | null; parent_id: string | null };
@@ -30,6 +31,7 @@ const initialsOf = (name: string) =>
 const Educadores = () => {
   const navigate = useNavigate();
   const { selectedYearId } = useAcademicYear();
+  const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
   const [guardians, setGuardians] = useState<GuardianRow[]>([]);
   const [classrooms, setClassrooms] = useState<ClassroomOpt[]>([]);
   const [students, setStudents] = useState<StudentOpt[]>([]);
@@ -47,6 +49,16 @@ const Educadores = () => {
     setLoading(true);
     let classroomsQuery = supabase.from("classrooms").select("id, name, academic_year_id").order("name");
     if (selectedYearId) classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
+    if (isTeacher) {
+      if (teacherClassroomIds.length === 0) {
+        setGuardians([]);
+        setStudents([]);
+        setClassrooms([]);
+        setLoading(false);
+        return;
+      }
+      classroomsQuery = classroomsQuery.in("id", teacherClassroomIds);
+    }
     const [{ data: profs, error: pErr }, { data: stus }, { data: clas }] = await Promise.all([
       supabase
         .from("profiles")
@@ -59,9 +71,13 @@ const Educadores = () => {
     if (pErr) {
       toast({ title: "Erro a carregar educadores", description: pErr.message, variant: "destructive" });
     }
-    const studentsArr = (stus ?? []) as StudentOpt[];
+    let studentsArr = (stus ?? []) as StudentOpt[];
     const classroomsArr = (clas ?? []) as ClassroomOpt[];
-    const rows: GuardianRow[] = (profs ?? []).map((p: any) => {
+    if (isTeacher) {
+      const allowed = new Set(teacherClassroomIds);
+      studentsArr = studentsArr.filter((s) => s.classroom_id && allowed.has(s.classroom_id));
+    }
+    let rows: GuardianRow[] = (profs ?? []).map((p: any) => {
       const linked = studentsArr.filter((st) => st.parent_id === p.id);
       return {
         profile_id: p.id,
@@ -72,13 +88,19 @@ const Educadores = () => {
         classroom_ids: linked.map((s) => s.classroom_id).filter((x): x is string => !!x),
       };
     });
+    if (isTeacher) {
+      rows = rows.filter((r) => r.student_ids.length > 0);
+    }
     setGuardians(rows);
     setStudents(studentsArr);
     setClassrooms(classroomsArr);
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [selectedYearId]);
+  useEffect(() => {
+    if (teacherLoading) return;
+    load();
+  }, [selectedYearId, teacherLoading, isTeacher, teacherClassroomIds.join(",")]);
 
   // Reset classroom filter if no longer in current year list
   useEffect(() => {
@@ -156,12 +178,14 @@ const Educadores = () => {
                 className="h-11 w-72 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             </div>
-            <button
-              onClick={() => { setEditing(null); setFormOpen(true); }}
-              className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
-              <Plus className="h-4 w-4" strokeWidth={2.25} />
-              Novo Educador
-            </button>
+            {!isTeacher && (
+              <button
+                onClick={() => { setEditing(null); setFormOpen(true); }}
+                className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
+                <Plus className="h-4 w-4" strokeWidth={2.25} />
+                Novo Educador
+              </button>
+            )}
           </div>
         </div>
 
