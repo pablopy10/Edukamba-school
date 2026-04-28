@@ -341,12 +341,16 @@ const Educadores = () => {
                           <button onClick={() => openChat(g.profile_id)} title="Conversar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/40 hover:text-pastel-blue-foreground">
                             <Mail className="h-4 w-4" strokeWidth={1.75} />
                           </button>
-                          <button onClick={() => { setEditing(g); setFormOpen(true); }} title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
-                            <Pencil className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                          <button onClick={() => setDeleting(g)} title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
-                            <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
+                          {!isTeacher && (
+                            <>
+                              <button onClick={() => { setEditing(g); setFormOpen(true); }} title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
+                                <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                              </button>
+                              <button onClick={() => setDeleting(g)} title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
+                                <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
