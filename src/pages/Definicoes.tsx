@@ -1342,6 +1342,54 @@ const Definicoes = () => {
                 <SaveBar onClick={handleSaveAcademicSettings} saving={savingAcademicSettings} isAdmin={isAdmin} />
               </div>
             </SectionCard>
+
+            <SectionCard
+              title="Custos de Matrícula"
+              desc="Valores únicos cobrados ao matricular um aluno (nova matrícula) ou ao renovar a matrícula num novo ano letivo. Definir 0 para não cobrar."
+            >
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <Field label="Custo da matrícula nova (Kz)">
+                  <input
+                    type="number"
+                    min={0}
+                    step={100}
+                    className={inputCls(false)}
+                    disabled={!isAdmin}
+                    value={academicSettings.enrollment_fee_new}
+                    onChange={(e) =>
+                      setAcademicSettings((s) => ({
+                        ...s,
+                        enrollment_fee_new: e.target.value === "" ? 0 : Number(e.target.value),
+                      }))
+                    }
+                  />
+                </Field>
+                <Field label="Custo da renovação de matrícula (Kz)">
+                  <input
+                    type="number"
+                    min={0}
+                    step={100}
+                    className={inputCls(false)}
+                    disabled={!isAdmin}
+                    value={academicSettings.enrollment_fee_renewal}
+                    onChange={(e) =>
+                      setAcademicSettings((s) => ({
+                        ...s,
+                        enrollment_fee_renewal: e.target.value === "" ? 0 : Number(e.target.value),
+                      }))
+                    }
+                  />
+                </Field>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Quando uma matrícula é criada e fica ativa, o custo correspondente é gerado automaticamente em
+                Pagamentos &rsaquo; Matrículas. Os encarregados de educação podem anexar o comprovativo para
+                validação pela administração.
+              </p>
+              <div className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
+                <SaveBar onClick={handleSaveAcademicSettings} saving={savingAcademicSettings} isAdmin={isAdmin} />
+              </div>
+            </SectionCard>
           </div>
         )}
 
