@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
+import { useParentChildren } from "@/hooks/useParentChildren";
 
 type FeeRule = {
   id: string;
@@ -135,6 +136,7 @@ const monthNames = [
 
 const Pagamentos = () => {
   const [schoolId, setSchoolId] = useState<string | null>(null);
+  const { isParent, childIds, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const [years, setYears] = useState<AcademicYear[]>([]);
   const [activeYearId, setActiveYearId] = useState<string | null>(null);
   const [rules, setRules] = useState<FeeRule[]>([]);
@@ -270,7 +272,18 @@ const Pagamentos = () => {
       return;
     }
     const amount = Number(recordAmount) || Number(fee.amount_due);
-    const insertPayload = {
+    const insertPayload = isParent ? {
+      amount_paid: amount,
+      method: recordMethod,
+      proof_url: path,
+      status: "pendente",
+      submitted_by: userId,
+      school_id: schoolId,
+      notes: recordNotes || null,
+      student_fee_id: kind === "fee" ? fee.id : null,
+      activity_fee_id: kind === "activity" ? fee.id : null,
+      transport_fee_id: kind === "transport" ? fee.id : null,
+    } : {
       amount_paid: amount,
       method: recordMethod,
       proof_url: path,
@@ -290,7 +303,7 @@ const Pagamentos = () => {
       toast({ title: "Erro a registar pagamento", description: insErr.message, variant: "destructive" });
       return;
     }
-    const { error: feeErr } =
+    const { error: feeErr } = isParent ? { error: null } as { error: null } :
       kind === "fee"
         ? await supabase.from("student_fees").update({ is_paid: true }).eq("id", fee.id)
         : kind === "activity"
@@ -302,7 +315,7 @@ const Pagamentos = () => {
       return;
     }
     // Notificar encarregado
-    const parentId = (fee as FeeListRow | ActivityFeeRow | TransportFeeRow).student?.parent_id;
+    const parentId = isParent ? null : (fee as FeeListRow | ActivityFeeRow | TransportFeeRow).student?.parent_id;
     if (parentId) {
       if (kind === "fee") {
         const f = fee as FeeListRow;
@@ -340,7 +353,7 @@ const Pagamentos = () => {
     }
     setRecordUploading(false);
     setRecordDialog(null);
-    toast({ title: "Pagamento registado e validado" });
+    toast({ title: isParent ? "Comprovativo enviado para validação" : "Pagamento registado e validado" });
     await fetchAll();
   };
 
@@ -381,11 +394,12 @@ const Pagamentos = () => {
 
     // Carregar propinas com aluno e educador
     const studentIds = (sRes.data ?? []).map((s) => s.id);
-    if (studentIds.length > 0) {
+    const scopedStudentIds = isParent ? studentIds.filter((id) => childIds.includes(id)) : studentIds;
+    if (scopedStudentIds.length > 0) {
       const { data: feesData } = await supabase
         .from("student_fees")
         .select("id, amount_due, due_date, is_paid, month_index, student_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name))")
-        .in("student_id", studentIds)
+        .in("student_id", scopedStudentIds)
         .order("due_date", { ascending: true });
       setAllFees((feesData ?? []) as unknown as FeeListRow[]);
 
@@ -403,11 +417,19 @@ const Pagamentos = () => {
 
       // Activity fees + lista de atividades para filtros
       const [{ data: actFees }, { data: actsList }] = await Promise.all([
-        supabase
+        (isParent
+          ? supabase
+              .from("activity_fees")
+              .select("id, amount_due, due_date, is_paid, month_index, student_id, activity_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), activity:extracurricular_activities(id, name, category)")
+              .eq("school_id", sId)
+              .in("student_id", scopedStudentIds)
+              .order("due_date", { ascending: true })
+          : supabase
           .from("activity_fees")
           .select("id, amount_due, due_date, is_paid, month_index, student_id, activity_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), activity:extracurricular_activities(id, name, category)")
           .eq("school_id", sId)
-          .order("due_date", { ascending: true }),
+          .order("due_date", { ascending: true })
+        ),
         supabase
           .from("extracurricular_activities")
           .select("id, name")
@@ -431,11 +453,19 @@ const Pagamentos = () => {
 
       // Transport fees + lista de rotas para filtros
       const [{ data: trFees }, { data: rtsList }] = await Promise.all([
-        supabase
+        (isParent
+          ? supabase
+              .from("transport_fees")
+              .select("id, amount_due, due_date, is_paid, month_index, student_id, route_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), route:transport_routes(id, name)")
+              .eq("school_id", sId)
+              .in("student_id", scopedStudentIds)
+              .order("due_date", { ascending: true })
+          : supabase
           .from("transport_fees")
           .select("id, amount_due, due_date, is_paid, month_index, student_id, route_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), route:transport_routes(id, name)")
           .eq("school_id", sId)
-          .order("due_date", { ascending: true }),
+          .order("due_date", { ascending: true })
+        ),
         supabase
           .from("transport_routes")
           .select("id, name")
@@ -467,7 +497,15 @@ const Pagamentos = () => {
     setLoading(false);
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { if (!parentLoading) fetchAll(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [parentLoading, isParent, childIds.join(",")]);
+
+  // Lock classroom filter to parent's child classroom
+  useEffect(() => {
+    if (!isParent) return;
+    if (parentClassroomIds.length > 0) {
+      setFeeClassroomFilter(parentClassroomIds[0]);
+    }
+  }, [isParent, parentClassroomIds.join(",")]);
 
   // Fee rules
   const openNewRule = () => {
@@ -1065,15 +1103,17 @@ const Pagamentos = () => {
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Pagamentos</h1>
-            <p className="text-sm text-muted-foreground">Gere as propinas, descontos e cobranças mensais.</p>
+            <p className="text-sm text-muted-foreground">{isParent ? "Consulte as cobranças do(s) seu(s) educando(s) e anexe os comprovativos." : "Gere as propinas, descontos e cobranças mensais."}</p>
           </div>
-          <Button onClick={() => setGenerateOpen(true)} className="gap-2">
-            <PlayCircle className="h-4 w-4" /> Gerar propinas do ano
-          </Button>
+          {!isParent && (
+            <Button onClick={() => setGenerateOpen(true)} className="gap-2">
+              <PlayCircle className="h-4 w-4" /> Gerar propinas do ano
+            </Button>
+          )}
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {!isParent && (<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Regras de propina</CardTitle>
@@ -1104,16 +1144,16 @@ const Pagamentos = () => {
               <p className="text-xs text-muted-foreground">overrides ativos</p>
             </CardContent>
           </Card>
-        </div>
+        </div>)}
 
-        <Tabs defaultValue="rules" className="w-full">
+        <Tabs defaultValue={isParent ? "fees" : "rules"} className="w-full">
           <TabsList>
-            <TabsTrigger value="rules">Regras de propina</TabsTrigger>
+            {!isParent && <TabsTrigger value="rules">Regras de propina</TabsTrigger>}
             <TabsTrigger value="fees">Propinas</TabsTrigger>
             <TabsTrigger value="activity-fees">Extracurriculares</TabsTrigger>
             <TabsTrigger value="transport-fees">Transporte</TabsTrigger>
-            <TabsTrigger value="family">Descontos por familiar</TabsTrigger>
-            <TabsTrigger value="overrides">Descontos por aluno</TabsTrigger>
+            {!isParent && <TabsTrigger value="family">Descontos por familiar</TabsTrigger>}
+            {!isParent && <TabsTrigger value="overrides">Descontos por aluno</TabsTrigger>}
           </TabsList>
 
           {/* FEES TAB */}
@@ -1133,7 +1173,7 @@ const Pagamentos = () => {
               </Card>
             </div>
 
-            {pendingValidations.length > 0 && (
+            {!isParent && pendingValidations.length > 0 && (
               <Card className="border-pastel-blue/60">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
@@ -1205,9 +1245,11 @@ const Pagamentos = () => {
                   <CardTitle>Lista de propinas</CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">Controla o estado das propinas e envia lembretes aos encarregados.</p>
                 </div>
-                <Button onClick={sendBulkReminders} size="sm" variant="outline" className="gap-2">
-                  <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
-                </Button>
+                {!isParent && (
+                  <Button onClick={sendBulkReminders} size="sm" variant="outline" className="gap-2">
+                    <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
@@ -1231,11 +1273,14 @@ const Pagamentos = () => {
                       {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <Select value={feeClassroomFilter} onValueChange={setFeeClassroomFilter}>
+                  <Select value={feeClassroomFilter} onValueChange={setFeeClassroomFilter} disabled={isParent}>
                     <SelectTrigger className="md:w-52"><SelectValue placeholder="Turma" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todas as turmas</SelectItem>
-                      {classrooms.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                      {!isParent && <SelectItem value="all">Todas as turmas</SelectItem>}
+                      {(isParent
+                        ? classrooms.filter((c) => parentClassroomIds.includes(c.id))
+                        : classrooms
+                      ).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1286,7 +1331,7 @@ const Pagamentos = () => {
                               </td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
-                                  {pendingValidation && pay && (
+                                  {pendingValidation && pay && !isParent && (
                                     <>
                                       {pay.proof_url && (
                                         <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
@@ -1313,15 +1358,22 @@ const Pagamentos = () => {
                                       </Button>
                                     </>
                                   )}
+                                  {pendingValidation && pay && isParent && pay.proof_url && (
+                                    <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
+                                      <Eye className="h-3.5 w-3.5" /> Ver comprovativo
+                                    </Button>
+                                  )}
                                   {!f.is_paid && !pendingValidation && (
                                     <>
                                       <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForFee(f)}>
-                                        <Upload className="h-3.5 w-3.5" /> Registar pagamento
+                                        <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
                                       </Button>
-                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => sendReminder(f)} disabled={remindingFeeId === f.id || !f.student?.parent_id}>
-                                        {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                                        Cobrar
-                                      </Button>
+                                      {!isParent && (
+                                        <Button size="sm" variant="outline" className="gap-2" onClick={() => sendReminder(f)} disabled={remindingFeeId === f.id || !f.student?.parent_id}>
+                                          {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                          Cobrar
+                                        </Button>
+                                      )}
                                     </>
                                   )}
                                 </div>
@@ -1357,7 +1409,7 @@ const Pagamentos = () => {
               </Card>
             </div>
 
-            {pendingActivityValidations.length > 0 && (
+            {!isParent && pendingActivityValidations.length > 0 && (
               <Card className="border-pastel-blue/60">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
@@ -1429,9 +1481,11 @@ const Pagamentos = () => {
                   <CardTitle>Cobranças de atividades extracurriculares</CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">Controla o estado das cobranças e envia lembretes aos encarregados.</p>
                 </div>
-                <Button onClick={sendActivityBulkReminders} size="sm" variant="outline" className="gap-2">
-                  <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
-                </Button>
+                {!isParent && (
+                  <Button onClick={sendActivityBulkReminders} size="sm" variant="outline" className="gap-2">
+                    <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
@@ -1510,7 +1564,7 @@ const Pagamentos = () => {
                               </td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
-                                  {pendingValidation && pay && (
+                                  {pendingValidation && pay && !isParent && (
                                     <>
                                       {pay.proof_url && (
                                         <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
@@ -1540,12 +1594,14 @@ const Pagamentos = () => {
                                   {!f.is_paid && !pendingValidation && (
                                     <>
                                       <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForActivity(f)}>
-                                        <Upload className="h-3.5 w-3.5" /> Registar pagamento
+                                        <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
                                       </Button>
-                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => sendActivityReminder(f)} disabled={remindingActFeeId === f.id || !f.student?.parent_id}>
-                                        {remindingActFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                                        Cobrar
-                                      </Button>
+                                      {!isParent && (
+                                        <Button size="sm" variant="outline" className="gap-2" onClick={() => sendActivityReminder(f)} disabled={remindingActFeeId === f.id || !f.student?.parent_id}>
+                                          {remindingActFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                          Cobrar
+                                        </Button>
+                                      )}
                                     </>
                                   )}
                                 </div>
@@ -1581,7 +1637,7 @@ const Pagamentos = () => {
               </Card>
             </div>
 
-            {pendingTransportValidations.length > 0 && (
+            {!isParent && pendingTransportValidations.length > 0 && (
               <Card className="border-pastel-blue/60">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
@@ -1653,9 +1709,11 @@ const Pagamentos = () => {
                   <CardTitle className="flex items-center gap-2"><Bus className="h-4 w-4" /> Cobranças de transporte escolar</CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">Controla as mensalidades de transporte e envia lembretes aos encarregados.</p>
                 </div>
-                <Button onClick={sendTransportBulkReminders} size="sm" variant="outline" className="gap-2">
-                  <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
-                </Button>
+                {!isParent && (
+                  <Button onClick={sendTransportBulkReminders} size="sm" variant="outline" className="gap-2">
+                    <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
@@ -1734,7 +1792,7 @@ const Pagamentos = () => {
                               </td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
-                                  {pendingValidation && pay && (
+                                  {pendingValidation && pay && !isParent && (
                                     <>
                                       {pay.proof_url && (
                                         <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
@@ -1764,12 +1822,14 @@ const Pagamentos = () => {
                                   {!f.is_paid && !pendingValidation && (
                                     <>
                                       <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForTransport(f)}>
-                                        <Upload className="h-3.5 w-3.5" /> Registar pagamento
+                                        <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
                                       </Button>
-                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => sendTransportReminder(f)} disabled={remindingTrFeeId === f.id || !f.student?.parent_id}>
-                                        {remindingTrFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                                        Cobrar
-                                      </Button>
+                                      {!isParent && (
+                                        <Button size="sm" variant="outline" className="gap-2" onClick={() => sendTransportReminder(f)} disabled={remindingTrFeeId === f.id || !f.student?.parent_id}>
+                                          {remindingTrFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                          Cobrar
+                                        </Button>
+                                      )}
                                     </>
                                   )}
                                 </div>
@@ -2140,14 +2200,14 @@ const Pagamentos = () => {
       <Dialog open={!!recordDialog} onOpenChange={(o) => { if (!o && !recordUploading) setRecordDialog(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Registar pagamento</DialogTitle>
+            <DialogTitle>{isParent ? "Anexar comprovativo" : "Registar pagamento"}</DialogTitle>
             <DialogDescription>
               {recordDialog?.kind === "fee"
-                ? `Anexa o comprovativo da propina de ${recordDialog.fee.student?.full_name ?? ""}. Será marcado como pago e validado, e o encarregado será notificado.`
+                ? `Anexa o comprovativo da propina de ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Ficará à espera de validação pela escola." : "Será marcado como pago e validado, e o encarregado será notificado."}`
                 : recordDialog?.kind === "activity"
-                ? `Anexa o comprovativo da atividade ${recordDialog.fee.activity?.name ?? ""} de ${recordDialog.fee.student?.full_name ?? ""}. Será marcado como pago e validado.`
+                ? `Anexa o comprovativo da atividade ${recordDialog.fee.activity?.name ?? ""} de ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Ficará à espera de validação pela escola." : "Será marcado como pago e validado."}`
                 : recordDialog?.kind === "transport"
-                ? `Anexa o comprovativo do transporte (${recordDialog.fee.route?.name ?? ""}) de ${recordDialog.fee.student?.full_name ?? ""}. Será marcado como pago e validado.`
+                ? `Anexa o comprovativo do transporte (${recordDialog.fee.route?.name ?? ""}) de ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Ficará à espera de validação pela escola." : "Será marcado como pago e validado."}`
                 : ""}
             </DialogDescription>
           </DialogHeader>
