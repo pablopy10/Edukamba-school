@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { useParentChildren } from "@/hooks/useParentChildren";
 import { CreateStudentAccessDialog, ELIGIBLE_GRADES } from "@/components/alunos/CreateStudentAccessDialog";
 
 export type EnrollmentRow = {
@@ -56,6 +57,7 @@ const RESULTS: { value: string; label: string }[] = [
 
 export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms, years, enrollment, onSaved }: Props) => {
   const { selectedYearId } = useAcademicYear();
+  const { isParent, children: parentChildren } = useParentChildren();
   const isEdit = !!enrollment;
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"new" | "renew">("renew");
@@ -291,12 +293,15 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         </DialogHeader>
 
         {!isEdit && (
-          <Tabs value={tab} onValueChange={(v) => setTab(v as "new" | "renew")}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="new">Nova</TabsTrigger>
-              <TabsTrigger value="renew">Renovação</TabsTrigger>
-            </TabsList>
+          <Tabs value={isParent ? "renew" : tab} onValueChange={(v) => setTab(v as "new" | "renew")}>
+            {!isParent && (
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="new">Nova</TabsTrigger>
+                <TabsTrigger value="renew">Renovação</TabsTrigger>
+              </TabsList>
+            )}
 
+            {!isParent && (
             <TabsContent value="new" className="mt-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
@@ -331,6 +336,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
                 </div>
               </div>
             </TabsContent>
+            )}
 
             <TabsContent value="renew" className="mt-4">
               <div>
@@ -338,7 +344,10 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
                 <Select value={studentId} onValueChange={setStudentId}>
                   <SelectTrigger><SelectValue placeholder="Seleccionar aluno..." /></SelectTrigger>
                   <SelectContent>
-                    {students.map((s) => (
+                    {(isParent
+                      ? parentChildren.map((c) => ({ id: c.id, name: c.full_name }))
+                      : students
+                    ).map((s) => (
                       <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                     ))}
                   </SelectContent>
