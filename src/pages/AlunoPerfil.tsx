@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreateStudentAccessDialog, ELIGIBLE_GRADES } from "@/components/alunos/CreateStudentAccessDialog";
 import { KeyRound, ShieldCheck } from "lucide-react";
+import { useUserRole } from "@/hooks/useUserRole";
 
 type AvatarColor = "lilac" | "blue" | "yellow" | "green" | "pink";
 
@@ -167,6 +168,8 @@ const StatPill = ({ label, value, color }: { label: string; value: string; color
 
 const AlunoPerfil = () => {
   const { id } = useParams<{ id: string }>();
+  const { role } = useUserRole();
+  const isTeacher = role === "TEACHER";
   const [loading, setLoading] = useState(true);
   const [student, setStudent] = useState<StudentRow | null>(null);
   const [guardian, setGuardian] = useState<{ full_name: string; phone: string | null } | null>(null);
@@ -619,6 +622,8 @@ const AlunoPerfil = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {!isTeacher && (
+              <>
               {(() => {
                 if (!student) return null;
                 if (student.user_id) {
@@ -646,6 +651,8 @@ const AlunoPerfil = () => {
               <Link to="/alunos" className="flex h-10 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
                 <Pencil className="h-4 w-4" strokeWidth={2} /> Editar
               </Link>
+              </>
+              )}
             </div>
           </div>
 
@@ -786,6 +793,7 @@ const AlunoPerfil = () => {
         </div>
 
         {/* Pagamentos */}
+        {!isTeacher && (
         <div className="rounded-2xl bg-card shadow-card">
           <div className="flex items-center gap-2 border-b border-border p-5">
             <Wallet className="h-5 w-5 text-pastel-yellow-foreground" strokeWidth={1.75} />
@@ -1001,6 +1009,7 @@ const AlunoPerfil = () => {
             </TabsContent>
           </Tabs>
         </div>
+        )}
 
         {/* Schedule + guardian */}
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
