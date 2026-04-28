@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
-  Plus, Search, Boxes, ClipboardList, Check, X, AlertTriangle, Pencil, Trash2,
+  Plus, Search, Boxes, ClipboardList, Check, AlertTriangle, Pencil, Trash2, ListChecks,
   BookOpen, Beaker, Palette, Dumbbell, Laptop, Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -10,11 +10,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { MaterialFormDialog, type MaterialRow } from "@/components/material/MaterialFormDialog";
 import { MaterialRequestFormDialog, type RequestRow } from "@/components/material/MaterialRequestFormDialog";
 
 type Category = "papelaria" | "laboratorio" | "artes" | "desporto" | "tecnologia";
-type Status = "pendente" | "aprovado" | "rejeitado" | "entregue";
 
 const categoryMeta: Record<string, { label: string; color: string; icon: typeof BookOpen }> = {
   papelaria: { label: "Papelaria", color: "bg-pastel-blue text-pastel-blue-foreground", icon: BookOpen },
@@ -26,12 +28,14 @@ const categoryMeta: Record<string, { label: string; color: string; icon: typeof 
 const catFallback = { label: "Outro", color: "bg-muted text-foreground", icon: Package };
 const meta = (c: string) => categoryMeta[c] ?? catFallback;
 
-const statusMeta: Record<Status, { label: string; color: string }> = {
-  pendente: { label: "Pendente", color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-  aprovado: { label: "Aprovado", color: "bg-pastel-green text-pastel-green-foreground" },
-  rejeitado: { label: "Rejeitado", color: "bg-pastel-pink text-pastel-pink-foreground" },
-  entregue: { label: "Entregue", color: "bg-pastel-blue text-pastel-blue-foreground" },
+type DeliveryRow = {
+  id: string;
+  request_id: string;
+  student_id: string;
+  brought: boolean;
 };
+
+type DeliveryFilter = "all" | "pendente" | "completo";
 
 type Tab = "stock" | "pedidos";
 
