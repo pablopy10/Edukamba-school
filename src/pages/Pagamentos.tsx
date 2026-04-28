@@ -1356,6 +1356,7 @@ const Pagamentos = () => {
           <TabsList>
             {!isParent && <TabsTrigger value="rules">Regras de propina</TabsTrigger>}
             <TabsTrigger value="fees">Propinas</TabsTrigger>
+            <TabsTrigger value="enrollment-fees">Matrículas</TabsTrigger>
             <TabsTrigger value="activity-fees">Extracurriculares</TabsTrigger>
             <TabsTrigger value="transport-fees">Transporte</TabsTrigger>
             {!isParent && <TabsTrigger value="family">Descontos por familiar</TabsTrigger>}
