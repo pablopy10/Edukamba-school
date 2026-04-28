@@ -40,25 +40,28 @@ const severityClass: Record<ComplaintRow["severity"], string> = {
   HIGH: "text-destructive",
 };
 
-export const ComplaintsCard = () => {
+export const ComplaintsCard = ({ studentScopeId }: { studentScopeId?: string | null } = {}) => {
   const [rows, setRows] = useState<ComplaintRow[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    supabase
+    let q = supabase
       .from("complaints")
       .select(
         "id, subject, target_type, severity, status, created_at, target_student:students!complaints_target_student_id_fkey(full_name), target_profile:profiles!complaints_target_profile_id_fkey(full_name)",
       )
       .order("created_at", { ascending: false })
-      .limit(6)
-      .then(({ data }) => {
+      .limit(6);
+    if (studentScopeId) {
+      q = q.eq("target_type", "STUDENT").eq("target_student_id", studentScopeId);
+    }
+    q.then(({ data }) => {
         if (!cancelled) setRows((data ?? []) as unknown as ComplaintRow[]);
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [studentScopeId]);
 
   return (
     <div className="flex h-full flex-col gap-4 rounded-2xl bg-card p-6 shadow-card">
