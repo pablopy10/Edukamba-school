@@ -228,6 +228,8 @@ const Turmas = () => {
                       <Presentation className="h-6 w-6" strokeWidth={1.75} />
                     </div>
                     <div className="flex items-center gap-1">
+                      {!isTeacher && (
+                      <>
                       <button
                         title="Editar"
                         onClick={() => { setEditing(c); setFormOpen(true); }}
@@ -242,6 +244,8 @@ const Turmas = () => {
                       >
                         <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                       </button>
+                      </>
+                      )}
                     </div>
                   </div>
 
