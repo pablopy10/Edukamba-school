@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Search, Plus, Mail, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Search, Plus, Mail, Pencil, Trash2, Loader2, Eye, Phone } from "lucide-react";
 import { cn, sortByName } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,6 +9,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "@/hooks/use-toast";
 import { GuardianFormDialog, GuardianRow } from "@/components/educadores/GuardianFormDialog";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 type ClassroomOpt = { id: string; name: string };
 type StudentOpt = { id: string; full_name: string; classroom_id: string | null; parent_id: string | null };
@@ -40,6 +41,7 @@ const Educadores = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<GuardianRow | null>(null);
   const [deleting, setDeleting] = useState<GuardianRow | null>(null);
+  const [viewing, setViewing] = useState<GuardianRow | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -309,6 +311,9 @@ const Educadores = () => {
                       </td>
                       <td className="py-4 pr-5">
                         <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => setViewing(g)} title="Ver detalhes" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-lilac/50 hover:text-pastel-lilac-foreground">
+                            <Eye className="h-4 w-4" strokeWidth={1.75} />
+                          </button>
                           <button onClick={() => openChat(g.profile_id)} title="Conversar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/40 hover:text-pastel-blue-foreground">
                             <Mail className="h-4 w-4" strokeWidth={1.75} />
                           </button>
