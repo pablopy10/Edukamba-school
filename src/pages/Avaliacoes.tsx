@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { AssessmentFormDialog, type AssessmentRecord } from "@/components/avaliacoes/AssessmentFormDialog";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { useParentChildren } from "@/hooks/useParentChildren";
 
 type EvalType = "teste" | "exame" | "trabalho" | "oral";
 
@@ -86,6 +87,7 @@ const tt = (t?: string | null) => (t ? t.slice(0, 5) : "");
 const Avaliacoes = () => {
   const navigate = useNavigate();
   const { selectedYearId } = useAcademicYear();
+  const { isParent, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const [view, setView] = useState<View>("calendario");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
@@ -140,6 +142,13 @@ const Avaliacoes = () => {
       // Filter assessments directly by academic_year_id (set automatically by DB trigger).
       assessmentsQuery = assessmentsQuery.eq("academic_year_id", yearId);
     }
+    if (isParent) {
+      if (parentClassroomIds.length === 0) {
+        setAssessments([]); setClassrooms([]); setSubjects([]); setTeachers([]); setTerms([]); setHolidays([]); setLoading(false);
+        return;
+      }
+      assessmentsQuery = assessmentsQuery.in("classroom_id", parentClassroomIds);
+    }
 
     const [aRes, cRes, sRes, tRes, termRes, holRes] = await Promise.all([
       assessmentsQuery,
@@ -164,7 +173,7 @@ const Avaliacoes = () => {
     setLoading(false);
   };
 
-  useEffect(() => { loadAll(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [selectedYearId]);
+  useEffect(() => { if (parentLoading) return; loadAll(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [selectedYearId, parentLoading, isParent, parentClassroomIds.join(",")]);
 
   const classroomMap = useMemo(() => new Map(classrooms.map((c) => [c.id, c.name])), [classrooms]);
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s.name])), [subjects]);
@@ -309,17 +318,20 @@ const Avaliacoes = () => {
                 Lista
               </button>
             </div>
-            <button
-              onClick={openCreate}
-              className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
-            >
-              <Plus className="h-4 w-4" strokeWidth={2.25} />
-              Nova Avaliação
-            </button>
+            {!isParent && (
+              <button
+                onClick={openCreate}
+                className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
+              >
+                <Plus className="h-4 w-4" strokeWidth={2.25} />
+                Nova Avaliação
+              </button>
+            )}
           </div>
         </div>
 
         {/* Stats */}
+        {!isParent && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             { label: "Total", value: stats.total, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
@@ -333,8 +345,10 @@ const Avaliacoes = () => {
             </div>
           ))}
         </div>
+        )}
 
         {/* Filters */}
+        {!isParent && (
         <div className="flex flex-col gap-3 rounded-2xl bg-card p-4 shadow-card">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="relative w-full sm:max-w-sm">
@@ -386,6 +400,7 @@ const Avaliacoes = () => {
             </Select>
           </div>
         </div>
+        )}
 
         {loading ? (
           <div className="flex items-center justify-center rounded-2xl bg-card py-16 shadow-card">
