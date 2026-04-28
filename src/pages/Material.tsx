@@ -449,16 +449,18 @@ const StockTable = ({
 
 /* ====================== Requests Table ====================== */
 const RequestsTable = ({
-  requests, classrooms, students, isAdmin, currentUserId, onEdit, onRemove, onUpdateStatus,
+  requests, classrooms, students, isAdmin, currentUserId, canMarkDeliveries, progressFor, onEdit, onRemove, onMarkDeliveries,
 }: {
   requests: RequestRow[];
   classrooms: { id: string; name: string }[];
   students: { id: string; full_name: string; classroom_id: string | null }[];
   isAdmin: boolean;
   currentUserId: string | null;
+  canMarkDeliveries: boolean;
+  progressFor: (r: RequestRow) => { brought: number; total: number };
   onEdit: (r: RequestRow) => void;
   onRemove: (id: string) => void;
-  onUpdateStatus: (id: string, status: Status) => void;
+  onMarkDeliveries: (r: RequestRow) => void;
 }) => {
   const classroomName = (id: string | null) => classrooms.find((c) => c.id === id)?.name ?? "—";
   const studentName = (id: string | null) => students.find((s) => s.id === id)?.full_name ?? null;
@@ -480,8 +482,7 @@ const RequestsTable = ({
                 <th className="px-6 py-3">Professor</th>
                 <th className="px-6 py-3">Destino</th>
                 <th className="px-6 py-3">Data</th>
-                <th className="px-6 py-3">Educador</th>
-                <th className="px-6 py-3">Estado</th>
+                <th className="px-6 py-3">Entregas</th>
                 <th className="px-6 py-3 text-right">Ações</th>
               </tr>
             </thead>
@@ -489,9 +490,10 @@ const RequestsTable = ({
               {requests.map((r) => {
                 const m = meta(r.category);
                 const Icon = m.icon;
-                const st = statusMeta[(r.status as Status)] ?? statusMeta.pendente;
                 const sName = studentName(r.student_id);
-                const canEdit = isAdmin || (r.requester_id === currentUserId && r.status === "pendente");
+                const canEdit = isAdmin || r.requester_id === currentUserId;
+                const { brought, total } = progressFor(r);
+                const complete = total > 0 && brought === total;
                 return (
                   <tr key={r.id} className="border-b border-border/60 text-sm transition-colors hover:bg-muted/30 align-top">
                     <td className="px-6 py-4">
@@ -527,25 +529,33 @@ const RequestsTable = ({
                         ? new Date(r.needed_date).toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric" })
                         : "—"}
                     </td>
-                    <td className="px-6 py-4 text-muted-foreground">{r.recipient ?? "—"}</td>
                     <td className="px-6 py-4">
-                      <span className={cn("rounded-full px-3 py-1 text-xs font-medium", st.color)}>{st.label}</span>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold",
+                            complete
+                              ? "bg-pastel-green text-pastel-green-foreground"
+                              : brought > 0
+                                ? "bg-pastel-yellow text-pastel-yellow-foreground"
+                                : "bg-muted text-foreground",
+                          )}
+                        >
+                          {complete && <Check className="h-3 w-3" strokeWidth={2.25} />}
+                          {brought} / {total}
+                        </span>
+                        <span className="text-xs text-muted-foreground">trouxeram</span>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-1">
-                        {isAdmin && r.status === "pendente" && (
-                          <>
-                            <button onClick={() => onUpdateStatus(r.id, "aprovado")} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-green hover:text-pastel-green-foreground" title="Aprovar">
-                              <Check className="h-4 w-4" strokeWidth={2} />
-                            </button>
-                            <button onClick={() => onUpdateStatus(r.id, "rejeitado")} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title="Rejeitar">
-                              <X className="h-4 w-4" strokeWidth={2} />
-                            </button>
-                          </>
-                        )}
-                        {isAdmin && r.status === "aprovado" && (
-                          <button onClick={() => onUpdateStatus(r.id, "entregue")} className="inline-flex h-8 items-center gap-1 rounded-full bg-pastel-blue px-3 text-xs font-medium text-pastel-blue-foreground" title="Marcar como entregue">
-                            <Check className="h-3 w-3" strokeWidth={2} /> Entregar
+                        {canMarkDeliveries && total > 0 && (
+                          <button
+                            onClick={() => onMarkDeliveries(r)}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-pastel-blue px-3 text-xs font-semibold text-pastel-blue-foreground transition-colors hover:opacity-90"
+                            title="Marcar entregas"
+                          >
+                            <ListChecks className="h-3.5 w-3.5" strokeWidth={2} /> Marcar
                           </button>
                         )}
                         {canEdit && (
