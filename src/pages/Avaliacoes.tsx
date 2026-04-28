@@ -393,7 +393,7 @@ const Avaliacoes = () => {
               <SelectTrigger className="h-10 rounded-full"><SelectValue placeholder="Turma" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas as turmas</SelectItem>
-                {classrooms.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                {sortByName(classrooms).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={termFilter} onValueChange={setTermFilter}>
