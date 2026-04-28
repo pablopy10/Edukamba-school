@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from "@/components/ui/button";
 import { MaterialFormDialog, type MaterialRow } from "@/components/material/MaterialFormDialog";
 import { MaterialRequestFormDialog, type RequestRow } from "@/components/material/MaterialRequestFormDialog";
+import { useParentChildren } from "@/hooks/useParentChildren";
 
 type Category = "papelaria" | "laboratorio" | "artes" | "desporto" | "tecnologia";
 
@@ -41,6 +42,7 @@ type Tab = "stock" | "pedidos";
 
 const Material = () => {
   const { user } = useAuth();
+  const { isParent, childIds, classroomIds, selectedChild } = useParentChildren();
   const [tab, setTab] = useState<Tab>("stock");
   const [loading, setLoading] = useState(true);
   const [schoolId, setSchoolId] = useState<string | null>(null);
@@ -73,6 +75,11 @@ const Material = () => {
   const isAdmin = userRole === "ADMIN";
   const canMarkDeliveries = userRole === "ADMIN" || userRole === "TEACHER";
   const canRequest = userRole === "ADMIN" || userRole === "TEACHER";
+
+  // Parents never see stock; force them onto the requests tab.
+  useEffect(() => {
+    if (isParent && tab !== "pedidos") setTab("pedidos");
+  }, [isParent, tab]);
 
   const loadAll = async () => {
     if (!user) return;
@@ -121,12 +128,32 @@ const Material = () => {
     return Array.from(set).sort();
   }, [stock]);
 
-  const stats = useMemo(() => ({
-    totalItens: stock.reduce((a, s) => a + (s.quantity || 0), 0),
-    baixoStock: stock.filter((s) => s.quantity < s.min_quantity).length,
-    pedidosAtivos: requests.length,
-    entregasMarcadas: deliveries.filter((d) => d.brought).length,
-  }), [stock, requests, deliveries]);
+  // For parent stats we count only requests scoped to their selected child.
+  const parentScopedRequests = useMemo(() => {
+    if (!isParent) return requests;
+    const childSet = new Set(childIds);
+    const classSet = new Set(classroomIds);
+    return requests.filter((r) => {
+      const targetsChild = r.student_id ? childSet.has(r.student_id) : false;
+      const targetsClass = !r.student_id && r.classroom_id ? classSet.has(r.classroom_id) : false;
+      return targetsChild || targetsClass;
+    });
+  }, [requests, isParent, childIds, classroomIds]);
+
+  const stats = useMemo(() => {
+    const reqList = isParent ? parentScopedRequests : requests;
+    const reqIds = new Set(reqList.map((r) => r.id));
+    const childSet = new Set(childIds);
+    const relevantDeliveries = isParent
+      ? deliveries.filter((d) => reqIds.has(d.request_id) && childSet.has(d.student_id))
+      : deliveries;
+    return {
+      totalItens: stock.reduce((a, s) => a + (s.quantity || 0), 0),
+      baixoStock: stock.filter((s) => s.quantity < s.min_quantity).length,
+      pedidosAtivos: reqList.length,
+      entregasMarcadas: relevantDeliveries.filter((d) => d.brought).length,
+    };
+  }, [stock, requests, deliveries, isParent, parentScopedRequests, childIds]);
 
   // Compute target students for a request and delivery progress.
   const targetStudentsFor = (r: RequestRow) => {
@@ -158,6 +185,14 @@ const Material = () => {
   const filteredRequests = useMemo(() => {
     const q = search.trim().toLowerCase();
     return requests.filter((r) => {
+      // Parents only see requests targeting their selected child or its classroom.
+      if (isParent) {
+        const childSet = new Set(childIds);
+        const classSet = new Set(classroomIds);
+        const targetsChild = r.student_id ? childSet.has(r.student_id) : false;
+        const targetsClass = !r.student_id && r.classroom_id ? classSet.has(r.classroom_id) : false;
+        if (!targetsChild && !targetsClass) return false;
+      }
       if (reqDeliveryFilter !== "all") {
         const { brought, total } = progressFor(r);
         const isComplete = total > 0 && brought === total;
@@ -173,7 +208,7 @@ const Material = () => {
       }
       return true;
     });
-  }, [requests, search, reqDeliveryFilter, reqTeacherFilter, students, classrooms, deliveries]);
+  }, [requests, search, reqDeliveryFilter, reqTeacherFilter, students, classrooms, deliveries, isParent, childIds, classroomIds]);
 
   const removeMaterial = async (id: string) => {
     if (!confirm("Remover este material?")) return;
@@ -199,10 +234,13 @@ const Material = () => {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Material</h1>
             <p className="text-sm text-muted-foreground">
-              Gerir stock da escola e pedidos de material para encarregados de educação.
+              {isParent
+                ? `Pedidos de material${selectedChild ? ` para ${selectedChild.full_name}` : ""}.`
+                : "Gerir stock da escola e pedidos de material para encarregados de educação."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            {!isParent && (
             <div className="inline-flex h-11 items-center rounded-full border border-border bg-card p-1 shadow-soft">
               <button onClick={() => setTab("stock")} className={cn("flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors", tab === "stock" ? "bg-pastel-blue text-pastel-blue-foreground" : "text-muted-foreground hover:text-foreground")}>
                 <Boxes className="h-4 w-4" strokeWidth={1.75} /> Stock
@@ -211,6 +249,7 @@ const Material = () => {
                 <ClipboardList className="h-4 w-4" strokeWidth={1.75} /> Pedidos
               </button>
             </div>
+            )}
             {tab === "stock" && isAdmin && (
               <button onClick={() => { setEditingMaterial(null); setShowMaterialDialog(true); }} className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
                 <Plus className="h-4 w-4" strokeWidth={2.25} /> Novo Material
@@ -225,13 +264,19 @@ const Material = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {[
-            { label: "Itens em Stock", value: stats.totalItens, color: "bg-pastel-blue text-pastel-blue-foreground" },
-            { label: "Stock Baixo", value: stats.baixoStock, color: "bg-pastel-pink text-pastel-pink-foreground" },
-            { label: "Pedidos ativos", value: stats.pedidosAtivos, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-            { label: "Materiais entregues", value: stats.entregasMarcadas, color: "bg-pastel-green text-pastel-green-foreground" },
-          ].map((s) => (
+        <div className={cn("grid gap-4", isParent ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-4")}>
+          {(isParent
+            ? [
+                { label: "Pedidos ativos", value: stats.pedidosAtivos, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+                { label: "Materiais entregues", value: stats.entregasMarcadas, color: "bg-pastel-green text-pastel-green-foreground" },
+              ]
+            : [
+                { label: "Itens em Stock", value: stats.totalItens, color: "bg-pastel-blue text-pastel-blue-foreground" },
+                { label: "Stock Baixo", value: stats.baixoStock, color: "bg-pastel-pink text-pastel-pink-foreground" },
+                { label: "Pedidos ativos", value: stats.pedidosAtivos, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+                { label: "Materiais entregues", value: stats.entregasMarcadas, color: "bg-pastel-green text-pastel-green-foreground" },
+              ]
+          ).map((s) => (
             <div key={s.label} className="rounded-2xl bg-card p-5 shadow-card">
               <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", s.color)}>{s.label}</span>
               <p className="mt-3 text-3xl font-bold text-foreground">{s.value}</p>
