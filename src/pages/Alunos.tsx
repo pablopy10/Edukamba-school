@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { ExcelImportDialog, ImportField } from "@/components/shared/ExcelImportDialog";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 type ClassroomOpt = { id: string; name: string };
 
@@ -24,6 +25,7 @@ const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 
 const Alunos = () => {
+  const { selectedYearId } = useAcademicYear();
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [classrooms, setClassrooms] = useState<ClassroomOpt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,12 +40,14 @@ const Alunos = () => {
 
   const load = async () => {
     setLoading(true);
+    let classroomsQuery = supabase.from("classrooms").select("id, name, academic_year_id").order("name");
+    if (selectedYearId) classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
     const [{ data: sData, error: sErr }, { data: cData }] = await Promise.all([
       supabase
         .from("students")
         .select("id, full_name, email, phone, birth_date, gender, enrollment_number, classroom_id, avatar_color, school_id, classrooms(id, name)")
         .order("created_at", { ascending: false }),
-      supabase.from("classrooms").select("id, name").order("name"),
+      classroomsQuery,
     ]);
     if (sErr) {
       toast({ title: "Erro a carregar alunos", description: sErr.message, variant: "destructive" });
@@ -53,7 +57,7 @@ const Alunos = () => {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [selectedYearId]);
 
   const classroomName = (id: string | null) => classrooms.find((c) => c.id === id)?.name ?? "—";
 
