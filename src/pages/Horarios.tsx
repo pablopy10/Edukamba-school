@@ -73,6 +73,7 @@ const Horarios = () => {
   const { role } = useUserRole();
   const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
   const isAdmin = role === "ADMIN";
+  const { subjectId: teacherSubjectId } = useTeacherClassrooms();
   const { selectedYearId } = useAcademicYear();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const academicYearId = selectedYearId;
@@ -178,6 +179,13 @@ const Horarios = () => {
   }, [schoolId, isParent, parentClassroomIds.join(","), parentLoading, selectedYearId, isTeacher, teacherClassroomIds.join(","), teacherLoading]);
 
   useEffect(() => { void loadAll(); }, [loadAll]);
+
+  // For teachers, lock filters to themselves and their subject
+  useEffect(() => {
+    if (!isTeacher || !user) return;
+    setTeacherFilter(user.id);
+    if (teacherSubjectId) setSubjectFilter(teacherSubjectId);
+  }, [isTeacher, user?.id, teacherSubjectId]);
 
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s.name])), [subjects]);
   const teacherMap = useMemo(() => new Map(teachers.map((t) => [t.id, t.name])), [teachers]);
@@ -362,7 +370,7 @@ const Horarios = () => {
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold text-muted-foreground">Disciplina</label>
-            <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+            <Select value={subjectFilter} onValueChange={setSubjectFilter} disabled={isTeacher}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>Todas as disciplinas</SelectItem>
@@ -372,7 +380,7 @@ const Horarios = () => {
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold text-muted-foreground">Professor</label>
-            <Select value={teacherFilter} onValueChange={setTeacherFilter}>
+            <Select value={teacherFilter} onValueChange={setTeacherFilter} disabled={isTeacher}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>Todos os professores</SelectItem>
