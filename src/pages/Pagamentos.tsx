@@ -1358,6 +1358,11 @@ const Pagamentos = () => {
                                       </Button>
                                     </>
                                   )}
+                                  {pendingValidation && pay && isParent && pay.proof_url && (
+                                    <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
+                                      <Eye className="h-3.5 w-3.5" /> Ver comprovativo
+                                    </Button>
+                                  )}
                                   {!f.is_paid && !pendingValidation && (
                                     <>
                                       <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForFee(f)}>
