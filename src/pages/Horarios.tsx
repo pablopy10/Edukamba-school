@@ -120,7 +120,7 @@ const Horarios = () => {
       supabase.from("subjects").select("id, name").eq("school_id", schoolId).order("name"),
       supabase
         .from("teachers")
-        .select("id, profile_id, profiles:profile_id ( full_name )")
+        .select("id, profile_id, subject_id, profiles:profile_id ( full_name )")
         .eq("school_id", schoolId),
       supabase.from("school_time_slots").select("*").eq("school_id", schoolId).order("shift").order("position"),
       supabase.from("schedules").select("*").eq("school_id", schoolId),
