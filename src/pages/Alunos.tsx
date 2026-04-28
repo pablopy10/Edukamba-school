@@ -11,6 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import { ExcelImportDialog, ImportField } from "@/components/shared/ExcelImportDialog";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useParentChildren } from "@/hooks/useParentChildren";
+import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 
 type ClassroomOpt = { id: string; name: string };
@@ -29,6 +30,7 @@ const initialsOf = (name: string) =>
 const Alunos = () => {
   const { selectedYearId } = useAcademicYear();
   const { isParent, childIds, loading: parentLoading } = useParentChildren();
+  const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [classrooms, setClassrooms] = useState<ClassroomOpt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,6 +58,13 @@ const Alunos = () => {
       }
       studentsQuery = studentsQuery.in("id", childIds);
     }
+    if (isTeacher) {
+      if (teacherClassroomIds.length === 0) {
+        setStudents([]); setClassrooms([]); setLoading(false);
+        return;
+      }
+      studentsQuery = studentsQuery.in("classroom_id", teacherClassroomIds);
+    }
     const [{ data: sData, error: sErr }, { data: cData }] = await Promise.all([
       studentsQuery,
       classroomsQuery,
@@ -64,14 +73,16 @@ const Alunos = () => {
       toast({ title: "Erro a carregar alunos", description: sErr.message, variant: "destructive" });
     }
     setStudents((sData ?? []) as unknown as StudentRow[]);
-    setClassrooms((cData ?? []) as ClassroomOpt[]);
+    let classroomList = (cData ?? []) as ClassroomOpt[];
+    if (isTeacher) classroomList = classroomList.filter((c) => teacherClassroomIds.includes(c.id));
+    setClassrooms(classroomList);
     setLoading(false);
   };
 
   useEffect(() => {
-    if (parentLoading) return;
+    if (parentLoading || teacherLoading) return;
     load();
-  }, [selectedYearId, parentLoading, isParent, childIds.join(",")]);
+  }, [selectedYearId, parentLoading, isParent, childIds.join(","), teacherLoading, isTeacher, teacherClassroomIds.join(",")]);
 
   const classroomName = (id: string | null) => classrooms.find((c) => c.id === id)?.name ?? "—";
 
@@ -136,7 +147,7 @@ const Alunos = () => {
                 className="h-11 w-72 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             </div>
-            {!isParent && (
+            {!isParent && !isTeacher && (
               <>
                 <button
                   onClick={() => { setEditing(null); setFormOpen(true); }}
@@ -281,7 +292,7 @@ const Alunos = () => {
                       </td>
                       <td className="py-4 pr-5">
                         <div className="flex items-center justify-end gap-1">
-                          {!isParent && (
+                          {!isParent && !isTeacher && (
                             <>
                               <button onClick={() => { setEditing(s); setFormOpen(true); }} title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
                                 <Pencil className="h-4 w-4" strokeWidth={1.75} />
