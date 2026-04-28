@@ -1237,9 +1237,11 @@ const Pagamentos = () => {
                   <CardTitle>Lista de propinas</CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">Controla o estado das propinas e envia lembretes aos encarregados.</p>
                 </div>
-                <Button onClick={sendBulkReminders} size="sm" variant="outline" className="gap-2">
-                  <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
-                </Button>
+                {!isParent && (
+                  <Button onClick={sendBulkReminders} size="sm" variant="outline" className="gap-2">
+                    <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
@@ -1461,9 +1463,11 @@ const Pagamentos = () => {
                   <CardTitle>Cobranças de atividades extracurriculares</CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">Controla o estado das cobranças e envia lembretes aos encarregados.</p>
                 </div>
-                <Button onClick={sendActivityBulkReminders} size="sm" variant="outline" className="gap-2">
-                  <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
-                </Button>
+                {!isParent && (
+                  <Button onClick={sendActivityBulkReminders} size="sm" variant="outline" className="gap-2">
+                    <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
@@ -1685,9 +1689,11 @@ const Pagamentos = () => {
                   <CardTitle className="flex items-center gap-2"><Bus className="h-4 w-4" /> Cobranças de transporte escolar</CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">Controla as mensalidades de transporte e envia lembretes aos encarregados.</p>
                 </div>
-                <Button onClick={sendTransportBulkReminders} size="sm" variant="outline" className="gap-2">
-                  <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
-                </Button>
+                {!isParent && (
+                  <Button onClick={sendTransportBulkReminders} size="sm" variant="outline" className="gap-2">
+                    <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
