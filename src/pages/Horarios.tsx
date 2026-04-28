@@ -19,7 +19,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-type Option = { id: string; name: string };
+type Option = { id: string; name: string; subjectId?: string | null };
 type TimeSlotRow = {
   id: string;
   shift: "MORNING" | "AFTERNOON" | "EVENING";
@@ -120,7 +120,7 @@ const Horarios = () => {
       supabase.from("subjects").select("id, name").eq("school_id", schoolId).order("name"),
       supabase
         .from("teachers")
-        .select("id, profile_id, profiles:profile_id ( full_name )")
+        .select("id, profile_id, subject_id, profiles:profile_id ( full_name )")
         .eq("school_id", schoolId),
       supabase.from("school_time_slots").select("*").eq("school_id", schoolId).order("shift").order("position"),
       supabase.from("schedules").select("*").eq("school_id", schoolId),
@@ -146,6 +146,7 @@ const Horarios = () => {
         .map((t: any) => ({
           id: t.profile_id,
           name: t.profiles?.full_name ?? "Sem nome",
+          subjectId: t.subject_id ?? null,
         })),
     );
     setTimeSlots(

@@ -23,7 +23,7 @@ export type ScheduleRecord = {
   notes: string | null;
 };
 
-type Option = { id: string; name: string };
+type Option = { id: string; name: string; subjectId?: string | null };
 type TimeSlotOption = { start_time: string; end_time: string; label: string | null; is_break: boolean; shift: string };
 
 const DAYS = [
@@ -103,8 +103,23 @@ export const ScheduleFormDialog = ({
     [timeSlots, form.shift],
   );
 
+  const filteredTeachers = useMemo(() => {
+    if (!form.subject_id) return [] as Option[];
+    return teachers.filter((t) => t.subjectId === form.subject_id);
+  }, [teachers, form.subject_id]);
+
   const update = <K extends keyof ScheduleRecord>(key: K, value: ScheduleRecord[K]) =>
-    setForm((f) => ({ ...f, [key]: value }));
+    setForm((f) => {
+      const next = { ...f, [key]: value } as ScheduleRecord;
+      // Reset teacher if subject changes and current teacher doesn't teach the new subject
+      if (key === "subject_id") {
+        const stillValid = teachers.some(
+          (t) => t.id === f.teacher_id && t.subjectId === value,
+        );
+        if (!stillValid) next.teacher_id = null;
+      }
+      return next;
+    });
 
   const applySlot = (start: string, end: string) => {
     setForm((f) => ({ ...f, start_time: trimTime(start), end_time: trimTime(end) }));
@@ -188,10 +203,24 @@ export const ScheduleFormDialog = ({
 
           <div className="space-y-2">
             <Label>Professor *</Label>
-            <Select value={form.teacher_id ?? ""} onValueChange={(v) => update("teacher_id", v)}>
-              <SelectTrigger><SelectValue placeholder="Escolher professor" /></SelectTrigger>
+            <Select
+              value={form.teacher_id ?? ""}
+              onValueChange={(v) => update("teacher_id", v)}
+              disabled={!form.subject_id || filteredTeachers.length === 0}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={
+                    !form.subject_id
+                      ? "Selecione a disciplina primeiro"
+                      : filteredTeachers.length === 0
+                        ? "Sem professores para esta disciplina"
+                        : "Escolher professor"
+                  }
+                />
+              </SelectTrigger>
               <SelectContent>
-                {teachers.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                {filteredTeachers.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
