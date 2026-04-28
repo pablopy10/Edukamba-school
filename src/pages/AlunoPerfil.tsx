@@ -1190,6 +1190,26 @@ const AlunoPerfil = () => {
               </div>
               <Link to="/presencas" className="text-xs font-medium text-pastel-green-foreground hover:underline">Ver todas</Link>
             </div>
+            {attendanceStats.total > 0 && (
+              <div className="grid grid-cols-2 gap-3 border-b border-border p-5 sm:grid-cols-4">
+                <div className="rounded-xl bg-pastel-green/40 p-3">
+                  <p className="text-xs text-muted-foreground">Presenças</p>
+                  <p className="text-xl font-bold text-foreground">{attendanceStats.present}</p>
+                </div>
+                <div className="rounded-xl bg-pastel-yellow/40 p-3">
+                  <p className="text-xs text-muted-foreground">Atrasos</p>
+                  <p className="text-xl font-bold text-foreground">{attendanceStats.late}</p>
+                </div>
+                <div className="rounded-xl bg-pastel-pink/40 p-3">
+                  <p className="text-xs text-muted-foreground">Faltas</p>
+                  <p className="text-xl font-bold text-foreground">{attendanceStats.absent}</p>
+                </div>
+                <div className="rounded-xl bg-pastel-blue/40 p-3">
+                  <p className="text-xs text-muted-foreground">Justificadas</p>
+                  <p className="text-xl font-bold text-foreground">{attendanceStats.justified}</p>
+                </div>
+              </div>
+            )}
             {attendance.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">Sem registos de presença.</p>
             ) : (
