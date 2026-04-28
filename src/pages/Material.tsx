@@ -282,11 +282,12 @@ const Material = () => {
               </div>
             ) : (
               <div className="flex flex-wrap items-center gap-2">
-                <Select value={reqStatusFilter} onValueChange={setReqStatusFilter}>
-                  <SelectTrigger className="h-10 w-40 rounded-full"><SelectValue placeholder="Estado" /></SelectTrigger>
+                <Select value={reqDeliveryFilter} onValueChange={(v) => setReqDeliveryFilter(v as DeliveryFilter)}>
+                  <SelectTrigger className="h-10 w-44 rounded-full"><SelectValue placeholder="Entregas" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todos os estados</SelectItem>
-                    {(Object.keys(statusMeta) as Status[]).map((s) => <SelectItem key={s} value={s}>{statusMeta[s].label}</SelectItem>)}
+                    <SelectItem value="all">Todas as entregas</SelectItem>
+                    <SelectItem value="pendente">Por completar</SelectItem>
+                    <SelectItem value="completo">Concluídas</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={reqTeacherFilter} onValueChange={setReqTeacherFilter}>
@@ -317,9 +318,11 @@ const Material = () => {
             students={students}
             isAdmin={isAdmin}
             currentUserId={user?.id ?? null}
+            canMarkDeliveries={canMarkDeliveries}
+            progressFor={progressFor}
             onEdit={(r) => { setEditingRequest(r); setShowRequestDialog(true); }}
             onRemove={removeRequest}
-            onUpdateStatus={updateRequestStatus}
+            onMarkDeliveries={(r) => setDeliveryDialog(r)}
           />
         )}
       </div>
@@ -340,6 +343,15 @@ const Material = () => {
         request={editingRequest}
         classrooms={classrooms}
         students={students}
+        onSaved={loadAll}
+      />
+      <DeliveryDialog
+        request={deliveryDialog}
+        targetStudents={deliveryDialog ? targetStudentsFor(deliveryDialog) : []}
+        deliveries={deliveries.filter((d) => deliveryDialog && d.request_id === deliveryDialog.id)}
+        schoolId={schoolId}
+        userId={user?.id ?? null}
+        onClose={() => setDeliveryDialog(null)}
         onSaved={loadAll}
       />
     </DashboardLayout>
