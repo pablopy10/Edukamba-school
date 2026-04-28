@@ -353,7 +353,7 @@ const Pagamentos = () => {
     }
     setRecordUploading(false);
     setRecordDialog(null);
-    toast({ title: "Pagamento registado e validado" });
+    toast({ title: isParent ? "Comprovativo enviado para validação" : "Pagamento registado e validado" });
     await fetchAll();
   };
 
