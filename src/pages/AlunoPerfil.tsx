@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreateStudentAccessDialog, ELIGIBLE_GRADES } from "@/components/alunos/CreateStudentAccessDialog";
 import { KeyRound, ShieldCheck } from "lucide-react";
+import { useUserRole } from "@/hooks/useUserRole";
 
 type AvatarColor = "lilac" | "blue" | "yellow" | "green" | "pink";
 
