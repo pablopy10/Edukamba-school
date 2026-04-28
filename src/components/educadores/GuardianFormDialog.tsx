@@ -4,17 +4,18 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { sortByName } from "@/lib/utils";
 
 export type GuardianRow = {
   profile_id: string;
   full_name: string;
   phone: string | null;
-  student_id: string | null;
-  student_name: string | null;
-  classroom_id: string | null;
+  student_ids: string[];
+  student_names: string[];
+  classroom_ids: string[];
 };
 
 type StudentOpt = { id: string; full_name: string };
@@ -33,7 +34,8 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [studentId, setStudentId] = useState<string>("none");
+  const [studentIds, setStudentIds] = useState<string[]>([]);
+  const [studentSearch, setStudentSearch] = useState("");
   const [mode, setMode] = useState<"invite" | "password">("invite");
   const [password, setPassword] = useState("");
 
@@ -42,14 +44,18 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
       if (guardian) {
         setFullName(guardian.full_name ?? "");
         setPhone(guardian.phone ?? "");
-        setStudentId(guardian.student_id ?? "none");
+        setStudentIds(guardian.student_ids ?? []);
       } else {
         setFullName(""); setEmail(""); setPhone("");
-        setStudentId("none");
+        setStudentIds([]);
         setMode("invite"); setPassword("");
       }
+      setStudentSearch("");
     }
   }, [open, guardian]);
+
+  const toggleStudent = (id: string) =>
+    setStudentIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const handleSubmit = async () => {
     if (!fullName.trim()) {
@@ -65,17 +71,18 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
         }).eq("id", guardian.profile_id);
         if (pErr) throw pErr;
 
-        // Reassign linked student
-        if (guardian.student_id && (studentId === "none" || studentId !== guardian.student_id)) {
-          // unlink old student (only if changed)
-          if (studentId !== guardian.student_id) {
-            await supabase.from("students").update({ parent_id: null }).eq("id", guardian.student_id);
-          }
+        // Reconcile student links: unlink removed, link added.
+        const previous = new Set(guardian.student_ids ?? []);
+        const next = new Set(studentIds);
+        const toUnlink = [...previous].filter((id) => !next.has(id));
+        const toLink = [...next].filter((id) => !previous.has(id));
+        if (toUnlink.length > 0) {
+          const { error } = await supabase.from("students").update({ parent_id: null }).in("id", toUnlink);
+          if (error) throw error;
         }
-        if (studentId !== "none") {
-          const { error: sErr } = await supabase.from("students")
-            .update({ parent_id: guardian.profile_id }).eq("id", studentId);
-          if (sErr) throw sErr;
+        if (toLink.length > 0) {
+          const { error } = await supabase.from("students").update({ parent_id: guardian.profile_id }).in("id", toLink);
+          if (error) throw error;
         }
         toast({ title: "Educador actualizado" });
       } else {
@@ -92,7 +99,7 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
             full_name: fullName.trim(),
             email: email.trim(),
             phone: phone || null,
-            student_id: studentId !== "none" ? studentId : null,
+            student_ids: studentIds,
             password: mode === "password" ? password : null,
           },
         });
@@ -111,6 +118,12 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
       setLoading(false);
     }
   };
+
+  const filteredStudents = sortByName(
+    students.filter((s) =>
+      !studentSearch.trim() || s.full_name.toLowerCase().includes(studentSearch.toLowerCase()),
+    ),
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -137,17 +150,32 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
             <Label htmlFor="gp">Telefone</Label>
             <Input id="gp" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(244) 925 ..." />
           </div>
-          <div>
-            <Label>Aluno associado</Label>
-            <Select value={studentId} onValueChange={setStudentId}>
-              <SelectTrigger><SelectValue placeholder="Sem aluno" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Sem aluno</SelectItem>
-                {students.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="sm:col-span-2">
+            <Label>Alunos associados {studentIds.length > 0 && <span className="text-muted-foreground">({studentIds.length})</span>}</Label>
+            <Input
+              value={studentSearch}
+              onChange={(e) => setStudentSearch(e.target.value)}
+              placeholder="Pesquisar aluno..."
+              className="mt-1"
+            />
+            <div className="mt-2 max-h-48 overflow-y-auto rounded-md border border-border">
+              {filteredStudents.length === 0 ? (
+                <p className="p-3 text-center text-xs text-muted-foreground">Nenhum aluno encontrado.</p>
+              ) : (
+                filteredStudents.map((s) => {
+                  const checked = studentIds.includes(s.id);
+                  return (
+                    <label
+                      key={s.id}
+                      className="flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-0 hover:bg-muted/50"
+                    >
+                      <Checkbox checked={checked} onCheckedChange={() => toggleStudent(s.id)} />
+                      <span className="text-sm text-foreground">{s.full_name}</span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
           </div>
 
           {!isEdit && (
