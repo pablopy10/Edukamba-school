@@ -230,11 +230,21 @@ const Pagamentos = () => {
   const [routesList, setRoutesList] = useState<Array<{ id: string; name: string }>>([]);
   const [remindingTrFeeId, setRemindingTrFeeId] = useState<string | null>(null);
 
+  // Enrollment fees (matrículas / renovações)
+  const [allEnrollmentFees, setAllEnrollmentFees] = useState<EnrollmentFeeRow[]>([]);
+  const [enrollmentPayments, setEnrollmentPayments] = useState<PaymentListRow[]>([]);
+  const [enFilter, setEnFilter] = useState<"all" | "paid" | "pending" | "overdue">("pending");
+  const [enYearFilter, setEnYearFilter] = useState<string>("all");
+  const [enTypeFilter, setEnTypeFilter] = useState<"all" | "NEW" | "RENEWAL">("all");
+  const [enSearch, setEnSearch] = useState("");
+  const [remindingEnFeeId, setRemindingEnFeeId] = useState<string | null>(null);
+
   // Staff "registar pagamento" dialog (works for both tuition and activity fees)
   const [recordDialog, setRecordDialog] = useState<
     | { kind: "fee"; fee: FeeListRow }
     | { kind: "activity"; fee: ActivityFeeRow }
     | { kind: "transport"; fee: TransportFeeRow }
+    | { kind: "enrollment"; fee: EnrollmentFeeRow }
     | null
   >(null);
   const [recordFile, setRecordFile] = useState<File | null>(null);
