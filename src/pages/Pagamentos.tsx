@@ -383,11 +383,12 @@ const Pagamentos = () => {
 
     // Carregar propinas com aluno e educador
     const studentIds = (sRes.data ?? []).map((s) => s.id);
-    if (studentIds.length > 0) {
+    const scopedStudentIds = isParent ? studentIds.filter((id) => childIds.includes(id)) : studentIds;
+    if (scopedStudentIds.length > 0) {
       const { data: feesData } = await supabase
         .from("student_fees")
         .select("id, amount_due, due_date, is_paid, month_index, student_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name))")
-        .in("student_id", studentIds)
+        .in("student_id", scopedStudentIds)
         .order("due_date", { ascending: true });
       setAllFees((feesData ?? []) as unknown as FeeListRow[]);
 
@@ -405,11 +406,19 @@ const Pagamentos = () => {
 
       // Activity fees + lista de atividades para filtros
       const [{ data: actFees }, { data: actsList }] = await Promise.all([
-        supabase
+        (isParent
+          ? supabase
+              .from("activity_fees")
+              .select("id, amount_due, due_date, is_paid, month_index, student_id, activity_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), activity:extracurricular_activities(id, name, category)")
+              .eq("school_id", sId)
+              .in("student_id", scopedStudentIds)
+              .order("due_date", { ascending: true })
+          : supabase
           .from("activity_fees")
           .select("id, amount_due, due_date, is_paid, month_index, student_id, activity_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), activity:extracurricular_activities(id, name, category)")
           .eq("school_id", sId)
-          .order("due_date", { ascending: true }),
+          .order("due_date", { ascending: true })
+        ),
         supabase
           .from("extracurricular_activities")
           .select("id, name")
