@@ -74,6 +74,7 @@ const Pedidos = () => {
   const [confirmDelete, setConfirmDelete] = useState<Row | null>(null);
 
   const isAdmin = role === "ADMIN";
+  const isTeacher = role === "TEACHER";
 
   const loadProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -126,6 +127,7 @@ const Pedidos = () => {
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
+      if (isTeacher && r.requester_id !== userId) return false;
       if (statusFilter !== "all" && (r.status as StatusDB) !== statusFilter) return false;
       if (reasonFilter !== "all" && r.reason !== reasonFilter) return false;
       if (dateFrom && r.end_date < dateFrom) return false;
@@ -137,14 +139,14 @@ const Pedidos = () => {
       }
       return true;
     });
-  }, [rows, statusFilter, reasonFilter, dateFrom, dateTo, search]);
+  }, [rows, statusFilter, reasonFilter, dateFrom, dateTo, search, isTeacher, userId]);
 
   const stats = useMemo(() => ({
-    total: rows.length,
-    pendentes: rows.filter((r) => r.status === "PENDING").length,
-    aprovados: rows.filter((r) => r.status === "APPROVED").length,
-    rejeitados: rows.filter((r) => r.status === "REJECTED").length,
-  }), [rows]);
+    total: filtered.length,
+    pendentes: filtered.filter((r) => r.status === "PENDING").length,
+    aprovados: filtered.filter((r) => r.status === "APPROVED").length,
+    rejeitados: filtered.filter((r) => r.status === "REJECTED").length,
+  }), [filtered]);
 
   const updateStatus = async (id: string, status: StatusDB) => {
     const { error } = await supabase
@@ -297,7 +299,7 @@ const Pedidos = () => {
                   const name = r.profile?.full_name ?? "—";
                   const isOwner = r.requester_id === userId;
                   const canEdit = isAdmin || (isOwner && status === "PENDING");
-                  const canDelete = isAdmin;
+                  const canDelete = isAdmin || (isOwner && status === "PENDING");
                   return (
                     <tr key={r.id} className="border-b border-border/60 text-sm transition-colors hover:bg-muted/30">
                       <td className="px-6 py-4">

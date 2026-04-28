@@ -21,6 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
+import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 
 type Status = "PRESENT" | "ABSENT" | "LATE" | "JUSTIFIED";
 
@@ -145,6 +146,7 @@ const Presencas = () => {
   const { user } = useAuth();
   const { selectedYearId } = useAcademicYear();
   const { isParent, childIds, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
+  const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month0, setMonth0] = useState(today.getMonth());
@@ -181,6 +183,7 @@ const Presencas = () => {
   useEffect(() => {
     if (!schoolId) return;
     if (isParent && parentLoading) return;
+    if (isTeacher && teacherLoading) return;
     if (!selectedYearId) {
       setClassrooms([]);
       setClassroomId("all");
@@ -201,13 +204,21 @@ const Presencas = () => {
         }
         q = q.in("id", parentClassroomIds);
       }
+      if (isTeacher) {
+        if (teacherClassroomIds.length === 0) {
+          setClassrooms([]);
+          setClassroomId("all");
+          return;
+        }
+        q = q.in("id", teacherClassroomIds);
+      }
       const { data } = await q;
       const list = data ?? [];
       setClassrooms(list);
       // Pre-select first classroom by ascending name; fall back to "all" if none.
       setClassroomId(list[0]?.id ?? "all");
     })();
-  }, [schoolId, selectedYearId, isParent, parentLoading, parentClassroomIds.join(",")]);
+  }, [schoolId, selectedYearId, isParent, parentLoading, parentClassroomIds.join(","), isTeacher, teacherLoading, teacherClassroomIds.join(",")]);
 
   // Compute month days
   const monthDays = useMemo(() => getMonthDays(year, month0), [year, month0]);

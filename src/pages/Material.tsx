@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { MaterialFormDialog, type MaterialRow } from "@/components/material/MaterialFormDialog";
 import { MaterialRequestFormDialog, type RequestRow } from "@/components/material/MaterialRequestFormDialog";
 import { useParentChildren } from "@/hooks/useParentChildren";
+import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 
 type Category = "papelaria" | "laboratorio" | "artes" | "desporto" | "tecnologia";
 
@@ -43,6 +44,7 @@ type Tab = "stock" | "pedidos";
 const Material = () => {
   const { user } = useAuth();
   const { isParent, childIds, classroomIds, selectedChild } = useParentChildren();
+  const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
   const [tab, setTab] = useState<Tab>("stock");
   const [loading, setLoading] = useState(true);
   const [schoolId, setSchoolId] = useState<string | null>(null);
@@ -81,6 +83,11 @@ const Material = () => {
     if (isParent && tab !== "pedidos") setTab("pedidos");
   }, [isParent, tab]);
 
+  // Teachers also never see stock; force them onto the requests tab.
+  useEffect(() => {
+    if (isTeacher && tab !== "pedidos") setTab("pedidos");
+  }, [isTeacher, tab]);
+
   const loadAll = async () => {
     if (!user) return;
     const { data: profile } = await supabase
@@ -113,6 +120,16 @@ const Material = () => {
 
   useEffect(() => { loadAll(); /* eslint-disable-next-line */ }, [user?.id]);
 
+  // For teachers, restrict the classroom list and student list to the classes they teach.
+  const visibleClassrooms = useMemo(() => {
+    if (!isTeacher) return classrooms;
+    return classrooms.filter((c) => teacherClassroomIds.includes(c.id));
+  }, [classrooms, isTeacher, teacherClassroomIds]);
+  const visibleStudents = useMemo(() => {
+    if (!isTeacher) return students;
+    return students.filter((s) => s.classroom_id && teacherClassroomIds.includes(s.classroom_id));
+  }, [students, isTeacher, teacherClassroomIds]);
+
   // Derive teacher list from existing requests
   useEffect(() => {
     const map = new Map<string, string>();
@@ -141,19 +158,23 @@ const Material = () => {
   }, [requests, isParent, childIds, classroomIds]);
 
   const stats = useMemo(() => {
-    const reqList = isParent ? parentScopedRequests : requests;
+    let reqList = requests;
+    if (isParent) reqList = parentScopedRequests;
+    else if (isTeacher) reqList = requests.filter((r) => r.requester_id === user?.id);
     const reqIds = new Set(reqList.map((r) => r.id));
     const childSet = new Set(childIds);
     const relevantDeliveries = isParent
       ? deliveries.filter((d) => reqIds.has(d.request_id) && childSet.has(d.student_id))
-      : deliveries;
+      : isTeacher
+        ? deliveries.filter((d) => reqIds.has(d.request_id))
+        : deliveries;
     return {
       totalItens: stock.reduce((a, s) => a + (s.quantity || 0), 0),
       baixoStock: stock.filter((s) => s.quantity < s.min_quantity).length,
       pedidosAtivos: reqList.length,
       entregasMarcadas: relevantDeliveries.filter((d) => d.brought).length,
     };
-  }, [stock, requests, deliveries, isParent, parentScopedRequests, childIds]);
+  }, [stock, requests, deliveries, isParent, parentScopedRequests, childIds, isTeacher, user?.id]);
 
   // Compute target students for a request and delivery progress.
   const targetStudentsFor = (r: RequestRow) => {
@@ -193,6 +214,8 @@ const Material = () => {
         const targetsClass = !r.student_id && r.classroom_id ? classSet.has(r.classroom_id) : false;
         if (!targetsChild && !targetsClass) return false;
       }
+      // Teachers only see their own requests.
+      if (isTeacher && r.requester_id !== user?.id) return false;
       if (reqDeliveryFilter !== "all") {
         const { brought, total } = progressFor(r);
         const isComplete = total > 0 && brought === total;
@@ -208,7 +231,7 @@ const Material = () => {
       }
       return true;
     });
-  }, [requests, search, reqDeliveryFilter, reqTeacherFilter, students, classrooms, deliveries, isParent, childIds, classroomIds]);
+  }, [requests, search, reqDeliveryFilter, reqTeacherFilter, students, classrooms, deliveries, isParent, childIds, classroomIds, isTeacher, user?.id]);
 
   const removeMaterial = async (id: string) => {
     if (!confirm("Remover este material?")) return;
@@ -240,7 +263,7 @@ const Material = () => {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {!isParent && (
+            {!isParent && !isTeacher && (
             <div className="inline-flex h-11 items-center rounded-full border border-border bg-card p-1 shadow-soft">
               <button onClick={() => setTab("stock")} className={cn("flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors", tab === "stock" ? "bg-pastel-blue text-pastel-blue-foreground" : "text-muted-foreground hover:text-foreground")}>
                 <Boxes className="h-4 w-4" strokeWidth={1.75} /> Stock
@@ -264,8 +287,8 @@ const Material = () => {
         </div>
 
         {/* Stats */}
-        <div className={cn("grid gap-4", isParent ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-4")}>
-          {(isParent
+        <div className={cn("grid gap-4", (isParent || isTeacher) ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-4")}>
+          {((isParent || isTeacher)
             ? [
                 { label: "Pedidos ativos", value: stats.pedidosAtivos, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
                 { label: "Materiais entregues", value: stats.entregasMarcadas, color: "bg-pastel-green text-pastel-green-foreground" },
@@ -386,8 +409,8 @@ const Material = () => {
         userId={user?.id ?? null}
         userName={userName}
         request={editingRequest}
-        classrooms={classrooms}
-        students={students}
+        classrooms={visibleClassrooms}
+        students={visibleStudents}
         onSaved={loadAll}
       />
       <DeliveryDialog

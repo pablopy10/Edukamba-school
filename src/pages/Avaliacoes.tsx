@@ -36,6 +36,9 @@ import {
 import { AssessmentFormDialog, type AssessmentRecord } from "@/components/avaliacoes/AssessmentFormDialog";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useParentChildren } from "@/hooks/useParentChildren";
+import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
+import { useUserRole } from "@/hooks/useUserRole";
+import { useAuth } from "@/hooks/useAuth";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 
 type EvalType = "teste" | "exame" | "trabalho" | "oral";
@@ -89,6 +92,9 @@ const Avaliacoes = () => {
   const navigate = useNavigate();
   const { selectedYearId } = useAcademicYear();
   const { isParent, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
+  const { user } = useAuth();
+  const { role } = useUserRole();
+  const { isTeacher, classroomIds: teacherClassroomIds, subjectId: teacherSubjectId, loading: teacherLoading } = useTeacherClassrooms();
   const [view, setView] = useState<View>("calendario");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
@@ -150,6 +156,13 @@ const Avaliacoes = () => {
       }
       assessmentsQuery = assessmentsQuery.in("classroom_id", parentClassroomIds);
     }
+    if (isTeacher) {
+      if (teacherClassroomIds.length === 0) {
+        setAssessments([]); setClassrooms([]); setSubjects([]); setTeachers([]); setTerms([]); setHolidays([]); setLoading(false);
+        return;
+      }
+      assessmentsQuery = assessmentsQuery.in("classroom_id", teacherClassroomIds);
+    }
 
     const [aRes, cRes, sRes, tRes, termRes, holRes] = await Promise.all([
       assessmentsQuery,
@@ -163,7 +176,13 @@ const Avaliacoes = () => {
     ]);
 
     setAssessments((aRes.data ?? []) as Assessment[]);
-    setClassrooms(cRes.data ?? []);
+    {
+      let classroomList = cRes.data ?? [];
+      if (isTeacher) {
+        classroomList = classroomList.filter((c) => teacherClassroomIds.includes(c.id));
+      }
+      setClassrooms(classroomList);
+    }
     setSubjects(sRes.data ?? []);
     setTeachers(
       (tRes.data ?? [])
@@ -176,7 +195,12 @@ const Avaliacoes = () => {
     setLoading(false);
   };
 
-  useEffect(() => { if (parentLoading) return; loadAll(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [selectedYearId, parentLoading, isParent, parentClassroomIds.join(",")]);
+  useEffect(() => {
+    if (parentLoading) return;
+    if (isTeacher && teacherLoading) return;
+    loadAll();
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [selectedYearId, parentLoading, isParent, parentClassroomIds.join(","), isTeacher, teacherLoading, teacherClassroomIds.join(",")]);
 
   const classroomMap = useMemo(() => new Map(classrooms.map((c) => [c.id, c.name])), [classrooms]);
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s.name])), [subjects]);
@@ -453,6 +477,8 @@ const Avaliacoes = () => {
         teachers={teachers}
         initial={editing}
         onSaved={loadAll}
+        lockTeacherId={isTeacher ? user?.id ?? null : null}
+        lockSubjectId={isTeacher ? teacherSubjectId : null}
       />
 
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
