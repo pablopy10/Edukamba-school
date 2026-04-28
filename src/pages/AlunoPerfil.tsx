@@ -755,7 +755,6 @@ const AlunoPerfil = () => {
                     <th className="py-3 pr-4 font-semibold">Turma</th>
                     <th className="py-3 pr-4 font-semibold">Classe</th>
                     <th className="py-3 pr-4 font-semibold">Estado</th>
-                    <th className="py-3 pr-5 font-semibold">Resultado</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -793,26 +792,6 @@ const AlunoPerfil = () => {
                           )}>
                             {h.status === "ACTIVE" ? "Confirmada" : h.status === "PENDING" ? "Pendente" : h.status === "CANCELLED" ? "Cancelada" : (h.status ?? "—")}
                           </span>
-                        </td>
-                        <td className="py-3 pr-5">
-                          {h.result === "APROVADO" ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-pastel-green px-3 py-1 text-xs font-semibold text-pastel-green-foreground">
-                              <CheckCircle2 className="h-3 w-3" /> Aprovado
-                            </span>
-                          ) : h.result === "REPROVADO" ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-pastel-pink px-3 py-1 text-xs font-semibold text-pastel-pink-foreground">
-                              <XCircle className="h-3 w-3" /> Reprovado
-                            </span>
-                          ) : h.result === "TRANSFERIDO" ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-pastel-blue px-3 py-1 text-xs font-semibold text-pastel-blue-foreground">
-                              <ArrowRightLeft className="h-3 w-3" /> Transferido
-                            </span>
-                          ) : (
-                            <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">Em curso</span>
-                          )}
-                          {h.result_notes && (
-                            <p className="mt-1 max-w-xs truncate text-xs text-muted-foreground" title={h.result_notes}>{h.result_notes}</p>
-                          )}
                         </td>
                       </tr>
                     );
