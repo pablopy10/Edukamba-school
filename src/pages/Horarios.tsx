@@ -370,7 +370,7 @@ const Horarios = () => {
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold text-muted-foreground">Disciplina</label>
-            <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+            <Select value={subjectFilter} onValueChange={setSubjectFilter} disabled={isTeacher}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>Todas as disciplinas</SelectItem>
@@ -380,7 +380,7 @@ const Horarios = () => {
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold text-muted-foreground">Professor</label>
-            <Select value={teacherFilter} onValueChange={setTeacherFilter}>
+            <Select value={teacherFilter} onValueChange={setTeacherFilter} disabled={isTeacher}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>Todos os professores</SelectItem>
