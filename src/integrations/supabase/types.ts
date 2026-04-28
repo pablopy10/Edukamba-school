@@ -711,6 +711,80 @@ export type Database = {
           },
         ]
       }
+      enrollment_fees: {
+        Row: {
+          academic_year_id: string | null
+          amount_due: number
+          created_at: string
+          due_date: string
+          enrollment_id: string | null
+          fee_type: string
+          id: string
+          is_paid: boolean
+          notes: string | null
+          school_id: string
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          academic_year_id?: string | null
+          amount_due?: number
+          created_at?: string
+          due_date?: string
+          enrollment_id?: string | null
+          fee_type: string
+          id?: string
+          is_paid?: boolean
+          notes?: string | null
+          school_id: string
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          academic_year_id?: string | null
+          amount_due?: number
+          created_at?: string
+          due_date?: string
+          enrollment_id?: string | null
+          fee_type?: string
+          id?: string
+          is_paid?: boolean
+          notes?: string | null
+          school_id?: string
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enrollment_fees_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enrollment_fees_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enrollment_fees_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enrollment_fees_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       enrollments: {
         Row: {
           academic_year_id: string | null
@@ -1616,6 +1690,7 @@ export type Database = {
         Row: {
           activity_fee_id: string | null
           amount_paid: number
+          enrollment_fee_id: string | null
           id: string
           method: string | null
           notes: string | null
@@ -1633,6 +1708,7 @@ export type Database = {
         Insert: {
           activity_fee_id?: string | null
           amount_paid: number
+          enrollment_fee_id?: string | null
           id?: string
           method?: string | null
           notes?: string | null
@@ -1650,6 +1726,7 @@ export type Database = {
         Update: {
           activity_fee_id?: string | null
           amount_paid?: number
+          enrollment_fee_id?: string | null
           id?: string
           method?: string | null
           notes?: string | null
@@ -1670,6 +1747,13 @@ export type Database = {
             columns: ["activity_fee_id"]
             isOneToOne: false
             referencedRelation: "activity_fees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_enrollment_fee_id_fkey"
+            columns: ["enrollment_fee_id"]
+            isOneToOne: false
+            referencedRelation: "enrollment_fees"
             referencedColumns: ["id"]
           },
           {

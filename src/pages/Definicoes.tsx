@@ -255,6 +255,8 @@ const Definicoes = () => {
     late_fee_enabled: false,
     late_fee_type: "fixed" as "fixed" | "percentage",
     late_fee_value: 0,
+    enrollment_fee_new: 0,
+    enrollment_fee_renewal: 0,
   });
   const [savingAcademicSettings, setSavingAcademicSettings] = useState(false);
 
@@ -383,6 +385,8 @@ const Definicoes = () => {
           late_fee_enabled?: boolean;
           late_fee_type?: "fixed" | "percentage";
           late_fee_value?: number;
+          enrollment_fee_new?: number;
+          enrollment_fee_renewal?: number;
         };
         setAcademicSettings({
           honor_roll_min_average: typeof s.honor_roll_min_average === "number" ? s.honor_roll_min_average : 14,
@@ -390,6 +394,8 @@ const Definicoes = () => {
           late_fee_enabled: typeof s.late_fee_enabled === "boolean" ? s.late_fee_enabled : false,
           late_fee_type: s.late_fee_type === "percentage" ? "percentage" : "fixed",
           late_fee_value: typeof s.late_fee_value === "number" ? s.late_fee_value : 0,
+          enrollment_fee_new: typeof s.enrollment_fee_new === "number" ? s.enrollment_fee_new : 0,
+          enrollment_fee_renewal: typeof s.enrollment_fee_renewal === "number" ? s.enrollment_fee_renewal : 0,
         });
       }
       if (yearRes.data) {
@@ -699,6 +705,8 @@ const Definicoes = () => {
       late_fee_enabled: academicSettings.late_fee_enabled,
       late_fee_type: academicSettings.late_fee_type,
       late_fee_value: academicSettings.late_fee_enabled ? lateValue : 0,
+      enrollment_fee_new: Math.max(0, Number(academicSettings.enrollment_fee_new) || 0),
+      enrollment_fee_renewal: Math.max(0, Number(academicSettings.enrollment_fee_renewal) || 0),
     };
     const { error } = await supabase.from("schools").update({ settings: merged }).eq("id", schoolId);
     setSavingAcademicSettings(false);
@@ -1329,6 +1337,54 @@ const Definicoes = () => {
               <p className="mt-3 text-xs text-muted-foreground">
                 A multa é aplicada uma única vez por propina em atraso, no dia 11. As propinas pagas antes do
                 vencimento ou já regularizadas não são afetadas.
+              </p>
+              <div className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
+                <SaveBar onClick={handleSaveAcademicSettings} saving={savingAcademicSettings} isAdmin={isAdmin} />
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              title="Custos de Matrícula"
+              desc="Valores únicos cobrados ao matricular um aluno (nova matrícula) ou ao renovar a matrícula num novo ano letivo. Definir 0 para não cobrar."
+            >
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <Field label="Custo da matrícula nova (Kz)">
+                  <input
+                    type="number"
+                    min={0}
+                    step={100}
+                    className={inputCls(false)}
+                    disabled={!isAdmin}
+                    value={academicSettings.enrollment_fee_new}
+                    onChange={(e) =>
+                      setAcademicSettings((s) => ({
+                        ...s,
+                        enrollment_fee_new: e.target.value === "" ? 0 : Number(e.target.value),
+                      }))
+                    }
+                  />
+                </Field>
+                <Field label="Custo da renovação de matrícula (Kz)">
+                  <input
+                    type="number"
+                    min={0}
+                    step={100}
+                    className={inputCls(false)}
+                    disabled={!isAdmin}
+                    value={academicSettings.enrollment_fee_renewal}
+                    onChange={(e) =>
+                      setAcademicSettings((s) => ({
+                        ...s,
+                        enrollment_fee_renewal: e.target.value === "" ? 0 : Number(e.target.value),
+                      }))
+                    }
+                  />
+                </Field>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Quando uma matrícula é criada e fica ativa, o custo correspondente é gerado automaticamente em
+                Pagamentos &rsaquo; Matrículas. Os encarregados de educação podem anexar o comprovativo para
+                validação pela administração.
               </p>
               <div className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
                 <SaveBar onClick={handleSaveAcademicSettings} saving={savingAcademicSettings} isAdmin={isAdmin} />
