@@ -18,6 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap, FileSpreadsheet } from "lucide-react";
 import { ErpExportMappingSection } from "@/components/pagamentos/ErpExportMappingSection";
+import { ErpExportPaymentsSection } from "@/components/pagamentos/ErpExportPaymentsSection";
 import { Textarea } from "@/components/ui/textarea";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
 import { useParentChildren } from "@/hooks/useParentChildren";
@@ -2432,8 +2433,9 @@ const Pagamentos = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="erp-export" className="space-y-4">
+          <TabsContent value="erp-export" className="space-y-6">
             <ErpExportMappingSection schoolId={schoolId} />
+            <ErpExportPaymentsSection schoolId={schoolId} />
           </TabsContent>
         </Tabs>
       </div>

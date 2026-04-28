@@ -63,7 +63,8 @@ type PaymentRow = Pick<
   | "enrollment_fee_id"
 >;
 
-type StudentMini = {
+/** Estudante resolvido a partir de uma cobrança (para export ERP). */
+export type ErpResolvedStudent = {
   id: string;
   full_name: string;
   tax_id: string | null;
@@ -86,7 +87,7 @@ function articleCodeForPayment(
   return "OUTRO";
 }
 
-function studentIdForErp(s: StudentMini): string {
+function studentIdForErp(s: ErpResolvedStudent): string {
   const en = s.enrollment_number?.trim();
   if (en) return en;
   return s.id;
@@ -136,8 +137,8 @@ export async function loadFeeMetaForPayments(
 export async function resolveStudentsForPayments(
   supabase: SupabaseClient<Database>,
   payments: PaymentRow[],
-): Promise<Map<string, StudentMini>> {
-  const out = new Map<string, StudentMini>();
+): Promise<Map<string, ErpResolvedStudent>> {
+  const out = new Map<string, ErpResolvedStudent>();
 
   const sfIds = [...new Set(payments.map((p) => p.student_fee_id).filter(Boolean))] as string[];
   const afIds = [...new Set(payments.map((p) => p.activity_fee_id).filter(Boolean))] as string[];
@@ -153,7 +154,7 @@ export async function resolveStudentsForPayments(
     efIds.length ? supabase.from("enrollment_fees").select(sel).in("id", efIds) : { data: [] as unknown[] },
   ]);
 
-  type FeeRow = { id: string; student_id: string; student: StudentMini | null };
+  type FeeRow = { id: string; student_id: string; student: ErpResolvedStudent | null };
 
   const ingest = (prefix: string, rows: FeeRow[]) => {
     rows.forEach((r) => {
@@ -173,7 +174,7 @@ export async function resolveStudentsForPayments(
 /** Linhas para Excel: números como number; datas ISO YYYY-MM-DD; sem formatação extra. */
 export function buildErpExportRows(
   payments: PaymentRow[],
-  studentByFeePrefix: Map<string, StudentMini>,
+  studentByFeePrefix: Map<string, ErpResolvedStudent>,
   cfg: ErpConfigFields | null,
   activityCodeByFeeId: Map<string, string>,
   enrollmentTypeByFeeId: Map<string, "NEW" | "RENEWAL">,
@@ -193,7 +194,7 @@ export function buildErpExportRows(
   const rows: (string | number)[][] = [];
 
   for (const p of payments) {
-    let student: StudentMini | undefined;
+    let student: ErpResolvedStudent | undefined;
     if (p.student_fee_id) student = studentByFeePrefix.get(`sf:${p.student_fee_id}`);
     else if (p.activity_fee_id) student = studentByFeePrefix.get(`af:${p.activity_fee_id}`);
     else if (p.transport_fee_id) student = studentByFeePrefix.get(`tf:${p.transport_fee_id}`);
@@ -221,4 +222,105 @@ export function downloadRawXlsx(filename: string, sheetName: string, headers: st
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
   XLSX.writeFile(wb, filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`);
+}
+
+export type ErpPaymentExportRow = Pick<
+  Database["public"]["Tables"]["payments"]["Row"],
+  | "id"
+  | "amount_paid"
+  | "method"
+  | "payment_date"
+  | "erp_exported_at"
+  | "student_fee_id"
+  | "activity_fee_id"
+  | "transport_fee_id"
+  | "enrollment_fee_id"
+>;
+
+/** Lista pagamentos validados cuja data está no ano civil indicado (filtro ERP). */
+export async function fetchValidatedPaymentsForErpYear(
+  supabase: SupabaseClient<Database>,
+  schoolId: string,
+  year: number,
+): Promise<{ data: ErpPaymentExportRow[] | null; error: { message: string } | null }> {
+  const start = `${year}-01-01`;
+  const end = `${year}-12-31`;
+  const { data, error } = await supabase
+    .from("payments")
+    .select(
+      "id, amount_paid, method, payment_date, erp_exported_at, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id",
+    )
+    .eq("school_id", schoolId)
+    .eq("status", "validado")
+    .gte("payment_date", start)
+    .lte("payment_date", end)
+    .order("payment_date", { ascending: false });
+  if (error) return { data: null, error };
+  return { data: (data ?? []) as ErpPaymentExportRow[], error: null };
+}
+
+export function enrichErpPaymentsWithStudentNames(
+  payments: ErpPaymentExportRow[],
+  studentMap: Map<string, ErpResolvedStudent>,
+): Array<ErpPaymentExportRow & { studentName: string }> {
+  return payments.map((p) => {
+    let st: ErpResolvedStudent | undefined;
+    if (p.student_fee_id) st = studentMap.get(`sf:${p.student_fee_id}`);
+    else if (p.activity_fee_id) st = studentMap.get(`af:${p.activity_fee_id}`);
+    else if (p.transport_fee_id) st = studentMap.get(`tf:${p.transport_fee_id}`);
+    else if (p.enrollment_fee_id) st = studentMap.get(`ef:${p.enrollment_fee_id}`);
+    return { ...p, studentName: st?.full_name ?? "—" };
+  });
+}
+
+export async function runErpExcelExport(opts: {
+  supabase: SupabaseClient<Database>;
+  schoolId: string;
+  payments: ErpPaymentExportRow[];
+  filenameYearSegment: string | number;
+  markAsExported: boolean;
+}): Promise<{ ok: boolean; empty?: boolean; exportMarkedError?: string | null; count: number }> {
+  const { supabase, schoolId, payments, filenameYearSegment, markAsExported } = opts;
+  if (payments.length === 0) return { ok: false, empty: true, count: 0 };
+
+  const { data: cfgRow } = await supabase.from("erp_export_configs").select("*").eq("school_id", schoolId).maybeSingle();
+  const cfg = cfgRow as ErpConfigFields | null;
+
+  const payload = payments.map((p) => ({
+    id: p.id,
+    amount_paid: p.amount_paid,
+    method: p.method,
+    payment_date: p.payment_date,
+    erp_exported_at: p.erp_exported_at,
+    student_fee_id: p.student_fee_id,
+    activity_fee_id: p.activity_fee_id,
+    transport_fee_id: p.transport_fee_id,
+    enrollment_fee_id: p.enrollment_fee_id,
+  }));
+
+  const studentMap = await resolveStudentsForPayments(supabase, payload);
+  const meta = await loadFeeMetaForPayments(supabase, payload);
+  const { headers, rows } = buildErpExportRows(
+    payload,
+    studentMap,
+    cfg,
+    meta.activityCodeByFeeId,
+    meta.enrollmentTypeByFeeId,
+  );
+  const fname = `erp-pagamentos-${filenameYearSegment}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  downloadRawXlsx(fname, "Pagamentos", headers, rows);
+
+  if (!markAsExported) {
+    return { ok: true, count: payments.length };
+  }
+
+  const ids = payments.map((p) => p.id);
+  const { error: upErr } = await supabase
+    .from("payments")
+    .update({ erp_exported_at: new Date().toISOString() })
+    .in("id", ids);
+  if (upErr) {
+    return { ok: true, exportMarkedError: upErr.message, count: payments.length };
+  }
+  return { ok: true, count: payments.length };
 }

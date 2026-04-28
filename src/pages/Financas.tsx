@@ -26,11 +26,11 @@ import {
 } from "recharts";
 import { useUserRole } from "@/hooks/useUserRole";
 import {
-  buildErpExportRows,
-  downloadRawXlsx,
-  loadFeeMetaForPayments,
+  enrichErpPaymentsWithStudentNames,
+  fetchValidatedPaymentsForErpYear,
   resolveStudentsForPayments,
-  type ErpConfigFields,
+  runErpExcelExport,
+  type ErpPaymentExportRow,
 } from "@/lib/erpExport";
 
 type Expense = {
@@ -121,18 +121,7 @@ const Financas = () => {
   const staffCanExportErp =
     role === "ADMIN" || role === "SUPER_ADMIN" || role === "TEACHER";
 
-  type ErpPaymentLine = {
-    id: string;
-    amount_paid: number;
-    method: string | null;
-    payment_date: string | null;
-    erp_exported_at: string | null;
-    student_fee_id: string | null;
-    activity_fee_id: string | null;
-    transport_fee_id: string | null;
-    enrollment_fee_id: string | null;
-    studentName: string;
-  };
+  type ErpPaymentLine = ErpPaymentExportRow & { studentName: string };
 
   const [erpPaymentLines, setErpPaymentLines] = useState<ErpPaymentLine[]>([]);
   const [erpLoading, setErpLoading] = useState(false);
@@ -196,35 +185,15 @@ const Financas = () => {
       return;
     }
     setErpLoading(true);
-    const start = `${year}-01-01`;
-    const end = `${year}-12-31`;
-    const { data, error } = await supabase
-      .from("payments")
-      .select(
-        "id, amount_paid, method, payment_date, erp_exported_at, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id",
-      )
-      .eq("school_id", schoolId)
-      .eq("status", "validado")
-      .gte("payment_date", start)
-      .lte("payment_date", end)
-      .order("payment_date", { ascending: false });
-
+    const { data, error } = await fetchValidatedPaymentsForErpYear(supabase, schoolId, year);
     if (error) {
       toast({ title: "Erro a carregar pagamentos", description: error.message, variant: "destructive" });
       setErpLoading(false);
       return;
     }
-    const rows = (data ?? []) as Omit<ErpPaymentLine, "studentName">[];
+    const rows = data ?? [];
     const studentMap = await resolveStudentsForPayments(supabase, rows);
-    const enriched: ErpPaymentLine[] = rows.map((p) => {
-      let st;
-      if (p.student_fee_id) st = studentMap.get(`sf:${p.student_fee_id}`);
-      else if (p.activity_fee_id) st = studentMap.get(`af:${p.activity_fee_id}`);
-      else if (p.transport_fee_id) st = studentMap.get(`tf:${p.transport_fee_id}`);
-      else if (p.enrollment_fee_id) st = studentMap.get(`ef:${p.enrollment_fee_id}`);
-      return { ...p, studentName: st?.full_name ?? "—" };
-    });
-    setErpPaymentLines(enriched);
+    setErpPaymentLines(enrichErpPaymentsWithStudentNames(rows, studentMap));
     setErpLoading(false);
   }, [schoolId, year, staffCanExportErp]);
 
@@ -248,46 +217,27 @@ const Financas = () => {
       return;
     }
     setErpExporting(true);
-    const { data: cfgRow } = await supabase.from("erp_export_configs").select("*").eq("school_id", schoolId).maybeSingle();
-    const cfg = cfgRow as ErpConfigFields | null;
-
-    const payload = filteredErpPayments.map((p) => ({
-      id: p.id,
-      amount_paid: p.amount_paid,
-      method: p.method,
-      payment_date: p.payment_date,
-      erp_exported_at: p.erp_exported_at,
-      student_fee_id: p.student_fee_id,
-      activity_fee_id: p.activity_fee_id,
-      transport_fee_id: p.transport_fee_id,
-      enrollment_fee_id: p.enrollment_fee_id,
-    }));
-
-    const studentMap = await resolveStudentsForPayments(supabase, payload);
-    const meta = await loadFeeMetaForPayments(supabase, payload);
-    const { headers, rows } = buildErpExportRows(
-      payload,
-      studentMap,
-      cfg,
-      meta.activityCodeByFeeId,
-      meta.enrollmentTypeByFeeId,
-    );
-    const fname = `erp-pagamentos-${year}-${new Date().toISOString().slice(0, 10)}.xlsx`;
-    downloadRawXlsx(fname, "Pagamentos", headers, rows);
-
-    const ids = filteredErpPayments.map((p) => p.id);
-    const { error: upErr } = await supabase
-      .from("payments")
-      .update({ erp_exported_at: new Date().toISOString() })
-      .in("id", ids);
+    const paymentsPayload = filteredErpPayments.map(({ studentName: _, ...row }) => row);
+    const result = await runErpExcelExport({
+      supabase,
+      schoolId,
+      payments: paymentsPayload,
+      filenameYearSegment: year,
+      markAsExported: true,
+    });
     setErpExporting(false);
-    if (upErr) {
-      toast({ title: "Ficheiro gerado; erro ao marcar exportação", description: upErr.message, variant: "destructive" });
+    if (result.empty) {
+      toast({ title: "Nada a exportar", variant: "destructive" });
+      return;
+    }
+    if (result.exportMarkedError) {
+      toast({ title: "Ficheiro gerado; erro ao marcar exportação", description: result.exportMarkedError, variant: "destructive" });
+      await loadErpPayments();
       return;
     }
     toast({
       title: "Exportação concluída",
-      description: `${ids.length} linha(s). Os registos foram marcados como exportados.`,
+      description: `${result.count} linha(s). Os registos foram marcados como exportados.`,
     });
     await loadErpPayments();
   };
