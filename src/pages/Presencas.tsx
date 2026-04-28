@@ -146,7 +146,11 @@ const AttendancePopover = ({
             <span className="flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-white"><X className="h-3 w-3" strokeWidth={3} /></span>
             Falta
           </Button>
-          {(status === "ABSENT" || status === "LATE" || status === "JUSTIFIED") && (
+          <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={() => handle("DISCIPLINARY")}>
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-pastel-lilac text-pastel-lilac-foreground"><AlertTriangle className="h-3 w-3" strokeWidth={3} /></span>
+            Falta indisciplinar
+          </Button>
+          {(status === "ABSENT" || status === "LATE" || status === "JUSTIFIED" || status === "DISCIPLINARY") && (
             <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={() => { setOpen(false); onJustify(); }}>
               <FileText className="h-4 w-4" />
               {hasNotes ? "Ver justificação" : "Justificar"}
