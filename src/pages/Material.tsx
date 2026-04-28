@@ -168,12 +168,21 @@ const Material = () => {
     let reqList = requests;
     if (isParent) reqList = parentScopedRequests;
     else if (isTeacher) reqList = requests.filter((r) => r.requester_id === user?.id);
+    else if (isStudent) {
+      reqList = requests.filter((r) => {
+        const targetsSelf = r.student_id ? r.student_id === studentId : false;
+        const targetsClass = !r.student_id && r.classroom_id ? r.classroom_id === studentClassroomId : false;
+        return targetsSelf || targetsClass;
+      });
+    }
     const reqIds = new Set(reqList.map((r) => r.id));
     const childSet = new Set(childIds);
     const relevantDeliveries = isParent
       ? deliveries.filter((d) => reqIds.has(d.request_id) && childSet.has(d.student_id))
       : isTeacher
         ? deliveries.filter((d) => reqIds.has(d.request_id))
+        : isStudent
+          ? deliveries.filter((d) => reqIds.has(d.request_id) && d.student_id === studentId)
         : deliveries;
     return {
       totalItens: stock.reduce((a, s) => a + (s.quantity || 0), 0),
@@ -181,7 +190,7 @@ const Material = () => {
       pedidosAtivos: reqList.length,
       entregasMarcadas: relevantDeliveries.filter((d) => d.brought).length,
     };
-  }, [stock, requests, deliveries, isParent, parentScopedRequests, childIds, isTeacher, user?.id]);
+  }, [stock, requests, deliveries, isParent, parentScopedRequests, childIds, isTeacher, user?.id, isStudent, studentId, studentClassroomId]);
 
   // Compute target students for a request and delivery progress.
   const targetStudentsFor = (r: RequestRow) => {
