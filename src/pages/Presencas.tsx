@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Check, X, Clock, Loader2, MinusCircle, FileText } from "lucide-react";
+import { Check, X, Clock, Loader2, MinusCircle, FileText, AlertTriangle } from "lucide-react";
 import { cn, sortByName } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -33,7 +33,7 @@ import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton"
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 
-type Status = "PRESENT" | "ABSENT" | "LATE" | "JUSTIFIED";
+type Status = "PRESENT" | "ABSENT" | "LATE" | "JUSTIFIED" | "DISCIPLINARY";
 
 interface Student {
   id: string;
@@ -64,6 +64,7 @@ const STATUS_CONFIG: Record<Status, { bg: string; Icon: typeof Check; label: str
   ABSENT: { bg: "bg-destructive text-white", Icon: X, label: "Falta" },
   LATE: { bg: "bg-pastel-yellow text-pastel-yellow-foreground", Icon: Clock, label: "Atrasado" },
   JUSTIFIED: { bg: "bg-pastel-green text-pastel-green-foreground", Icon: Check, label: "Justificado" },
+  DISCIPLINARY: { bg: "bg-pastel-lilac text-pastel-lilac-foreground", Icon: AlertTriangle, label: "Falta indisciplinar" },
 };
 
 // Build days range for a given month/year and a chosen "week" (1..n)

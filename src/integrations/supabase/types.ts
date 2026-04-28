@@ -3125,7 +3125,12 @@ export type Database = {
     }
     Enums: {
       absence_reason: "SICKNESS" | "PERSONAL" | "FAMILY" | "OTHER"
-      attendance_status: "PRESENT" | "ABSENT" | "JUSTIFIED" | "LATE"
+      attendance_status:
+        | "PRESENT"
+        | "ABSENT"
+        | "JUSTIFIED"
+        | "LATE"
+        | "DISCIPLINARY"
       payment_status: "PENDING" | "VALIDATED" | "REJECTED"
       user_role: "SUPER_ADMIN" | "ADMIN" | "TEACHER" | "PARENT" | "STUDENT"
     }
@@ -3256,7 +3261,13 @@ export const Constants = {
   public: {
     Enums: {
       absence_reason: ["SICKNESS", "PERSONAL", "FAMILY", "OTHER"],
-      attendance_status: ["PRESENT", "ABSENT", "JUSTIFIED", "LATE"],
+      attendance_status: [
+        "PRESENT",
+        "ABSENT",
+        "JUSTIFIED",
+        "LATE",
+        "DISCIPLINARY",
+      ],
       payment_status: ["PENDING", "VALIDATED", "REJECTED"],
       user_role: ["SUPER_ADMIN", "ADMIN", "TEACHER", "PARENT", "STUDENT"],
     },
