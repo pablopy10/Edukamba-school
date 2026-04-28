@@ -582,3 +582,125 @@ const RequestsTable = ({
 };
 
 export default Material;
+
+/* ====================== Delivery Dialog ====================== */
+const DeliveryDialog = ({
+  request, targetStudents, deliveries, schoolId, userId, onClose, onSaved,
+}: {
+  request: RequestRow | null;
+  targetStudents: { id: string; full_name: string; classroom_id: string | null }[];
+  deliveries: DeliveryRow[];
+  schoolId: string | null;
+  userId: string | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) => {
+  const [marks, setMarks] = useState<Record<string, boolean>>({});
+  const [search, setSearch] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!request) return;
+    const initial: Record<string, boolean> = {};
+    targetStudents.forEach((s) => {
+      const d = deliveries.find((x) => x.student_id === s.id);
+      initial[s.id] = d?.brought ?? false;
+    });
+    setMarks(initial);
+    setSearch("");
+  }, [request?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!request) return null;
+
+  const filtered = targetStudents
+    .filter((s) => !search.trim() || s.full_name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => a.full_name.localeCompare(b.full_name, undefined, { numeric: true, sensitivity: "base" }));
+
+  const toggleAll = (value: boolean) => {
+    const next: Record<string, boolean> = { ...marks };
+    filtered.forEach((s) => { next[s.id] = value; });
+    setMarks(next);
+  };
+
+  const broughtCount = Object.values(marks).filter(Boolean).length;
+
+  const save = async () => {
+    if (!schoolId || !userId) return;
+    setSaving(true);
+    const now = new Date().toISOString();
+    const payload = targetStudents.map((s) => ({
+      request_id: request.id,
+      student_id: s.id,
+      school_id: schoolId,
+      brought: !!marks[s.id],
+      marked_by: userId,
+      marked_at: now,
+    }));
+    const { error } = await supabase
+      .from("material_request_deliveries")
+      .upsert(payload, { onConflict: "request_id,student_id" });
+    setSaving(false);
+    if (error) {
+      toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Entregas atualizadas" });
+    onSaved();
+    onClose();
+  };
+
+  return (
+    <Dialog open={!!request} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Marcar entregas — {request.item_name}</DialogTitle>
+          <DialogDescription>
+            Marque os alunos que trouxeram o material. {broughtCount} de {targetStudents.length} marcados.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Pesquisar aluno..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <Button type="button" variant="outline" size="sm" onClick={() => toggleAll(true)}>Todos</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => toggleAll(false)}>Nenhum</Button>
+        </div>
+
+        <div className="mt-2 max-h-72 overflow-y-auto rounded-md border border-border">
+          {filtered.length === 0 ? (
+            <p className="p-4 text-center text-sm text-muted-foreground">Sem alunos.</p>
+          ) : (
+            filtered.map((s) => {
+              const checked = !!marks[s.id];
+              return (
+                <label
+                  key={s.id}
+                  className="flex cursor-pointer items-center justify-between gap-3 border-b border-border px-3 py-2 last:border-0 hover:bg-muted/50"
+                >
+                  <span className="text-sm text-foreground">{s.full_name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={cn("text-xs", checked ? "text-pastel-green-foreground" : "text-muted-foreground")}>
+                      {checked ? "Trouxe" : "Não trouxe"}
+                    </span>
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(v) => setMarks((m) => ({ ...m, [s.id]: !!v }))}
+                    />
+                  </div>
+                </label>
+              );
+            })
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button onClick={save} disabled={saving}>{saving ? "A guardar..." : "Guardar entregas"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
