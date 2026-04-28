@@ -583,6 +583,7 @@ const AlunoPerfil = () => {
       ABSENT: { label: "Falta", cls: "bg-pastel-pink text-pastel-pink-foreground" },
       LATE: { label: "Atraso", cls: "bg-pastel-yellow text-pastel-yellow-foreground" },
       JUSTIFIED: { label: "Justificada", cls: "bg-pastel-blue text-pastel-blue-foreground" },
+      DISCIPLINARY: { label: "Falta indisciplinar", cls: "bg-pastel-lilac text-pastel-lilac-foreground" },
     };
     const v = map[status] ?? { label: status, cls: "bg-muted text-foreground" };
     return <span className={cn("rounded-full px-3 py-1 text-xs font-medium", v.cls)}>{v.label}</span>;
