@@ -7,6 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
+import { useUserRole } from "@/hooks/useUserRole";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -68,6 +70,9 @@ const ALL = "__ALL__";
 const Horarios = () => {
   const { user } = useAuth();
   const { isParent, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
+  const { role } = useUserRole();
+  const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
+  const isAdmin = role === "ADMIN";
   const { selectedYearId } = useAcademicYear();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const academicYearId = selectedYearId;
@@ -106,6 +111,7 @@ const Horarios = () => {
   const loadAll = useCallback(async () => {
     if (!schoolId) return;
     if (parentLoading) return;
+    if (isTeacher && teacherLoading) return;
     setLoading(true);
     let classroomsQuery = supabase.from("classrooms").select("id, name").eq("school_id", schoolId).order("name");
     if (selectedYearId) classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
@@ -123,6 +129,9 @@ const Horarios = () => {
     let classroomList = (classroomsRes.data ?? []).map((c) => ({ id: c.id, name: c.name }));
     if (isParent) {
       classroomList = classroomList.filter((c) => parentClassroomIds.includes(c.id));
+    }
+    if (isTeacher) {
+      classroomList = classroomList.filter((c) => teacherClassroomIds.includes(c.id));
     }
     setClassrooms(classroomList);
     // Pre-select first classroom if none selected or current selection is not valid
@@ -165,7 +174,7 @@ const Horarios = () => {
       })),
     );
     setLoading(false);
-  }, [schoolId, isParent, parentClassroomIds.join(","), parentLoading, selectedYearId]);
+  }, [schoolId, isParent, parentClassroomIds.join(","), parentLoading, selectedYearId, isTeacher, teacherClassroomIds.join(","), teacherLoading]);
 
   useEffect(() => { void loadAll(); }, [loadAll]);
 
@@ -326,7 +335,7 @@ const Horarios = () => {
                 : "Gerir horário semanal por turma, professor ou disciplina, com deteção de conflitos."}
             </p>
           </div>
-          {!isParent && (
+          {!isParent && isAdmin && (
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => setOpenSlots(true)}>
               <Settings2 className="mr-2 h-4 w-4" /> Blocos da escola
@@ -440,7 +449,7 @@ const Horarios = () => {
                       onDelete={(id) => setDeletingId(id)}
                       onCreate={handleNewAt}
                       onDropMove={handleDropMove}
-                      readOnly={isParent}
+                      readOnly={isParent || !isAdmin}
                     />
                   ))}
                 </div>
