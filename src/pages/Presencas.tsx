@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Check, X, Clock, Loader2, MinusCircle } from "lucide-react";
+import { Check, X, Clock, Loader2, MinusCircle, FileText } from "lucide-react";
 import { cn, sortByName } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -19,6 +19,15 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
@@ -41,6 +50,7 @@ interface AttendanceRow {
   student_id: string;
   date: string;
   status: Status;
+  notes: string | null;
 }
 
 const MONTHS_PT = [
@@ -88,14 +98,18 @@ const AttendancePopover = ({
   student,
   date,
   status,
+  hasNotes,
   cellInner,
   onSelect,
+  onJustify,
 }: {
   student: Student;
   date: Date;
   status: Status | null;
+  hasNotes: boolean;
   cellInner: React.ReactNode;
   onSelect: (next: Status | null) => void | Promise<void>;
+  onJustify: () => void;
 }) => {
   const [open, setOpen] = useState(false);
   const handle = (next: Status | null) => {
@@ -130,6 +144,12 @@ const AttendancePopover = ({
             <span className="flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-white"><X className="h-3 w-3" strokeWidth={3} /></span>
             Falta
           </Button>
+          {(status === "ABSENT" || status === "LATE" || status === "JUSTIFIED") && (
+            <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={() => { setOpen(false); onJustify(); }}>
+              <FileText className="h-4 w-4" />
+              {hasNotes ? "Ver justificação" : "Justificar"}
+            </Button>
+          )}
           {status && (
             <Button variant="ghost" size="sm" className="justify-start gap-2 text-muted-foreground" onClick={() => handle(null)}>
               <MinusCircle className="h-4 w-4" />
@@ -160,8 +180,13 @@ const Presencas = () => {
   const [studentsLoading, setStudentsLoading] = useState(true);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [justifyTarget, setJustifyTarget] = useState<{ student: Student; date: Date; row: AttendanceRow | null } | null>(null);
+  const [justifyText, setJustifyText] = useState("");
+  const [justifySaving, setJustifySaving] = useState(false);
 
   const canEdit = (userRole === "ADMIN" || userRole === "TEACHER") && !isParent;
+  const isStudent = userRole === "STUDENT";
+  const canJustify = isParent || isStudent || canEdit;
 
   // Load profile (school + role)
   useEffect(() => {
@@ -267,7 +292,7 @@ const Presencas = () => {
     (async () => {
       let q = supabase
         .from("attendance")
-        .select("id, student_id, date, status")
+        .select("id, student_id, date, status, notes")
         .eq("school_id", schoolId)
         .gte("date", startDate)
         .lte("date", endDate);
@@ -321,7 +346,7 @@ const Presencas = () => {
             classroom_id: student.classroom_id,
             teacher_id: user?.id ?? null,
           })
-          .select("id, student_id, date, status")
+            .select("id, student_id, date, status, notes")
           .single();
         if (error) throw error;
         setAttendance({ ...attendance, [key]: data as AttendanceRow });
@@ -353,6 +378,74 @@ const Presencas = () => {
   }, [students, visibleDays, attendance]);
 
   if (parentLoading) return <PageLoadingSkeleton />;
+
+  const openJustify = (student: Student, date: Date) => {
+    const key = `${student.id}__${fmtISO(date)}`;
+    const row = attendance[key] ?? null;
+    setJustifyTarget({ student, date, row });
+    setJustifyText(row?.notes ?? "");
+  };
+
+  const justifyReadOnly = !!justifyTarget && (() => {
+    const row = justifyTarget.row;
+    // Parents/students can only justify their own absences/lates
+    if (canEdit) return false;
+    if (!row) return false;
+    return !(row.status === "ABSENT" || row.status === "LATE" || row.status === "JUSTIFIED");
+  })();
+
+  const submitJustification = async () => {
+    if (!justifyTarget || !schoolId) return;
+    const { student, date, row } = justifyTarget;
+    const text = justifyText.trim();
+    if (!text) {
+      toast.error("Escreva uma justificação");
+      return;
+    }
+    setJustifySaving(true);
+    try {
+      if (row) {
+        // Parents/students: only allowed transition is ABSENT/LATE -> JUSTIFIED
+        const newStatus: Status = canEdit ? row.status : "JUSTIFIED";
+        const { error } = await supabase
+          .from("attendance")
+          .update({ notes: text, status: newStatus })
+          .eq("id", row.id);
+        if (error) throw error;
+        const key = `${student.id}__${fmtISO(date)}`;
+        setAttendance({ ...attendance, [key]: { ...row, notes: text, status: newStatus } });
+      } else {
+        // Only staff can create rows from scratch
+        if (!canEdit) {
+          toast.error("Sem registo para justificar.");
+          return;
+        }
+        const { data, error } = await supabase
+          .from("attendance")
+          .insert({
+            student_id: student.id,
+            date: fmtISO(date),
+            status: "ABSENT" as Status,
+            notes: text,
+            school_id: schoolId,
+            classroom_id: student.classroom_id,
+            teacher_id: user?.id ?? null,
+          })
+          .select("id, student_id, date, status, notes")
+          .single();
+        if (error) throw error;
+        const key = `${student.id}__${fmtISO(date)}`;
+        setAttendance({ ...attendance, [key]: data as AttendanceRow });
+      }
+      toast.success("Justificação guardada");
+      setJustifyTarget(null);
+      setJustifyText("");
+    } catch (e: any) {
+      toast.error("Erro ao guardar justificação", { description: e.message });
+    } finally {
+      setJustifySaving(false);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -479,13 +572,20 @@ const Presencas = () => {
                         const row = attendance[key];
                         const status = row?.status ?? null;
                         const isSaving = savingKey === key;
+                        const hasNotes = !!row?.notes && row.notes.trim().length > 0;
 
                         const cellInner = (
-                          <div className="flex justify-center">
+                          <div className="relative flex justify-center">
                             {isSaving ? (
                               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                             ) : (
                               <StatusCell status={status} isWeekend={isWk} />
+                            )}
+                            {hasNotes && (
+                              <span
+                                className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-primary"
+                                title="Tem justificação"
+                              />
                             )}
                           </div>
                         );
@@ -503,9 +603,30 @@ const Presencas = () => {
                                 student={s}
                                 date={d}
                                 status={status}
+                                hasNotes={hasNotes}
                                 cellInner={cellInner}
                                 onSelect={(next) => applyStatus(s, d, next)}
+                                onJustify={() => openJustify(s, d)}
                               />
+                            ) : !isWk && row && (status === "ABSENT" || status === "LATE" || status === "JUSTIFIED") ? (
+                              <button
+                                type="button"
+                                onClick={() => openJustify(s, d)}
+                                className="flex w-full justify-center rounded-md py-1 transition-colors hover:bg-accent"
+                                aria-label={hasNotes ? "Ver justificação" : "Justificar falta"}
+                                title={hasNotes ? "Ver justificação" : "Justificar falta"}
+                              >
+                                {cellInner}
+                              </button>
+                            ) : !isWk && row && hasNotes ? (
+                              <button
+                                type="button"
+                                onClick={() => openJustify(s, d)}
+                                className="flex w-full justify-center rounded-md py-1 transition-colors hover:bg-accent"
+                                title="Ver justificação"
+                              >
+                                {cellInner}
+                              </button>
                             ) : (
                               cellInner
                             )}
@@ -545,6 +666,43 @@ const Presencas = () => {
             Sem registo / Fim de semana
           </div>
         </div>
+
+        {/* Justification dialog */}
+        <Dialog open={!!justifyTarget} onOpenChange={(o) => { if (!o) { setJustifyTarget(null); setJustifyText(""); } }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Justificação de falta</DialogTitle>
+              <DialogDescription>
+                {justifyTarget && (
+                  <>
+                    {justifyTarget.student.full_name} ·{" "}
+                    {String(justifyTarget.date.getDate()).padStart(2, "0")}/
+                    {String(justifyTarget.date.getMonth() + 1).padStart(2, "0")}/
+                    {justifyTarget.date.getFullYear()}
+                  </>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <Textarea
+              value={justifyText}
+              onChange={(e) => setJustifyText(e.target.value)}
+              placeholder="Descreva o motivo da falta..."
+              rows={5}
+              readOnly={justifyReadOnly}
+            />
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setJustifyTarget(null); setJustifyText(""); }}>
+                Fechar
+              </Button>
+              {!justifyReadOnly && (
+                <Button onClick={submitJustification} disabled={justifySaving}>
+                  {justifySaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Guardar
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
