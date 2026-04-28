@@ -177,6 +177,7 @@ const AlunoPerfil = () => {
   const [assessments, setAssessments] = useState<AssessmentRow[]>([]);
   const [grades, setGrades] = useState<GradeRow[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRow[]>([]);
+  const [attendanceStats, setAttendanceStats] = useState<{ total: number; present: number; late: number; absent: number; justified: number }>({ total: 0, present: 0, late: 0, absent: 0, justified: 0 });
   const [teachers, setTeachers] = useState<{ id: string; full_name: string; subject: string | null; phone: string | null }[]>([]);
   const [fees, setFees] = useState<FeeRow[]>([]);
   const [remindingFeeId, setRemindingFeeId] = useState<string | null>(null);
