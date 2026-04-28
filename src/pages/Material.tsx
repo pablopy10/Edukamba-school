@@ -49,6 +49,7 @@ const Material = () => {
 
   const [stock, setStock] = useState<MaterialRow[]>([]);
   const [requests, setRequests] = useState<RequestRow[]>([]);
+  const [deliveries, setDeliveries] = useState<DeliveryRow[]>([]);
   const [classrooms, setClassrooms] = useState<{ id: string; name: string }[]>([]);
   const [students, setStudents] = useState<{ id: string; full_name: string; classroom_id: string | null }[]>([]);
   const [teachers, setTeachers] = useState<{ id: string; name: string }[]>([]);
@@ -59,7 +60,7 @@ const Material = () => {
   const [stockLowOnly, setStockLowOnly] = useState(false);
   const [stockLocation, setStockLocation] = useState<string>("all");
 
-  const [reqStatusFilter, setReqStatusFilter] = useState<string>("all");
+  const [reqDeliveryFilter, setReqDeliveryFilter] = useState<DeliveryFilter>("all");
   const [reqTeacherFilter, setReqTeacherFilter] = useState<string>("all");
 
   // Dialog state
@@ -67,8 +68,10 @@ const Material = () => {
   const [editingMaterial, setEditingMaterial] = useState<MaterialRow | null>(null);
   const [showRequestDialog, setShowRequestDialog] = useState(false);
   const [editingRequest, setEditingRequest] = useState<RequestRow | null>(null);
+  const [deliveryDialog, setDeliveryDialog] = useState<RequestRow | null>(null);
 
   const isAdmin = userRole === "ADMIN";
+  const canMarkDeliveries = userRole === "ADMIN" || userRole === "TEACHER";
   const canRequest = userRole === "ADMIN" || userRole === "TEACHER";
 
   const loadAll = async () => {
@@ -86,16 +89,18 @@ const Material = () => {
     setUserRole(profile.role);
     setUserName(profile.full_name ?? "");
 
-    const [m, r, c, s] = await Promise.all([
+    const [m, r, c, s, d] = await Promise.all([
       supabase.from("materials").select("*").eq("school_id", profile.school_id).order("name"),
       supabase.from("material_requests").select("*").eq("school_id", profile.school_id).order("created_at", { ascending: false }),
       supabase.from("classrooms").select("id, name").eq("school_id", profile.school_id).order("name"),
       supabase.from("students").select("id, full_name, classroom_id").eq("school_id", profile.school_id).order("full_name"),
+      supabase.from("material_request_deliveries").select("id, request_id, student_id, brought").eq("school_id", profile.school_id),
     ]);
     setStock((m.data as MaterialRow[]) ?? []);
     setRequests((r.data as RequestRow[]) ?? []);
     setClassrooms(c.data ?? []);
     setStudents(s.data ?? []);
+    setDeliveries(((d.data ?? []) as DeliveryRow[]));
     setLoading(false);
   };
 
@@ -119,9 +124,25 @@ const Material = () => {
   const stats = useMemo(() => ({
     totalItens: stock.reduce((a, s) => a + (s.quantity || 0), 0),
     baixoStock: stock.filter((s) => s.quantity < s.min_quantity).length,
-    pendentes: requests.filter((r) => r.status === "pendente").length,
-    entregues: requests.filter((r) => r.status === "entregue").length,
-  }), [stock, requests]);
+    pedidosAtivos: requests.length,
+    entregasMarcadas: deliveries.filter((d) => d.brought).length,
+  }), [stock, requests, deliveries]);
+
+  // Compute target students for a request and delivery progress.
+  const targetStudentsFor = (r: RequestRow) => {
+    if (r.student_id) return students.filter((s) => s.id === r.student_id);
+    if (r.classroom_id) return students.filter((s) => s.classroom_id === r.classroom_id);
+    return [] as typeof students;
+  };
+  const progressFor = (r: RequestRow) => {
+    const target = targetStudentsFor(r);
+    const total = target.length;
+    const broughtIds = new Set(
+      deliveries.filter((d) => d.request_id === r.id && d.brought).map((d) => d.student_id),
+    );
+    const brought = target.filter((s) => broughtIds.has(s.id)).length;
+    return { brought, total };
+  };
 
   const filteredStock = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -137,7 +158,12 @@ const Material = () => {
   const filteredRequests = useMemo(() => {
     const q = search.trim().toLowerCase();
     return requests.filter((r) => {
-      if (reqStatusFilter !== "all" && r.status !== reqStatusFilter) return false;
+      if (reqDeliveryFilter !== "all") {
+        const { brought, total } = progressFor(r);
+        const isComplete = total > 0 && brought === total;
+        if (reqDeliveryFilter === "completo" && !isComplete) return false;
+        if (reqDeliveryFilter === "pendente" && isComplete) return false;
+      }
       if (reqTeacherFilter !== "all" && r.requester_id !== reqTeacherFilter) return false;
       if (q) {
         const studentName = students.find((s) => s.id === r.student_id)?.full_name ?? "";
@@ -147,23 +173,13 @@ const Material = () => {
       }
       return true;
     });
-  }, [requests, search, reqStatusFilter, reqTeacherFilter, students, classrooms]);
+  }, [requests, search, reqDeliveryFilter, reqTeacherFilter, students, classrooms, deliveries]);
 
   const removeMaterial = async (id: string) => {
     if (!confirm("Remover este material?")) return;
     const { error } = await supabase.from("materials").delete().eq("id", id);
     if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
     toast({ title: "Material removido" });
-    loadAll();
-  };
-
-  const updateRequestStatus = async (id: string, status: Status) => {
-    const { error } = await supabase
-      .from("material_requests")
-      .update({ status, decided_by: user?.id ?? null, decided_at: new Date().toISOString() })
-      .eq("id", id);
-    if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
-    toast({ title: `Pedido ${statusMeta[status].label.toLowerCase()}` });
     loadAll();
   };
 
