@@ -180,7 +180,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
           result_published_by?: string | null;
         } = {
           student_id: studentId,
-          classroom_id: classroomId,
+          classroom_id: classroomId || null,
           academic_year_id: yearId || null,
           status,
           result: result === "EM_CURSO" ? null : result,
