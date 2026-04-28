@@ -272,7 +272,18 @@ const Pagamentos = () => {
       return;
     }
     const amount = Number(recordAmount) || Number(fee.amount_due);
-    const insertPayload = {
+    const insertPayload = isParent ? {
+      amount_paid: amount,
+      method: recordMethod,
+      proof_url: path,
+      status: "pendente",
+      submitted_by: userId,
+      school_id: schoolId,
+      notes: recordNotes || null,
+      student_fee_id: kind === "fee" ? fee.id : null,
+      activity_fee_id: kind === "activity" ? fee.id : null,
+      transport_fee_id: kind === "transport" ? fee.id : null,
+    } : {
       amount_paid: amount,
       method: recordMethod,
       proof_url: path,
@@ -292,7 +303,7 @@ const Pagamentos = () => {
       toast({ title: "Erro a registar pagamento", description: insErr.message, variant: "destructive" });
       return;
     }
-    const { error: feeErr } =
+    const { error: feeErr } = isParent ? { error: null } as { error: null } :
       kind === "fee"
         ? await supabase.from("student_fees").update({ is_paid: true }).eq("id", fee.id)
         : kind === "activity"
@@ -304,7 +315,7 @@ const Pagamentos = () => {
       return;
     }
     // Notificar encarregado
-    const parentId = (fee as FeeListRow | ActivityFeeRow | TransportFeeRow).student?.parent_id;
+    const parentId = isParent ? null : (fee as FeeListRow | ActivityFeeRow | TransportFeeRow).student?.parent_id;
     if (parentId) {
       if (kind === "fee") {
         const f = fee as FeeListRow;
