@@ -12,6 +12,7 @@ import {
 import { ClassroomFormDialog, ClassroomRow } from "@/components/turmas/ClassroomFormDialog";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { ExcelImportDialog } from "@/components/shared/ExcelImportDialog";
+import { useUserRole } from "@/hooks/useUserRole";
 
 type ClassroomWithJoins = ClassroomRow & {
   courses?: { id: string; name: string } | null;
@@ -35,6 +36,8 @@ const periodStyles: Record<string, string> = {
 
 const Turmas = () => {
   const { selectedYearId } = useAcademicYear();
+  const { role } = useUserRole();
+  const isTeacher = role === "TEACHER";
   const [search, setSearch] = useState("");
   const [periodFilter, setPeriodFilter] = useState<string>("all");
   const [courseFilter, setCourseFilter] = useState<string>("all");
@@ -139,20 +142,24 @@ const Turmas = () => {
                 className="h-11 w-72 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             </div>
-            <button
-              onClick={() => { setEditing(null); setFormOpen(true); }}
-              className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
-            >
-              <Plus className="h-4 w-4" strokeWidth={2.25} />
-              Nova Turma
-            </button>
-            <button
-              onClick={() => setImportOpen(true)}
-              className="flex h-11 items-center gap-2 rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
-            >
-              <Upload className="h-4 w-4" strokeWidth={2.25} />
-              Importar Excel
-            </button>
+            {!isTeacher && (
+              <>
+                <button
+                  onClick={() => { setEditing(null); setFormOpen(true); }}
+                  className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
+                >
+                  <Plus className="h-4 w-4" strokeWidth={2.25} />
+                  Nova Turma
+                </button>
+                <button
+                  onClick={() => setImportOpen(true)}
+                  className="flex h-11 items-center gap-2 rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
+                >
+                  <Upload className="h-4 w-4" strokeWidth={2.25} />
+                  Importar Excel
+                </button>
+              </>
+            )}
           </div>
         </div>
 
