@@ -73,6 +73,7 @@ const Horarios = () => {
   const { role } = useUserRole();
   const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
   const isAdmin = role === "ADMIN";
+  const { subjectId: teacherSubjectId } = useTeacherClassrooms();
   const { selectedYearId } = useAcademicYear();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const academicYearId = selectedYearId;
@@ -178,6 +179,13 @@ const Horarios = () => {
   }, [schoolId, isParent, parentClassroomIds.join(","), parentLoading, selectedYearId, isTeacher, teacherClassroomIds.join(","), teacherLoading]);
 
   useEffect(() => { void loadAll(); }, [loadAll]);
+
+  // For teachers, lock filters to themselves and their subject
+  useEffect(() => {
+    if (!isTeacher || !user) return;
+    setTeacherFilter(user.id);
+    if (teacherSubjectId) setSubjectFilter(teacherSubjectId);
+  }, [isTeacher, user?.id, teacherSubjectId]);
 
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s.name])), [subjects]);
   const teacherMap = useMemo(() => new Map(teachers.map((t) => [t.id, t.name])), [teachers]);
