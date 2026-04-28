@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "@/hooks/use-toast";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useParentChildren } from "@/hooks/useParentChildren";
+import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 
 type Opt = { id: string; name: string };
 type YearOpt = { id: string; label: string; is_active: boolean | null };
@@ -132,6 +133,8 @@ const Matriculas = () => {
   }), [enrollments]);
 
   const filtersActive = filterClassroom !== "all" || filterStatus !== "all" || filterYear !== "all";
+
+  if (parentLoading) return <PageLoadingSkeleton />;
 
   return (
     <DashboardLayout>

@@ -36,6 +36,7 @@ import {
 import { AssessmentFormDialog, type AssessmentRecord } from "@/components/avaliacoes/AssessmentFormDialog";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useParentChildren } from "@/hooks/useParentChildren";
+import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 
 type EvalType = "teste" | "exame" | "trabalho" | "oral";
 
@@ -286,6 +287,8 @@ const Avaliacoes = () => {
     toast({ title: "Avaliação eliminada" });
     setAssessments((prev) => prev.filter((a) => a.id !== id));
   };
+
+  if (parentLoading) return <PageLoadingSkeleton />;
 
   return (
     <DashboardLayout>

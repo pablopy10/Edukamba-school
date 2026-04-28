@@ -20,6 +20,7 @@ import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell
 import { Textarea } from "@/components/ui/textarea";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
 import { useParentChildren } from "@/hooks/useParentChildren";
+import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 
 type FeeRule = {
   id: string;
@@ -1096,6 +1097,8 @@ const Pagamentos = () => {
     if (error) toast({ title: "Erro a enviar lembretes", description: error.message, variant: "destructive" });
     else toast({ title: `${rows.length} lembrete(s) enviado(s)` });
   };
+
+  if (parentLoading) return <PageLoadingSkeleton />;
 
   return (
     <DashboardLayout>

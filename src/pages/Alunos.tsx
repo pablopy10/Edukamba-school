@@ -11,6 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import { ExcelImportDialog, ImportField } from "@/components/shared/ExcelImportDialog";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useParentChildren } from "@/hooks/useParentChildren";
+import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 
 type ClassroomOpt = { id: string; name: string };
 
@@ -112,6 +113,8 @@ const Alunos = () => {
       inactive: 0,
     };
   }, [students]);
+
+  if (parentLoading) return <PageLoadingSkeleton />;
 
   return (
     <DashboardLayout>
