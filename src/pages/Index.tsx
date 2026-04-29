@@ -14,6 +14,7 @@ import { useState } from "react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
+import { cn } from "@/lib/utils";
 
 const Index = () => {
   const { counts, gender, messages } = useDashboardData();
@@ -21,6 +22,7 @@ const Index = () => {
   const { role, loading: roleLoading } = useUserRole();
   const isParent = role === "PARENT";
   const isStudent = role === "STUDENT";
+  const isTeacher = role === "TEACHER";
   const { studentId, loading: studentLoading } = useStudentSelf();
   const fmt = (n: number) => n.toLocaleString("pt-PT");
   if (roleLoading || (isStudent && studentLoading)) return <PageLoadingSkeleton />;
@@ -64,8 +66,13 @@ const Index = () => {
                   <ComplaintsCard studentScopeId={isStudent ? studentId : undefined} />
                 </section>
               ) : (
-                <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                  <EarningsCard />
+                <section
+                  className={cn(
+                    "grid grid-cols-1 gap-6",
+                    !isTeacher && "lg:grid-cols-2",
+                  )}
+                >
+                  {!isTeacher && <EarningsCard />}
                   <ComplaintsCard />
                 </section>
               )}
