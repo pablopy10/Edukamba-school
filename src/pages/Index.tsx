@@ -15,6 +15,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { cn } from "@/lib/utils";
+import { isNativeMobileApp } from "@/lib/nativeApp";
 
 const Index = () => {
   const { counts, gender, messages } = useDashboardData();
@@ -23,12 +24,19 @@ const Index = () => {
   const isParent = role === "PARENT";
   const isStudent = role === "STUDENT";
   const isTeacher = role === "TEACHER";
+  /** Painel nativo iOS/Android: professor não vê calendário, agenda nem mensagens na direita. */
+  const hideTeacherMobileRail = isNativeMobileApp() && isTeacher;
   const { studentId, loading: studentLoading } = useStudentSelf();
   const fmt = (n: number) => n.toLocaleString("pt-PT");
   if (roleLoading || (isStudent && studentLoading)) return <PageLoadingSkeleton />;
   return (
     <DashboardLayout>
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_320px]">
+      <div
+        className={cn(
+          "grid grid-cols-1 gap-6",
+          !hideTeacherMobileRail && "xl:grid-cols-[1fr_320px]",
+        )}
+      >
             {/* Center column */}
             <div className="flex flex-col gap-6">
               <h1 className="sr-only">Painel Edukamba</h1>
@@ -78,12 +86,14 @@ const Index = () => {
               )}
             </div>
 
-            {/* Right column */}
-            <aside className="flex flex-col gap-6">
-              <CalendarCard selectedDate={selectedDate} onSelect={setSelectedDate} />
-              <AgendaCard date={selectedDate} />
-              {!isStudent && <MessagesCard messages={messages} />}
-            </aside>
+            {/* Right column — omitido na app nativa para professores */}
+            {!hideTeacherMobileRail && (
+              <aside className="flex flex-col gap-6">
+                <CalendarCard selectedDate={selectedDate} onSelect={setSelectedDate} />
+                <AgendaCard date={selectedDate} />
+                {!isStudent && <MessagesCard messages={messages} />}
+              </aside>
+            )}
       </div>
     </DashboardLayout>
   );
