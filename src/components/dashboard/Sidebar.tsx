@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useUserRole, UserRole } from "@/hooks/useUserRole";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { EdukambaWordmark } from "@/components/branding/EdukambaWordmark";
 
 export type NavItem = { icon: ElementType; label: string; to: string; hasArrow?: boolean; moduleKey?: ModuleKey };
 
@@ -123,10 +124,7 @@ function SidebarNavigation({
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col gap-6", scrollClassName)}>
       <div className="flex items-center justify-center px-2 pt-2">
-        <span className="text-3xl font-extrabold tracking-tight">
-          <span className="text-foreground">Edu</span>
-          <span className="text-sidebar-ring">kamba</span>
-        </span>
+        <EdukambaWordmark />
       </div>
 
       <div className="flex flex-col gap-1">

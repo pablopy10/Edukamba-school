@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { cn } from "@/lib/utils";
 import { isNativeMobileApp } from "@/lib/nativeApp";
+import { EdukambaWordmark } from "@/components/branding/EdukambaWordmark";
 
 const roleLabels: Record<string, string> = {
   SUPER_ADMIN: "Super Admin",
@@ -145,9 +146,7 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
               className="min-w-0 shrink touch-manipulation"
               aria-label="Edukamba — Painel"
             >
-              <span className="block truncate bg-gradient-to-r from-primary to-pastel-blue-foreground bg-clip-text text-xl font-bold tracking-tight text-transparent">
-                Edukamba
-              </span>
+              <EdukambaWordmark className="block truncate leading-none" />
             </Link>
           </div>
 
