@@ -22,6 +22,9 @@ export const ERP_HEADER_DEFAULTS: ErpHeaderDefaults = {
   payment_method: "Metodo_Pagamento",
 };
 
+/** Quando o NIF do aluno não existe ou está vazio, exporta-se este valor para compatibilidade com ERP (ex.: Primavera). */
+export const ERP_DEFAULT_NIF_PLACEHOLDER = "999999999";
+
 export type ErpConfigFields = {
   header_student_id: string | null;
   header_student_name: string | null;
@@ -30,7 +33,11 @@ export type ErpConfigFields = {
   header_payment_date: string | null;
   header_article_code: string | null;
   header_payment_method: string | null;
+  /** Código Propinas */
   default_article_code_propina: string | null;
+  article_code_matricula: string | null;
+  article_code_extracurricular: string | null;
+  article_code_transporte: string | null;
 };
 
 export function resolveErpHeaders(cfg: ErpConfigFields | null): ErpHeaderDefaults {
@@ -71,20 +78,50 @@ export type ErpResolvedStudent = {
   enrollment_number: string | null;
 };
 
-function articleCodeForPayment(
+/** Metadados para coluna «código artigo»: nomes de serviço quando o código configurado está vazio. */
+export type ErpArticleFeeMeta = {
+  activityNameByFeeId: Map<string, string>;
+  enrollmentFeeTypeByFeeId: Map<string, "NEW" | "RENEWAL">;
+  transportRouteNameByFeeId: Map<string, string>;
+};
+
+/** Fallbacks quando o código configurado está vazio — nome do serviço no Edukamba. */
+const FALLBACK_PROPINA = "Propina";
+const FALLBACK_EXTRACURRICULAR = "Extracurricular";
+const FALLBACK_TRANSPORTE = "Transporte escolar";
+
+function enrollmentServiceLabel(feeType: "NEW" | "RENEWAL" | undefined): string {
+  return feeType === "RENEWAL" ? "Renovação de matrícula" : "Matrícula";
+}
+
+function articleCodeForPaymentRow(
   p: PaymentRow,
-  propinaDefault: string,
-  activityCodeByFeeId: Map<string, string>,
-  enrollmentTypeByFeeId: Map<string, "NEW" | "RENEWAL">,
+  cfg: ErpConfigFields | null,
+  meta: ErpArticleFeeMeta,
 ): string {
-  if (p.student_fee_id) return propinaDefault || "PROPINA";
-  if (p.activity_fee_id) return activityCodeByFeeId.get(p.activity_fee_id) ?? "EXTRA";
-  if (p.transport_fee_id) return "TRANSPORTE";
-  if (p.enrollment_fee_id) {
-    const t = enrollmentTypeByFeeId.get(p.enrollment_fee_id);
-    return t === "RENEWAL" ? "MATRICULA_RENOV" : "MATRICULA_NOVA";
+  if (p.student_fee_id) {
+    const code = cfg?.default_article_code_propina?.trim();
+    return code ? code : FALLBACK_PROPINA;
   }
-  return "OUTRO";
+  if (p.enrollment_fee_id) {
+    const code = cfg?.article_code_matricula?.trim();
+    if (code) return code;
+    const ft = meta.enrollmentFeeTypeByFeeId.get(p.enrollment_fee_id);
+    return enrollmentServiceLabel(ft);
+  }
+  if (p.activity_fee_id) {
+    const code = cfg?.article_code_extracurricular?.trim();
+    if (code) return code;
+    const name = meta.activityNameByFeeId.get(p.activity_fee_id)?.trim();
+    return name || FALLBACK_EXTRACURRICULAR;
+  }
+  if (p.transport_fee_id) {
+    const code = cfg?.article_code_transporte?.trim();
+    if (code) return code;
+    const route = meta.transportRouteNameByFeeId.get(p.transport_fee_id)?.trim();
+    return route || FALLBACK_TRANSPORTE;
+  }
+  return "Outro";
 }
 
 function studentIdForErp(s: ErpResolvedStudent): string {
@@ -93,25 +130,28 @@ function studentIdForErp(s: ErpResolvedStudent): string {
   return s.id;
 }
 
+function nifForErpExport(student: ErpResolvedStudent | undefined): string {
+  const t = student?.tax_id?.trim();
+  return t ? t : ERP_DEFAULT_NIF_PLACEHOLDER;
+}
+
 function isoDateOnly(iso: string | null): string {
   if (!iso) return "";
   const d = iso.slice(0, 10);
   return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : "";
 }
 
-/** Preenche mapas de artigos / tipo matrícula para linhas de pagamento. */
-export async function loadFeeMetaForPayments(
+export async function loadErpArticleFeeMeta(
   supabase: SupabaseClient<Database>,
   payments: PaymentRow[],
-): Promise<{
-  activityCodeByFeeId: Map<string, string>;
-  enrollmentTypeByFeeId: Map<string, "NEW" | "RENEWAL">;
-}> {
-  const activityCodeByFeeId = new Map<string, string>();
-  const enrollmentTypeByFeeId = new Map<string, "NEW" | "RENEWAL">();
+): Promise<ErpArticleFeeMeta> {
+  const activityNameByFeeId = new Map<string, string>();
+  const enrollmentFeeTypeByFeeId = new Map<string, "NEW" | "RENEWAL">();
+  const transportRouteNameByFeeId = new Map<string, string>();
 
   const afIds = [...new Set(payments.map((p) => p.activity_fee_id).filter(Boolean))] as string[];
   const efIds = [...new Set(payments.map((p) => p.enrollment_fee_id).filter(Boolean))] as string[];
+  const tfIds = [...new Set(payments.map((p) => p.transport_fee_id).filter(Boolean))] as string[];
 
   if (afIds.length > 0) {
     const { data } = await supabase
@@ -120,17 +160,27 @@ export async function loadFeeMetaForPayments(
       .in("id", afIds);
     (data ?? []).forEach((row: { id: string; activity: { name: string } | null }) => {
       const name = row.activity?.name?.trim();
-      activityCodeByFeeId.set(row.id, name ? `EXTRA_${name.slice(0, 24)}` : "EXTRA");
+      if (name) activityNameByFeeId.set(row.id, name);
     });
   }
   if (efIds.length > 0) {
     const { data } = await supabase.from("enrollment_fees").select("id, fee_type").in("id", efIds);
     (data ?? []).forEach((row: { id: string; fee_type: "NEW" | "RENEWAL" }) => {
-      enrollmentTypeByFeeId.set(row.id, row.fee_type);
+      enrollmentFeeTypeByFeeId.set(row.id, row.fee_type);
+    });
+  }
+  if (tfIds.length > 0) {
+    const { data } = await supabase
+      .from("transport_fees")
+      .select("id, route:transport_routes(name)")
+      .in("id", tfIds);
+    (data ?? []).forEach((row: { id: string; route: { name: string } | null }) => {
+      const name = row.route?.name?.trim();
+      if (name) transportRouteNameByFeeId.set(row.id, name);
     });
   }
 
-  return { activityCodeByFeeId, enrollmentTypeByFeeId };
+  return { activityNameByFeeId, enrollmentFeeTypeByFeeId, transportRouteNameByFeeId };
 }
 
 /** Resolve estudante por pagamento via fee rows (batch). */
@@ -171,15 +221,13 @@ export async function resolveStudentsForPayments(
   return out;
 }
 
-/** Linhas para Excel: números como number; datas ISO YYYY-MM-DD; sem formatação extra. */
+/** Linhas para Excel: números como number; datas ISO YYYY-MM-DD; cabeçalhos definidos na configuração. */
 export function buildErpExportRows(
   payments: PaymentRow[],
   studentByFeePrefix: Map<string, ErpResolvedStudent>,
   cfg: ErpConfigFields | null,
-  activityCodeByFeeId: Map<string, string>,
-  enrollmentTypeByFeeId: Map<string, "NEW" | "RENEWAL">,
+  articleMeta: ErpArticleFeeMeta,
 ): { headers: string[]; rows: (string | number)[][] } {
-  const propinaArticle = (cfg?.default_article_code_propina?.trim() || "PROPINA");
   const headersObj = resolveErpHeaders(cfg);
   const headers = [
     headersObj.student_id,
@@ -200,12 +248,12 @@ export function buildErpExportRows(
     else if (p.transport_fee_id) student = studentByFeePrefix.get(`tf:${p.transport_fee_id}`);
     else if (p.enrollment_fee_id) student = studentByFeePrefix.get(`ef:${p.enrollment_fee_id}`);
 
-    const article = articleCodeForPayment(p, propinaArticle, activityCodeByFeeId, enrollmentTypeByFeeId);
+    const article = articleCodeForPaymentRow(p, cfg, articleMeta);
 
     rows.push([
       student ? studentIdForErp(student) : "",
       student?.full_name ?? "",
-      student?.tax_id?.trim() ?? "",
+      nifForErpExport(student),
       Number(p.amount_paid) || 0,
       isoDateOnly(p.payment_date),
       article,
@@ -224,6 +272,25 @@ export function downloadRawXlsx(filename: string, sheetName: string, headers: st
   XLSX.writeFile(wb, filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`);
 }
 
+/** UPSERT com leitura prévia para não apagar colunas geridas por outro cartão (ex.: códigos de artigo). */
+export async function upsertErpExportConfigMerged(
+  supabase: SupabaseClient<Database>,
+  schoolId: string,
+  patch: Partial<Database["public"]["Tables"]["erp_export_configs"]["Insert"]>,
+) {
+  const { data: existing } = await supabase
+    .from("erp_export_configs")
+    .select("*")
+    .eq("school_id", schoolId)
+    .maybeSingle();
+  const merged = {
+    ...(existing ?? {}),
+    ...patch,
+    school_id: schoolId,
+  } as Database["public"]["Tables"]["erp_export_configs"]["Insert"];
+  return supabase.from("erp_export_configs").upsert(merged, { onConflict: "school_id" });
+}
+
 export type ErpPaymentExportRow = Pick<
   Database["public"]["Tables"]["payments"]["Row"],
   | "id"
@@ -237,26 +304,51 @@ export type ErpPaymentExportRow = Pick<
   | "enrollment_fee_id"
 >;
 
+/** Filtro por tipo de pagamento na exportação ERP (colunas `*_fee_id`). */
+export type ErpPaymentKindFilter =
+  | "all"
+  | "propina"
+  | "extracurricular"
+  | "matricula"
+  | "transporte";
+
+const ERP_PAYMENT_SELECT =
+  "id, amount_paid, method, payment_date, erp_exported_at, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id";
+
+/** Lista pagamentos validados entre datas (inclusive) e opcionalmente por tipo de propina/fee. */
+export async function fetchValidatedPaymentsForErpFilters(
+  supabase: SupabaseClient<Database>,
+  schoolId: string,
+  dateFrom: string,
+  dateTo: string,
+  paymentKind: ErpPaymentKindFilter,
+): Promise<{ data: ErpPaymentExportRow[] | null; error: { message: string } | null }> {
+  let q = supabase
+    .from("payments")
+    .select(ERP_PAYMENT_SELECT)
+    .eq("school_id", schoolId)
+    .eq("status", "validado")
+    .gte("payment_date", dateFrom)
+    .lte("payment_date", dateTo)
+    .order("payment_date", { ascending: false });
+
+  if (paymentKind === "propina") q = q.not("student_fee_id", "is", null);
+  else if (paymentKind === "extracurricular") q = q.not("activity_fee_id", "is", null);
+  else if (paymentKind === "matricula") q = q.not("enrollment_fee_id", "is", null);
+  else if (paymentKind === "transporte") q = q.not("transport_fee_id", "is", null);
+
+  const { data, error } = await q;
+  if (error) return { data: null, error };
+  return { data: (data ?? []) as ErpPaymentExportRow[], error: null };
+}
+
 /** Lista pagamentos validados cuja data está no ano civil indicado (filtro ERP). */
 export async function fetchValidatedPaymentsForErpYear(
   supabase: SupabaseClient<Database>,
   schoolId: string,
   year: number,
 ): Promise<{ data: ErpPaymentExportRow[] | null; error: { message: string } | null }> {
-  const start = `${year}-01-01`;
-  const end = `${year}-12-31`;
-  const { data, error } = await supabase
-    .from("payments")
-    .select(
-      "id, amount_paid, method, payment_date, erp_exported_at, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id",
-    )
-    .eq("school_id", schoolId)
-    .eq("status", "validado")
-    .gte("payment_date", start)
-    .lte("payment_date", end)
-    .order("payment_date", { ascending: false });
-  if (error) return { data: null, error };
-  return { data: (data ?? []) as ErpPaymentExportRow[], error: null };
+  return fetchValidatedPaymentsForErpFilters(supabase, schoolId, `${year}-01-01`, `${year}-12-31`, "all");
 }
 
 export function enrichErpPaymentsWithStudentNames(
@@ -299,14 +391,8 @@ export async function runErpExcelExport(opts: {
   }));
 
   const studentMap = await resolveStudentsForPayments(supabase, payload);
-  const meta = await loadFeeMetaForPayments(supabase, payload);
-  const { headers, rows } = buildErpExportRows(
-    payload,
-    studentMap,
-    cfg,
-    meta.activityCodeByFeeId,
-    meta.enrollmentTypeByFeeId,
-  );
+  const articleMeta = await loadErpArticleFeeMeta(supabase, payload);
+  const { headers, rows } = buildErpExportRows(payload, studentMap, cfg, articleMeta);
   const fname = `erp-pagamentos-${filenameYearSegment}-${new Date().toISOString().slice(0, 10)}.xlsx`;
   downloadRawXlsx(fname, "Pagamentos", headers, rows);
 

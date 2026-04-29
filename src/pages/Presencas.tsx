@@ -32,6 +32,8 @@ import { useParentChildren } from "@/hooks/useParentChildren";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
+import { OFFLINE_SYNC_FLUSH_EVENT, useOfflineSync } from "@/hooks/useOfflineSync";
+import { supabaseRestTable } from "@/lib/supabaseRestUrls";
 
 type Status = "PRESENT" | "ABSENT" | "LATE" | "JUSTIFIED" | "DISCIPLINARY";
 
@@ -191,7 +193,7 @@ const Presencas = () => {
   const [justifyText, setJustifyText] = useState("");
   const [justifySaving, setJustifySaving] = useState(false);
 
-  const canEdit = (userRole === "ADMIN" || userRole === "TEACHER") && !isParent && !isStudent;
+  const { isOnline, enqueuePendingSync } = useOfflineSync();
 
   // Load profile (school + role)
   useEffect(() => {
@@ -334,12 +336,98 @@ const Presencas = () => {
     return () => { cancelled = true; };
   }, [schoolId, classroomId, year, month0]);
 
+  useEffect(() => {
+    const onSynced = () => {
+      if (!schoolId) return;
+      const startDate = fmtISO(new Date(year, month0, 1));
+      const endDate = fmtISO(new Date(year, month0 + 1, 0));
+      void (async () => {
+        let q = supabase
+          .from("attendance")
+          .select("id, student_id, date, status, notes")
+          .eq("school_id", schoolId)
+          .gte("date", startDate)
+          .lte("date", endDate);
+        if (classroomId !== "all") {
+          q = q.eq("classroom_id", classroomId);
+        }
+        const { data } = await q;
+        const map: Record<string, AttendanceRow> = {};
+        (data ?? []).forEach((row: any) => {
+          map[`${row.student_id}__${row.date}`] = row as AttendanceRow;
+        });
+        setAttendance(map);
+      })();
+    };
+    window.addEventListener(OFFLINE_SYNC_FLUSH_EVENT, onSynced);
+    return () => window.removeEventListener(OFFLINE_SYNC_FLUSH_EVENT, onSynced);
+  }, [schoolId, classroomId, year, month0]);
+
   const applyStatus = async (student: Student, date: Date, next: Status | null) => {
     if (!schoolId) return;
     const key = `${student.id}__${fmtISO(date)}`;
     const existing = attendance[key];
+    const attendanceBase = supabaseRestTable("attendance");
+
+    const offlineToast = () => {
+      toast.success("Guardado offline — será sincronizado quando voltar a haver rede.");
+    };
 
     try {
+      if (!isOnline) {
+        if (next === null) {
+          if (!existing) return;
+          enqueuePendingSync({
+            url: `${attendanceBase}?id=eq.${encodeURIComponent(existing.id)}`,
+            method: "DELETE",
+            body: null,
+          });
+          const copy = { ...attendance };
+          delete copy[key];
+          setAttendance(copy);
+          offlineToast();
+          return;
+        }
+        if (existing) {
+          enqueuePendingSync({
+            url: `${attendanceBase}?id=eq.${encodeURIComponent(existing.id)}`,
+            method: "PATCH",
+            body: JSON.stringify({ status: next }),
+          });
+          setAttendance({
+            ...attendance,
+            [key]: { ...existing, status: next },
+          });
+          offlineToast();
+          return;
+        }
+        enqueuePendingSync({
+          url: attendanceBase,
+          method: "POST",
+          body: JSON.stringify({
+            student_id: student.id,
+            date: fmtISO(date),
+            status: next,
+            school_id: schoolId,
+            classroom_id: student.classroom_id,
+            teacher_id: user?.id ?? null,
+          }),
+        });
+        const tempId = `offline-${crypto.randomUUID()}`;
+        setAttendance({
+          ...attendance,
+          [key]: {
+            id: tempId,
+            student_id: student.id,
+            date: fmtISO(date),
+            status: next,
+            notes: null,
+          },
+        });
+        offlineToast();
+        return;
+      }
+
       if (next === null) {
         if (!existing) return;
         const { error } = await supabase.from("attendance").delete().eq("id", existing.id);
@@ -369,7 +457,7 @@ const Presencas = () => {
             classroom_id: student.classroom_id,
             teacher_id: user?.id ?? null,
           })
-            .select("id, student_id, date, status, notes")
+          .select("id, student_id, date, status, notes")
           .single();
         if (error) throw error;
         setAttendance({ ...attendance, [key]: data as AttendanceRow });
@@ -429,6 +517,54 @@ const Presencas = () => {
     }
     setJustifySaving(true);
     try {
+      const attendanceBase = supabaseRestTable("attendance");
+      const mapKey = `${student.id}__${fmtISO(date)}`;
+
+      if (!isOnline) {
+        if (row) {
+          const newStatus: Status = canEdit ? row.status : "JUSTIFIED";
+          enqueuePendingSync({
+            url: `${attendanceBase}?id=eq.${encodeURIComponent(row.id)}`,
+            method: "PATCH",
+            body: JSON.stringify({ notes: text, status: newStatus }),
+          });
+          setAttendance({ ...attendance, [mapKey]: { ...row, notes: text, status: newStatus } });
+        } else {
+          if (!canEdit) {
+            toast.error("Sem registo para justificar.");
+            return;
+          }
+          enqueuePendingSync({
+            url: attendanceBase,
+            method: "POST",
+            body: JSON.stringify({
+              student_id: student.id,
+              date: fmtISO(date),
+              status: "ABSENT" as Status,
+              notes: text,
+              school_id: schoolId,
+              classroom_id: student.classroom_id,
+              teacher_id: user?.id ?? null,
+            }),
+          });
+          const tempId = `offline-${crypto.randomUUID()}`;
+          setAttendance({
+            ...attendance,
+            [mapKey]: {
+              id: tempId,
+              student_id: student.id,
+              date: fmtISO(date),
+              status: "ABSENT",
+              notes: text,
+            },
+          });
+        }
+        toast.success("Guardado offline — será sincronizado quando voltar a haver rede.");
+        setJustifyTarget(null);
+        setJustifyText("");
+        return;
+      }
+
       if (row) {
         // Parents/students: only allowed transition is ABSENT/LATE -> JUSTIFIED
         const newStatus: Status = canEdit ? row.status : "JUSTIFIED";
@@ -437,8 +573,7 @@ const Presencas = () => {
           .update({ notes: text, status: newStatus })
           .eq("id", row.id);
         if (error) throw error;
-        const key = `${student.id}__${fmtISO(date)}`;
-        setAttendance({ ...attendance, [key]: { ...row, notes: text, status: newStatus } });
+        setAttendance({ ...attendance, [mapKey]: { ...row, notes: text, status: newStatus } });
       } else {
         // Only staff can create rows from scratch
         if (!canEdit) {
@@ -459,8 +594,7 @@ const Presencas = () => {
           .select("id, student_id, date, status, notes")
           .single();
         if (error) throw error;
-        const key = `${student.id}__${fmtISO(date)}`;
-        setAttendance({ ...attendance, [key]: data as AttendanceRow });
+        setAttendance({ ...attendance, [mapKey]: data as AttendanceRow });
       }
       toast.success("Justificação guardada");
       setJustifyTarget(null);

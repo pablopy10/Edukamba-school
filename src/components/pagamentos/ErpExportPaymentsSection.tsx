@@ -6,15 +6,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, FileSpreadsheet } from "lucide-react";
+import { Loader2, FileSpreadsheet, RotateCcw } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import {
   enrichErpPaymentsWithStudentNames,
-  fetchValidatedPaymentsForErpYear,
+  fetchValidatedPaymentsForErpFilters,
   resolveStudentsForPayments,
   runErpExcelExport,
   type ErpPaymentExportRow,
+  type ErpPaymentKindFilter,
 } from "@/lib/erpExport";
+import { Input } from "@/components/ui/input";
 
 type ErpPaymentLine = ErpPaymentExportRow & { studentName: string };
 
@@ -23,11 +25,18 @@ const fmtAOA = (n: number) =>
 
 type Props = { schoolId: string | null };
 
+function defaultErpExportDateRange(): { dateFrom: string; dateTo: string } {
+  const year = new Date().getFullYear();
+  return { dateFrom: `${year}-01-01`, dateTo: `${year}-12-31` };
+}
+
 export const ErpExportPaymentsSection = ({ schoolId }: Props) => {
   const { role } = useUserRole();
   const staffOk = role === "ADMIN" || role === "SUPER_ADMIN" || role === "TEACHER";
 
-  const [year, setYear] = useState<number>(() => new Date().getFullYear());
+  const [dateFrom, setDateFrom] = useState<string>(() => defaultErpExportDateRange().dateFrom);
+  const [dateTo, setDateTo] = useState<string>(() => defaultErpExportDateRange().dateTo);
+  const [paymentKind, setPaymentKind] = useState<ErpPaymentKindFilter>("all");
   const [lines, setLines] = useState<ErpPaymentLine[]>([]);
   const [loading, setLoading] = useState(false);
   const [exportFilter, setExportFilter] = useState<"all" | "pending" | "exported">("all");
@@ -38,8 +47,18 @@ export const ErpExportPaymentsSection = ({ schoolId }: Props) => {
       setLines([]);
       return;
     }
+    if (dateFrom > dateTo) {
+      setLines([]);
+      return;
+    }
     setLoading(true);
-    const { data, error } = await fetchValidatedPaymentsForErpYear(supabase, schoolId, year);
+    const { data, error } = await fetchValidatedPaymentsForErpFilters(
+      supabase,
+      schoolId,
+      dateFrom,
+      dateTo,
+      paymentKind,
+    );
     if (error) {
       toast({ title: "Erro a carregar pagamentos", description: error.message, variant: "destructive" });
       setLoading(false);
@@ -49,7 +68,7 @@ export const ErpExportPaymentsSection = ({ schoolId }: Props) => {
     const studentMap = await resolveStudentsForPayments(supabase, rows);
     setLines(enrichErpPaymentsWithStudentNames(rows, studentMap));
     setLoading(false);
-  }, [schoolId, year, staffOk]);
+  }, [schoolId, dateFrom, dateTo, paymentKind, staffOk]);
 
   useEffect(() => {
     load();
@@ -61,7 +80,28 @@ export const ErpExportPaymentsSection = ({ schoolId }: Props) => {
     return lines;
   }, [lines, exportFilter]);
 
+  const filtersAreDefault = useMemo(() => {
+    const { dateFrom: df, dateTo: dt } = defaultErpExportDateRange();
+    return dateFrom === df && dateTo === dt && paymentKind === "all" && exportFilter === "all";
+  }, [dateFrom, dateTo, paymentKind, exportFilter]);
+
+  const clearFilters = () => {
+    const { dateFrom: df, dateTo: dt } = defaultErpExportDateRange();
+    setDateFrom(df);
+    setDateTo(dt);
+    setPaymentKind("all");
+    setExportFilter("all");
+  };
+
   const exportExcel = async () => {
+    if (dateFrom > dateTo) {
+      toast({
+        title: "Datas inválidas",
+        description: "A data inicial deve ser anterior ou igual à data final.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!schoolId || filtered.length === 0) {
       toast({
         title: "Nada a exportar",
@@ -76,7 +116,7 @@ export const ErpExportPaymentsSection = ({ schoolId }: Props) => {
       supabase,
       schoolId,
       payments: paymentsPayload,
-      filenameYearSegment: year,
+      filenameYearSegment: `${dateFrom}_${dateTo}`,
       markAsExported: true,
     });
     setExporting(false);
@@ -104,49 +144,87 @@ export const ErpExportPaymentsSection = ({ schoolId }: Props) => {
 
   return (
     <Card>
-      <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
+      <CardHeader className="flex flex-col gap-4">
+        <div className="space-y-1">
           <CardTitle className="text-lg">Exportar pagamentos (Excel ERP)</CardTitle>
-          <CardDescription className="mt-1">
+          <CardDescription>
             Gera um ficheiro .xlsx com os cabeçalhos definidos acima para Primavera ou outro ERP. Apenas pagamentos com
             estado validado; valores numéricos e datas ISO (YYYY-MM-DD).
           </CardDescription>
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-end">
-          <div className="grid gap-1">
-            <Label className="text-xs text-muted-foreground">Ano civil</Label>
-            <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-              <SelectTrigger className="w-full sm:w-[120px]">
-                <SelectValue />
+        <div className="flex w-full flex-col gap-3">
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+            <div className="grid gap-1">
+              <Label htmlFor="erp-export-date-from" className="text-xs text-muted-foreground">
+                Data inicial
+              </Label>
+              <Input
+                id="erp-export-date-from"
+                type="date"
+                className="w-full sm:w-[160px]"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label htmlFor="erp-export-date-to" className="text-xs text-muted-foreground">
+                Data final
+              </Label>
+              <Input
+                id="erp-export-date-to"
+                type="date"
+                className="w-full sm:w-[160px]"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Tipo de pagamento</Label>
+              <Select value={paymentKind} onValueChange={(v) => setPaymentKind(v as ErpPaymentKindFilter)}>
+                <SelectTrigger className="w-full sm:w-[200px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="propina">Propina</SelectItem>
+                  <SelectItem value="extracurricular">Extracurriculares</SelectItem>
+                  <SelectItem value="matricula">Matrículas</SelectItem>
+                  <SelectItem value="transporte">Transporte</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+            <Select value={exportFilter} onValueChange={(v) => setExportFilter(v as typeof exportFilter)}>
+              <SelectTrigger className="w-full sm:w-[220px]">
+                <SelectValue placeholder="Filtro" />
               </SelectTrigger>
               <SelectContent>
-                {[year + 1, year, year - 1, year - 2].map((y) => (
-                  <SelectItem key={y} value={String(y)}>
-                    {y}
-                  </SelectItem>
-                ))}
+                <SelectItem value="all">Todos os pagamentos</SelectItem>
+                <SelectItem value="pending">Ainda não exportados</SelectItem>
+                <SelectItem value="exported">Já exportados</SelectItem>
               </SelectContent>
             </Select>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2 sm:self-auto"
+              disabled={filtersAreDefault}
+              onClick={clearFilters}
+            >
+              <RotateCcw className="h-4 w-4" />
+              Limpar filtros
+            </Button>
+            <Button
+              type="button"
+              className="gap-2 sm:self-auto"
+              disabled={exporting || filtered.length === 0 || dateFrom > dateTo}
+              onClick={exportExcel}
+            >
+              {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+              Exportar Excel (ERP)
+            </Button>
           </div>
-          <Select value={exportFilter} onValueChange={(v) => setExportFilter(v as typeof exportFilter)}>
-            <SelectTrigger className="w-full sm:w-[220px]">
-              <SelectValue placeholder="Filtro" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os pagamentos</SelectItem>
-              <SelectItem value="pending">Ainda não exportados</SelectItem>
-              <SelectItem value="exported">Já exportados</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button
-            type="button"
-            className="gap-2 sm:self-auto"
-            disabled={exporting || filtered.length === 0}
-            onClick={exportExcel}
-          >
-            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
-            Exportar Excel (ERP)
-          </Button>
         </div>
       </CardHeader>
       <CardContent>
@@ -154,9 +232,13 @@ export const ErpExportPaymentsSection = ({ schoolId }: Props) => {
           <div className="flex justify-center py-10">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
+        ) : dateFrom > dateTo ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            A data inicial deve ser anterior ou igual à data final.
+          </p>
         ) : filtered.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            Nenhum pagamento validado neste ano para o filtro seleccionado.
+            Nenhum pagamento validado no período e tipo seleccionados para o filtro de exportação ERP.
           </p>
         ) : (
           <div className="overflow-x-auto rounded-lg border">
@@ -167,7 +249,7 @@ export const ErpExportPaymentsSection = ({ schoolId }: Props) => {
                   <th className="py-2 px-3">Aluno</th>
                   <th className="py-2 px-3">Valor</th>
                   <th className="py-2 px-3">Método</th>
-                  <th className="py-2 px-3">Exportação ERP</th>
+                  <th className="py-2 px-3">Exportação para Faturação</th>
                 </tr>
               </thead>
               <tbody>

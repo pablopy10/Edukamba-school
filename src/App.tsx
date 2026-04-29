@@ -4,7 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index.tsx";
-import Landing from "./pages/Landing.tsx";
+import { NativeAppRoot } from "./components/NativeAppRoot.tsx";
 import Auth from "./pages/Auth.tsx";
 import Onboarding from "./pages/Onboarding.tsx";
 import Termos from "./pages/Termos.tsx";
@@ -43,11 +43,13 @@ import { ModulesProvider } from "./context/ModulesContext";
 import { AcademicYearProvider } from "./context/AcademicYearContext";
 import { UserRoleProvider } from "./hooks/useUserRole";
 import { SelectedChildProvider } from "./context/SelectedChildContext";
+import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <OfflineSyncProvider>
     <ModulesProvider>
       <AcademicYearProvider>
       <UserRoleProvider>
@@ -57,7 +59,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-          <Route path="/" element={<Landing />} />
+          <Route path="/" element={<NativeAppRoot />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
           <Route path="/termos" element={<Termos />} />
@@ -101,6 +103,7 @@ const App = () => (
       </UserRoleProvider>
       </AcademicYearProvider>
     </ModulesProvider>
+    </OfflineSyncProvider>
   </QueryClientProvider>
 );
 

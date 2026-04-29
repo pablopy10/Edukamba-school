@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap, FileSpreadsheet } from "lucide-react";
+import { ErpArticleCodesCard } from "@/components/pagamentos/ErpArticleCodesCard";
 import { ErpExportMappingSection } from "@/components/pagamentos/ErpExportMappingSection";
 import { ErpExportPaymentsSection } from "@/components/pagamentos/ErpExportPaymentsSection";
 import { Textarea } from "@/components/ui/textarea";
@@ -1365,7 +1366,7 @@ const Pagamentos = () => {
             {!isParent && <TabsTrigger value="overrides">Descontos por aluno</TabsTrigger>}
             {!isParent && (
               <TabsTrigger value="erp-export" className="gap-1.5">
-                <FileSpreadsheet className="h-3.5 w-3.5" /> Exportação ERP
+                <FileSpreadsheet className="h-3.5 w-3.5" /> Exportar para Faturação
               </TabsTrigger>
             )}
           </TabsList>
@@ -2434,6 +2435,7 @@ const Pagamentos = () => {
           </TabsContent>
 
           <TabsContent value="erp-export" className="space-y-6">
+            <ErpArticleCodesCard schoolId={schoolId} />
             <ErpExportMappingSection schoolId={schoolId} />
             <ErpExportPaymentsSection schoolId={schoolId} />
           </TabsContent>

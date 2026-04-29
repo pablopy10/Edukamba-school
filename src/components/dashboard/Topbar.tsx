@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Search, MessageSquare, Bell, Clock, CalendarDays, Baby } from "lucide-react";
+import { Search, MessageSquare, Bell, Clock, CalendarDays, Baby, Cloud, Menu } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,6 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useOfflineSync } from "@/hooks/useOfflineSync";
+import { cn } from "@/lib/utils";
 
 const roleLabels: Record<string, string> = {
   SUPER_ADMIN: "Super Admin",
@@ -29,7 +31,8 @@ const initialsOf = (name: string) =>
     .map((n) => n[0]?.toUpperCase() ?? "")
     .join("") || "?";
 
-export const Topbar = () => {
+export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) => {
+  const { pendingCount } = useOfflineSync();
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const { user } = useAuth();
@@ -81,8 +84,19 @@ export const Topbar = () => {
   const avatarUrl = profile?.avatar_url ?? "";
 
   return (
-    <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <form onSubmit={submit} className="relative w-full max-w-md" role="search">
+    <header className="flex flex-col gap-4">
+      <div className="flex w-full flex-wrap items-center gap-3">
+        {!!onOpenMobileMenu && (
+          <button
+            type="button"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent lg:hidden"
+            aria-label="Abrir menu"
+            onClick={onOpenMobileMenu}
+          >
+            <Menu className="h-6 w-6" strokeWidth={1.75} />
+          </button>
+        )}
+        <form onSubmit={submit} className="relative min-w-0 flex-1 max-w-md" role="search">
         <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
           type="text"
@@ -93,7 +107,7 @@ export const Topbar = () => {
         />
       </form>
 
-      <div className="flex items-center gap-3">
+      <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-3 min-[480px]:w-auto min-[480px]:flex-1">
         {isParent && kids.length > 0 && (
           <div className="hidden items-center md:flex" title="Filho(a) em consulta">
             <Select
@@ -148,6 +162,23 @@ export const Topbar = () => {
               : `${trialDaysLeft} ${trialDaysLeft === 1 ? "dia" : "dias"} de trial`}
           </div>
         )}
+        <div
+          className={cn(
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-full shadow-soft",
+            pendingCount > 0
+              ? "bg-pastel-yellow text-pastel-yellow-foreground"
+              : "bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400",
+          )}
+          title={
+            pendingCount > 0
+              ? `${pendingCount} alteração(ões) pendente(s) de sincronização`
+              : "Sincronizado com o servidor"
+          }
+          role="status"
+          aria-live="polite"
+        >
+          <Cloud className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+        </div>
         <Link
           to="/chat"
           aria-label="Chat"
@@ -182,6 +213,7 @@ export const Topbar = () => {
             <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-card bg-success" />
           </div>
         </Link>
+      </div>
       </div>
     </header>
   );

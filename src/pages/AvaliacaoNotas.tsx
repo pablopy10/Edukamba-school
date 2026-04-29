@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Save, Loader2, GraduationCap, Users, Search } from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
@@ -7,6 +7,8 @@ import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
+import { OFFLINE_SYNC_FLUSH_EVENT, useOfflineSync } from "@/hooks/useOfflineSync";
+import { supabaseRestTable } from "@/lib/supabaseRestUrls";
 
 type AssessmentInfo = {
   id: string;
@@ -59,6 +61,7 @@ const AvaliacaoNotas = () => {
   const navigate = useNavigate();
   const { role } = useUserRole();
   const { isStudent, studentId } = useStudentSelf();
+  const { isOnline, enqueuePendingSync } = useOfflineSync();
   const readOnly = isStudent || role === "PARENT";
 
   const [loading, setLoading] = useState(true);
@@ -68,7 +71,7 @@ const AvaliacaoNotas = () => {
   const [rows, setRows] = useState<Record<string, GradeRow>>({});
   const [search, setSearch] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     const { data: a, error: aErr } = await supabase
@@ -133,9 +136,17 @@ const AvaliacaoNotas = () => {
     });
     setRows(map);
     setLoading(false);
-  };
+  }, [id, isStudent, studentId]);
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [id, isStudent, studentId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    const onSynced = () => void load();
+    window.addEventListener(OFFLINE_SYNC_FLUSH_EVENT, onSynced);
+    return () => window.removeEventListener(OFFLINE_SYNC_FLUSH_EVENT, onSynced);
+  }, [load]);
 
   const filteredStudents = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -207,6 +218,73 @@ const AvaliacaoNotas = () => {
         setSaving(false);
         return;
       }
+    }
+
+    const gradesBase = supabaseRestTable("grades");
+
+    if (!isOnline) {
+      try {
+        if (toInsert.length > 0) {
+          enqueuePendingSync({
+            url: gradesBase,
+            method: "POST",
+            body: JSON.stringify(toInsert),
+          });
+        }
+        for (const u of toUpdate) {
+          if (u.id.startsWith("offline-")) continue;
+          enqueuePendingSync({
+            url: `${gradesBase}?id=eq.${encodeURIComponent(u.id)}`,
+            method: "PATCH",
+            body: JSON.stringify({ score: u.score, teacher_comment: u.teacher_comment }),
+          });
+        }
+        const serverDeletes = toDelete.filter((gid) => !gid.startsWith("offline-"));
+        if (serverDeletes.length > 0) {
+          enqueuePendingSync({
+            url: `${gradesBase}?id=in.(${serverDeletes.join(",")})`,
+            method: "DELETE",
+            body: null,
+          });
+        }
+        toast({ title: "Guardado offline — será sincronizado quando voltar a haver rede." });
+        const nextRows = { ...rows };
+        toInsert.forEach((row: { student_id: string; score: number; teacher_comment: string | null }) => {
+          const sid = row.student_id;
+          nextRows[sid] = {
+            ...nextRows[sid],
+            id: `offline-${crypto.randomUUID()}`,
+            score: String(row.score),
+            teacher_comment: row.teacher_comment ?? "",
+            original_score: row.score,
+            original_comment: row.teacher_comment ?? "",
+          };
+        });
+        toUpdate.forEach((u) => {
+          const sid = Object.keys(nextRows).find((k) => nextRows[k].id === u.id);
+          if (!sid) return;
+          nextRows[sid] = {
+            ...nextRows[sid],
+            score: String(u.score),
+            teacher_comment: u.teacher_comment ?? "",
+            original_score: u.score,
+            original_comment: u.teacher_comment ?? "",
+          };
+        });
+        toDelete.forEach((gid) => {
+          const sid = Object.keys(nextRows).find((k) => nextRows[k].id === gid);
+          if (!sid) return;
+          nextRows[sid] = {
+            student_id: sid,
+            score: "",
+            teacher_comment: "",
+          };
+        });
+        setRows(nextRows);
+      } finally {
+        setSaving(false);
+      }
+      return;
     }
 
     try {

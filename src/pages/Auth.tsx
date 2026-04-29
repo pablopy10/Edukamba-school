@@ -1,24 +1,38 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { GraduationCap, Loader2, Mail, Lock, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { isNativeMobileApp } from "@/lib/nativeApp";
+import { cn } from "@/lib/utils";
+import heroImage from "@/assets/landing-hero.jpg";
+
+/** Inputs arredondados estilo app + ícone à esquerda */
+const authInputClass =
+  "h-14 rounded-full border-0 bg-muted/70 pl-14 pr-5 text-base shadow-none transition-all placeholder:text-muted-foreground focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-pastel-blue/35";
+
+const authPasswordInputClass =
+  "h-14 rounded-full border-0 bg-muted/70 pl-14 pr-12 text-base shadow-none transition-all placeholder:text-muted-foreground focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-pastel-blue/35";
+
+const iconWrapClass =
+  "pointer-events-none absolute left-5 top-1/2 z-[1] -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-pastel-blue-foreground";
 
 const Auth = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = useMemo(
-    () => (searchParams.get("tab") === "signup" ? "signup" : "login"),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
-  const [tab, setTab] = useState<"login" | "signup">(initialTab);
+  const isNative = isNativeMobileApp();
+
+  const [tab, setTab] = useState<"login" | "signup">(() => {
+    if (typeof window === "undefined") return "login";
+    if (isNativeMobileApp()) return "login";
+    const p = new URLSearchParams(window.location.search).get("tab");
+    return p === "signup" ? "signup" : "login";
+  });
 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -36,16 +50,32 @@ const Auth = () => {
   }, [navigate]);
 
   useEffect(() => {
+    if (isNative) {
+      setTab("login");
+      if (searchParams.get("tab") === "signup") {
+        setSearchParams({ tab: "login" }, { replace: true });
+      }
+      return;
+    }
     const urlTab = searchParams.get("tab");
     if (urlTab === "signup" || urlTab === "login") {
       setTab(urlTab);
     }
-  }, [searchParams]);
+  }, [searchParams, setSearchParams, isNative]);
 
   const handleTabChange = (value: string) => {
+    if (isNative) return;
     const next = value === "signup" ? "signup" : "login";
     setTab(next);
     setSearchParams({ tab: next }, { replace: true });
+  };
+
+  const forgotPasswordHint = () => {
+    toast({
+      title: "Recuperar password",
+      description:
+        "Contacte o administrador da sua escola ou utilize o email associado à sua conta Edukamba.",
+    });
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -67,7 +97,6 @@ const Auth = () => {
       });
       return;
     }
-    // Block inactive / removed users
     if (signInData.user) {
       const { data: profile } = await supabase
         .from("profiles")
@@ -112,7 +141,6 @@ const Auth = () => {
       return;
     }
     if (data.session) {
-      // Email confirmation disabled — go straight to onboarding
       toast({ title: "Conta criada!", description: "Vamos configurar a sua escola." });
       navigate("/onboarding", { replace: true });
     } else {
@@ -125,174 +153,270 @@ const Auth = () => {
     }
   };
 
+  const BrandMark = ({ interactive }: { interactive: boolean }) =>
+    interactive ? (
+      <Link to="/" className="mb-10 flex flex-col items-center gap-0">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-pastel-blue shadow-[0_10px_24px_hsla(205,90%,55%,0.12)]">
+          <GraduationCap className="h-9 w-9 text-pastel-blue-foreground" strokeWidth={1.75} />
+        </div>
+        <h1 className="text-center text-3xl font-semibold tracking-tight text-foreground">Edukamba</h1>
+        <p className="mt-2 text-center text-sm text-muted-foreground">Educação com propósito, em todo o lado</p>
+      </Link>
+    ) : (
+      <div className="mb-10 flex flex-col items-center gap-0">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-pastel-blue shadow-[0_10px_24px_hsla(205,90%,55%,0.12)]">
+          <GraduationCap className="h-9 w-9 text-pastel-blue-foreground" strokeWidth={1.75} />
+        </div>
+        <h1 className="text-center text-3xl font-semibold tracking-tight text-foreground">Edukamba</h1>
+        <p className="mt-2 text-center text-sm text-muted-foreground">Educação com propósito, em todo o lado</p>
+      </div>
+    );
+
+  const submitBlueClass =
+    "w-full rounded-full bg-pastel-blue py-6 text-base font-semibold text-pastel-blue-foreground shadow-[0_8px_28px_hsla(205,90%,65%,0.38)] transition hover:bg-pastel-blue/88 active:scale-[0.98] disabled:opacity-70";
+
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-background px-4 py-12">
-      <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute -top-32 left-1/2 h-[480px] w-[480px] -translate-x-1/2 rounded-full bg-pastel-blue opacity-50 blur-3xl" />
+    <div className="relative flex min-h-[100dvh] min-h-screen items-center justify-center overflow-hidden bg-background px-6 py-12">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute left-[-10%] top-[-10%] h-[42%] w-[42%] rounded-full bg-pastel-blue/25 blur-3xl" />
+        <div className="absolute bottom-[-10%] right-[-10%] h-[42%] w-[42%] rounded-full bg-pastel-lilac/25 blur-3xl" />
       </div>
 
-      <div className="w-full max-w-md">
-        <Link to="/" className="mb-8 flex items-center justify-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pastel-blue text-pastel-blue-foreground">
-            <GraduationCap className="h-5 w-5" />
+      <div className="relative z-10 mx-auto flex w-full max-w-[1200px] flex-col items-center gap-10 lg:flex-row lg:items-center lg:justify-between lg:gap-16">
+        <div className="w-full max-w-[480px]">
+          <BrandMark interactive={!isNative} />
+
+          <div
+            className={cn(
+              "rounded-[2rem] border border-white/60 bg-card p-8 shadow-[0_24px_60px_rgba(15,23,42,0.06)] backdrop-blur-sm md:p-12",
+              "dark:border-white/10 dark:bg-card/95",
+            )}
+          >
+            <Tabs value={isNative ? "login" : tab} onValueChange={handleTabChange} className="w-full">
+              {!isNative && (
+                <TabsList className="mb-8 grid w-full grid-cols-2 rounded-full bg-muted/50 p-1">
+                  <TabsTrigger value="login" className="rounded-full text-sm font-medium">
+                    Entrar
+                  </TabsTrigger>
+                  <TabsTrigger value="signup" className="rounded-full text-sm font-medium">
+                    Criar conta
+                  </TabsTrigger>
+                </TabsList>
+              )}
+
+              <TabsContent value="login" className="mt-0 outline-none">
+                <div className="mb-10 text-center">
+                  <h2 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">Bem-vindo de volta</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Gerir a sua escola com simplicidade e clareza
+                  </p>
+                </div>
+
+                <form onSubmit={handleLogin} className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="login-email" className="ml-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Email
+                    </Label>
+                    <div className="group relative">
+                      <Mail className={cn(iconWrapClass, "h-5 w-5")} aria-hidden />
+                      <Input
+                        id="login-email"
+                        type="email"
+                        required
+                        autoComplete="email"
+                        placeholder="nome@escola.ao"
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        className={authInputClass}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between px-1">
+                      <Label htmlFor="login-password" className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Password
+                      </Label>
+                      <button
+                        type="button"
+                        onClick={forgotPasswordHint}
+                        className="text-xs font-medium text-pastel-blue-foreground underline-offset-4 hover:underline"
+                      >
+                        Esqueceu-se da password?
+                      </button>
+                    </div>
+                    <div className="group relative">
+                      <Lock className={cn(iconWrapClass, "h-5 w-5")} aria-hidden />
+                      <PasswordInput
+                        id="login-password"
+                        required
+                        autoComplete="current-password"
+                        placeholder="••••••••"
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        className={authPasswordInputClass}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <Button type="submit" disabled={loginLoading} size="lg" className={submitBlueClass}>
+                      {loginLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Entrar"}
+                    </Button>
+                  </div>
+                </form>
+
+                <p className="mt-8 text-center text-xs leading-relaxed text-muted-foreground">
+                  Ao entrar aceita os nossos{" "}
+                  <Link to="/termos" className="font-medium text-pastel-blue-foreground underline-offset-2 hover:underline">
+                    Termos
+                  </Link>{" "}
+                  e a{" "}
+                  <Link to="/privacidade" className="font-medium text-pastel-blue-foreground underline-offset-2 hover:underline">
+                    Política de Privacidade
+                  </Link>
+                  .
+                </p>
+              </TabsContent>
+
+              {!isNative && (
+                <TabsContent value="signup" className="mt-0 outline-none">
+                  <div className="mb-10 text-center">
+                    <h2 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">Criar uma conta</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Comece a gerir a sua escola em poucos minutos
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleSignup} className="space-y-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-name" className="ml-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Nome completo
+                      </Label>
+                      <div className="group relative">
+                        <User className={cn(iconWrapClass, "h-5 w-5")} aria-hidden />
+                        <Input
+                          id="signup-name"
+                          type="text"
+                          required
+                          autoComplete="name"
+                          placeholder="O seu nome"
+                          value={signupName}
+                          onChange={(e) => setSignupName(e.target.value)}
+                          className={authInputClass}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-email" className="ml-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Email
+                      </Label>
+                      <div className="group relative">
+                        <Mail className={cn(iconWrapClass, "h-5 w-5")} aria-hidden />
+                        <Input
+                          id="signup-email"
+                          type="email"
+                          required
+                          autoComplete="email"
+                          placeholder="nome@escola.ao"
+                          value={signupEmail}
+                          onChange={(e) => setSignupEmail(e.target.value)}
+                          className={authInputClass}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-password" className="ml-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Password
+                      </Label>
+                      <div className="group relative">
+                        <Lock className={cn(iconWrapClass, "h-5 w-5")} aria-hidden />
+                        <PasswordInput
+                          id="signup-password"
+                          required
+                          minLength={6}
+                          autoComplete="new-password"
+                          placeholder="Mínimo 6 caracteres"
+                          value={signupPassword}
+                          onChange={(e) => setSignupPassword(e.target.value)}
+                          className={authPasswordInputClass}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-2">
+                      <Button type="submit" disabled={signupLoading} size="lg" className={submitBlueClass}>
+                        {signupLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Criar conta"}
+                      </Button>
+                    </div>
+                  </form>
+
+                  <p className="mt-8 text-center text-xs leading-relaxed text-muted-foreground">
+                    Ao registar aceita os nossos{" "}
+                    <Link to="/termos" className="font-medium text-pastel-blue-foreground underline-offset-2 hover:underline">
+                      Termos
+                    </Link>{" "}
+                    e a{" "}
+                    <Link to="/privacidade" className="font-medium text-pastel-blue-foreground underline-offset-2 hover:underline">
+                      Política de Privacidade
+                    </Link>
+                    .
+                  </p>
+                </TabsContent>
+              )}
+            </Tabs>
           </div>
-          <span className="text-xl font-semibold tracking-tight">Edukamba</span>
-        </Link>
 
-        <Card className="rounded-2xl border-border/60 p-8 shadow-card">
-          <Tabs value={tab} onValueChange={handleTabChange} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 rounded-full">
-              <TabsTrigger value="login" className="rounded-full">
-                Entrar
-              </TabsTrigger>
-              <TabsTrigger value="signup" className="rounded-full">
-                Criar conta
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="login" className="mt-6 space-y-6">
-              <div className="space-y-1 text-center">
-                <h1 className="text-2xl font-bold tracking-tight">Bem-vindo de volta</h1>
-                <p className="text-sm text-muted-foreground">
-                  Aceda ao painel da sua escola
-                </p>
-              </div>
-
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="login-email">Email</Label>
-                  <div className="relative">
-                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      id="login-email"
-                      type="email"
-                      required
-                      autoComplete="email"
-                      placeholder="nome@escola.ao"
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="login-password">Password</Label>
-                  <div className="relative">
-                    <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <PasswordInput
-                      id="login-password"
-                      required
-                      autoComplete="current-password"
-                      placeholder="••••••••"
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={loginLoading}
-                  className="w-full rounded-full bg-pastel-blue-foreground text-primary-foreground hover:bg-pastel-blue-foreground/90"
-                  size="lg"
+          {!isNative && (
+            <footer className="mt-8 space-y-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                Não tem conta?{" "}
+                <button
+                  type="button"
+                  onClick={() => handleTabChange("signup")}
+                  className="font-semibold text-pastel-blue-foreground underline decoration-2 underline-offset-4 hover:opacity-90"
                 >
-                  {loginLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Entrar"}
-                </Button>
-              </form>
-            </TabsContent>
-
-            <TabsContent value="signup" className="mt-6 space-y-6">
-              <div className="space-y-1 text-center">
-                <h1 className="text-2xl font-bold tracking-tight">Criar uma conta</h1>
-                <p className="text-sm text-muted-foreground">
-                  Comece a gerir a sua escola em poucos minutos
-                </p>
-              </div>
-
-              <form onSubmit={handleSignup} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-name">Nome completo</Label>
-                  <div className="relative">
-                    <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      id="signup-name"
-                      type="text"
-                      required
-                      autoComplete="name"
-                      placeholder="O seu nome"
-                      value={signupName}
-                      onChange={(e) => setSignupName(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
-                  <div className="relative">
-                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      id="signup-email"
-                      type="email"
-                      required
-                      autoComplete="email"
-                      placeholder="nome@escola.ao"
-                      value={signupEmail}
-                      onChange={(e) => setSignupEmail(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">Password</Label>
-                  <div className="relative">
-                    <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <PasswordInput
-                      id="signup-password"
-                      required
-                      minLength={6}
-                      autoComplete="new-password"
-                      placeholder="Mínimo 6 caracteres"
-                      value={signupPassword}
-                      onChange={(e) => setSignupPassword(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={signupLoading}
-                  className="w-full rounded-full bg-pastel-blue-foreground text-primary-foreground hover:bg-pastel-blue-foreground/90"
-                  size="lg"
+                  Registe a sua escola
+                </button>
+              </p>
+              <div className="flex justify-center gap-8">
+                <Link
+                  to="/privacidade"
+                  className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  {signupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar conta"}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+                  Privacidade
+                </Link>
+                <Link to="/termos" className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">
+                  Termos de utilização
+                </Link>
+              </div>
+              <p>
+                <Link to="/" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                  ← Voltar à página inicial
+                </Link>
+              </p>
+            </footer>
+          )}
+        </div>
 
-          <p className="mt-6 text-center text-xs text-muted-foreground">
-            Ao entrar concorda com os nossos{" "}
-            <Link to="/termos" className="underline hover:text-foreground">
-              Termos
-            </Link>{" "}
-            e{" "}
-            <Link to="/privacidade" className="underline hover:text-foreground">
-              Política de Privacidade
-            </Link>
-            .
-          </p>
-        </Card>
-
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          <Link to="/" className="hover:text-foreground">
-            ← Voltar à página inicial
-          </Link>
-        </p>
+        {!isNative && (
+          <aside className="relative hidden h-[min(560px,70vh)] w-full max-w-[400px] shrink-0 rotate-3 overflow-hidden rounded-[3rem] shadow-2xl lg:block">
+            <img
+              src={heroImage}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-pastel-blue/75 via-pastel-blue/15 to-transparent" />
+            <div className="absolute bottom-8 left-8 right-8 text-white">
+              <h3 className="mb-2 text-xl font-semibold tracking-tight drop-shadow-sm">Feito para educadores</h3>
+              <p className="text-sm leading-relaxed opacity-[0.95] drop-shadow-sm">
+                Um painel administrativo claro e intuitivo, pensado para o dia a dia na escola.
+              </p>
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   );

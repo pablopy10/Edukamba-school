@@ -848,6 +848,9 @@ export type Database = {
       }
       erp_export_configs: {
         Row: {
+          article_code_extracurricular: string | null
+          article_code_matricula: string | null
+          article_code_transporte: string | null
           created_at: string
           default_article_code_propina: string | null
           header_amount_paid: string | null
@@ -862,6 +865,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          article_code_extracurricular?: string | null
+          article_code_matricula?: string | null
+          article_code_transporte?: string | null
           created_at?: string
           default_article_code_propina?: string | null
           header_amount_paid?: string | null
@@ -876,6 +882,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          article_code_extracurricular?: string | null
+          article_code_matricula?: string | null
+          article_code_transporte?: string | null
           created_at?: string
           default_article_code_propina?: string | null
           header_amount_paid?: string | null

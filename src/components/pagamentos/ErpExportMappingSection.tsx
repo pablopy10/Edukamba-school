@@ -7,11 +7,22 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import type { ErpConfigFields } from "@/lib/erpExport";
-import { ERP_HEADER_DEFAULTS } from "@/lib/erpExport";
+import { ERP_HEADER_DEFAULTS, upsertErpExportConfigMerged } from "@/lib/erpExport";
 
 type Props = { schoolId: string | null };
 
-const emptyForm = (): Record<keyof ErpConfigFields, string> => ({
+type HeaderFormKey = keyof Pick<
+  ErpConfigFields,
+  | "header_student_id"
+  | "header_student_name"
+  | "header_tax_id"
+  | "header_amount_paid"
+  | "header_payment_date"
+  | "header_article_code"
+  | "header_payment_method"
+>;
+
+const emptyForm = (): Record<HeaderFormKey, string> => ({
   header_student_id: "",
   header_student_name: "",
   header_tax_id: "",
@@ -19,7 +30,6 @@ const emptyForm = (): Record<keyof ErpConfigFields, string> => ({
   header_payment_date: "",
   header_article_code: "",
   header_payment_method: "",
-  default_article_code_propina: "PROPINA",
 });
 
 export const ErpExportMappingSection = ({ schoolId }: Props) => {
@@ -37,7 +47,9 @@ export const ErpExportMappingSection = ({ schoolId }: Props) => {
       setLoading(true);
       const { data, error } = await supabase
         .from("erp_export_configs")
-        .select("*")
+        .select(
+          "header_student_id, header_student_name, header_tax_id, header_amount_paid, header_payment_date, header_article_code, header_payment_method",
+        )
         .eq("school_id", schoolId)
         .maybeSingle();
       if (cancelled) return;
@@ -55,7 +67,6 @@ export const ErpExportMappingSection = ({ schoolId }: Props) => {
           header_payment_date: data.header_payment_date ?? "",
           header_article_code: data.header_article_code ?? "",
           header_payment_method: data.header_payment_method ?? "",
-          default_article_code_propina: data.default_article_code_propina ?? "PROPINA",
         });
       } else {
         setForm(emptyForm());
@@ -70,8 +81,7 @@ export const ErpExportMappingSection = ({ schoolId }: Props) => {
   const save = async () => {
     if (!schoolId) return;
     setSaving(true);
-    const payload = {
-      school_id: schoolId,
+    const { error } = await upsertErpExportConfigMerged(supabase, schoolId, {
       header_student_id: form.header_student_id.trim() || null,
       header_student_name: form.header_student_name.trim() || null,
       header_tax_id: form.header_tax_id.trim() || null,
@@ -79,9 +89,7 @@ export const ErpExportMappingSection = ({ schoolId }: Props) => {
       header_payment_date: form.header_payment_date.trim() || null,
       header_article_code: form.header_article_code.trim() || null,
       header_payment_method: form.header_payment_method.trim() || null,
-      default_article_code_propina: form.default_article_code_propina.trim() || null,
-    };
-    const { error } = await supabase.from("erp_export_configs").upsert(payload, { onConflict: "school_id" });
+    });
     setSaving(false);
     if (error) {
       toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
@@ -95,9 +103,10 @@ export const ErpExportMappingSection = ({ schoolId }: Props) => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Exportação para ERP / faturação</CardTitle>
+        <CardTitle className="text-lg">Colunas do Excel (cabeçalhos)</CardTitle>
         <CardDescription>
-          Defina o nome das colunas que o seu software (ex.: Primavera) espera em CSV/Excel. Campos vazios usam os nomes por defeito indicados abaixo.
+          Defina o nome das colunas que o seu software (ex.: Primavera) espera. Campos vazios usam os nomes por defeito
+          indicados abaixo. Estes cabeçalhos são aplicados ao ficheiro Excel gerado em baixo e na página Finanças.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -131,24 +140,12 @@ export const ErpExportMappingSection = ({ schoolId }: Props) => {
                 </div>
               ))}
             </div>
-            <div className="grid max-w-md gap-2">
-              <Label htmlFor="default_article_code_propina">Código de artigo para propina (valor nas linhas)</Label>
-              <Input
-                id="default_article_code_propina"
-                placeholder="PROPINA"
-                value={form.default_article_code_propina}
-                onChange={(e) => setForm((f) => ({ ...f, default_article_code_propina: e.target.value }))}
-              />
-              <p className="text-xs text-muted-foreground">
-                Para extracurricular, transporte e matrículas são usados códigos internos distintos (ex.: EXTRA_*, TRANSPORTE, MATRICULA_*).
-              </p>
-            </div>
             <p className="text-xs text-muted-foreground">
-              O NIF do aluno pode ser preenchido no perfil do aluno (campo fiscal) quando disponível.
+              Sem NIF no registo do aluno, a exportação usa o valor placeholder definido para o ERP (ex.: 999999999).
             </p>
             <Button type="button" onClick={save} disabled={saving} className="gap-2">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Guardar mapeamento
+              Guardar cabeçalhos
             </Button>
           </>
         )}
