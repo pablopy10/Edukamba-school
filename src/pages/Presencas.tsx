@@ -195,6 +195,8 @@ const Presencas = () => {
 
   const { isOnline, enqueuePendingSync } = useOfflineSync();
 
+  const canEdit = (userRole === "ADMIN" || userRole === "TEACHER") && !isParent && !isStudent;
+
   // Load profile (school + role)
   useEffect(() => {
     if (!user) return;
