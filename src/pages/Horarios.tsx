@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Plus, Settings2, User, MapPin, Pencil, Trash2, Sun, Sunset, Moon, Loader2, AlertCircle } from "lucide-react";
-import { cn, sortByName } from "@/lib/utils";
+import { Plus, Settings2, User, MapPin, Pencil, Trash2, Sun, Sunset, Moon, Loader2, AlertCircle, ChevronLeft, ChevronRight, Clock } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -19,6 +19,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { isNativeMobileApp } from "@/lib/nativeApp";
 
 type Option = { id: string; name: string; subjectId?: string | null };
 type TimeSlotRow = {
@@ -51,6 +52,36 @@ const DAYS = [
   { value: 5, label: "Sexta" },
 ] as const;
 
+const MONTHS_PT = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+
+const WEEKDAY_SHORT_PT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+/** Segunda a domingo da semana que contém `d`. */
+const getWeekDaysMonSun = (d: Date) => {
+  const copy = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const day = copy.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  copy.setDate(copy.getDate() + diff);
+  return Array.from({ length: 7 }, (_, i) => {
+    const x = new Date(copy.getFullYear(), copy.getMonth(), copy.getDate());
+    x.setDate(copy.getDate() + i);
+    return x;
+  });
+};
+
+const sameCalendarDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+/** Seg–Sex → 1–5 (mesmo esquema que `day_of_week` nas aulas). */
+const calendarToSchoolDow = (d: Date): number | null => {
+  const day = d.getDay();
+  if (day >= 1 && day <= 5) return day;
+  return null;
+};
+
 const SHIFT_META = {
   MORNING: { label: "Manhã", icon: Sun, classes: "bg-pastel-yellow text-pastel-yellow-foreground" },
   AFTERNOON: { label: "Tarde", icon: Sunset, classes: "bg-pastel-pink text-pastel-pink-foreground" },
@@ -69,6 +100,7 @@ const trim5 = (t: string) => t?.slice(0, 5) ?? "";
 const ALL = "__ALL__";
 
 const Horarios = () => {
+  const native = isNativeMobileApp();
   const { user } = useAuth();
   const { isParent, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const { role } = useUserRole();
@@ -97,6 +129,12 @@ const Horarios = () => {
   const [subjectFilter, setSubjectFilter] = useState<string>(ALL);
   const [teacherFilter, setTeacherFilter] = useState<string>(ALL);
   const [shiftView, setShiftView] = useState<"MORNING" | "AFTERNOON" | "EVENING">("MORNING");
+
+  const [nativeSelectedDate, setNativeSelectedDate] = useState(() => {
+    const t = new Date();
+    t.setHours(0, 0, 0, 0);
+    return t;
+  });
 
   const [loading, setLoading] = useState(true);
   const [openForm, setOpenForm] = useState(false);
@@ -237,6 +275,50 @@ const Horarios = () => {
     [timeSlots, shiftView],
   );
 
+  const nativeWeekDays = useMemo(() => getWeekDaysMonSun(nativeSelectedDate), [nativeSelectedDate]);
+
+  const pickNativeDay = useCallback((day: Date) => {
+    const normalized = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+    normalized.setHours(0, 0, 0, 0);
+    setNativeSelectedDate(normalized);
+  }, []);
+
+  const shiftNativeWeek = useCallback((deltaWeeks: number) => {
+    setNativeSelectedDate((prev) => {
+      const base = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate());
+      base.setDate(base.getDate() + deltaWeeks * 7);
+      base.setHours(0, 0, 0, 0);
+      return base;
+    });
+  }, []);
+
+  const goNativeToday = useCallback(() => {
+    const t = new Date();
+    t.setHours(0, 0, 0, 0);
+    setNativeSelectedDate(t);
+  }, []);
+
+  type NativeTimelineRow =
+    | { kind: "lesson"; schedule: ScheduleRow }
+    | { kind: "break"; slot: TimeSlotRow };
+
+  const nativeTimeline = useMemo((): NativeTimelineRow[] => {
+    const dow = calendarToSchoolDow(nativeSelectedDate);
+    if (dow === null) return [];
+    const lessons: NativeTimelineRow[] = filteredSchedules
+      .filter((row) => row.day_of_week === dow)
+      .sort((a, b) => a.start_time.localeCompare(b.start_time))
+      .map((schedule) => ({ kind: "lesson", schedule }));
+    const breaks: NativeTimelineRow[] = slotsForShift
+      .filter((slot) => slot.is_break)
+      .map((slot) => ({ kind: "break", slot }));
+    return [...lessons, ...breaks].sort((a, b) => {
+      const ta = a.kind === "lesson" ? a.schedule.start_time : a.slot.start_time;
+      const tb = b.kind === "lesson" ? b.schedule.start_time : b.slot.start_time;
+      return ta.localeCompare(tb);
+    });
+  }, [nativeSelectedDate, filteredSchedules, slotsForShift]);
+
   // Detect cross-classroom conflicts (teacher or room) within filtered set
   const conflicts = useMemo(() => {
     const ids = new Set<string>();
@@ -354,10 +436,301 @@ const Horarios = () => {
 
   const ShiftIcon = SHIFT_META[shiftView].icon;
 
+  const nativeReadOnly = isParent || isStudent || !isAdmin;
+
   if (parentLoading) return <PageLoadingSkeleton />;
+
+  const showTurmaPickerNative = !isParent && !isStudent && classrooms.length > 0;
 
   return (
     <DashboardLayout>
+      <>
+        {native ? (
+          <div className="relative flex flex-col gap-5 pb-28">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Horário
+                </span>
+                <h2 className="text-xl font-bold tracking-tight text-foreground">
+                  {MONTHS_PT[nativeSelectedDate.getMonth()]} {nativeSelectedDate.getFullYear()}
+                </h2>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                {isAdmin && !isParent && !isStudent && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10 shrink-0 rounded-full shadow-card"
+                    aria-label="Blocos da escola"
+                    onClick={() => setOpenSlots(true)}
+                  >
+                    <Settings2 className="h-4 w-4" />
+                  </Button>
+                )}
+                <Button type="button" variant="ghost" size="sm" className="shrink-0 text-primary" onClick={goNativeToday}>
+                  Hoje
+                </Button>
+                {showTurmaPickerNative ? (
+                  <Select value={classroomFilter} onValueChange={setClassroomFilter}>
+                    <SelectTrigger className="h-10 w-[min(42vw,11rem)] shrink-0 rounded-full bg-card shadow-card">
+                      <SelectValue placeholder="Turma" />
+                    </SelectTrigger>
+                    <SelectContent align="end">
+                      {classrooms.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="flex items-stretch gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-auto min-h-[5rem] w-10 shrink-0 rounded-full border-border/80 shadow-card"
+                aria-label="Semana anterior"
+                onClick={() => shiftNativeWeek(-1)}
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+              <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto py-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {nativeWeekDays.map((d) => {
+                  const selected = sameCalendarDay(d, nativeSelectedDate);
+                  const isWk = d.getDay() === 0 || d.getDay() === 6;
+                  return (
+                    <button
+                      key={d.toISOString()}
+                      type="button"
+                      onClick={() => pickNativeDay(d)}
+                      className={cn(
+                        "flex h-20 w-14 shrink-0 flex-col items-center justify-center rounded-full transition-all active:scale-95",
+                        selected
+                          ? "bg-pastel-lilac text-pastel-lilac-foreground shadow-card"
+                          : "bg-muted text-muted-foreground",
+                        isWk && !selected && "opacity-65",
+                      )}
+                    >
+                      <span className="text-[10px] font-semibold uppercase">{WEEKDAY_SHORT_PT[d.getDay()]}</span>
+                      <span className="text-lg font-semibold tabular-nums">{d.getDate()}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-auto min-h-[5rem] w-10 shrink-0 rounded-full border-border/80 shadow-card"
+                aria-label="Semana seguinte"
+                onClick={() => shiftNativeWeek(1)}
+              >
+                <ChevronRight className="h-5 w-5" />
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {(["MORNING", "AFTERNOON", "EVENING"] as const).map((sh) => {
+                const Meta = SHIFT_META[sh];
+                const Icon = Meta.icon;
+                return (
+                  <button
+                    key={sh}
+                    type="button"
+                    disabled={isStudent}
+                    onClick={() => setShiftView(sh)}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold transition-all active:scale-[0.98]",
+                      shiftView === sh ? cn(Meta.classes, "shadow-card ring-2 ring-primary/10") : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {Meta.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {!isParent && isAdmin && !isStudent && (
+              <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="min-w-[9.5rem] flex-1">
+                  <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+                    <SelectTrigger className="rounded-full bg-card shadow-card">
+                      <SelectValue placeholder="Disciplina" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Todas as disciplinas</SelectItem>
+                      {subjects.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="min-w-[9.5rem] flex-1">
+                  <Select value={teacherFilter} onValueChange={setTeacherFilter}>
+                    <SelectTrigger className="rounded-full bg-card shadow-card">
+                      <SelectValue placeholder="Professor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Todos os professores</SelectItem>
+                      {teachers.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {!isParent && conflicts.size > 0 && (
+              <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                <span>{conflicts.size} conflito(s) nas aulas desta vista.</span>
+              </div>
+            )}
+
+            <div className="space-y-0 pt-2">
+              {loading ? (
+                <div className="flex justify-center py-16">
+                  <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
+                </div>
+              ) : slotsForShift.length === 0 ? (
+                <div className="rounded-2xl bg-card px-4 py-12 text-center text-sm text-muted-foreground shadow-card">
+                  Nenhum bloco horário configurado para este turno.
+                  {isAdmin && !isStudent ? (
+                    <Button variant="link" className="block w-full" onClick={() => setOpenSlots(true)}>
+                      Configurar agora
+                    </Button>
+                  ) : null}
+                </div>
+              ) : calendarToSchoolDow(nativeSelectedDate) === null ? (
+                <div className="rounded-2xl bg-muted/40 px-4 py-10 text-center text-sm text-muted-foreground">
+                  Fim de semana — não há horário lectivo neste modelo.
+                </div>
+              ) : nativeTimeline.length === 0 ? (
+                <div className="rounded-2xl bg-card px-4 py-10 text-center text-sm text-muted-foreground shadow-card">
+                  Sem aulas nem intervalos registados neste dia ({SHIFT_META[shiftView].label.toLowerCase()}).
+                </div>
+              ) : (
+                nativeTimeline.map((row) => {
+                  if (row.kind === "break") {
+                    const slot = row.slot;
+                    return (
+                      <div key={`break-${slot.id}`} className="flex gap-3">
+                        <div className="w-11 shrink-0 pt-2 text-right">
+                          <span className="text-[11px] font-semibold tabular-nums text-muted-foreground">{slot.start_time}</span>
+                        </div>
+                        <div className="min-w-0 flex-1 pb-5">
+                          <div className="rounded-xl border border-border/70 bg-card p-4 shadow-card">
+                            <div className="flex items-center gap-3">
+                              <div className="rounded-full bg-muted p-2">
+                                <Moon className="h-4 w-4 text-muted-foreground" aria-hidden />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-semibold text-foreground">{slot.label ?? "Intervalo"}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {slot.start_time} – {slot.end_time}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  const s = row.schedule;
+                  const subjectName = s.subject_id ? subjectMap.get(s.subject_id) ?? "—" : "—";
+                  const teacherName = s.teacher_id ? teacherMap.get(s.teacher_id) ?? "—" : "—";
+                  const colorClass = s.subject_id ? subjectColor.get(s.subject_id) ?? PASTEL_PALETTE[0] : PASTEL_PALETTE[0];
+                  const conflict = conflicts.has(s.id);
+                  return (
+                    <div key={s.id} className="flex gap-3">
+                      <div className="w-11 shrink-0 pt-2 text-right">
+                        <span className="text-[11px] font-semibold tabular-nums text-muted-foreground">{s.start_time}</span>
+                      </div>
+                      <div className="min-w-0 flex-1 pb-5">
+                        <div
+                          className={cn(
+                            "rounded-xl p-4 shadow-card transition-transform active:scale-[0.99]",
+                            colorClass,
+                            conflict && "ring-2 ring-destructive ring-offset-2 ring-offset-background",
+                          )}
+                        >
+                          <div className="mb-2 flex items-start justify-between gap-2">
+                            <h3 className="text-base font-semibold leading-tight text-inherit">{subjectName}</h3>
+                            {!nativeReadOnly && (
+                              <div className="flex shrink-0 gap-1">
+                                <button
+                                  type="button"
+                                  className="rounded-lg bg-background/35 p-1.5 hover:bg-background/55"
+                                  aria-label="Editar"
+                                  onClick={() => handleEdit(s)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="rounded-lg bg-background/35 p-1.5 hover:bg-background/55"
+                                  aria-label="Remover"
+                                  onClick={() => setDeletingId(s.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs opacity-90">
+                            <span className="inline-flex items-center gap-1">
+                              <Clock className="h-3.5 w-3.5 shrink-0 opacity-80" />
+                              {s.start_time} – {s.end_time}
+                            </span>
+                            {s.room ? (
+                              <span className="inline-flex items-center gap-1">
+                                <MapPin className="h-3.5 w-3.5 shrink-0 opacity-80" />
+                                {s.room}
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-2 inline-flex items-center gap-1 text-[11px] opacity-85">
+                            <User className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{teacherName}</span>
+                          </p>
+                          {conflict ? (
+                            <p className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-destructive">
+                              <AlertCircle className="h-3 w-3" /> Conflito
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {isAdmin && !isParent && !isStudent ? (
+              <Button
+                type="button"
+                size="icon"
+                className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+                aria-label="Nova aula"
+                onClick={handleNew}
+              >
+                <Plus className="h-6 w-6" />
+              </Button>
+            ) : null}
+          </div>
+        ) : (
       <div className="flex flex-col gap-6">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -492,6 +865,7 @@ const Horarios = () => {
           )}
         </div>
       </div>
+        )}
 
       <ScheduleFormDialog
         open={openForm}
@@ -525,6 +899,7 @@ const Horarios = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </>
     </DashboardLayout>
   );
 };
