@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
-import { showPageKpiCards } from "@/lib/nativeApp";
+import { isNativeMobileApp, showPageKpiCards } from "@/lib/nativeApp";
 
 type SubjectOpt = { id: string; name: string };
 
@@ -25,6 +25,7 @@ const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 
 const Professores = () => {
+  const native = isNativeMobileApp();
   const navigate = useNavigate();
   const [teachers, setTeachers] = useState<TeacherRow[]>([]);
   const [subjects, setSubjects] = useState<SubjectOpt[]>([]);
@@ -112,24 +113,102 @@ const Professores = () => {
     inactive: 0,
   }), [teachers]);
 
+  const renderTeacherCard = (t: TeacherRow) => {
+    const isSelected = selected.includes(t.id);
+    const name = t.profiles?.full_name ?? "—";
+    const initials = initialsOf(name) || "??";
+    const color = (t.avatar_color as string) || "blue";
+    return (
+      <div
+        key={t.id}
+        className={cn(
+          "rounded-2xl border border-border bg-background p-4 shadow-soft transition-colors",
+          isSelected ? "border-pastel-blue/60 bg-pastel-blue/10" : "hover:bg-muted/30",
+        )}
+      >
+        <div className="flex gap-3">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => toggle(t.id)}
+            className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-border accent-pastel-blue-foreground"
+            aria-label={`Seleccionar ${name}`}
+          />
+          <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold", avatarStyles[color] ?? avatarStyles.blue)}>
+            {initials}
+          </div>
+          <div className="min-w-0 flex-1">
+            <Link to={`/professores/${t.id}`} className="font-semibold text-foreground transition-colors hover:text-pastel-blue-foreground hover:underline">
+              {name}
+            </Link>
+            <p className="mt-0.5 text-sm text-muted-foreground">{t.profiles?.phone ?? "—"}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
+                ID: {t.employee_id ?? "—"}
+              </span>
+              <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", "bg-pastel-blue/30 text-pastel-blue-foreground")}>
+                {subjectName(t.subject_id)}
+              </span>
+              <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
+                Admissão: {t.hire_date ? new Date(t.hire_date).toLocaleDateString("pt-PT") : "—"}
+              </span>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => openChat(t.profile_id)}
+              title="Conversar"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/40 hover:text-pastel-blue-foreground"
+            >
+              <Mail className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(t);
+                setFormOpen(true);
+              }}
+              title="Editar"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
+            >
+              <Pencil className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeleting(t)}
+              title="Eliminar"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
+            >
+              <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
         {/* Page header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className={cn("flex flex-col gap-4", native ? "" : "sm:flex-row sm:items-center sm:justify-between")}>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Professores</h1>
             <p className="text-sm text-muted-foreground">Faça a gestão e acompanhe todos os professores da escola.</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative">
+          <div className={cn("flex flex-wrap items-center gap-3", native && "w-full")}>
+            <div className={cn("relative", native ? "min-w-0 flex-1" : "")}>
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 type="text"
                 placeholder="Pesquisar por nome..."
-                className="h-11 w-72 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
+                className={cn(
+                  "h-11 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20",
+                  native ? "w-full min-w-0" : "w-72",
+                )}
               />
             </div>
             <button
@@ -143,7 +222,7 @@ const Professores = () => {
 
         {/* Filters row */}
         <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card">
-          <div className="min-w-[180px] flex-1">
+          <div className={cn("min-w-[180px] flex-1", native && "min-w-0 w-full")}>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Disciplina</label>
             <Select value={filterSubject} onValueChange={setFilterSubject}>
               <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
@@ -204,6 +283,30 @@ const Professores = () => {
             )}
           </div>
 
+          {native ? (
+            <div className="flex flex-col gap-3 p-4">
+              {filtered.length > 0 && (
+                <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="h-4 w-4 cursor-pointer rounded border-border accent-pastel-blue-foreground"
+                  />
+                  Seleccionar todos ({filtered.length})
+                </label>
+              )}
+              {loading && (
+                <div className="flex justify-center py-12 text-muted-foreground">
+                  <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
+                </div>
+              )}
+              {!loading && filtered.length === 0 && (
+                <p className="py-10 text-center text-sm text-muted-foreground">Nenhum professor encontrado.</p>
+              )}
+              {!loading && filtered.map(renderTeacherCard)}
+            </div>
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -298,6 +401,7 @@ const Professores = () => {
               </tbody>
             </table>
           </div>
+          )}
 
           {/* Pagination */}
           <div className="flex flex-col items-center justify-between gap-3 border-t border-border p-5 sm:flex-row">

@@ -18,7 +18,7 @@ import { MaterialRequestFormDialog, type RequestRow } from "@/components/materia
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
-import { showPageKpiCards } from "@/lib/nativeApp";
+import { isNativeMobileApp, showPageKpiCards } from "@/lib/nativeApp";
 
 type Category = "papelaria" | "laboratorio" | "artes" | "desporto" | "tecnologia";
 
@@ -44,6 +44,7 @@ type DeliveryFilter = "all" | "pendente" | "completo";
 type Tab = "stock" | "pedidos";
 
 const Material = () => {
+  const native = isNativeMobileApp();
   const { user } = useAuth();
   const { isParent, childIds, classroomIds, selectedChild } = useParentChildren();
   const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
@@ -399,6 +400,7 @@ const Material = () => {
           <div className="rounded-2xl bg-card p-10 text-center text-muted-foreground shadow-card">A carregar...</div>
         ) : tab === "stock" ? (
           <StockTable
+            native={native}
             items={filteredStock}
             isAdmin={isAdmin}
             onEdit={(m) => { setEditingMaterial(m); setShowMaterialDialog(true); }}
@@ -406,6 +408,7 @@ const Material = () => {
           />
         ) : (
           <RequestsTable
+            native={native}
             requests={filteredRequests}
             classrooms={classrooms}
             students={students}
@@ -453,12 +456,13 @@ const Material = () => {
 
 /* ====================== Stock Table ====================== */
 const StockTable = ({
-  items, isAdmin, onEdit, onRemove,
+  items, isAdmin, onEdit, onRemove, native = false,
 }: {
   items: MaterialRow[];
   isAdmin: boolean;
   onEdit: (m: MaterialRow) => void;
   onRemove: (id: string) => void;
+  native?: boolean;
 }) => {
   return (
     <div className="overflow-hidden rounded-2xl bg-card shadow-card">
@@ -468,6 +472,49 @@ const StockTable = ({
       </div>
       {items.length === 0 ? (
         <div className="p-10 text-center text-sm text-muted-foreground">Sem materiais.</div>
+      ) : native ? (
+        <div className="flex flex-col gap-3 p-4">
+          {items.map((s) => {
+            const m = meta(s.category);
+            const Icon = m.icon;
+            const low = s.quantity < s.min_quantity;
+            return (
+              <div key={s.id} className="rounded-2xl border border-border bg-background p-4 shadow-soft transition-colors hover:bg-muted/30">
+                <div className="flex gap-3">
+                  <span className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-full", m.color)}>
+                    <Icon className="h-5 w-5" strokeWidth={2} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-foreground">{s.name}</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", m.color)}>{m.label}</span>
+                      <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-xs font-medium text-foreground">SKU: {s.sku ?? "—"}</span>
+                      <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
+                        Qtd: {s.quantity} {s.unit} · mín. {s.min_quantity}
+                      </span>
+                      <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">Local: {s.location ?? "—"}</span>
+                      {low ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-pastel-pink px-2.5 py-1 text-xs font-semibold text-pastel-pink-foreground">
+                          <AlertTriangle className="h-3 w-3" strokeWidth={2} /> Stock baixo
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  {isAdmin ? (
+                    <div className="flex shrink-0 flex-col gap-1">
+                      <button type="button" onClick={() => onEdit(s)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
+                        <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                      </button>
+                      <button type="button" onClick={() => onRemove(s.id)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title="Remover">
+                        <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px]">
@@ -542,7 +589,7 @@ const StockTable = ({
 
 /* ====================== Requests Table ====================== */
 const RequestsTable = ({
-  requests, classrooms, students, isAdmin, currentUserId, canMarkDeliveries, progressFor, onEdit, onRemove, onMarkDeliveries,
+  requests, classrooms, students, isAdmin, currentUserId, canMarkDeliveries, progressFor, onEdit, onRemove, onMarkDeliveries, native = false,
 }: {
   requests: RequestRow[];
   classrooms: { id: string; name: string }[];
@@ -554,6 +601,7 @@ const RequestsTable = ({
   onEdit: (r: RequestRow) => void;
   onRemove: (id: string) => void;
   onMarkDeliveries: (r: RequestRow) => void;
+  native?: boolean;
 }) => {
   const classroomName = (id: string | null) => classrooms.find((c) => c.id === id)?.name ?? "—";
   const studentName = (id: string | null) => students.find((s) => s.id === id)?.full_name ?? null;
@@ -566,6 +614,82 @@ const RequestsTable = ({
       </div>
       {requests.length === 0 ? (
         <div className="p-10 text-center text-sm text-muted-foreground">Sem pedidos.</div>
+      ) : native ? (
+        <div className="flex flex-col gap-3 p-4">
+          {requests.map((r) => {
+            const m = meta(r.category);
+            const Icon = m.icon;
+            const sName = studentName(r.student_id);
+            const canEdit = isAdmin || r.requester_id === currentUserId;
+            const { brought, total } = progressFor(r);
+            const complete = total > 0 && brought === total;
+            return (
+              <div key={r.id} className="rounded-2xl border border-border bg-background p-4 shadow-soft transition-colors hover:bg-muted/30">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex min-w-0 flex-1 gap-3">
+                    <span className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-full", m.color)}>
+                      <Icon className="h-5 w-5" strokeWidth={2} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-foreground">{r.item_name}</p>
+                      {r.description ? <p className="mt-1 text-sm text-muted-foreground line-clamp-3">{r.description}</p> : null}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", m.color)}>{m.label}</span>
+                        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">Qtd: {r.quantity}</span>
+                        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
+                          Professor: {r.teacher_name ?? "—"}
+                        </span>
+                        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
+                          {sName ? `Aluno: ${sName}` : `Turma: ${classroomName(r.classroom_id)}`}
+                        </span>
+                        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
+                          Data:{" "}
+                          {r.needed_date
+                            ? new Date(r.needed_date).toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric" })
+                            : "—"}
+                        </span>
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
+                            complete
+                              ? "bg-pastel-green text-pastel-green-foreground"
+                              : brought > 0
+                                ? "bg-pastel-yellow text-pastel-yellow-foreground"
+                                : "bg-muted text-foreground",
+                          )}
+                        >
+                          {complete && <Check className="h-3 w-3" strokeWidth={2.25} />}
+                          Entregas: {brought} / {total}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:flex-col sm:items-end">
+                    {canMarkDeliveries && total > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => onMarkDeliveries(r)}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-full bg-pastel-blue px-3 text-xs font-semibold text-pastel-blue-foreground transition-colors hover:opacity-90"
+                      >
+                        <ListChecks className="h-3.5 w-3.5" strokeWidth={2} /> Marcar
+                      </button>
+                    )}
+                    {canEdit ? (
+                      <>
+                        <button type="button" onClick={() => onEdit(r)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
+                          <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                        </button>
+                        <button type="button" onClick={() => onRemove(r.id)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title="Remover">
+                          <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1000px]">

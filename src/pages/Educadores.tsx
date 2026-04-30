@@ -11,7 +11,7 @@ import { GuardianFormDialog, GuardianRow } from "@/components/educadores/Guardia
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
-import { showPageKpiCards } from "@/lib/nativeApp";
+import { isNativeMobileApp, showPageKpiCards } from "@/lib/nativeApp";
 
 type ClassroomOpt = { id: string; name: string };
 type StudentOpt = { id: string; full_name: string; classroom_id: string | null; parent_id: string | null };
@@ -30,6 +30,7 @@ const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 
 const Educadores = () => {
+  const native = isNativeMobileApp();
   const navigate = useNavigate();
   const { selectedYearId } = useAcademicYear();
   const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
@@ -160,23 +161,117 @@ const Educadores = () => {
     classes: new Set(guardians.flatMap((g) => g.classroom_ids)).size,
   }), [guardians]);
 
+  const studentLine = (g: GuardianRow) => {
+    if (g.student_names.length === 0) return "—";
+    if (g.student_names.length === 1) return g.student_names[0];
+    return `${g.student_names[0]} +${g.student_names.length - 1}`;
+  };
+
+  const renderGuardianCard = (g: GuardianRow) => {
+    const isSelected = selected.includes(g.profile_id);
+    const initials = initialsOf(g.full_name) || "??";
+    const color = colorFor(g.profile_id);
+    return (
+      <div
+        key={g.profile_id}
+        className={cn(
+          "rounded-2xl border border-border bg-background p-4 shadow-soft transition-colors",
+          isSelected ? "border-pastel-blue/60 bg-pastel-blue/10" : "hover:bg-muted/30",
+        )}
+      >
+        <div className="flex gap-3">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => toggle(g.profile_id)}
+            className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-border accent-pastel-blue-foreground"
+            aria-label={`Seleccionar ${g.full_name}`}
+          />
+          <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold", avatarStyles[color])}>
+            {initials}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-foreground">{g.full_name}</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">{g.phone ?? "—"}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground" title={g.student_names.join(", ")}>
+                Aluno(s): {studentLine(g)}
+              </span>
+              <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
+                {g.classroom_ids.length === 0
+                  ? "Turma: —"
+                  : g.classroom_ids.length <= 2
+                    ? g.classroom_ids.map((cid) => classroomName(cid)).join(" · ")
+                    : `${classroomName(g.classroom_ids[0])} +${g.classroom_ids.length - 1}`}
+              </span>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => setViewing(g)}
+              title="Ver detalhes"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-lilac/50 hover:text-pastel-lilac-foreground"
+            >
+              <Eye className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+            <button
+              type="button"
+              onClick={() => openChat(g.profile_id)}
+              title="Conversar"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/40 hover:text-pastel-blue-foreground"
+            >
+              <Mail className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+            {!isTeacher && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(g);
+                    setFormOpen(true);
+                  }}
+                  title="Editar"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
+                >
+                  <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleting(g)}
+                  title="Eliminar"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
+                >
+                  <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className={cn("flex flex-col gap-4", native ? "" : "sm:flex-row sm:items-center sm:justify-between")}>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Educadores</h1>
             <p className="text-sm text-muted-foreground">Faça a gestão dos encarregados de educação dos alunos.</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative">
+          <div className={cn("flex flex-wrap items-center gap-3", native && "w-full")}>
+            <div className={cn("relative", native ? "min-w-0 flex-1" : "")}>
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 type="text"
                 placeholder="Pesquisar educador..."
-                className="h-11 w-72 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
+                className={cn(
+                  "h-11 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20",
+                  native ? "w-full min-w-0" : "w-72",
+                )}
               />
             </div>
             {!isTeacher && (
@@ -192,7 +287,7 @@ const Educadores = () => {
 
         {/* Filters */}
         <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card">
-          <div className="min-w-[220px] flex-1">
+          <div className={cn("min-w-[220px] flex-1", native && "min-w-0 w-full")}>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Turma</label>
             <Select value={filterClassroom} onValueChange={setFilterClassroom}>
               <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
@@ -240,6 +335,30 @@ const Educadores = () => {
             )}
           </div>
 
+          {native ? (
+            <div className="flex flex-col gap-3 p-4">
+              {filtered.length > 0 && (
+                <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="h-4 w-4 cursor-pointer rounded border-border accent-pastel-blue-foreground"
+                  />
+                  Seleccionar todos ({filtered.length})
+                </label>
+              )}
+              {loading && (
+                <div className="flex justify-center py-12 text-muted-foreground">
+                  <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
+                </div>
+              )}
+              {!loading && filtered.length === 0 && (
+                <p className="py-10 text-center text-sm text-muted-foreground">Nenhum educador encontrado.</p>
+              )}
+              {!loading && filtered.map(renderGuardianCard)}
+            </div>
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -362,6 +481,7 @@ const Educadores = () => {
               </tbody>
             </table>
           </div>
+          )}
 
           <div className="flex flex-col items-center justify-between gap-3 border-t border-border p-5 sm:flex-row">
             <p className="text-xs text-muted-foreground">

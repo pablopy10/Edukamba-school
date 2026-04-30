@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ExcelImportDialog, type ImportField } from "@/components/shared/ExcelImportDialog";
+import { isNativeMobileApp } from "@/lib/nativeApp";
 
 const colorPalette = ["lilac", "blue", "yellow", "green", "pink"] as const;
 const colorStyles: Record<typeof colorPalette[number], string> = {
@@ -22,6 +23,7 @@ const colorStyles: Record<typeof colorPalette[number], string> = {
 };
 
 const Disciplinas = () => {
+  const native = isNativeMobileApp();
   const [subjects, setSubjects] = useState<SubjectRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string[]>([]);
@@ -121,27 +123,81 @@ const Disciplinas = () => {
     }
   };
 
+  const renderSubjectCard = (s: SubjectRow, idx: number) => {
+    const isSelected = selected.includes(s.id);
+    const color = colorPalette[idx % colorPalette.length];
+    return (
+      <div
+        key={s.id}
+        className={cn(
+          "rounded-2xl border border-border bg-background p-4 shadow-soft transition-colors",
+          isSelected ? "border-pastel-blue/60 bg-pastel-blue/10" : "hover:bg-muted/30",
+        )}
+      >
+        <div className="flex gap-3">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => toggle(s.id)}
+            className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-border accent-pastel-blue-foreground"
+            aria-label={`Seleccionar ${s.name}`}
+          />
+          <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl", colorStyles[color])}>
+            <Contact className="h-5 w-5" strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-foreground">{s.name}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-xs font-medium text-foreground">Código: {s.code ?? "—"}</span>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => handleEdit(s)}
+              title="Editar"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
+            >
+              <Pencil className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeleteId(s.id)}
+              title="Eliminar"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
+            >
+              <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className={cn("flex flex-col gap-4", native ? "" : "sm:flex-row sm:items-center sm:justify-between")}>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Disciplinas</h1>
             <p className="text-sm text-muted-foreground">Faça a gestão das disciplinas leccionadas.</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative">
+          <div className={cn("flex flex-wrap items-center gap-3", native && "w-full")}>
+            <div className={cn("relative", native ? "min-w-0 flex-1" : "")}>
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 type="text"
                 placeholder="Pesquisar disciplina..."
-                className="h-11 w-72 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
+                className={cn(
+                  "h-11 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20",
+                  native ? "w-full min-w-0" : "w-72",
+                )}
               />
             </div>
             <Select value={codeFilter} onValueChange={setCodeFilter}>
-              <SelectTrigger className="h-11 w-[160px] rounded-full border-border bg-card">
+              <SelectTrigger className={cn("h-11 rounded-full border-border bg-card", native ? "w-full min-w-0" : "w-[160px]")}>
                 <Filter className="mr-1 h-4 w-4 text-muted-foreground" />
                 <SelectValue placeholder="Filtrar" />
               </SelectTrigger>
@@ -192,6 +248,21 @@ const Disciplinas = () => {
           ) : filtered.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">
               {subjects.length === 0 ? "Ainda não há disciplinas. Crie a primeira." : "Nenhuma disciplina corresponde aos filtros."}
+            </div>
+          ) : native ? (
+            <div className="flex flex-col gap-3 p-4">
+              {filtered.length > 0 && (
+                <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="h-4 w-4 cursor-pointer rounded border-border accent-pastel-blue-foreground"
+                  />
+                  Seleccionar todos ({filtered.length})
+                </label>
+              )}
+              {filtered.map((s, i) => renderSubjectCard(s, i))}
             </div>
           ) : (
             <div className="overflow-x-auto">
