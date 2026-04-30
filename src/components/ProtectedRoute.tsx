@@ -3,6 +3,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import TrialExpirado from "@/pages/TrialExpirado";
+import { isDashboardRouteBlockedOnNative } from "@/lib/nativeApp";
 
 export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { session, user, loading } = useAuth();
@@ -100,6 +101,10 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   // School trial expired → block all routes (except onboarding) with notice screen
   if (hasSchool && trialExpired && location.pathname !== "/onboarding") {
     return <TrialExpirado schoolName={schoolName} trialEndedAt={trialEndsAt} />;
+  }
+
+  if (isDashboardRouteBlockedOnNative(location.pathname)) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;

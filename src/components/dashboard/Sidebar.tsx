@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useUserRole, UserRole } from "@/hooks/useUserRole";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { EdukambaWordmark } from "@/components/branding/EdukambaWordmark";
+import { isDashboardRouteBlockedOnNative, isNativeMobileApp } from "@/lib/nativeApp";
 
 export type NavItem = { icon: ElementType; label: string; to: string; hasArrow?: boolean; moduleKey?: ModuleKey };
 
@@ -71,8 +72,10 @@ function SidebarNavigation({
   const { role, loading: roleLoading } = useUserRole();
 
   const isPrivileged = role === "ADMIN" || role === "SUPER_ADMIN";
+  const native = isNativeMobileApp();
 
   const visibleMenu = menu.filter((item) => {
+    if (native && isDashboardRouteBlockedOnNative(item.to)) return false;
     if (item.moduleKey && !modules[item.moduleKey]) return false;
     if (roleLoading || role === null) return false;
     if (isPrivileged) return true;
@@ -81,6 +84,7 @@ function SidebarNavigation({
   });
 
   const visibleOther = other.filter((item) => {
+    if (native && isDashboardRouteBlockedOnNative(item.to)) return false;
     if (roleLoading || role === null) return false;
     if (isPrivileged) return true;
     const allowed = roleAllowedOther[role as Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">] ?? [];
