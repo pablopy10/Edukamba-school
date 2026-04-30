@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
   Plus,
   Search,
@@ -366,7 +365,7 @@ const Avaliacoes = () => {
   if (parentLoading || (isStudent && studentLoading)) return <PageLoadingSkeleton />;
 
   return (
-    <DashboardLayout>
+    <>
       <div className={cn("flex flex-col gap-6", native && !studentReadOnly && "relative pb-28")}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -569,7 +568,7 @@ const Avaliacoes = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </DashboardLayout>
+    </>
   );
 };
 

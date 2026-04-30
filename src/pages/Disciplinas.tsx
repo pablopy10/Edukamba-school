@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Search, Filter, Plus, Pencil, Trash2, Contact, Loader2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -176,7 +175,7 @@ const Disciplinas = () => {
   };
 
   return (
-    <DashboardLayout>
+    <>
       <div className={cn("flex flex-col gap-6", native && "relative pb-28")}>
         <div className={cn("flex flex-col gap-4", native ? "" : "sm:flex-row sm:items-center sm:justify-between")}>
           <div>
@@ -396,7 +395,7 @@ const Disciplinas = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </DashboardLayout>
+    </>
   );
 };
 

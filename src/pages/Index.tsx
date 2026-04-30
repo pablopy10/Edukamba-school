@@ -1,4 +1,3 @@
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { StudentsCard } from "@/components/dashboard/StudentsCard";
 import { AttendanceCard } from "@/components/dashboard/AttendanceCard";
@@ -35,7 +34,7 @@ const Index = () => {
   const fmt = (n: number) => n.toLocaleString("pt-PT");
   if (roleLoading || (isStudent && studentLoading)) return <PageLoadingSkeleton />;
   return (
-    <DashboardLayout>
+    <>
       <div
         className={cn(
           "grid grid-cols-1 gap-6",
@@ -106,7 +105,7 @@ const Index = () => {
               </aside>
             )}
       </div>
-    </DashboardLayout>
+    </>
   );
 };
 

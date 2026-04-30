@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
   Search,
   Clock,
@@ -336,7 +335,7 @@ const Timesheet = () => {
   };
 
   return (
-    <DashboardLayout>
+    <>
       <div className="flex flex-col gap-6">
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -770,7 +769,7 @@ const Timesheet = () => {
           </div>
         </div>
       )}
-    </DashboardLayout>
+    </>
   );
 };
 

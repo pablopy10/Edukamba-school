@@ -1,37 +1,43 @@
-import { useEffect, useRef, useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import TrialExpirado from "@/pages/TrialExpirado";
 import { isDashboardRouteBlockedOnNative } from "@/lib/nativeApp";
+import {
+  getRouteGuardSnapshot,
+  setRouteGuardSnapshot,
+  type RouteGuardSnapshot,
+} from "@/lib/routeGuardCache";
 
-export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+/**
+ * Portão de sessão + escola + trial. Renderiza `<Outlet />` para rotas filhas.
+ * Com rotas aninhadas em App.tsx, o componente mantém-se montado ao navegar
+ * entre páginas do dashboard — evita spinner completo a cada troca de rota.
+ */
+export const ProtectedRoute = () => {
   const { session, user, loading } = useAuth();
   const location = useLocation();
-  const [schoolChecked, setSchoolChecked] = useState(false);
-  const [hasSchool, setHasSchool] = useState<boolean>(false);
-  const [isActive, setIsActive] = useState<boolean>(true);
-  const [trialExpired, setTrialExpired] = useState(false);
-  const [schoolName, setSchoolName] = useState<string | null>(null);
-  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
-  const checkedForUserRef = useRef<string | null>(null);
+  const [snapshot, setSnapshot] = useState<RouteGuardSnapshot | null>(() =>
+    user?.id ? getRouteGuardSnapshot(user.id) ?? null : null,
+  );
 
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      checkedForUserRef.current = null;
-      setSchoolChecked(false);
-      setHasSchool(false);
-      setTrialExpired(false);
+      setSnapshot(null);
       return;
     }
-    // Only check once per authenticated user id (avoid re-running on every auth event)
-    if (checkedForUserRef.current === user.id) return;
-    checkedForUserRef.current = user.id;
+
+    const cached = getRouteGuardSnapshot(user.id);
+    if (cached) {
+      setSnapshot(cached);
+      return;
+    }
 
     let cancelled = false;
+
     const run = async () => {
-      // Retry briefly to handle the race with the handle_new_user trigger
       for (let i = 0; i < 5; i++) {
         const { data } = await supabase
           .from("profiles")
@@ -40,8 +46,12 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
           .maybeSingle();
         if (cancelled) return;
         if (data) {
-          setHasSchool(!!data.school_id);
-          setIsActive(data.is_active !== false);
+          const hasSchool = !!data.school_id;
+          const isActive = data.is_active !== false;
+          let schoolName: string | null = null;
+          let trialEndsAt: string | null = null;
+          let trialExpired = false;
+
           if (data.school_id) {
             const { data: school } = await supabase
               .from("schools")
@@ -50,32 +60,48 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
               .maybeSingle();
             if (cancelled) return;
             if (school) {
-              setSchoolName(school.name);
-              setTrialEndsAt(school.trial_ends_at);
-              const expired =
+              schoolName = school.name;
+              trialEndsAt = school.trial_ends_at;
+              trialExpired =
                 school.subscription_status !== "active" &&
                 (school.subscription_status !== "trialing" ||
                   new Date(school.trial_ends_at).getTime() <= Date.now());
-              setTrialExpired(expired);
             }
           }
-          setSchoolChecked(true);
+
+          const snap: RouteGuardSnapshot = {
+            hasSchool,
+            isActive,
+            trialExpired,
+            schoolName,
+            trialEndsAt,
+          };
+          setRouteGuardSnapshot(user.id, snap);
+          if (!cancelled) setSnapshot(snap);
           return;
         }
         await new Promise((r) => setTimeout(r, 300));
       }
       if (!cancelled) {
-        setHasSchool(false);
-        setSchoolChecked(true);
+        const snap: RouteGuardSnapshot = {
+          hasSchool: false,
+          isActive: true,
+          trialExpired: false,
+          schoolName: null,
+          trialEndsAt: null,
+        };
+        setRouteGuardSnapshot(user.id, snap);
+        setSnapshot(snap);
       }
     };
-    run();
+
+    void run();
     return () => {
       cancelled = true;
     };
   }, [user?.id, loading]);
 
-  if (loading || (session && !schoolChecked)) {
+  if (loading || (session && user && !snapshot)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -87,25 +113,32 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
-  // Inactive / removed users → force sign-out
-  if (!isActive) {
+  if (!snapshot) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (!snapshot.isActive) {
     void supabase.auth.signOut();
     return <Navigate to="/auth" replace />;
   }
 
-  // User signed in but has no school → force onboarding
-  if (!hasSchool && location.pathname !== "/onboarding") {
+  if (!snapshot.hasSchool && location.pathname !== "/onboarding") {
     return <Navigate to="/onboarding" replace />;
   }
 
-  // School trial expired → block all routes (except onboarding) with notice screen
-  if (hasSchool && trialExpired && location.pathname !== "/onboarding") {
-    return <TrialExpirado schoolName={schoolName} trialEndedAt={trialEndsAt} />;
+  if (snapshot.hasSchool && snapshot.trialExpired && location.pathname !== "/onboarding") {
+    return (
+      <TrialExpirado schoolName={snapshot.schoolName} trialEndedAt={snapshot.trialEndsAt} />
+    );
   }
 
   if (isDashboardRouteBlockedOnNative(location.pathname)) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  return <>{children}</>;
+  return <Outlet />;
 };

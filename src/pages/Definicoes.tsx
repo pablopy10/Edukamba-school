@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
   Building2,
   Image as ImageIcon,
@@ -952,16 +951,16 @@ const Definicoes = () => {
 
   if (loading) {
     return (
-      <DashboardLayout>
+      <>
         <div className="flex h-64 items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
   return (
-    <DashboardLayout>
+    <>
       <div className="flex flex-col gap-6">
         {/* Header */}
         <div>
@@ -2121,7 +2120,7 @@ const Definicoes = () => {
           </div>
         )}
       </div>
-    </DashboardLayout>
+    </>
   );
 };
 

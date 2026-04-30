@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Search, Package, Eye, EyeOff, RotateCcw, Check, AlertCircle, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useModules, moduleMeta, ModuleKey, modulePlan, isModuleAllowedForPlan } from "@/context/ModulesContext";
@@ -52,7 +51,7 @@ const Modulos = () => {
   );
 
   return (
-    <DashboardLayout>
+    <>
       <div className="flex flex-col gap-6">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -178,7 +177,7 @@ const Modulos = () => {
           </div>
         )}
       </div>
-    </DashboardLayout>
+    </>
   );
 };
 

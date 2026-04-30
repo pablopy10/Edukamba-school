@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
   User, Mail, Phone, Lock, Shield, Bell, Eye, EyeOff, Check, AlertCircle,
   Globe, Save, Loader2, Trash2,
@@ -282,16 +281,16 @@ const Perfil = () => {
 
   if (loading) {
     return (
-      <DashboardLayout>
+      <>
         <div className="flex h-64 items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
   return (
-    <DashboardLayout>
+    <>
       <div className="flex flex-col gap-6">
         {/* Header */}
         <div>
@@ -626,7 +625,7 @@ const Perfil = () => {
           </div>
         )}
       </div>
-    </DashboardLayout>
+    </>
   );
 };
 

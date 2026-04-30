@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Save, Loader2, GraduationCap, Users, Search } from "lucide-react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -315,29 +314,29 @@ const AvaliacaoNotas = () => {
 
   if (loading) {
     return (
-      <DashboardLayout>
+      <>
         <div className="flex items-center justify-center py-24">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
   if (!assessment) {
     return (
-      <DashboardLayout>
+      <>
         <div className="rounded-2xl bg-card p-8 text-center shadow-card">
           <p className="text-sm text-muted-foreground">Avaliação não encontrada.</p>
           <button onClick={() => navigate("/avaliacoes")} className="mt-4 inline-flex items-center gap-2 rounded-full bg-pastel-blue px-4 py-2 text-sm font-medium text-pastel-blue-foreground">
             <ArrowLeft className="h-4 w-4" /> Voltar
           </button>
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
   return (
-    <DashboardLayout>
+    <>
       <div className="flex flex-col gap-6">
         {/* Header */}
         <div className="flex flex-col gap-4">
@@ -485,7 +484,7 @@ const AvaliacaoNotas = () => {
           </div>
         )}
       </div>
-    </DashboardLayout>
+    </>
   );
 };
 

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { ArrowLeft, Mail, Phone, Calendar, GraduationCap, BookOpen, Clock, FileText, Pencil, Award, Users, Briefcase, TrendingUp, Loader2, Plus, ThumbsUp, AlertTriangle, Trash2, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -234,22 +233,22 @@ const ProfessorPerfil = () => {
 
   if (loading) {
     return (
-      <DashboardLayout>
+      <>
         <div className="flex h-64 items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
   if (!teacher) {
     return (
-      <DashboardLayout>
+      <>
         <div className="rounded-2xl bg-card p-8 text-center shadow-card">
           <p className="text-muted-foreground">Professor não encontrado.</p>
           <Link to="/professores" className="mt-4 inline-block text-sm font-medium text-pastel-blue-foreground hover:underline">Voltar a Professores</Link>
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
@@ -258,7 +257,7 @@ const ProfessorPerfil = () => {
   const yearsExp = yearsSince(teacher.hire_date);
 
   return (
-    <DashboardLayout>
+    <>
       <div className="flex flex-col gap-6">
         <Link to="/professores" className="inline-flex w-fit items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
           <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
@@ -640,7 +639,7 @@ const ProfessorPerfil = () => {
           />
         )}
       </div>
-    </DashboardLayout>
+    </>
   );
 };
 

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Search,
@@ -319,7 +318,7 @@ const Pesquisa = () => {
   ];
 
   return (
-    <DashboardLayout>
+    <>
       <div className="flex flex-col gap-6">
         {/* Header */}
         <div className="flex flex-col gap-1">
@@ -456,7 +455,7 @@ const Pesquisa = () => {
           </div>
         )}
       </div>
-    </DashboardLayout>
+    </>
   );
 };
 

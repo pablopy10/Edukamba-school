@@ -1,4 +1,6 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -10,6 +12,7 @@ import Onboarding from "./pages/Onboarding.tsx";
 import Termos from "./pages/Termos.tsx";
 import Privacidade from "./pages/Privacidade.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { DashboardShell } from "./components/dashboard/DashboardShell";
 import NotFound from "./pages/NotFound.tsx";
 import Alunos from "./pages/Alunos.tsx";
 import AlunoPerfil from "./pages/AlunoPerfil.tsx";
@@ -46,67 +49,96 @@ import { UserRoleProvider } from "./hooks/useUserRole";
 import { SelectedChildProvider } from "./context/SelectedChildContext";
 import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60 * 1000,
+      gcTime: 1000 * 60 * 60 * 24 * 7,
+      retry: (failureCount) => {
+        if (typeof navigator !== "undefined" && !navigator.onLine) return false;
+        return failureCount < 2;
+      },
+      /** Permite servir dados persistidos offline quando aplicável. */
+      networkMode: "offlineFirst",
+    },
+  },
+});
+
+const persister = createAsyncStoragePersister({
+  storage: window.localStorage,
+});
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
+  <PersistQueryClientProvider
+    client={queryClient}
+    persistOptions={{
+      persister,
+      maxAge: 1000 * 60 * 60 * 24 * 7,
+    }}
+  >
     <OfflineSyncProvider>
-    <ModulesProvider>
-      <AcademicYearProvider>
-      <UserRoleProvider>
-      <SelectedChildProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-          <Route path="/" element={<NativeAppRoot />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
-          <Route path="/termos" element={<Termos />} />
-          <Route path="/privacidade" element={<Privacidade />} />
-          <Route path="/dashboard" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-          <Route path="/alunos" element={<ProtectedRoute><Alunos /></ProtectedRoute>} />
-          <Route path="/alunos/:id" element={<ProtectedRoute><AlunoPerfil /></ProtectedRoute>} />
-          <Route path="/professores" element={<ProtectedRoute><Professores /></ProtectedRoute>} />
-          <Route path="/professores/:id" element={<ProtectedRoute><ProfessorPerfil /></ProtectedRoute>} />
-          <Route path="/matriculas" element={<ProtectedRoute><Matriculas /></ProtectedRoute>} />
-          <Route path="/cursos" element={<ProtectedRoute><Cursos /></ProtectedRoute>} />
-          <Route path="/turmas" element={<ProtectedRoute><Turmas /></ProtectedRoute>} />
-          <Route path="/turmas/:id" element={<ProtectedRoute><TurmaDetalhe /></ProtectedRoute>} />
-          <Route path="/disciplinas" element={<ProtectedRoute><Disciplinas /></ProtectedRoute>} />
-          <Route path="/educadores" element={<ProtectedRoute><Educadores /></ProtectedRoute>} />
-          <Route path="/presencas" element={<ProtectedRoute><Presencas /></ProtectedRoute>} />
-          <Route path="/horario" element={<ProtectedRoute><Horarios /></ProtectedRoute>} />
-          <Route path="/horarios" element={<ProtectedRoute><Horarios /></ProtectedRoute>} />
-          <Route path="/avaliacoes" element={<ProtectedRoute><Avaliacoes /></ProtectedRoute>} />
-          <Route path="/avaliacoes/:id/notas" element={<ProtectedRoute><AvaliacaoNotas /></ProtectedRoute>} />
-          <Route path="/eventos" element={<ProtectedRoute><Eventos /></ProtectedRoute>} />
-          <Route path="/extracurriculares" element={<ProtectedRoute><Extracurriculares /></ProtectedRoute>} />
-          <Route path="/pedidos" element={<ProtectedRoute><Pedidos /></ProtectedRoute>} />
-          <Route path="/material" element={<ProtectedRoute><Material /></ProtectedRoute>} />
-          <Route path="/pagamentos" element={<ProtectedRoute><Pagamentos /></ProtectedRoute>} />
-          <Route path="/financas" element={<ProtectedRoute><Financas /></ProtectedRoute>} />
-          <Route path="/relatorios" element={<ProtectedRoute><Relatorios /></ProtectedRoute>} />
-          <Route path="/timesheet" element={<ProtectedRoute><Timesheet /></ProtectedRoute>} />
-          <Route path="/perfil" element={<ProtectedRoute><Perfil /></ProtectedRoute>} />
-          <Route path="/definicoes" element={<ProtectedRoute><Definicoes /></ProtectedRoute>} />
-          <Route path="/modulos" element={<ProtectedRoute><Modulos /></ProtectedRoute>} />
-          <Route path="/notificacoes" element={<ProtectedRoute><Notificacoes /></ProtectedRoute>} />
-          <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
-          <Route path="/pesquisa" element={<ProtectedRoute><Pesquisa /></ProtectedRoute>} />
-          <Route path="/transportes" element={<ProtectedRoute><Transportes /></ProtectedRoute>} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-      </SelectedChildProvider>
-      </UserRoleProvider>
-      </AcademicYearProvider>
-    </ModulesProvider>
+      <ModulesProvider>
+        <AcademicYearProvider>
+          <UserRoleProvider>
+            <SelectedChildProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
+                <BrowserRouter>
+                  <Routes>
+                    <Route path="/" element={<NativeAppRoot />} />
+                    <Route path="/auth" element={<Auth />} />
+                    <Route path="/termos" element={<Termos />} />
+                    <Route path="/privacidade" element={<Privacidade />} />
+
+                    <Route element={<ProtectedRoute />}>
+                      <Route path="/onboarding" element={<Onboarding />} />
+                      <Route element={<DashboardShell />}>
+                        <Route path="/dashboard" element={<Index />} />
+                        <Route path="/alunos" element={<Alunos />} />
+                        <Route path="/alunos/:id" element={<AlunoPerfil />} />
+                        <Route path="/professores" element={<Professores />} />
+                        <Route path="/professores/:id" element={<ProfessorPerfil />} />
+                        <Route path="/matriculas" element={<Matriculas />} />
+                        <Route path="/cursos" element={<Cursos />} />
+                        <Route path="/turmas" element={<Turmas />} />
+                        <Route path="/turmas/:id" element={<TurmaDetalhe />} />
+                        <Route path="/disciplinas" element={<Disciplinas />} />
+                        <Route path="/educadores" element={<Educadores />} />
+                        <Route path="/presencas" element={<Presencas />} />
+                        <Route path="/horario" element={<Horarios />} />
+                        <Route path="/horarios" element={<Horarios />} />
+                        <Route path="/avaliacoes" element={<Avaliacoes />} />
+                        <Route path="/avaliacoes/:id/notas" element={<AvaliacaoNotas />} />
+                        <Route path="/eventos" element={<Eventos />} />
+                        <Route path="/extracurriculares" element={<Extracurriculares />} />
+                        <Route path="/pedidos" element={<Pedidos />} />
+                        <Route path="/material" element={<Material />} />
+                        <Route path="/pagamentos" element={<Pagamentos />} />
+                        <Route path="/financas" element={<Financas />} />
+                        <Route path="/relatorios" element={<Relatorios />} />
+                        <Route path="/timesheet" element={<Timesheet />} />
+                        <Route path="/perfil" element={<Perfil />} />
+                        <Route path="/definicoes" element={<Definicoes />} />
+                        <Route path="/modulos" element={<Modulos />} />
+                        <Route path="/notificacoes" element={<Notificacoes />} />
+                        <Route path="/chat" element={<Chat />} />
+                        <Route path="/pesquisa" element={<Pesquisa />} />
+                        <Route path="/transportes" element={<Transportes />} />
+                        <Route path="*" element={<NotFound />} />
+                      </Route>
+                    </Route>
+
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </BrowserRouter>
+              </TooltipProvider>
+            </SelectedChildProvider>
+          </UserRoleProvider>
+        </AcademicYearProvider>
+      </ModulesProvider>
     </OfflineSyncProvider>
-  </QueryClientProvider>
+  </PersistQueryClientProvider>
 );
 
 export default App;

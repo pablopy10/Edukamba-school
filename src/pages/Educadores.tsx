@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Search, Plus, Mail, Pencil, Trash2, Loader2, Eye, Phone } from "lucide-react";
 import { cn, sortByName } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -254,7 +253,7 @@ const Educadores = () => {
   };
 
   return (
-    <DashboardLayout>
+    <>
       <div className={cn("flex flex-col gap-6", native && !isTeacher && "relative pb-28")}>
         <div className={cn("flex flex-col gap-4", native ? "" : "sm:flex-row sm:items-center sm:justify-between")}>
           <div>
@@ -576,7 +575,7 @@ const Educadores = () => {
           )}
         </DialogContent>
       </Dialog>
-    </DashboardLayout>
+    </>
   );
 };
 

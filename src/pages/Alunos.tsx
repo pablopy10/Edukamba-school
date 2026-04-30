@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Search, Plus, Pencil, Trash2, Loader2, Upload } from "lucide-react";
 import { cn, sortByName } from "@/lib/utils";
 import { Link } from "react-router-dom";
@@ -245,7 +244,7 @@ const Alunos = () => {
   };
 
   return (
-    <DashboardLayout>
+    <>
       <div className={cn("flex flex-col gap-6", native && !isParent && !isTeacher && "relative pb-28")}>
         {/* Page header */}
         <div className={cn("flex flex-col gap-4", native ? "" : "sm:flex-row sm:items-center sm:justify-between")}>
@@ -612,7 +611,7 @@ const Alunos = () => {
         onCompleted={load}
       />
       )}
-    </DashboardLayout>
+    </>
   );
 };
 

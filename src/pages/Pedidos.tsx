@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
   Plus, Search, Check, X, Clock, CalendarDays, FileText, Stethoscope, Plane, Briefcase, HeartPulse, Pencil, Trash2, MoreHorizontal,
 } from "lucide-react";
@@ -178,7 +177,7 @@ const Pedidos = () => {
   };
 
   return (
-    <DashboardLayout>
+    <>
       <div className={cn("flex flex-col gap-6", native && "relative pb-28")}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -552,7 +551,7 @@ const Pedidos = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </DashboardLayout>
+    </>
   );
 };
 

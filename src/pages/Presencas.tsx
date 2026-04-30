@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Check, X, Clock, Loader2, MinusCircle, FileText, AlertTriangle, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn, compareNatural } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -788,7 +787,7 @@ const Presencas = () => {
   };
 
   return (
-    <DashboardLayout>
+    <>
       <>
         {native ? (
           <div className="flex flex-col gap-5 pb-4">
@@ -1319,7 +1318,7 @@ const Presencas = () => {
           </DialogContent>
         </Dialog>
       </>
-    </DashboardLayout>
+    </>
   );
 };
 

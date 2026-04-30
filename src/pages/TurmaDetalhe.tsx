@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
   ArrowLeft,
   BookOpen,
@@ -254,7 +253,7 @@ const TurmaDetalhe = () => {
 
   if (!classroom) {
     return (
-      <DashboardLayout>
+      <>
         <div className="rounded-2xl border border-border bg-card p-10 text-center shadow-card">
           <p className="text-muted-foreground">Turma não encontrada.</p>
           <Link
@@ -264,14 +263,14 @@ const TurmaDetalhe = () => {
             <ArrowLeft className="h-4 w-4" /> Voltar
           </Link>
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
   const headerTint = colorFor(classroom.id);
 
   return (
-    <DashboardLayout>
+    <>
       <div className={cn("flex flex-col gap-6", native && "pb-4")}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-col gap-3">
@@ -500,7 +499,7 @@ const TurmaDetalhe = () => {
           </div>
         </section>
       </div>
-    </DashboardLayout>
+    </>
   );
 };
 

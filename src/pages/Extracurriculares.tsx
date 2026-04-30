@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
   Search,
   Plus,
@@ -235,7 +234,7 @@ const Extracurriculares = () => {
   };
 
   return (
-    <DashboardLayout>
+    <>
       <div className={cn("flex flex-col gap-6", native && canEdit && "relative pb-28")}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -594,7 +593,7 @@ const Extracurriculares = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </DashboardLayout>
+    </>
   );
 };
 

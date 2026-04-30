@@ -8,6 +8,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { Capacitor } from "@capacitor/core";
+import { Network } from "@capacitor/network";
 import { supabase } from "@/integrations/supabase/client";
 import { loadPendingSync, savePendingSync, type PendingSyncEntry } from "@/lib/pendingSyncStorage";
 
@@ -15,7 +17,7 @@ import { loadPendingSync, savePendingSync, type PendingSyncEntry } from "@/lib/p
 export const OFFLINE_SYNC_FLUSH_EVENT = "edukamba-offline-sync-flushed";
 
 type OfflineSyncContextValue = {
-  /** Estado derivado de `navigator.onLine` + eventos window online/offline. */
+  /** Ligado: rede disponível (Capacitor Network na app nativa; navigator na web). */
   isOnline: boolean;
   pendingCount: number;
   syncing: boolean;
@@ -78,6 +80,9 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator !== "undefined" ? navigator.onLine : true,
   );
+  const isOnlineRef = useRef(isOnline);
+  isOnlineRef.current = isOnline;
+
   const [pending, setPending] = useState<PendingSyncEntry[]>(() => loadPendingSync());
   const [syncing, setSyncing] = useState(false);
   const flushingRef = useRef(false);
@@ -88,7 +93,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
 
   const flushPending = useCallback(async () => {
     if (flushingRef.current) return;
-    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+    if (!isOnlineRef.current) return;
     if (loadPendingSync().length === 0) return;
 
     flushingRef.current = true;
@@ -102,7 +107,28 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
     }
   }, [refreshPendingFromStorage]);
 
+  /** Rede: Capacitor na shell nativa (mais fiável); senão eventos do browser. */
   useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      let removed = false;
+      let listener: { remove: () => Promise<void> } | undefined;
+
+      void Network.getStatus().then((s) => {
+        if (!removed) setIsOnline(s.connected);
+      });
+
+      void Network.addListener("networkStatusChange", (status) => {
+        setIsOnline(status.connected);
+      }).then((handle) => {
+        listener = handle;
+      });
+
+      return () => {
+        removed = true;
+        void listener?.remove();
+      };
+    }
+
     const up = () => setIsOnline(true);
     const down = () => setIsOnline(false);
     window.addEventListener("online", up);
@@ -125,7 +151,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
       );
       savePendingSync(next);
       setPending(next);
-      if (typeof navigator !== "undefined" && navigator.onLine) {
+      if (isOnlineRef.current) {
         void flushPending();
       }
     },

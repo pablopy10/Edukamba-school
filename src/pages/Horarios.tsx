@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Plus, Settings2, User, MapPin, Pencil, Trash2, Sun, Sunset, Moon, Loader2, AlertCircle, ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -475,7 +474,7 @@ const Horarios = () => {
   const showTurmaPickerNative = !isParent && !isStudent && classrooms.length > 0;
 
   return (
-    <DashboardLayout>
+    <>
       <>
         {native ? (
           <div className="relative flex flex-col gap-5 pb-28">
@@ -929,7 +928,7 @@ const Horarios = () => {
         </AlertDialogContent>
       </AlertDialog>
       </>
-    </DashboardLayout>
+    </>
   );
 };
 

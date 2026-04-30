@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { ArrowLeft, Mail, Phone, MapPin, Calendar, GraduationCap, BookOpen, Clock, CheckCircle2, XCircle, AlertCircle, Users, FileText, Pencil, Loader2, TrendingUp, Wallet, Bell, Upload, Paperclip, History, ArrowRightLeft, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -591,22 +590,22 @@ const AlunoPerfil = () => {
 
   if (loading) {
     return (
-      <DashboardLayout>
+      <>
         <div className="flex h-64 items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
   if (!student) {
     return (
-      <DashboardLayout>
+      <>
         <div className="rounded-2xl bg-card p-8 text-center shadow-card">
           <p className="text-muted-foreground">Aluno não encontrado.</p>
           <Link to="/alunos" className="mt-4 inline-block text-sm font-medium text-pastel-blue-foreground hover:underline">Voltar a Alunos</Link>
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
@@ -614,7 +613,7 @@ const AlunoPerfil = () => {
   const age = ageFrom(student.birth_date);
 
   return (
-    <DashboardLayout>
+    <>
       <div className="flex flex-col gap-6">
         <Link to="/alunos" className="inline-flex w-fit items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
           <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
@@ -1320,7 +1319,7 @@ const AlunoPerfil = () => {
           }}
         />
       )}
-    </DashboardLayout>
+    </>
   );
 };
 

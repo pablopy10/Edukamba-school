@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
   Users,
   CalendarDays,
@@ -437,18 +436,18 @@ const Relatorios = () => {
 
   if (!loading && !isAdmin) {
     return (
-      <DashboardLayout>
+      <>
         <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-center">
           <ShieldAlert className="h-10 w-10 text-muted-foreground" />
           <h1 className="text-xl font-bold text-foreground">Acesso restrito</h1>
           <p className="text-sm text-muted-foreground">Apenas administradores podem aceder aos relatórios.</p>
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
   return (
-    <DashboardLayout>
+    <>
       <div className="flex flex-col gap-6">
       {/* Header */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -654,7 +653,7 @@ const Relatorios = () => {
         </div>
       </div>
       </div>
-    </DashboardLayout>
+    </>
   );
 };
 

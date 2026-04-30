@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
   Search, Send, Paperclip, Smile, MoreVertical, Check, CheckCheck, Loader2,
   Plus, X, FileText, ImageIcon, Download, Ban,
@@ -354,7 +353,7 @@ const Chat = () => {
   // STUDENT lockout view
   if (myRole === "STUDENT") {
     return (
-      <DashboardLayout>
+      <>
         <div className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-card p-12 text-center shadow-card">
           <Ban className="h-10 w-10 text-muted-foreground" strokeWidth={1.5} />
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Chat indisponível</h1>
@@ -362,7 +361,7 @@ const Chat = () => {
             O chat não está disponível para a conta de aluno. Contacte um administrador ou educador para qualquer assunto.
           </p>
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
@@ -376,7 +375,7 @@ const Chat = () => {
     });
 
   return (
-    <DashboardLayout>
+    <>
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Chat</h1>
@@ -695,7 +694,7 @@ const Chat = () => {
           </div>
         </DialogContent>
       </Dialog>
-    </DashboardLayout>
+    </>
   );
 };
 

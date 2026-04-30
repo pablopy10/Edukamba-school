@@ -121,7 +121,7 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
   const avatarUrl = profile?.avatar_url ?? "";
 
   const connectivityTitle = !isOnline
-    ? "Sem ligação à Internet"
+    ? "Sem ligação à Internet — modo offline"
     : pendingCount > 0
       ? `${pendingCount} alteração(ões) por sincronizar`
       : "Ligado · sincronizado";
@@ -162,14 +162,15 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
 
             <div
               className={cn(
-                "relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-soft",
-                !isOnline && "bg-muted text-muted-foreground",
+                "relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-soft ring-2 ring-offset-2 ring-offset-background",
+                !isOnline &&
+                  "bg-destructive/15 text-destructive ring-destructive/35 dark:bg-destructive/25 dark:text-destructive dark:ring-destructive/40",
                 isOnline &&
                   pendingCount > 0 &&
-                  "bg-pastel-yellow text-pastel-yellow-foreground",
+                  "bg-pastel-yellow text-pastel-yellow-foreground ring-pastel-yellow/40",
                 isOnline &&
                   pendingCount === 0 &&
-                  "bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400",
+                  "bg-emerald-500/15 text-emerald-700 ring-emerald-500/25 dark:bg-emerald-500/20 dark:text-emerald-400 dark:ring-emerald-500/35",
               )}
               title={connectivityTitle}
               role="status"
@@ -330,20 +331,31 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
           )}
           <div
             className={cn(
-              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full shadow-soft",
-              pendingCount > 0
-                ? "bg-pastel-yellow text-pastel-yellow-foreground"
-                : "bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400",
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full shadow-soft ring-2 ring-offset-2 ring-offset-background",
+              !isOnline &&
+                "bg-destructive/15 text-destructive ring-destructive/35 dark:bg-destructive/25 dark:text-destructive",
+              isOnline &&
+                pendingCount > 0 &&
+                "bg-pastel-yellow text-pastel-yellow-foreground ring-pastel-yellow/40",
+              isOnline &&
+                pendingCount === 0 &&
+                "bg-emerald-500/15 text-emerald-700 ring-emerald-500/25 dark:bg-emerald-500/20 dark:text-emerald-400",
             )}
             title={
-              pendingCount > 0
-                ? `${pendingCount} alteração(ões) pendente(s) de sincronização`
-                : "Sincronizado com o servidor"
+              !isOnline
+                ? "Sem ligação à Internet — modo offline"
+                : pendingCount > 0
+                  ? `${pendingCount} alteração(ões) pendente(s) de sincronização`
+                  : "Sincronizado com o servidor"
             }
             role="status"
             aria-live="polite"
           >
-            <Cloud className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+            {!isOnline ? (
+              <WifiOff className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+            ) : (
+              <Cloud className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+            )}
           </div>
           <Link
             to="/chat"

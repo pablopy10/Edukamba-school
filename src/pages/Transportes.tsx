@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -187,7 +186,7 @@ const Transportes = () => {
   const selectedListRoute = routes.find((r) => r.id === listRouteId);
 
   return (
-    <DashboardLayout>
+    <>
       <div className={cn("flex flex-col gap-6", native && isAdmin && transportTab !== "lista" && "relative pb-28")}>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -562,7 +561,7 @@ const Transportes = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </DashboardLayout>
+    </>
   );
 };
 

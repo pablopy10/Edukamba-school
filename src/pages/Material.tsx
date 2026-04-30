@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
   Plus, Search, Boxes, ClipboardList, Check, AlertTriangle, Pencil, Trash2, ListChecks,
   BookOpen, Beaker, Palette, Dumbbell, Laptop, Package,
@@ -278,7 +277,7 @@ const Material = () => {
     ((tab === "stock" && isAdmin) || (tab === "pedidos" && canRequest));
 
   return (
-    <DashboardLayout>
+    <>
       <div className={cn("flex flex-col gap-6", showCreateFab && "relative pb-28")}>
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -477,7 +476,7 @@ const Material = () => {
         onClose={() => setDeliveryDialog(null)}
         onSaved={loadAll}
       />
-    </DashboardLayout>
+    </>
   );
 };
 
