@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { isNativeMobileApp } from "@/lib/nativeApp";
 
-type Option = { id: string; name: string; subjectId?: string | null };
+type Option = { id: string; name: string; subjectId?: string | null; period?: string | null };
 type TimeSlotRow = {
   id: string;
   shift: "MORNING" | "AFTERNOON" | "EVENING";
@@ -87,6 +87,16 @@ const SHIFT_META = {
   AFTERNOON: { label: "Tarde", icon: Sunset, classes: "bg-pastel-pink text-pastel-pink-foreground" },
   EVENING: { label: "Noite", icon: Moon, classes: "bg-pastel-lilac text-pastel-lilac-foreground" },
 } as const;
+
+/** Alinha período da turma (ex. «Manhã») com o turno dos blocos horários. */
+const periodLabelToShift = (period: string | null | undefined): "MORNING" | "AFTERNOON" | "EVENING" | null => {
+  if (!period) return null;
+  const p = period.trim().toLowerCase();
+  if (p.includes("manh")) return "MORNING";
+  if (p.includes("tarde")) return "AFTERNOON";
+  if (p.includes("noite")) return "EVENING";
+  return null;
+};
 
 const PASTEL_PALETTE = [
   "bg-pastel-blue text-pastel-blue-foreground",
@@ -162,7 +172,7 @@ const Horarios = () => {
     if (isTeacher && teacherLoading) return;
     if (isStudent && studentLoading) return;
     setLoading(true);
-    let classroomsQuery = supabase.from("classrooms").select("id, name").eq("school_id", schoolId).order("name");
+    let classroomsQuery = supabase.from("classrooms").select("id, name, period").eq("school_id", schoolId).order("name");
     if (selectedYearId) classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
     const [classroomsRes, subjectsRes, teachersRes, slotsRes, schedulesRes] = await Promise.all([
       classroomsQuery,
@@ -175,7 +185,7 @@ const Horarios = () => {
       supabase.from("schedules").select("*").eq("school_id", schoolId),
     ]);
 
-    let classroomList = (classroomsRes.data ?? []).map((c) => ({ id: c.id, name: c.name }));
+    let classroomList = (classroomsRes.data ?? []).map((c: any) => ({ id: c.id, name: c.name, period: c.period ?? null }));
     if (isParent) {
       classroomList = classroomList.filter((c) => parentClassroomIds.includes(c.id));
     }
@@ -270,9 +280,27 @@ const Horarios = () => {
     });
   }, [schedules, classroomFilter, subjectFilter, teacherFilter]);
 
+  const derivedShiftForClassroom = useMemo((): "MORNING" | "AFTERNOON" | "EVENING" => {
+    if (isStudent && studentShift) return studentShift;
+    const cls = classrooms.find((c) => c.id === classroomFilter);
+    const fromPeriod = periodLabelToShift(cls?.period ?? null);
+    if (fromPeriod) return fromPeriod;
+    if (!classroomFilter) return "MORNING";
+    const counts: Record<string, number> = {};
+    schedules
+      .filter((s) => s.classroom_id === classroomFilter && s.shift)
+      .forEach((s) => {
+        counts[s.shift!] = (counts[s.shift!] ?? 0) + 1;
+      });
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    return (top as "MORNING" | "AFTERNOON" | "EVENING") ?? "MORNING";
+  }, [isStudent, studentShift, classroomFilter, classrooms, schedules]);
+
+  const effectiveShift = native ? derivedShiftForClassroom : shiftView;
+
   const slotsForShift = useMemo(
-    () => timeSlots.filter((s) => s.shift === shiftView).sort((a, b) => a.position - b.position),
-    [timeSlots, shiftView],
+    () => timeSlots.filter((s) => s.shift === effectiveShift).sort((a, b) => a.position - b.position),
+    [timeSlots, effectiveShift],
   );
 
   const nativeWeekDays = useMemo(() => getWeekDaysMonSun(nativeSelectedDate), [nativeSelectedDate]);
@@ -306,7 +334,11 @@ const Horarios = () => {
     const dow = calendarToSchoolDow(nativeSelectedDate);
     if (dow === null) return [];
     const lessons: NativeTimelineRow[] = filteredSchedules
-      .filter((row) => row.day_of_week === dow)
+      .filter((row) => {
+        if (row.day_of_week !== dow) return false;
+        if (!native) return true;
+        return !row.shift || row.shift === effectiveShift;
+      })
       .sort((a, b) => a.start_time.localeCompare(b.start_time))
       .map((schedule) => ({ kind: "lesson", schedule }));
     const breaks: NativeTimelineRow[] = slotsForShift
@@ -317,7 +349,7 @@ const Horarios = () => {
       const tb = b.kind === "lesson" ? b.schedule.start_time : b.slot.start_time;
       return ta.localeCompare(tb);
     });
-  }, [nativeSelectedDate, filteredSchedules, slotsForShift]);
+  }, [nativeSelectedDate, filteredSchedules, slotsForShift, native, effectiveShift]);
 
   // Detect cross-classroom conflicts (teacher or room) within filtered set
   const conflicts = useMemo(() => {
@@ -363,7 +395,7 @@ const Horarios = () => {
       start_time: "08:00",
       end_time: "09:00",
       room: "",
-      shift: shiftView,
+      shift: effectiveShift,
       notes: "",
     });
     setOpenForm(true);
@@ -500,7 +532,7 @@ const Horarios = () => {
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
-              <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto py-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="grid min-w-0 flex-1 grid-cols-7 gap-1 py-1">
                 {nativeWeekDays.map((d) => {
                   const selected = sameCalendarDay(d, nativeSelectedDate);
                   const isWk = d.getDay() === 0 || d.getDay() === 6;
@@ -510,7 +542,7 @@ const Horarios = () => {
                       type="button"
                       onClick={() => pickNativeDay(d)}
                       className={cn(
-                        "flex h-20 w-14 shrink-0 flex-col items-center justify-center rounded-full transition-all active:scale-95",
+                        "flex min-h-[5rem] min-w-0 flex-col items-center justify-center rounded-full px-0.5 transition-all active:scale-95",
                         selected
                           ? "bg-pastel-lilac text-pastel-lilac-foreground shadow-card"
                           : "bg-muted text-muted-foreground",
@@ -535,26 +567,22 @@ const Horarios = () => {
               </Button>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {(["MORNING", "AFTERNOON", "EVENING"] as const).map((sh) => {
-                const Meta = SHIFT_META[sh];
+            <div className="flex flex-wrap items-center gap-2">
+              {(() => {
+                const Meta = SHIFT_META[effectiveShift];
                 const Icon = Meta.icon;
                 return (
-                  <button
-                    key={sh}
-                    type="button"
-                    disabled={isStudent}
-                    onClick={() => setShiftView(sh)}
+                  <span
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold transition-all active:scale-[0.98]",
-                      shiftView === sh ? cn(Meta.classes, "shadow-card ring-2 ring-primary/10") : "bg-muted text-muted-foreground",
+                      "inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold shadow-card ring-2 ring-primary/10",
+                      Meta.classes,
                     )}
                   >
-                    <Icon className="h-3.5 w-3.5" />
+                    <Icon className="h-3.5 w-3.5" aria-hidden />
                     {Meta.label}
-                  </button>
+                  </span>
                 );
-              })}
+              })()}
             </div>
 
             {!isParent && isAdmin && !isStudent && (
@@ -619,7 +647,7 @@ const Horarios = () => {
                 </div>
               ) : nativeTimeline.length === 0 ? (
                 <div className="rounded-2xl bg-card px-4 py-10 text-center text-sm text-muted-foreground shadow-card">
-                  Sem aulas nem intervalos registados neste dia ({SHIFT_META[shiftView].label.toLowerCase()}).
+                  Sem aulas nem intervalos registados neste dia ({SHIFT_META[effectiveShift].label.toLowerCase()}).
                 </div>
               ) : (
                 nativeTimeline.map((row) => {
@@ -885,6 +913,7 @@ const Horarios = () => {
         onOpenChange={setOpenSlots}
         schoolId={schoolId}
         onSaved={loadAll}
+        fullScreen={native && isAdmin}
       />
 
       <AlertDialog open={!!deletingId} onOpenChange={(o) => !o && setDeletingId(null)}>

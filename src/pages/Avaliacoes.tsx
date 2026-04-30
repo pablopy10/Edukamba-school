@@ -41,7 +41,8 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { useAuth } from "@/hooks/useAuth";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
-import { showPageKpiCards } from "@/lib/nativeApp";
+import { showPageKpiCards, isNativeMobileApp } from "@/lib/nativeApp";
+import { Button } from "@/components/ui/button";
 
 type EvalType = "teste" | "exame" | "trabalho" | "oral";
 
@@ -92,6 +93,7 @@ const tt = (t?: string | null) => (t ? t.slice(0, 5) : "");
 
 const Avaliacoes = () => {
   const navigate = useNavigate();
+  const native = isNativeMobileApp();
   const { selectedYearId } = useAcademicYear();
   const { isParent, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const { user } = useAuth();
@@ -353,7 +355,7 @@ const Avaliacoes = () => {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6">
+      <div className={cn("flex flex-col gap-6", native && !studentReadOnly && "relative pb-28")}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Avaliações</h1>
@@ -382,7 +384,7 @@ const Avaliacoes = () => {
                 Lista
               </button>
             </div>
-            {!studentReadOnly && (
+            {!studentReadOnly && !native && (
               <button
                 onClick={openCreate}
                 className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
@@ -502,6 +504,18 @@ const Avaliacoes = () => {
           />
         )}
       </div>
+
+      {native && !studentReadOnly && (
+        <Button
+          type="button"
+          size="icon"
+          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          aria-label="Nova avaliação"
+          onClick={openCreate}
+        >
+          <Plus className="h-6 w-6" />
+        </Button>
+      )}
 
       <AssessmentFormDialog
         open={dialogOpen}

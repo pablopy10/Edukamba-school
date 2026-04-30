@@ -21,7 +21,8 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { EventFormDialog, type EventRow } from "@/components/eventos/EventFormDialog";
-import { showPageKpiCards } from "@/lib/nativeApp";
+import { showPageKpiCards, isNativeMobileApp } from "@/lib/nativeApp";
+import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,6 +61,7 @@ const formatDateLong = (iso: string) => {
 const formatTime = (t: string | null) => (t ? t.slice(0, 5) : "");
 
 const Eventos = () => {
+  const native = isNativeMobileApp();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
 
@@ -159,7 +161,7 @@ const Eventos = () => {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6">
+      <div className={cn("flex flex-col gap-6", native && canEdit && "relative pb-28")}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Eventos</h1>
@@ -195,7 +197,7 @@ const Eventos = () => {
               </button>
             </div>
 
-            {canEdit && (
+            {canEdit && !native && (
               <button
                 onClick={handleNew}
                 className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
@@ -278,6 +280,18 @@ const Eventos = () => {
           />
         )}
       </div>
+
+      {native && canEdit && (
+        <Button
+          type="button"
+          size="icon"
+          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          aria-label="Novo evento"
+          onClick={handleNew}
+        >
+          <Plus className="h-6 w-6" />
+        </Button>
+      )}
 
       <EventFormDialog
         open={dialogOpen}

@@ -14,6 +14,7 @@ import { useParentChildren } from "@/hooks/useParentChildren";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { isNativeMobileApp } from "@/lib/nativeApp";
+import { Button } from "@/components/ui/button";
 
 type ClassroomOpt = { id: string; name: string };
 
@@ -245,7 +246,7 @@ const Alunos = () => {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6">
+      <div className={cn("flex flex-col gap-6", native && !isParent && !isTeacher && "relative pb-28")}>
         {/* Page header */}
         <div className={cn("flex flex-col gap-4", native ? "" : "sm:flex-row sm:items-center sm:justify-between")}>
           <div>
@@ -268,6 +269,8 @@ const Alunos = () => {
             </div>
             {!isParent && !isTeacher && (
               <>
+                {!native && (
+                <>
                 <button
                   type="button"
                   onClick={() => {
@@ -287,6 +290,8 @@ const Alunos = () => {
                   <Upload className="h-4 w-4" strokeWidth={2.25} />
                   Importar Excel
                 </button>
+                </>
+                )}
               </>
             )}
           </div>
@@ -515,6 +520,30 @@ const Alunos = () => {
           </div>
         </div>
       </div>
+
+      {native && !isParent && !isTeacher && (
+        <>
+          <Button
+            type="button"
+            size="icon"
+            className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+            aria-label="Novo aluno"
+            onClick={() => { setEditing(null); setFormOpen(true); }}
+          >
+            <Plus className="h-6 w-6" />
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="secondary"
+            className="fixed bottom-[7.25rem] right-5 z-40 h-12 w-12 rounded-2xl border border-border shadow-lg"
+            aria-label="Importar Excel"
+            onClick={() => setImportOpen(true)}
+          >
+            <Upload className="h-5 w-5" />
+          </Button>
+        </>
+      )}
 
       <StudentFormDialog open={formOpen} onOpenChange={setFormOpen} classrooms={classrooms} student={editing} onSaved={load} />
 

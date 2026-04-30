@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Trash2, Plus, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export type TimeSlot = {
   id?: string;
@@ -32,9 +33,11 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   schoolId: string | null;
   onSaved: () => void;
+  /** Caixa de diálogo a ocupar todo o ecrã (app móvel nativo). */
+  fullScreen?: boolean;
 };
 
-export const TimeSlotsDialog = ({ open, onOpenChange, schoolId, onSaved }: Props) => {
+export const TimeSlotsDialog = ({ open, onOpenChange, schoolId, onSaved, fullScreen }: Props) => {
   const [tab, setTab] = useState<TimeSlot["shift"]>("MORNING");
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [loading, setLoading] = useState(false);
@@ -156,7 +159,14 @@ export const TimeSlotsDialog = ({ open, onOpenChange, schoolId, onSaved }: Props
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] max-w-3xl flex-col">
+      <DialogContent
+        className={cn(
+          "flex flex-col",
+          fullScreen
+            ? "!fixed !inset-0 !left-0 !top-0 z-50 flex h-[100dvh] max-h-[100dvh] w-full !max-w-none !translate-x-0 !translate-y-0 gap-0 rounded-none border-0 p-4 pt-14 sm:gap-4 sm:p-6 sm:pt-16"
+            : "max-h-[85vh] max-w-3xl",
+        )}
+      >
         <DialogHeader>
           <DialogTitle>Configurar blocos horários da escola</DialogTitle>
         </DialogHeader>

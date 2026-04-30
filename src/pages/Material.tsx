@@ -273,9 +273,13 @@ const Material = () => {
     loadAll();
   };
 
+  const showCreateFab =
+    native &&
+    ((tab === "stock" && isAdmin) || (tab === "pedidos" && canRequest));
+
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6">
+      <div className={cn("flex flex-col gap-6", showCreateFab && "relative pb-28")}>
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -297,12 +301,12 @@ const Material = () => {
               </button>
             </div>
             )}
-            {tab === "stock" && isAdmin && (
+            {tab === "stock" && isAdmin && !native && (
               <button onClick={() => { setEditingMaterial(null); setShowMaterialDialog(true); }} className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
                 <Plus className="h-4 w-4" strokeWidth={2.25} /> Novo Material
               </button>
             )}
-            {tab === "pedidos" && canRequest && (
+            {tab === "pedidos" && canRequest && !native && (
               <button onClick={() => { setEditingRequest(null); setShowRequestDialog(true); }} className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
                 <Plus className="h-4 w-4" strokeWidth={2.25} /> Novo Pedido
               </button>
@@ -422,6 +426,29 @@ const Material = () => {
           />
         )}
       </div>
+
+      {native && tab === "stock" && isAdmin && (
+        <Button
+          type="button"
+          size="icon"
+          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          aria-label="Novo material"
+          onClick={() => { setEditingMaterial(null); setShowMaterialDialog(true); }}
+        >
+          <Plus className="h-6 w-6" />
+        </Button>
+      )}
+      {native && tab === "pedidos" && canRequest && (
+        <Button
+          type="button"
+          size="icon"
+          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          aria-label="Novo pedido"
+          onClick={() => { setEditingRequest(null); setShowRequestDialog(true); }}
+        >
+          <Plus className="h-6 w-6" />
+        </Button>
+      )}
 
       <MaterialFormDialog
         open={showMaterialDialog}

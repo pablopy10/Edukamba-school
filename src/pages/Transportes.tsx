@@ -21,9 +21,11 @@ import {
 import { Bus, Plus, Pencil, Trash2, MapPin, Users, ListChecks, Printer, Search, Wallet } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { isNativeMobileApp } from "@/lib/nativeApp";
 import { RouteFormDialog, type RouteRow } from "@/components/transportes/RouteFormDialog";
 import { StopFormDialog, type StopRow } from "@/components/transportes/StopFormDialog";
 import { TransportEnrollmentDialog, type TransportEnrollment } from "@/components/transportes/TransportEnrollmentDialog";
+import { cn } from "@/lib/utils";
 
 type Enrollment = TransportEnrollment & {
   student?: { full_name: string; classroom_id: string | null };
@@ -35,6 +37,7 @@ const shiftLabel = (s: string) => (s === "MORNING" ? "Manhã" : s === "AFTERNOON
 const directionLabel = (d: string) => (d === "PICKUP" ? "Ida" : d === "DROPOFF" ? "Regresso" : "Ida + Regresso");
 
 const Transportes = () => {
+  const native = isNativeMobileApp();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [routes, setRoutes] = useState<RouteRow[]>([]);
@@ -60,6 +63,7 @@ const Transportes = () => {
 
   // Passenger list
   const [listRouteId, setListRouteId] = useState<string>("");
+  const [transportTab, setTransportTab] = useState("rotas");
 
   useEffect(() => {
     const init = async () => {
@@ -184,7 +188,7 @@ const Transportes = () => {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6">
+      <div className={cn("flex flex-col gap-6", native && isAdmin && transportTab !== "lista" && "relative pb-28")}>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-foreground">
@@ -195,14 +199,14 @@ const Transportes = () => {
               Giros, paragens, inscrições e listas de passageiros para o motorista.
             </p>
           </div>
-          {isAdmin && (
+          {isAdmin && !native && (
             <Button onClick={() => { setEditRoute(null); setRouteOpen(true); }}>
               <Plus className="mr-2 h-4 w-4" /> Nova rota
             </Button>
           )}
         </div>
 
-        <Tabs defaultValue="rotas" className="w-full">
+        <Tabs value={transportTab} onValueChange={setTransportTab} className="w-full">
           <TabsList>
             <TabsTrigger value="rotas"><Bus className="mr-2 h-4 w-4" />Rotas</TabsTrigger>
             <TabsTrigger value="inscricoes"><Users className="mr-2 h-4 w-4" />Inscrições</TabsTrigger>
@@ -313,7 +317,7 @@ const Transportes = () => {
           <TabsContent value="inscricoes" className="mt-4">
             <div className="mb-4 flex items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">Alunos inscritos no transporte</h2>
-              {isAdmin && (
+              {isAdmin && !native && (
                 <Button onClick={() => { setEditEnroll(null); setEnrollOpen(true); }} disabled={routes.length === 0}>
                   <Plus className="mr-2 h-4 w-4" /> Inscrever aluno
                 </Button>
@@ -465,6 +469,30 @@ const Transportes = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {native && isAdmin && transportTab !== "lista" && (
+        <Button
+          type="button"
+          size="icon"
+          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          aria-label={transportTab === "inscricoes" ? "Inscrever aluno" : "Nova rota"}
+          onClick={() => {
+            if (transportTab === "inscricoes") {
+              if (routes.length === 0) {
+                toast.error("Crie primeiro pelo menos uma rota.");
+                return;
+              }
+              setEditEnroll(null);
+              setEnrollOpen(true);
+            } else {
+              setEditRoute(null);
+              setRouteOpen(true);
+            }
+          }}
+        >
+          <Plus className="h-6 w-6" />
+        </Button>
+      )}
 
       {/* Dialogs */}
       {schoolId && (

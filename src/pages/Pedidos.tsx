@@ -12,7 +12,8 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { showPageKpiCards } from "@/lib/nativeApp";
+import { Button } from "@/components/ui/button";
+import { showPageKpiCards, isNativeMobileApp } from "@/lib/nativeApp";
 
 type Reason = "doenca" | "ferias" | "pessoal" | "luto" | "formacao" | "outro";
 type StatusDB = "PENDING" | "APPROVED" | "REJECTED";
@@ -57,6 +58,7 @@ type Row = AbsenceRecord & {
 };
 
 const Pedidos = () => {
+  const native = isNativeMobileApp();
   const [rows, setRows] = useState<Row[]>([]);
   const [staff, setStaff] = useState<{ id: string; full_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -176,12 +178,13 @@ const Pedidos = () => {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6">
+      <div className={cn("flex flex-col gap-6", native && "relative pb-28")}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Pedidos de Ausência</h1>
             <p className="text-sm text-muted-foreground">Crie, aprove e gira pedidos da sua equipa.</p>
           </div>
+          {!native && (
           <button
             onClick={() => { setEditing(null); setDialogOpen(true); }}
             className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
@@ -189,6 +192,7 @@ const Pedidos = () => {
             <Plus className="h-4 w-4" strokeWidth={2.25} />
             Novo Pedido
           </button>
+          )}
         </div>
 
         {/* Stats */}
@@ -391,6 +395,18 @@ const Pedidos = () => {
           </div>
         </div>
       </div>
+
+      {native && (
+        <Button
+          type="button"
+          size="icon"
+          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          aria-label="Novo pedido"
+          onClick={() => { setEditing(null); setDialogOpen(true); }}
+        >
+          <Plus className="h-6 w-6" />
+        </Button>
+      )}
 
       <AbsenceFormDialog
         open={dialogOpen}

@@ -23,7 +23,7 @@ import {
   CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { showPageKpiCards } from "@/lib/nativeApp";
+import { showPageKpiCards, isNativeMobileApp } from "@/lib/nativeApp";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ActivityFormDialog, type ActivityRow } from "@/components/extracurriculares/ActivityFormDialog";
@@ -38,6 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { UserPlus, Wallet } from "lucide-react";
 import { CheckCircle2 } from "lucide-react";
 
@@ -60,6 +61,7 @@ const formatTime = (t: string | null) => (t ? t.slice(0, 5) : "");
 const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 const Extracurriculares = () => {
+  const native = isNativeMobileApp();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [academicYear, setAcademicYear] = useState<{ id: string; start_date: string; end_date: string } | null>(null);
@@ -234,13 +236,13 @@ const Extracurriculares = () => {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6">
+      <div className={cn("flex flex-col gap-6", native && canEdit && "relative pb-28")}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Extracurriculares</h1>
             <p className="text-sm text-muted-foreground">Gerir atividades recorrentes e pontuais</p>
           </div>
-          {canEdit && (
+          {canEdit && !native && (
             <button
               onClick={handleNew}
               className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-soft hover:opacity-90 transition-[var(--transition-smooth)]"
@@ -545,6 +547,18 @@ const Extracurriculares = () => {
           </div>
         )}
       </div>
+
+      {native && canEdit && (
+        <Button
+          type="button"
+          size="icon"
+          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          aria-label="Nova atividade"
+          onClick={handleNew}
+        >
+          <Plus className="h-6 w-6" />
+        </Button>
+      )}
 
       <ActivityFormDialog
         open={dialogOpen}

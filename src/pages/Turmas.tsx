@@ -13,7 +13,8 @@ import { ClassroomFormDialog, ClassroomRow } from "@/components/turmas/Classroom
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { ExcelImportDialog } from "@/components/shared/ExcelImportDialog";
 import { useUserRole } from "@/hooks/useUserRole";
-import { showPageKpiCards } from "@/lib/nativeApp";
+import { isNativeMobileApp, showPageKpiCards } from "@/lib/nativeApp";
+import { Button } from "@/components/ui/button";
 
 type ClassroomWithJoins = ClassroomRow & {
   courses?: { id: string; name: string } | null;
@@ -36,6 +37,7 @@ const periodStyles: Record<string, string> = {
 };
 
 const Turmas = () => {
+  const native = isNativeMobileApp();
   const { selectedYearId } = useAcademicYear();
   const { role } = useUserRole();
   const isTeacher = role === "TEACHER";
@@ -126,7 +128,7 @@ const Turmas = () => {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6">
+      <div className={cn("flex flex-col gap-6", native && !isTeacher && "relative pb-28")}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Turmas</h1>
@@ -145,6 +147,8 @@ const Turmas = () => {
             </div>
             {!isTeacher && (
               <>
+                {!native && (
+                <>
                 <button
                   onClick={() => { setEditing(null); setFormOpen(true); }}
                   className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
@@ -159,6 +163,8 @@ const Turmas = () => {
                   <Upload className="h-4 w-4" strokeWidth={2.25} />
                   Importar Excel
                 </button>
+                </>
+                )}
               </>
             )}
           </div>
@@ -289,6 +295,30 @@ const Turmas = () => {
           </div>
         )}
       </div>
+
+      {native && !isTeacher && (
+        <>
+          <Button
+            type="button"
+            size="icon"
+            className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+            aria-label="Nova turma"
+            onClick={() => { setEditing(null); setFormOpen(true); }}
+          >
+            <Plus className="h-6 w-6" />
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="secondary"
+            className="fixed bottom-[7.25rem] right-5 z-40 h-12 w-12 rounded-2xl border border-border shadow-lg"
+            aria-label="Importar Excel"
+            onClick={() => setImportOpen(true)}
+          >
+            <Upload className="h-5 w-5" />
+          </Button>
+        </>
+      )}
 
       <ClassroomFormDialog
         open={formOpen}
