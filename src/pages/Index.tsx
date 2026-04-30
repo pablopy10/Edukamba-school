@@ -16,6 +16,7 @@ import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { cn } from "@/lib/utils";
 import { isNativeMobileApp } from "@/lib/nativeApp";
+import { StudentTodayScheduleCard } from "@/components/dashboard/StudentTodayScheduleCard";
 
 const Index = () => {
   const { counts, gender, messages } = useDashboardData();
@@ -24,8 +25,12 @@ const Index = () => {
   const isParent = role === "PARENT";
   const isStudent = role === "STUDENT";
   const isTeacher = role === "TEACHER";
+  const nativeMobile = isNativeMobileApp();
   /** Painel nativo iOS/Android: professor não vê calendário, agenda nem mensagens na direita. */
-  const hideTeacherMobileRail = isNativeMobileApp() && isTeacher;
+  const hideTeacherMobileRail = nativeMobile && isTeacher;
+  /** Aluno na app nativa: sem calendário nem agenda na coluna direita (só na web). */
+  const hideStudentMobileAside = nativeMobile && isStudent;
+  const showDashboardAside = !hideTeacherMobileRail && !hideStudentMobileAside;
   const { studentId, loading: studentLoading } = useStudentSelf();
   const fmt = (n: number) => n.toLocaleString("pt-PT");
   if (roleLoading || (isStudent && studentLoading)) return <PageLoadingSkeleton />;
@@ -34,12 +39,18 @@ const Index = () => {
       <div
         className={cn(
           "grid grid-cols-1 gap-6",
-          !hideTeacherMobileRail && "xl:grid-cols-[1fr_320px]",
+          showDashboardAside && "xl:grid-cols-[1fr_320px]",
         )}
       >
             {/* Center column */}
             <div className="flex flex-col gap-6">
               <h1 className="sr-only">Painel Edukamba</h1>
+
+              {isStudent && (
+                <section className="grid grid-cols-1 gap-6">
+                  <StudentTodayScheduleCard />
+                </section>
+              )}
 
               {!isParent && !isStudent && (
                 <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -86,8 +97,8 @@ const Index = () => {
               )}
             </div>
 
-            {/* Right column — omitido na app nativa para professores */}
-            {!hideTeacherMobileRail && (
+            {/* Right column — omitido na app nativa para professores; aluno nativo sem calendário/agenda */}
+            {showDashboardAside && (
               <aside className="flex flex-col gap-6">
                 <CalendarCard selectedDate={selectedDate} onSelect={setSelectedDate} />
                 <AgendaCard date={selectedDate} />
