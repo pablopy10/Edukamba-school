@@ -639,7 +639,15 @@ const AlunoPerfil = () => {
                   {age !== null ? ` · ${age} anos` : ""}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {student.classrooms?.name && (
+                  {student.classrooms?.name && student.classroom_id && (
+                    <Link
+                      to={`/turmas/${student.classroom_id}`}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-pastel-blue/40 px-3 py-1 text-xs font-medium text-pastel-blue-foreground transition-opacity hover:opacity-90"
+                    >
+                      <GraduationCap className="h-3.5 w-3.5" strokeWidth={2} /> Turma {student.classrooms.name}
+                    </Link>
+                  )}
+                  {student.classrooms?.name && !student.classroom_id && (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-pastel-blue/40 px-3 py-1 text-xs font-medium text-pastel-blue-foreground">
                       <GraduationCap className="h-3.5 w-3.5" strokeWidth={2} /> Turma {student.classrooms.name}
                     </span>

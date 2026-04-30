@@ -18,6 +18,7 @@ import ProfessorPerfil from "./pages/ProfessorPerfil.tsx";
 import Matriculas from "./pages/Matriculas.tsx";
 import Cursos from "./pages/Cursos.tsx";
 import Turmas from "./pages/Turmas.tsx";
+import TurmaDetalhe from "./pages/TurmaDetalhe.tsx";
 import Disciplinas from "./pages/Disciplinas.tsx";
 import Educadores from "./pages/Educadores.tsx";
 import Presencas from "./pages/Presencas.tsx";
@@ -72,6 +73,7 @@ const App = () => (
           <Route path="/matriculas" element={<ProtectedRoute><Matriculas /></ProtectedRoute>} />
           <Route path="/cursos" element={<ProtectedRoute><Cursos /></ProtectedRoute>} />
           <Route path="/turmas" element={<ProtectedRoute><Turmas /></ProtectedRoute>} />
+          <Route path="/turmas/:id" element={<ProtectedRoute><TurmaDetalhe /></ProtectedRoute>} />
           <Route path="/disciplinas" element={<ProtectedRoute><Disciplinas /></ProtectedRoute>} />
           <Route path="/educadores" element={<ProtectedRoute><Educadores /></ProtectedRoute>} />
           <Route path="/presencas" element={<ProtectedRoute><Presencas /></ProtectedRoute>} />

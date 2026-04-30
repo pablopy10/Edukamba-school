@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Search, Plus, Users, Presentation, Pencil, Trash2, Loader2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -231,16 +232,12 @@ const Turmas = () => {
             {filtered.map((c) => {
               const color = colorFor(c.id);
               return (
-                <div key={c.id} className="group flex flex-col gap-4 rounded-2xl bg-card p-5 shadow-card transition-transform hover:-translate-y-1">
-                  <div className="flex items-start justify-between">
-                    <div className={cn("flex h-12 w-12 items-center justify-center rounded-2xl", colorStyles[color])}>
-                      <Presentation className="h-6 w-6" strokeWidth={1.75} />
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {!isTeacher && (
-                      <>
+                <div key={c.id} className="relative flex flex-col gap-4 rounded-2xl bg-card p-5 shadow-card transition-transform hover:-translate-y-1">
+                  {!isTeacher && (
+                    <div className="absolute right-4 top-4 z-10 flex items-center gap-1">
                       <button
                         title="Editar"
+                        type="button"
                         onClick={() => { setEditing(c); setFormOpen(true); }}
                         className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
                       >
@@ -248,47 +245,58 @@ const Turmas = () => {
                       </button>
                       <button
                         title="Eliminar"
+                        type="button"
                         onClick={() => setDeleteId(c.id)}
                         className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
                       >
                         <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                       </button>
-                      </>
+                    </div>
+                  )}
+                  <Link
+                    to={`/turmas/${c.id}`}
+                    className={cn(
+                      "group/turma flex flex-col gap-4 rounded-xl outline-none ring-offset-background transition-[var(--transition-smooth)] focus-visible:ring-2 focus-visible:ring-primary",
+                      !isTeacher && "pr-12",
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl", colorStyles[color])}>
+                        <Presentation className="h-6 w-6" strokeWidth={1.75} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-base font-bold text-foreground transition-colors group-hover/turma:text-pastel-blue-foreground">{c.name}</h3>
+                        {c.courses?.name && (
+                          <p className="mt-1 text-xs text-muted-foreground">{c.courses.name}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {c.period && (
+                        <span className={cn("rounded-full px-3 py-1 text-xs font-medium", periodStyles[c.period] ?? "bg-muted text-foreground")}>
+                          {c.period}
+                        </span>
+                      )}
+                      {c.grade_level && (
+                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
+                          {c.grade_level}
+                        </span>
+                      )}
+                      {c.academic_years?.label && (
+                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
+                          {c.academic_years.label}
+                        </span>
                       )}
                     </div>
-                  </div>
 
-                  <div>
-                    <h3 className="text-base font-bold text-foreground">{c.name}</h3>
-                    {c.courses?.name && (
-                      <p className="mt-1 text-xs text-muted-foreground">{c.courses.name}</p>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    {c.period && (
-                      <span className={cn("rounded-full px-3 py-1 text-xs font-medium", periodStyles[c.period] ?? "bg-muted text-foreground")}>
-                        {c.period}
+                    <div className="mt-auto flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1">
+                        <Users className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        {c.studentCount} alunos
                       </span>
-                    )}
-                    {c.grade_level && (
-                      <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
-                        {c.grade_level}
-                      </span>
-                    )}
-                    {c.academic_years?.label && (
-                      <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
-                        {c.academic_years.label}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="mt-auto flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground">
-                    <span className="inline-flex items-center gap-1">
-                      <Users className="h-3.5 w-3.5" strokeWidth={1.75} />
-                      {c.studentCount} alunos
-                    </span>
-                  </div>
+                    </div>
+                  </Link>
                 </div>
               );
             })}
