@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { showPageKpiCards, isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 
 type Reason = "doenca" | "ferias" | "pessoal" | "luto" | "formacao" | "outro";
@@ -517,15 +518,17 @@ const Pedidos = () => {
       </div>
 
       {native && (
-        <Button
-          type="button"
-          size="icon"
-          className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-          aria-label="Novo pedido"
-          onClick={() => { setEditing(null); setDialogOpen(true); }}
-        >
-          <Plus className="h-6 w-6" />
-        </Button>
+        <NativeMobileFabPortal>
+          <Button
+            type="button"
+            size="icon"
+            className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
+            aria-label="Novo pedido"
+            onClick={() => { setEditing(null); setDialogOpen(true); }}
+          >
+            <Plus className="h-6 w-6" />
+          </Button>
+        </NativeMobileFabPortal>
       )}
 
       <AbsenceFormDialog

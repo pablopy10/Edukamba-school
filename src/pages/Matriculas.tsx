@@ -11,6 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
+import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { isNativeMobileApp, showPageKpiCards, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { Button } from "@/components/ui/button";
 
@@ -482,15 +483,17 @@ const Matriculas = () => {
       </div>
 
       {native && (
-        <Button
-          type="button"
-          size="icon"
-          className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-          aria-label={isParent ? "Renovar matrícula" : "Nova matrícula"}
-          onClick={() => { setEditing(null); setFormOpen(true); }}
-        >
-          <Plus className="h-6 w-6" />
-        </Button>
+        <NativeMobileFabPortal>
+          <Button
+            type="button"
+            size="icon"
+            className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
+            aria-label={isParent ? "Renovar matrícula" : "Nova matrícula"}
+            onClick={() => { setEditing(null); setFormOpen(true); }}
+          >
+            <Plus className="h-6 w-6" />
+          </Button>
+        </NativeMobileFabPortal>
       )}
 
       <EnrollmentFormDialog

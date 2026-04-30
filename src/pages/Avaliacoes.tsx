@@ -40,6 +40,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { useAuth } from "@/hooks/useAuth";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
+import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { showPageKpiCards, isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { Button } from "@/components/ui/button";
 
@@ -532,15 +533,17 @@ const Avaliacoes = () => {
       </div>
 
       {native && !studentReadOnly && (
-        <Button
-          type="button"
-          size="icon"
-          className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-          aria-label="Nova avaliação"
-          onClick={openCreate}
-        >
-          <Plus className="h-6 w-6" />
-        </Button>
+        <NativeMobileFabPortal>
+          <Button
+            type="button"
+            size="icon"
+            className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
+            aria-label="Nova avaliação"
+            onClick={openCreate}
+          >
+            <Plus className="h-6 w-6" />
+          </Button>
+        </NativeMobileFabPortal>
       )}
 
       <AssessmentFormDialog

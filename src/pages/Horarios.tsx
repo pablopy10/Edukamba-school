@@ -10,6 +10,7 @@ import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
+import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScheduleFormDialog, type ScheduleRecord } from "@/components/horarios/ScheduleFormDialog";
@@ -746,15 +747,17 @@ const Horarios = () => {
             </div>
 
             {isAdmin && !isParent && !isStudent ? (
-              <Button
-                type="button"
-                size="icon"
-                className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-                aria-label="Nova aula"
-                onClick={handleNew}
-              >
-                <Plus className="h-6 w-6" />
-              </Button>
+              <NativeMobileFabPortal>
+                <Button
+                  type="button"
+                  size="icon"
+                  className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
+                  aria-label="Nova aula"
+                  onClick={handleNew}
+                >
+                  <Plus className="h-6 w-6" />
+                </Button>
+              </NativeMobileFabPortal>
             ) : null}
           </div>
         ) : (

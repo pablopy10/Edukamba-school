@@ -22,6 +22,7 @@ import {
   CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { showPageKpiCards, isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -550,15 +551,17 @@ const Extracurriculares = () => {
       </div>
 
       {native && canEdit && (
-        <Button
-          type="button"
-          size="icon"
-          className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-          aria-label="Nova atividade"
-          onClick={handleNew}
-        >
-          <Plus className="h-6 w-6" />
-        </Button>
+        <NativeMobileFabPortal>
+          <Button
+            type="button"
+            size="icon"
+            className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
+            aria-label="Nova atividade"
+            onClick={handleNew}
+          >
+            <Plus className="h-6 w-6" />
+          </Button>
+        </NativeMobileFabPortal>
       )}
 
       <ActivityFormDialog

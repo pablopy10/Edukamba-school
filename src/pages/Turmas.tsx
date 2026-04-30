@@ -13,6 +13,7 @@ import { ClassroomFormDialog, ClassroomRow } from "@/components/turmas/Classroom
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { ExcelImportDialog } from "@/components/shared/ExcelImportDialog";
 import { useUserRole } from "@/hooks/useUserRole";
+import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { isNativeMobileApp, showPageKpiCards, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { Button } from "@/components/ui/button";
 
@@ -304,15 +305,17 @@ const Turmas = () => {
       </div>
 
       {native && !isTeacher && (
-        <Button
-          type="button"
-          size="icon"
-          className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-          aria-label="Nova turma"
-          onClick={() => { setEditing(null); setFormOpen(true); }}
-        >
-          <Plus className="h-6 w-6" />
-        </Button>
+        <NativeMobileFabPortal>
+          <Button
+            type="button"
+            size="icon"
+            className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
+            aria-label="Nova turma"
+            onClick={() => { setEditing(null); setFormOpen(true); }}
+          >
+            <Plus className="h-6 w-6" />
+          </Button>
+        </NativeMobileFabPortal>
       )}
 
       <ClassroomFormDialog

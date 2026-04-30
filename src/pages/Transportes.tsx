@@ -20,6 +20,7 @@ import {
 import { Bus, Plus, Pencil, Trash2, MapPin, Users, ListChecks, Printer, Search, Wallet } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { RouteFormDialog, type RouteRow } from "@/components/transportes/RouteFormDialog";
 import { StopFormDialog, type StopRow } from "@/components/transportes/StopFormDialog";
@@ -470,27 +471,29 @@ const Transportes = () => {
       </div>
 
       {native && isAdmin && transportTab !== "lista" && (
-        <Button
-          type="button"
-          size="icon"
-          className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-          aria-label={transportTab === "inscricoes" ? "Inscrever aluno" : "Nova rota"}
-          onClick={() => {
-            if (transportTab === "inscricoes") {
-              if (routes.length === 0) {
-                toast.error("Crie primeiro pelo menos uma rota.");
-                return;
+        <NativeMobileFabPortal>
+          <Button
+            type="button"
+            size="icon"
+            className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
+            aria-label={transportTab === "inscricoes" ? "Inscrever aluno" : "Nova rota"}
+            onClick={() => {
+              if (transportTab === "inscricoes") {
+                if (routes.length === 0) {
+                  toast.error("Crie primeiro pelo menos uma rota.");
+                  return;
+                }
+                setEditEnroll(null);
+                setEnrollOpen(true);
+              } else {
+                setEditRoute(null);
+                setRouteOpen(true);
               }
-              setEditEnroll(null);
-              setEnrollOpen(true);
-            } else {
-              setEditRoute(null);
-              setRouteOpen(true);
-            }
-          }}
-        >
-          <Plus className="h-6 w-6" />
-        </Button>
+            }}
+          >
+            <Plus className="h-6 w-6" />
+          </Button>
+        </NativeMobileFabPortal>
       )}
 
       {/* Dialogs */}

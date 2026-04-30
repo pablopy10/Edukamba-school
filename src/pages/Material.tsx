@@ -17,6 +17,7 @@ import { MaterialRequestFormDialog, type RequestRow } from "@/components/materia
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
+import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME, showPageKpiCards } from "@/lib/nativeApp";
 
 type Category = "papelaria" | "laboratorio" | "artes" | "desporto" | "tecnologia";
@@ -427,26 +428,30 @@ const Material = () => {
       </div>
 
       {native && tab === "stock" && isAdmin && (
-        <Button
-          type="button"
-          size="icon"
-          className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-          aria-label="Novo material"
-          onClick={() => { setEditingMaterial(null); setShowMaterialDialog(true); }}
-        >
-          <Plus className="h-6 w-6" />
-        </Button>
+        <NativeMobileFabPortal>
+          <Button
+            type="button"
+            size="icon"
+            className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
+            aria-label="Novo material"
+            onClick={() => { setEditingMaterial(null); setShowMaterialDialog(true); }}
+          >
+            <Plus className="h-6 w-6" />
+          </Button>
+        </NativeMobileFabPortal>
       )}
       {native && tab === "pedidos" && canRequest && (
-        <Button
-          type="button"
-          size="icon"
-          className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-          aria-label="Novo pedido"
-          onClick={() => { setEditingRequest(null); setShowRequestDialog(true); }}
-        >
-          <Plus className="h-6 w-6" />
-        </Button>
+        <NativeMobileFabPortal>
+          <Button
+            type="button"
+            size="icon"
+            className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
+            aria-label="Novo pedido"
+            onClick={() => { setEditingRequest(null); setShowRequestDialog(true); }}
+          >
+            <Plus className="h-6 w-6" />
+          </Button>
+        </NativeMobileFabPortal>
       )}
 
       <MaterialFormDialog
