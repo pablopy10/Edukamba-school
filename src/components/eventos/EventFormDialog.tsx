@@ -20,6 +20,7 @@ export type EventRow = {
   audience: string | null;
   description: string | null;
   school_id: string | null;
+  created_by: string | null;
 };
 
 const EVENT_TYPES = [

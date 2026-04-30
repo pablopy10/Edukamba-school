@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
@@ -60,6 +60,7 @@ type Assessment = {
   subject_id: string | null;
   teacher_id: string | null;
   term_id: string | null;
+  created_by: string | null;
 };
 
 type Term = { id: string; term_number: number; name: string; start_date: string; end_date: string };
@@ -97,7 +98,7 @@ const Avaliacoes = () => {
   const { selectedYearId } = useAcademicYear();
   const { isParent, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const { user } = useAuth();
-  const { role } = useUserRole();
+  const { role, loading: roleLoading } = useUserRole();
   const { isTeacher, classroomIds: teacherClassroomIds, subjectId: teacherSubjectId, loading: teacherLoading } = useTeacherClassrooms();
   const {
     isStudent,
@@ -154,7 +155,7 @@ const Avaliacoes = () => {
       .order("start_date");
     let assessmentsQuery = supabase
       .from("assessments")
-      .select("id,title,type,date,start_time,end_time,room,weight,description,classroom_id,subject_id,teacher_id,term_id,academic_year_id")
+      .select("id,title,type,date,start_time,end_time,room,weight,description,classroom_id,subject_id,teacher_id,term_id,academic_year_id,created_by")
       .eq("school_id", sid)
       .order("date", { ascending: true });
     if (yearId) {
@@ -317,6 +318,17 @@ const Avaliacoes = () => {
     }
     return map;
   }, [assessments, holidays]);
+
+  const canMutateAssessment = useCallback(
+    (a: Assessment) => {
+      if (studentReadOnly) return false;
+      if (roleLoading || !user?.id) return false;
+      if (role === "ADMIN" || role === "SUPER_ADMIN") return true;
+      if (role === "TEACHER") return (a.created_by ?? null) === user.id;
+      return false;
+    },
+    [studentReadOnly, roleLoading, user?.id, role],
+  );
 
   const openCreate = () => { setEditing(null); setDialogOpen(true); };
   const openEdit = (a: Assessment) => {
@@ -485,7 +497,7 @@ const Avaliacoes = () => {
             onEdit={openEdit}
             onDelete={(id) => setDeleteId(id)}
             onOpen={(id) => navigate(`/avaliacoes/${id}/notas`)}
-            readOnly={studentReadOnly}
+            canMutateAssessment={canMutateAssessment}
           />
         ) : view === "calendario" ? (
           <CalendarView
@@ -502,7 +514,7 @@ const Avaliacoes = () => {
             onEdit={openEdit}
             onDelete={(id) => setDeleteId(id)}
             onOpen={(id) => navigate(`/avaliacoes/${id}/notas`)}
-            readOnly={studentReadOnly}
+            canMutateAssessment={canMutateAssessment}
           />
         ) : (
           <ListView
@@ -515,7 +527,7 @@ const Avaliacoes = () => {
             onEdit={openEdit}
             onDelete={(id) => setDeleteId(id)}
             onOpen={(id) => navigate(`/avaliacoes/${id}/notas`)}
-            readOnly={studentReadOnly}
+            canMutateAssessment={canMutateAssessment}
           />
         )}
       </div>
@@ -586,7 +598,7 @@ const AssessmentsCardsView = ({
   onEdit,
   onDelete,
   onOpen,
-  readOnly,
+  canMutateAssessment,
 }: {
   evaluations: Assessment[];
   classroomMap: Map<string, string>;
@@ -597,7 +609,7 @@ const AssessmentsCardsView = ({
   onEdit: (a: Assessment) => void;
   onDelete: (id: string) => void;
   onOpen: (id: string) => void;
-  readOnly?: boolean;
+  canMutateAssessment: (a: Assessment) => boolean;
 }) => {
   const sorted = [...evaluations].sort((a, b) => {
     const d = a.date.localeCompare(b.date);
@@ -667,7 +679,7 @@ const AssessmentsCardsView = ({
                   <button type="button" onClick={(ev) => { ev.stopPropagation(); onOpen(e.id); }} className="inline-flex items-center gap-1 rounded-full bg-pastel-blue px-3 py-1 text-xs font-medium text-pastel-blue-foreground hover:opacity-90">
                     <GraduationCap className="h-3 w-3" /> Notas
                   </button>
-                  {!readOnly && (
+                  {canMutateAssessment(e) && (
                     <>
                       <button type="button" onClick={(ev) => { ev.stopPropagation(); onEdit(e); }} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground hover:bg-accent">
                         <Pencil className="h-3 w-3" /> Editar
@@ -690,7 +702,7 @@ const AssessmentsCardsView = ({
 /* ======================= Calendar View ======================= */
 const CalendarView = ({
   cursor, setCursor, evaluations, selectedDate, setSelectedDate,
-  classroomMap, subjectMap, conflictIds, holidays, holidayConflicts, onEdit, onDelete, onOpen, readOnly,
+  classroomMap, subjectMap, conflictIds, holidays, holidayConflicts, onEdit, onDelete, onOpen, canMutateAssessment,
 }: {
   cursor: Date;
   setCursor: (d: Date) => void;
@@ -705,7 +717,7 @@ const CalendarView = ({
   onEdit: (a: Assessment) => void;
   onDelete: (id: string) => void;
   onOpen: (id: string) => void;
-  readOnly?: boolean;
+  canMutateAssessment: (a: Assessment) => boolean;
 }) => {
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -886,7 +898,7 @@ const CalendarView = ({
                   <button onClick={(ev) => { ev.stopPropagation(); onOpen(e.id); }} className="inline-flex items-center gap-1 rounded-full bg-pastel-blue px-3 py-1 text-xs font-medium text-pastel-blue-foreground hover:opacity-90">
                     <GraduationCap className="h-3 w-3" /> Notas
                   </button>
-                  {!readOnly && (
+                  {canMutateAssessment(e) && (
                     <>
                       <button onClick={(ev) => { ev.stopPropagation(); onEdit(e); }} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground hover:bg-accent">
                         <Pencil className="h-3 w-3" /> Editar
@@ -908,7 +920,7 @@ const CalendarView = ({
 
 /* ======================= List View ======================= */
 const ListView = ({
-  evaluations, classroomMap, subjectMap, teacherMap, conflictIds, holidayConflicts, onEdit, onDelete, onOpen, readOnly,
+  evaluations, classroomMap, subjectMap, teacherMap, conflictIds, holidayConflicts, onEdit, onDelete, onOpen, canMutateAssessment,
 }: {
   evaluations: Assessment[];
   classroomMap: Map<string, string>;
@@ -919,7 +931,7 @@ const ListView = ({
   onEdit: (a: Assessment) => void;
   onDelete: (id: string) => void;
   onOpen: (id: string) => void;
-  readOnly?: boolean;
+  canMutateAssessment: (a: Assessment) => boolean;
 }) => {
   const sorted = [...evaluations].sort((a, b) => a.date.localeCompare(b.date));
 
@@ -996,7 +1008,7 @@ const ListView = ({
                       <button onClick={(ev) => { ev.stopPropagation(); onOpen(e.id); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/30 hover:text-foreground" title="Atribuir notas">
                         <GraduationCap className="h-4 w-4" strokeWidth={1.75} />
                       </button>
-                      {!readOnly && (
+                      {canMutateAssessment(e) && (
                         <>
                           <button onClick={(ev) => { ev.stopPropagation(); onEdit(e); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
                             <Pencil className="h-4 w-4" strokeWidth={1.75} />

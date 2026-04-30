@@ -166,6 +166,7 @@ const Pedidos = () => {
 
   const handleDelete = async () => {
     if (!confirmDelete) return;
+    if (isTeacher && confirmDelete.requester_id !== userId) return;
     const { error } = await supabase.from("staff_absences").delete().eq("id", confirmDelete.id);
     if (error) {
       toast({ title: "Erro a remover", description: error.message, variant: "destructive" });
@@ -297,6 +298,8 @@ const Pedidos = () => {
                   const isOwner = r.requester_id === userId;
                   const canEditRow = isAdmin || (isOwner && status === "PENDING");
                   const canDeleteRow = isAdmin || (isOwner && status === "PENDING");
+                  const showInlineOwnerActions =
+                    native && r.requester_id === userId && canEditRow && canDeleteRow;
                   return (
                     <div key={r.id} className="rounded-xl border border-border bg-background p-4 shadow-soft">
                       <div className="flex items-start justify-between gap-3">
@@ -343,7 +346,30 @@ const Pedidos = () => {
                             ><X className="h-3.5 w-3.5" />Rejeitar</button>
                           </>
                         )}
-                        {(canEditRow || canDeleteRow) && (
+                        {showInlineOwnerActions && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditing(r);
+                                setDialogOpen(true);
+                              }}
+                              className="inline-flex h-9 items-center gap-1 rounded-full bg-muted px-3 text-xs font-semibold text-foreground transition-opacity hover:bg-accent"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDelete(r)}
+                              className="inline-flex h-9 items-center gap-1 rounded-full bg-destructive/15 px-3 text-xs font-semibold text-destructive transition-opacity hover:bg-destructive/25"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Remover
+                            </button>
+                          </>
+                        )}
+                        {(canEditRow || canDeleteRow) && !showInlineOwnerActions && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">

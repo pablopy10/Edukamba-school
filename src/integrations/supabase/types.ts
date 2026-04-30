@@ -271,6 +271,7 @@ export type Database = {
           assessment_type_id: string | null
           classroom_id: string | null
           created_at: string
+          created_by: string | null
           date: string
           description: string | null
           end_time: string | null
@@ -291,6 +292,7 @@ export type Database = {
           assessment_type_id?: string | null
           classroom_id?: string | null
           created_at?: string
+          created_by?: string | null
           date: string
           description?: string | null
           end_time?: string | null
@@ -311,6 +313,7 @@ export type Database = {
           assessment_type_id?: string | null
           classroom_id?: string | null
           created_at?: string
+          created_by?: string | null
           date?: string
           description?: string | null
           end_time?: string | null
@@ -346,6 +349,13 @@ export type Database = {
             columns: ["classroom_id"]
             isOneToOne: false
             referencedRelation: "classrooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assessments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {

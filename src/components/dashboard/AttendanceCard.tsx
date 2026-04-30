@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { TooltipProps } from "recharts";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useAcademicYear } from "@/context/AcademicYearContext";
-import { sortByName } from "@/lib/utils";
+import { sortByName, cn } from "@/lib/utils";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import {
@@ -36,6 +37,70 @@ const emptyMonths = (): WeekBucket[] =>
     absent: 0,
   }));
 
+/** Índice 0–11 a partir da parte calendário YYYY-MM-DD (sem UTC). */
+const calendarMonthIndexFromIso = (dateStr: string): number | null => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr.trim());
+  if (!m) return null;
+  const month = Number(m[2]);
+  if (month < 1 || month > 12) return null;
+  return month - 1;
+};
+
+/** Presentes vs ausentes alinhado com Presencas.tsx (status). */
+const bucketAttendance = (status: string | null, notes: string | null): "present" | "absent" => {
+  const s = (status ?? "").trim().toUpperCase();
+  const n = (notes ?? "").toUpperCase();
+  if (s === "ABSENT" || s === "DISCIPLINARY" || s === "JUSTIFIED") return "absent";
+  if (s === "PRESENT" || s === "LATE") return "present";
+  if (n.includes("ABSEN") || n.includes("FALT")) return "absent";
+  return "present";
+};
+
+const CHART_LIMIT = 25000;
+
+function AttendanceTooltip({ active, payload, label }: TooltipProps<number, string>) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div
+      className={cn(
+        "rounded-xl border border-border bg-card px-3 py-2.5 shadow-card",
+        "text-sm text-foreground",
+      )}
+    >
+      <p className="mb-1.5 border-b border-border pb-1 text-xs font-bold uppercase tracking-wide text-foreground">
+        {label}
+      </p>
+      <ul className="flex flex-col gap-1">
+        {payload.map((entry) => {
+          const key = String(entry.dataKey ?? "");
+          const labelPt = key === "present" ? "Presentes" : key === "absent" ? "Ausentes" : key;
+          const color =
+            key === "present"
+              ? "hsl(var(--pastel-yellow-foreground))"
+              : key === "absent"
+                ? "hsl(var(--pastel-blue-foreground))"
+                : "hsl(var(--foreground))";
+          return (
+            <li key={key} className="flex items-center justify-between gap-6 font-semibold text-foreground">
+              <span className="flex items-center gap-2">
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{
+                    backgroundColor:
+                      key === "present" ? "hsl(var(--pastel-yellow))" : "hsl(var(--pastel-blue))",
+                  }}
+                />
+                <span style={{ color }}>{labelPt}</span>
+              </span>
+              <span className="tabular-nums text-base font-bold text-foreground">{entry.value}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export const AttendanceCard = () => {
   const { selectedYear, selectedYearId } = useAcademicYear();
   const { role, loading: roleLoading } = useUserRole();
@@ -43,23 +108,42 @@ export const AttendanceCard = () => {
   const teacherMode = !roleLoading && role === "TEACHER";
   const { classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
 
+  const [schoolId, setSchoolId] = useState<string | null>(null);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [classroomId, setClassroomId] = useState<string>("ALL");
   const [data, setData] = useState<WeekBucket[]>(() => emptyMonths());
 
-  const yearRange = useMemo(() => {
+  /** Limites YYYY-MM-DD em calendário local da escola (evita desvio UTC com toISOString). */
+  const dateBounds = useMemo(() => {
     if (selectedYear) {
       return {
-        start: new Date(`${selectedYear.start_date}T00:00:00`),
-        end: new Date(`${selectedYear.end_date}T00:00:00`),
-        year: Number(selectedYear.start_date.slice(0, 4)),
+        start: selectedYear.start_date.slice(0, 10),
+        end: selectedYear.end_date.slice(0, 10),
       };
     }
     const now = new Date();
-    const start = new Date(now.getFullYear(), 0, 1);
-    const end = new Date(now.getFullYear() + 1, 0, 1);
-    return { start, end, year: now.getFullYear() };
+    const y = now.getFullYear();
+    return {
+      start: `${y}-01-01`,
+      end: `${y}-12-31`,
+    };
   }, [selectedYear]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        if (!cancelled) setSchoolId(null);
+        return;
+      }
+      const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", user.id).maybeSingle();
+      if (!cancelled) setSchoolId(profile?.school_id ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Turmas no select: admin = todas do ano; professor = só turmas com horário (schedules) ∩ ano letivo atual.
   useEffect(() => {
@@ -116,11 +200,26 @@ export const AttendanceCard = () => {
     };
   }, [roleLoading, teacherMode, selectedYearId, teacherLoading, teacherClassroomIds.join(",")]);
 
-  useEffect(() => {
-    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const aggregateRows = useCallback((rows: { date: string; status: string | null; notes: string | null }[]) => {
+    const months = emptyMonths();
+    for (const row of rows) {
+      const monthIdx = calendarMonthIndexFromIso(row.date);
+      if (monthIdx === null) continue;
+      const side = bucketAttendance(row.status, row.notes);
+      if (side === "absent") months[monthIdx].absent += 1;
+      else months[monthIdx].present += 1;
+    }
+    return months;
+  }, []);
 
+  useEffect(() => {
     const load = async () => {
       if (roleLoading) {
+        setData(emptyMonths());
+        return;
+      }
+
+      if (!schoolId) {
         setData(emptyMonths());
         return;
       }
@@ -133,68 +232,50 @@ export const AttendanceCard = () => {
         let query = supabase
           .from("attendance")
           .select("date, notes, status, classroom_id")
-          .gte("date", fmt(yearRange.start))
-          .lt("date", fmt(yearRange.end))
-          .eq("classroom_id", classroomId);
+          .eq("school_id", schoolId)
+          .gte("date", dateBounds.start)
+          .lte("date", dateBounds.end)
+          .eq("classroom_id", classroomId)
+          .limit(CHART_LIMIT);
 
-        const { data: rows } = await query;
-        const filtered = rows ?? [];
-        const months = emptyMonths();
-
-        filtered.forEach((row) => {
-          const d = new Date((row as { date: string }).date);
-          const monthIdx = d.getMonth();
-          const status = ((row as { status: string | null }).status ?? "").toUpperCase();
-          const notes = ((row as { notes: string | null }).notes ?? "").toUpperCase();
-          const isAbsent =
-            status === "ABSENT" ||
-            status === "JUSTIFIED" ||
-            notes.includes("ABSEN") ||
-            notes.includes("FALT");
-          if (isAbsent) months[monthIdx].absent += 1;
-          else months[monthIdx].present += 1;
-        });
-
-        setData(months);
+        const { data: rows, error } = await query;
+        if (error) {
+          console.error("AttendanceCard load", error);
+          setData(emptyMonths());
+          return;
+        }
+        setData(aggregateRows((rows ?? []) as { date: string; status: string | null; notes: string | null }[]));
         return;
       }
 
       let query = supabase
         .from("attendance")
         .select("date, notes, status, classroom_id")
-        .gte("date", fmt(yearRange.start))
-        .lt("date", fmt(yearRange.end));
+        .eq("school_id", schoolId)
+        .gte("date", dateBounds.start)
+        .lte("date", dateBounds.end)
+        .limit(CHART_LIMIT);
 
       if (classroomId !== "ALL") {
         query = query.eq("classroom_id", classroomId);
       }
 
-      const { data: rows } = await query;
-      const filtered = rows ?? [];
-      const months = emptyMonths();
-
-      filtered.forEach((row) => {
-        const d = new Date((row as { date: string }).date);
-        const monthIdx = d.getMonth();
-        const status = ((row as { status: string | null }).status ?? "").toUpperCase();
-        const notes = ((row as { notes: string | null }).notes ?? "").toUpperCase();
-        const isAbsent =
-          status === "ABSENT" ||
-          status === "JUSTIFIED" ||
-          notes.includes("ABSEN") ||
-          notes.includes("FALT");
-        if (isAbsent) months[monthIdx].absent += 1;
-        else months[monthIdx].present += 1;
-      });
-
-      setData(months);
+      const { data: rows, error } = await query;
+      if (error) {
+        console.error("AttendanceCard load", error);
+        setData(emptyMonths());
+        return;
+      }
+      setData(aggregateRows((rows ?? []) as { date: string; status: string | null; notes: string | null }[]));
     };
 
     void load();
   }, [
+    aggregateRows,
     classroomId,
-    yearRange.start,
-    yearRange.end,
+    dateBounds.start,
+    dateBounds.end,
+    schoolId,
     teacherMode,
     teacherLoading,
     roleLoading,
@@ -235,7 +316,7 @@ export const AttendanceCard = () => {
         </p>
       )}
 
-      <div className="flex items-center gap-5 text-xs text-muted-foreground">
+      <div className="flex items-center gap-5 text-xs font-medium text-muted-foreground">
         <div className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full bg-pastel-yellow" /> Presentes
         </div>
@@ -244,37 +325,25 @@ export const AttendanceCard = () => {
         </div>
       </div>
 
-      <div className="h-64 w-full">
+      <div className="h-64 w-full min-h-[240px] touch-pan-x">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} barCategoryGap="25%">
+          <BarChart data={data} barCategoryGap="25%" margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
             <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 3" />
             <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
             <YAxis axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} domain={[0, yMax]} allowDecimals={false} />
             <Tooltip
-              cursor={{ fill: "hsl(var(--accent))", opacity: 0.4 }}
-              contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
-                borderRadius: "12px",
-                boxShadow: "var(--shadow-soft)",
-                fontSize: "12px",
-              }}
-              formatter={(value: number, name: string) => {
-                const labels: Record<string, string> = {
-                  present: "Presentes",
-                  absent: "Ausentes",
-                };
-                return [value, labels[name] ?? name];
-              }}
-              labelFormatter={(label: string) => label}
+              cursor={{ fill: "hsl(var(--muted) / 0.35)" }}
+              content={<AttendanceTooltip />}
             />
-            <Bar dataKey="present" fill="hsl(var(--pastel-yellow))" radius={[8, 8, 0, 0]} />
-            <Bar dataKey="absent" fill="hsl(var(--pastel-blue))" radius={[8, 8, 0, 0]} />
+            <Bar dataKey="present" name="Presentes" fill="hsl(var(--pastel-yellow))" radius={[8, 8, 0, 0]} stroke="hsl(var(--pastel-yellow-foreground) / 0.25)" strokeWidth={1} />
+            <Bar dataKey="absent" name="Ausentes" fill="hsl(var(--pastel-blue))" radius={[8, 8, 0, 0]} stroke="hsl(var(--pastel-blue-foreground) / 0.35)" strokeWidth={1} />
           </BarChart>
         </ResponsiveContainer>
       </div>
       {isEmpty && (
-        <p className="text-center text-xs text-muted-foreground">Sem registos de frequência este mês.</p>
+        <p className="text-center text-xs text-muted-foreground">
+          Sem registos de frequência neste período. Verifique o ano letivo no topo ou registe presenças em Presenças.
+        </p>
       )}
     </div>
   );

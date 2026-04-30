@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
   Plus,
@@ -64,6 +64,7 @@ const Eventos = () => {
   const native = isNativeMobileApp();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
   const [view, setView] = useState<View>("calendario");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
@@ -78,8 +79,17 @@ const Eventos = () => {
   const [editing, setEditing] = useState<EventRow | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const canEdit = role === "ADMIN" || role === "TEACHER";
-  const canDelete = role === "ADMIN";
+  const canCreateEvent = role === "ADMIN" || role === "TEACHER" || role === "SUPER_ADMIN";
+
+  const canMutateEvent = useCallback(
+    (e: EventRow) => {
+      if (!userId) return false;
+      if (role === "ADMIN" || role === "SUPER_ADMIN") return true;
+      if (role === "TEACHER") return (e.created_by ?? null) === userId;
+      return false;
+    },
+    [userId, role],
+  );
 
   const loadEvents = async () => {
     if (!schoolId) return;
@@ -101,6 +111,7 @@ const Eventos = () => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      setUserId(user.id);
       const { data: profile } = await supabase
         .from("profiles")
         .select("school_id, role")
@@ -161,7 +172,7 @@ const Eventos = () => {
 
   return (
     <DashboardLayout>
-      <div className={cn("flex flex-col gap-6", native && canEdit && "relative pb-28")}>
+      <div className={cn("flex flex-col gap-6", native && canCreateEvent && "relative pb-28")}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Eventos</h1>
@@ -199,7 +210,7 @@ const Eventos = () => {
             </div>
             )}
 
-            {canEdit && !native && (
+            {canCreateEvent && !native && (
               <button
                 onClick={handleNew}
                 className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
@@ -263,8 +274,7 @@ const Eventos = () => {
         ) : native ? (
           <EventsCardsView
             events={filtered}
-            canEdit={canEdit}
-            canDelete={canDelete}
+            canMutateEvent={canMutateEvent}
             onEdit={handleEdit}
             onDelete={(id) => setDeleteId(id)}
           />
@@ -275,23 +285,21 @@ const Eventos = () => {
             events={filtered}
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
-            canEdit={canEdit}
-            canDelete={canDelete}
+            canMutateEvent={canMutateEvent}
             onEdit={handleEdit}
             onDelete={(id) => setDeleteId(id)}
           />
         ) : (
           <ListView
             events={filtered}
-            canEdit={canEdit}
-            canDelete={canDelete}
+            canMutateEvent={canMutateEvent}
             onEdit={handleEdit}
             onDelete={(id) => setDeleteId(id)}
           />
         )}
       </div>
 
-      {native && canEdit && (
+      {native && canCreateEvent && (
         <Button
           type="button"
           size="icon"
@@ -354,14 +362,12 @@ const TypeChip = ({
 
 const EventsCardsView = ({
   events: items,
-  canEdit,
-  canDelete,
+  canMutateEvent,
   onEdit,
   onDelete,
 }: {
   events: EventRow[];
-  canEdit: boolean;
-  canDelete: boolean;
+  canMutateEvent: (e: EventRow) => boolean;
   onEdit: (e: EventRow) => void;
   onDelete: (id: string) => void;
 }) => {
@@ -418,26 +424,22 @@ const EventsCardsView = ({
                     Público: <span className="font-medium text-foreground">{e.audience}</span>
                   </p>
                 )}
-                {(canEdit || canDelete) && (
+                {canMutateEvent(e) && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {canEdit && (
-                      <button
-                        type="button"
-                        onClick={() => onEdit(e)}
-                        className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground hover:bg-accent"
-                      >
-                        <Pencil className="h-3 w-3" /> Editar
-                      </button>
-                    )}
-                    {canDelete && (
-                      <button
-                        type="button"
-                        onClick={() => onDelete(e.id)}
-                        className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/20"
-                      >
-                        <Trash2 className="h-3 w-3" /> Remover
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => onEdit(e)}
+                      className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground hover:bg-accent"
+                    >
+                      <Pencil className="h-3 w-3" /> Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(e.id)}
+                      className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/20"
+                    >
+                      <Trash2 className="h-3 w-3" /> Remover
+                    </button>
                   </div>
                 )}
               </div>
@@ -456,8 +458,7 @@ const CalendarView = ({
   events: items,
   selectedDate,
   setSelectedDate,
-  canEdit,
-  canDelete,
+  canMutateEvent,
   onEdit,
   onDelete,
 }: {
@@ -466,8 +467,7 @@ const CalendarView = ({
   events: EventRow[];
   selectedDate: string | null;
   setSelectedDate: (d: string | null) => void;
-  canEdit: boolean;
-  canDelete: boolean;
+  canMutateEvent: (e: EventRow) => boolean;
   onEdit: (e: EventRow) => void;
   onDelete: (id: string) => void;
 }) => {
@@ -658,24 +658,20 @@ const CalendarView = ({
                     Público: <span className="font-medium text-foreground">{e.audience}</span>
                   </p>
                 )}
-                {(canEdit || canDelete) && (
+                {canMutateEvent(e) && (
                   <div className="mt-3 flex gap-2">
-                    {canEdit && (
-                      <button
-                        onClick={() => onEdit(e)}
-                        className="inline-flex h-7 items-center gap-1 rounded-full bg-muted px-3 text-[11px] font-medium text-foreground hover:bg-accent"
-                      >
-                        <Pencil className="h-3 w-3" /> Editar
-                      </button>
-                    )}
-                    {canDelete && (
-                      <button
-                        onClick={() => onDelete(e.id)}
-                        className="inline-flex h-7 items-center gap-1 rounded-full bg-destructive/10 px-3 text-[11px] font-medium text-destructive hover:bg-destructive/20"
-                      >
-                        <Trash2 className="h-3 w-3" /> Remover
-                      </button>
-                    )}
+                    <button
+                      onClick={() => onEdit(e)}
+                      className="inline-flex h-7 items-center gap-1 rounded-full bg-muted px-3 text-[11px] font-medium text-foreground hover:bg-accent"
+                    >
+                      <Pencil className="h-3 w-3" /> Editar
+                    </button>
+                    <button
+                      onClick={() => onDelete(e.id)}
+                      className="inline-flex h-7 items-center gap-1 rounded-full bg-destructive/10 px-3 text-[11px] font-medium text-destructive hover:bg-destructive/20"
+                    >
+                      <Trash2 className="h-3 w-3" /> Remover
+                    </button>
                   </div>
                 )}
               </div>
@@ -690,14 +686,12 @@ const CalendarView = ({
 /* ======================= List View ======================= */
 const ListView = ({
   events: items,
-  canEdit,
-  canDelete,
+  canMutateEvent,
   onEdit,
   onDelete,
 }: {
   events: EventRow[];
-  canEdit: boolean;
-  canDelete: boolean;
+  canMutateEvent: (e: EventRow) => boolean;
   onEdit: (e: EventRow) => void;
   onDelete: (id: string) => void;
 }) => {
@@ -756,23 +750,23 @@ const ListView = ({
                   <td className="px-6 py-4 text-muted-foreground">{e.audience ?? "—"}</td>
                   <td className="px-6 py-4">
                     <div className="flex justify-end gap-1">
-                      {canEdit && (
-                        <button
-                          onClick={() => onEdit(e)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                          title="Editar"
-                        >
-                          <Pencil className="h-4 w-4" strokeWidth={1.75} />
-                        </button>
-                      )}
-                      {canDelete && (
-                        <button
-                          onClick={() => onDelete(e.id)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                          title="Remover"
-                        >
-                          <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                        </button>
+                      {canMutateEvent(e) && (
+                        <>
+                          <button
+                            onClick={() => onEdit(e)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            title="Editar"
+                          >
+                            <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                          </button>
+                          <button
+                            onClick={() => onDelete(e.id)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                            title="Remover"
+                          >
+                            <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                          </button>
+                        </>
                       )}
                     </div>
                   </td>
