@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TooltipProps } from "recharts";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip, LabelList } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { sortByName, cn } from "@/lib/utils";
@@ -58,8 +58,26 @@ const bucketAttendance = (status: string | null, notes: string | null): "present
 
 const CHART_LIMIT = 25000;
 
+function attendanceFromTooltipPayload(payload: TooltipProps<number, string>["payload"]): {
+  present: number;
+  absent: number;
+  monthLabel: string;
+} | null {
+  if (!payload?.length) return null;
+  /** Em barras agrupadas o valor fiável está em `payload` da série (linha do gráfico), não só em `entry.value`. */
+  const row = payload[0]?.payload as WeekBucket | undefined;
+  if (!row) return null;
+  const present = Number(row.present ?? 0);
+  const absent = Number(row.absent ?? 0);
+  return { present, absent, monthLabel: row.week ?? "" };
+}
+
 function AttendanceTooltip({ active, payload, label }: TooltipProps<number, string>) {
-  if (!active || !payload?.length) return null;
+  if (!active) return null;
+  const stats = attendanceFromTooltipPayload(payload);
+  if (!stats) return null;
+  const { present, absent, monthLabel } = stats;
+  const header = typeof label === "string" && label.trim() ? label : monthLabel;
   return (
     <div
       className={cn(
@@ -68,37 +86,38 @@ function AttendanceTooltip({ active, payload, label }: TooltipProps<number, stri
       )}
     >
       <p className="mb-1.5 border-b border-border pb-1 text-xs font-bold uppercase tracking-wide text-foreground">
-        {label}
+        {header}
       </p>
       <ul className="flex flex-col gap-1">
-        {payload.map((entry) => {
-          const key = String(entry.dataKey ?? "");
-          const labelPt = key === "present" ? "Presentes" : key === "absent" ? "Ausentes" : key;
-          const color =
-            key === "present"
-              ? "hsl(var(--pastel-yellow-foreground))"
-              : key === "absent"
-                ? "hsl(var(--pastel-blue-foreground))"
-                : "hsl(var(--foreground))";
-          return (
-            <li key={key} className="flex items-center justify-between gap-6 font-semibold text-foreground">
-              <span className="flex items-center gap-2">
-                <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{
-                    backgroundColor:
-                      key === "present" ? "hsl(var(--pastel-yellow))" : "hsl(var(--pastel-blue))",
-                  }}
-                />
-                <span style={{ color }}>{labelPt}</span>
-              </span>
-              <span className="tabular-nums text-base font-bold text-foreground">{entry.value}</span>
-            </li>
-          );
-        })}
+        <li className="flex items-center justify-between gap-6 font-semibold text-foreground">
+          <span className="flex items-center gap-2">
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: "hsl(var(--pastel-yellow))" }}
+            />
+            <span style={{ color: "hsl(var(--pastel-yellow-foreground))" }}>Presentes</span>
+          </span>
+          <span className="tabular-nums text-base font-bold text-foreground">{present}</span>
+        </li>
+        <li className="flex items-center justify-between gap-6 font-semibold text-foreground">
+          <span className="flex items-center gap-2">
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: "hsl(var(--pastel-blue))" }}
+            />
+            <span style={{ color: "hsl(var(--pastel-blue-foreground))" }}>Ausentes</span>
+          </span>
+          <span className="tabular-nums text-base font-bold text-foreground">{absent}</span>
+        </li>
       </ul>
     </div>
   );
+}
+
+function barCountLabel(value: number | string): string {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  return String(Math.round(n));
 }
 
 export const AttendanceCard = () => {
@@ -327,16 +346,32 @@ export const AttendanceCard = () => {
 
       <div className="h-64 w-full min-h-[240px] touch-pan-x">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} barCategoryGap="25%" margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+          <BarChart data={data} barCategoryGap="25%" margin={{ top: 20, right: 4, left: 0, bottom: 0 }}>
             <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 3" />
             <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
             <YAxis axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} domain={[0, yMax]} allowDecimals={false} />
             <Tooltip
               cursor={{ fill: "hsl(var(--muted) / 0.35)" }}
-              content={<AttendanceTooltip />}
+              content={(props) => <AttendanceTooltip {...props} />}
             />
-            <Bar dataKey="present" name="Presentes" fill="hsl(var(--pastel-yellow))" radius={[8, 8, 0, 0]} stroke="hsl(var(--pastel-yellow-foreground) / 0.25)" strokeWidth={1} />
-            <Bar dataKey="absent" name="Ausentes" fill="hsl(var(--pastel-blue))" radius={[8, 8, 0, 0]} stroke="hsl(var(--pastel-blue-foreground) / 0.35)" strokeWidth={1} />
+            <Bar dataKey="present" name="Presentes" fill="hsl(var(--pastel-yellow))" radius={[8, 8, 0, 0]} stroke="hsl(var(--pastel-yellow-foreground) / 0.25)" strokeWidth={1}>
+              <LabelList
+                dataKey="present"
+                position="top"
+                fill="hsl(var(--foreground))"
+                fontSize={11}
+                formatter={barCountLabel}
+              />
+            </Bar>
+            <Bar dataKey="absent" name="Ausentes" fill="hsl(var(--pastel-blue))" radius={[8, 8, 0, 0]} stroke="hsl(var(--pastel-blue-foreground) / 0.35)" strokeWidth={1}>
+              <LabelList
+                dataKey="absent"
+                position="top"
+                fill="hsl(var(--foreground))"
+                fontSize={11}
+                formatter={barCountLabel}
+              />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
