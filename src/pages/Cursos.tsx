@@ -10,7 +10,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CourseFormDialog, CourseRow } from "@/components/cursos/CourseFormDialog";
-import { showPageKpiCards } from "@/lib/nativeApp";
+import { showPageKpiCards, isNativeMobileApp } from "@/lib/nativeApp";
+import { Button } from "@/components/ui/button";
 
 type CourseWithStats = CourseRow & {
   classroomCount: number;
@@ -32,6 +33,7 @@ const levelStyles: Record<string, string> = {
 };
 
 const Cursos = () => {
+  const native = isNativeMobileApp();
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [levelFilter, setLevelFilter] = useState<string>("all");
@@ -123,25 +125,28 @@ const Cursos = () => {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className={cn("flex flex-col gap-6", native && "relative pb-28")}>
+        <div className={cn("flex flex-col gap-4", native ? "" : "sm:flex-row sm:items-center sm:justify-between")}>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Cursos</h1>
             <p className="text-sm text-muted-foreground">Faça a gestão de todos os cursos oferecidos pela escola.</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative">
+          <div className={cn("flex flex-wrap items-center gap-3", native && "w-full")}>
+            <div className={cn("relative", native ? "min-w-0 flex-1" : "")}>
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 type="text"
                 placeholder="Pesquisar curso..."
-                className="h-11 w-72 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
+                className={cn(
+                  "h-11 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20",
+                  native ? "w-full min-w-0" : "w-72",
+                )}
               />
             </div>
             <Select value={levelFilter} onValueChange={setLevelFilter}>
-              <SelectTrigger className="h-11 w-44 rounded-full border-border bg-card shadow-soft">
+              <SelectTrigger className={cn("h-11 rounded-full border-border bg-card shadow-soft", native ? "w-full" : "w-44")}>
                 <SelectValue placeholder="Filtrar nível" />
               </SelectTrigger>
               <SelectContent>
@@ -151,6 +156,7 @@ const Cursos = () => {
                 <SelectItem value="Avançado">Avançado</SelectItem>
               </SelectContent>
             </Select>
+            {!native && (
             <button
               onClick={() => { setEditing(null); setFormOpen(true); }}
               className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
@@ -158,6 +164,7 @@ const Cursos = () => {
               <Plus className="h-4 w-4" strokeWidth={2.25} />
               Novo Curso
             </button>
+            )}
           </div>
         </div>
 
@@ -179,8 +186,9 @@ const Cursos = () => {
         </div>
         )}
 
-        <div className="flex items-center justify-between">
+        <div className={cn("flex items-center justify-between gap-3", native && "flex-col items-stretch")}>
           <h2 className="text-lg font-bold text-foreground">Catálogo de Cursos</h2>
+          {!native && (
           <div className="flex rounded-full border border-border bg-card p-1 shadow-soft">
             <button
               onClick={() => setView("grid")}
@@ -201,6 +209,7 @@ const Cursos = () => {
               Lista
             </button>
           </div>
+          )}
         </div>
 
         {loading ? (
@@ -211,7 +220,7 @@ const Cursos = () => {
           <div className="rounded-2xl bg-card p-10 text-center shadow-card">
             <p className="text-sm text-muted-foreground">Nenhum curso encontrado.</p>
           </div>
-        ) : view === "grid" ? (
+        ) : native || view === "grid" ? (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((c) => {
               const color = colorFor(c.id);
@@ -326,6 +335,18 @@ const Cursos = () => {
           </div>
         )}
       </div>
+
+      {native && (
+        <Button
+          type="button"
+          size="icon"
+          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          aria-label="Novo curso"
+          onClick={() => { setEditing(null); setFormOpen(true); }}
+        >
+          <Plus className="h-6 w-6" />
+        </Button>
+      )}
 
       <CourseFormDialog open={formOpen} onOpenChange={setFormOpen} course={editing} onSaved={load} />
 

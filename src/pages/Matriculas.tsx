@@ -253,6 +253,16 @@ const Matriculas = () => {
             )}
             </>
             )}
+            {native && !isParent && (
+              <button
+                type="button"
+                onClick={() => setPublishOpen(true)}
+                className="flex h-11 shrink-0 items-center gap-2 rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
+              >
+                <GraduationCap className="h-4 w-4" strokeWidth={2.25} />
+                Publicar resultados
+              </button>
+            )}
           </div>
         </div>
 
@@ -473,29 +483,15 @@ const Matriculas = () => {
       </div>
 
       {native && (
-        <>
-          <Button
-            type="button"
-            size="icon"
-            className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
-            aria-label={isParent ? "Renovar matrícula" : "Nova matrícula"}
-            onClick={() => { setEditing(null); setFormOpen(true); }}
-          >
-            <Plus className="h-6 w-6" />
-          </Button>
-          {!isParent && (
-            <Button
-              type="button"
-              size="icon"
-              variant="secondary"
-              className="fixed bottom-[7.25rem] right-5 z-40 h-12 w-12 rounded-2xl border border-border shadow-lg"
-              aria-label="Publicar resultados"
-              onClick={() => setPublishOpen(true)}
-            >
-              <GraduationCap className="h-5 w-5" />
-            </Button>
-          )}
-        </>
+        <Button
+          type="button"
+          size="icon"
+          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          aria-label={isParent ? "Renovar matrícula" : "Nova matrícula"}
+          onClick={() => { setEditing(null); setFormOpen(true); }}
+        >
+          <Plus className="h-6 w-6" />
+        </Button>
       )}
 
       <EnrollmentFormDialog

@@ -362,6 +362,7 @@ const Avaliacoes = () => {
             <p className="text-sm text-muted-foreground">Gerir testes, exames, trabalhos de grupo e provas orais.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            {!native && (
             <div className="inline-flex h-11 items-center rounded-full border border-border bg-card p-1 shadow-soft">
               <button
                 onClick={() => setView("calendario")}
@@ -384,6 +385,7 @@ const Avaliacoes = () => {
                 Lista
               </button>
             </div>
+            )}
             {!studentReadOnly && !native && (
               <button
                 onClick={openCreate}
@@ -472,6 +474,19 @@ const Avaliacoes = () => {
           <div className="flex items-center justify-center rounded-2xl bg-card py-16 shadow-card">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
+        ) : native ? (
+          <AssessmentsCardsView
+            evaluations={filtered}
+            classroomMap={classroomMap}
+            subjectMap={subjectMap}
+            teacherMap={teacherMap}
+            conflictIds={conflictIds}
+            holidayConflicts={holidayConflicts}
+            onEdit={openEdit}
+            onDelete={(id) => setDeleteId(id)}
+            onOpen={(id) => navigate(`/avaliacoes/${id}/notas`)}
+            readOnly={studentReadOnly}
+          />
         ) : view === "calendario" ? (
           <CalendarView
             cursor={cursor}
@@ -559,6 +574,118 @@ const TypeChip = ({
     {children}
   </button>
 );
+
+/* ======================= Native cards (lista única) ======================= */
+const AssessmentsCardsView = ({
+  evaluations,
+  classroomMap,
+  subjectMap,
+  teacherMap,
+  conflictIds,
+  holidayConflicts,
+  onEdit,
+  onDelete,
+  onOpen,
+  readOnly,
+}: {
+  evaluations: Assessment[];
+  classroomMap: Map<string, string>;
+  subjectMap: Map<string, string>;
+  teacherMap: Map<string, string>;
+  conflictIds: Set<string>;
+  holidayConflicts: Map<string, string>;
+  onEdit: (a: Assessment) => void;
+  onDelete: (id: string) => void;
+  onOpen: (id: string) => void;
+  readOnly?: boolean;
+}) => {
+  const sorted = [...evaluations].sort((a, b) => {
+    const d = a.date.localeCompare(b.date);
+    if (d !== 0) return d;
+    return (a.start_time ?? "").localeCompare(b.start_time ?? "");
+  });
+
+  return (
+    <div className="overflow-hidden rounded-2xl bg-card shadow-card">
+      <div className="flex items-center justify-between border-b border-border px-4 py-4 sm:px-6">
+        <h2 className="text-base font-bold text-foreground">Avaliações</h2>
+        <span className="text-xs text-muted-foreground">{sorted.length} resultado(s)</span>
+      </div>
+      <div className="flex flex-col gap-3 p-4">
+        {sorted.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">Sem avaliações para os filtros aplicados.</p>
+        ) : (
+          sorted.map((e) => {
+            const Icon = meta(e.type).icon;
+            const turma = e.classroom_id ? classroomMap.get(e.classroom_id) : "";
+            const subj = e.subject_id ? subjectMap.get(e.subject_id) : "";
+            const teacher = e.teacher_id ? teacherMap.get(e.teacher_id) : "";
+            return (
+              <div
+                key={e.id}
+                onClick={() => onOpen(e.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onOpen(e.id); } }}
+                className={cn(
+                  "cursor-pointer rounded-xl border bg-background p-3 transition-all hover:-translate-y-0.5 hover:shadow-soft",
+                  conflictIds.has(e.id) ? "border-destructive/50" : "border-border",
+                )}
+              >
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {formatDateLong(e.date)}
+                  {teacher ? ` · ${teacher}` : ""}
+                </p>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className={cn("flex h-8 w-8 items-center justify-center rounded-full", meta(e.type).color)}>
+                      <Icon className="h-4 w-4" strokeWidth={2} />
+                    </span>
+                    <div>
+                      <p className="text-sm font-bold text-foreground">{e.title}</p>
+                      <p className="text-xs text-muted-foreground">{subj}{turma ? ` · ${turma}` : ""}</p>
+                    </div>
+                  </div>
+                  <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold", meta(e.type).color)}>{meta(e.type).label}</span>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" strokeWidth={1.75} />{tt(e.start_time)} – {tt(e.end_time)}</span>
+                  {e.room && <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" strokeWidth={1.75} />{e.room}</span>}
+                  {(e.weight ?? 0) > 0 && <span className="rounded-full bg-muted px-2 py-0.5 font-semibold text-foreground">{e.weight}%</span>}
+                </div>
+                {conflictIds.has(e.id) && (
+                  <div className="mt-2 flex items-center gap-1 text-[11px] font-medium text-destructive">
+                    <AlertTriangle className="h-3 w-3" /> Conflito detetado
+                  </div>
+                )}
+                {holidayConflicts.has(e.id) && (
+                  <div className="mt-2 flex items-center gap-1 text-[11px] font-medium text-pastel-yellow-foreground">
+                    <AlertTriangle className="h-3 w-3" /> Marcada em férias: {holidayConflicts.get(e.id)}
+                  </div>
+                )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" onClick={(ev) => { ev.stopPropagation(); onOpen(e.id); }} className="inline-flex items-center gap-1 rounded-full bg-pastel-blue px-3 py-1 text-xs font-medium text-pastel-blue-foreground hover:opacity-90">
+                    <GraduationCap className="h-3 w-3" /> Notas
+                  </button>
+                  {!readOnly && (
+                    <>
+                      <button type="button" onClick={(ev) => { ev.stopPropagation(); onEdit(e); }} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground hover:bg-accent">
+                        <Pencil className="h-3 w-3" /> Editar
+                      </button>
+                      <button type="button" onClick={(ev) => { ev.stopPropagation(); onDelete(e.id); }} className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/20">
+                        <Trash2 className="h-3 w-3" /> Eliminar
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+};
 
 /* ======================= Calendar View ======================= */
 const CalendarView = ({

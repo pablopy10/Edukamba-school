@@ -20,6 +20,8 @@ import {
 import { Loader2, Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet, AlertCircle, RefreshCw, Repeat, Power, FileSpreadsheet } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { isNativeMobileApp } from "@/lib/nativeApp";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   LineChart, Line,
@@ -72,6 +74,7 @@ const fmtAOA = (n: number) =>
   new Intl.NumberFormat("pt-PT", { style: "currency", currency: "AOA", maximumFractionDigits: 0 }).format(n || 0);
 
 const Financas = () => {
+  const native = isNativeMobileApp();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -180,7 +183,7 @@ const Financas = () => {
   useEffect(() => { fetchAll(); /* eslint-disable-next-line */ }, [year]);
 
   const loadErpPayments = useCallback(async () => {
-    if (!schoolId || !staffCanExportErp) {
+    if (!schoolId || !staffCanExportErp || native) {
       setErpPaymentLines([]);
       return;
     }
@@ -195,7 +198,7 @@ const Financas = () => {
     const studentMap = await resolveStudentsForPayments(supabase, rows);
     setErpPaymentLines(enrichErpPaymentsWithStudentNames(rows, studentMap));
     setErpLoading(false);
-  }, [schoolId, year, staffCanExportErp]);
+  }, [schoolId, year, staffCanExportErp, native]);
 
   useEffect(() => {
     loadErpPayments();
@@ -477,7 +480,7 @@ const Financas = () => {
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className={cn(native ? "grid grid-cols-2 gap-4" : "grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4")}>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Receita total</CardTitle>
@@ -563,7 +566,7 @@ const Financas = () => {
             <TabsTrigger value="expenses">Despesas</TabsTrigger>
             <TabsTrigger value="recurring">Recorrentes</TabsTrigger>
             <TabsTrigger value="categories">Categorias</TabsTrigger>
-            {staffCanExportErp && (
+            {staffCanExportErp && !native && (
               <TabsTrigger value="erp-payments" className="gap-1.5">
                 <FileSpreadsheet className="h-3.5 w-3.5" /> Pagamentos ERP
               </TabsTrigger>
@@ -738,7 +741,7 @@ const Financas = () => {
             </Card>
           </TabsContent>
 
-          {staffCanExportErp && (
+          {staffCanExportErp && !native && (
             <TabsContent value="erp-payments" className="space-y-4">
               <Card>
                 <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">

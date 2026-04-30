@@ -284,6 +284,100 @@ const Pedidos = () => {
             <span className="text-xs text-muted-foreground">{filtered.length} resultado(s)</span>
           </div>
           <div className="overflow-x-auto">
+            {native ? (
+              <div className="flex flex-col gap-3 p-4">
+                {loading && (
+                  <p className="py-12 text-center text-sm text-muted-foreground">A carregar...</p>
+                )}
+                {!loading && filtered.map((r, idx) => {
+                  const meta = reasonMeta[(r.reason as Reason) ?? "outro"];
+                  const Icon = meta.icon;
+                  const status = (r.status as StatusDB) ?? "PENDING";
+                  const name = r.profile?.full_name ?? "—";
+                  const isOwner = r.requester_id === userId;
+                  const canEditRow = isAdmin || (isOwner && status === "PENDING");
+                  const canDeleteRow = isAdmin || (isOwner && status === "PENDING");
+                  return (
+                    <div key={r.id} className="rounded-xl border border-border bg-background p-4 shadow-soft">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold", avatarColors[idx % avatarColors.length])}>
+                            {initials(name)}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-foreground">{name}</p>
+                            <p className="text-xs text-muted-foreground">{r.profile?.role ?? ""}</p>
+                          </div>
+                        </div>
+                        <span className={cn("shrink-0 rounded-full px-3 py-1 text-xs font-semibold", statusMeta[status].color)}>
+                          {statusMeta[status].label}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <span className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium", meta.color)}>
+                          <Icon className="h-3 w-3" />{meta.label}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-col gap-1 text-sm">
+                        <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                          <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          {formatDateLong(r.start_date)} – {formatDateLong(r.end_date)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">{daysBetween(r.start_date, r.end_date)} dia(s)</span>
+                      </div>
+                      {r.description ? (
+                        <p className="mt-3 text-sm text-muted-foreground">{r.description}</p>
+                      ) : null}
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
+                        {isAdmin && status === "PENDING" && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => updateStatus(r.id, "APPROVED")}
+                              className="inline-flex h-9 items-center gap-1 rounded-full bg-pastel-green px-3 text-xs font-semibold text-pastel-green-foreground transition-opacity hover:opacity-90"
+                            ><Check className="h-3.5 w-3.5" />Aprovar</button>
+                            <button
+                              type="button"
+                              onClick={() => updateStatus(r.id, "REJECTED")}
+                              className="inline-flex h-9 items-center gap-1 rounded-full bg-pastel-pink px-3 text-xs font-semibold text-pastel-pink-foreground transition-opacity hover:opacity-90"
+                            ><X className="h-3.5 w-3.5" />Rejeitar</button>
+                          </>
+                        )}
+                        {(canEditRow || canDeleteRow) && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {canEditRow && (
+                                <DropdownMenuItem onClick={() => { setEditing(r); setDialogOpen(true); }}>
+                                  <Pencil className="mr-2 h-4 w-4" />Editar
+                                </DropdownMenuItem>
+                              )}
+                              {isAdmin && status !== "PENDING" && (
+                                <DropdownMenuItem onClick={() => updateStatus(r.id, "PENDING")}>
+                                  <Clock className="mr-2 h-4 w-4" />Marcar como pendente
+                                </DropdownMenuItem>
+                              )}
+                              {canDeleteRow && (
+                                <DropdownMenuItem className="text-destructive" onClick={() => setConfirmDelete(r)}>
+                                  <Trash2 className="mr-2 h-4 w-4" />Remover
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                {!loading && filtered.length === 0 && (
+                  <p className="py-12 text-center text-sm text-muted-foreground">Sem pedidos para os filtros aplicados.</p>
+                )}
+              </div>
+            ) : (
             <table className="w-full min-w-[900px]">
               <thead>
                 <tr className="border-b border-border bg-muted/30 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -392,6 +486,7 @@ const Pedidos = () => {
                 )}
               </tbody>
             </table>
+            )}
           </div>
         </div>
       </div>

@@ -170,6 +170,7 @@ const Eventos = () => {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            {!native && (
             <div className="inline-flex h-11 items-center rounded-full border border-border bg-card p-1 shadow-soft">
               <button
                 onClick={() => setView("calendario")}
@@ -196,6 +197,7 @@ const Eventos = () => {
                 Lista
               </button>
             </div>
+            )}
 
             {canEdit && !native && (
               <button
@@ -258,6 +260,14 @@ const Eventos = () => {
           <div className="rounded-2xl bg-card p-12 text-center text-sm text-muted-foreground shadow-card">
             A carregar eventos...
           </div>
+        ) : native ? (
+          <EventsCardsView
+            events={filtered}
+            canEdit={canEdit}
+            canDelete={canDelete}
+            onEdit={handleEdit}
+            onDelete={(id) => setDeleteId(id)}
+          />
         ) : view === "calendario" ? (
           <CalendarView
             cursor={cursor}
@@ -341,6 +351,103 @@ const TypeChip = ({
     {children}
   </button>
 );
+
+const EventsCardsView = ({
+  events: items,
+  canEdit,
+  canDelete,
+  onEdit,
+  onDelete,
+}: {
+  events: EventRow[];
+  canEdit: boolean;
+  canDelete: boolean;
+  onEdit: (e: EventRow) => void;
+  onDelete: (id: string) => void;
+}) => {
+  const sorted = [...items].sort((a, b) => a.event_date.localeCompare(b.event_date));
+
+  return (
+    <div className="overflow-hidden rounded-2xl bg-card shadow-card">
+      <div className="flex items-center justify-between border-b border-border px-4 py-4 sm:px-6">
+        <h2 className="text-base font-bold text-foreground">Eventos</h2>
+        <span className="text-xs text-muted-foreground">{sorted.length} resultado(s)</span>
+      </div>
+      <div className="flex flex-col gap-3 p-4">
+        {sorted.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">Sem eventos para os filtros aplicados.</p>
+        ) : (
+          sorted.map((e) => {
+            const meta = typeMeta[e.type] ?? typeMeta.academico;
+            const Icon = meta.icon;
+            return (
+              <div key={e.id} className="rounded-xl border border-border bg-background p-3 shadow-soft">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {formatDateLong(e.event_date)}
+                </p>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className={cn("flex h-8 w-8 items-center justify-center rounded-full", meta.color)}>
+                      <Icon className="h-4 w-4" strokeWidth={2} />
+                    </span>
+                    <div>
+                      <p className="text-sm font-bold text-foreground">{e.title}</p>
+                      {e.organizer && <p className="text-xs text-muted-foreground">{e.organizer}</p>}
+                    </div>
+                  </div>
+                  <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold", meta.color)}>
+                    {meta.label}
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                  {(e.start_time || e.end_time) && (
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="h-3 w-3" strokeWidth={1.75} />
+                      {formatTime(e.start_time)}{e.end_time ? ` – ${formatTime(e.end_time)}` : ""}
+                    </span>
+                  )}
+                  {e.location && (
+                    <span className="inline-flex items-center gap-1">
+                      <MapPin className="h-3 w-3" strokeWidth={1.75} />
+                      {e.location}
+                    </span>
+                  )}
+                </div>
+                {e.audience && (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Público: <span className="font-medium text-foreground">{e.audience}</span>
+                  </p>
+                )}
+                {(canEdit || canDelete) && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => onEdit(e)}
+                        className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground hover:bg-accent"
+                      >
+                        <Pencil className="h-3 w-3" /> Editar
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() => onDelete(e.id)}
+                        className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/20"
+                      >
+                        <Trash2 className="h-3 w-3" /> Remover
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+};
 
 /* ======================= Calendar View ======================= */
 const CalendarView = ({

@@ -284,6 +284,7 @@ const Extracurriculares = () => {
               className="h-10 w-full rounded-xl border border-border bg-card pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
+          {!native && (
           <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-1">
             <button
               onClick={() => setView("lista")}
@@ -304,6 +305,7 @@ const Extracurriculares = () => {
               <CalendarDays className="h-3.5 w-3.5" /> Calendário
             </button>
           </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -341,7 +343,7 @@ const Extracurriculares = () => {
           <div className="rounded-2xl bg-card p-12 text-center text-sm text-muted-foreground shadow-card">
             A carregar...
           </div>
-        ) : view === "lista" ? (
+        ) : native || view === "lista" ? (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {filtered.map((a) => {
               const meta = categoryMeta[a.category] ?? categoryMeta.academico;
