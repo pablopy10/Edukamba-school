@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import {
@@ -114,95 +114,117 @@ const TurmaDetalhe = () => {
     [isParent, isStudent],
   );
 
-  const canAccessClassroom = useCallback(
-    (classroomId: string): boolean => {
+  const teacherIdsKey = useMemo(() => [...teacherClassroomIds].sort().join(","), [teacherClassroomIds]);
+  const parentIdsKey = useMemo(() => [...parentClassroomIds].sort().join(","), [parentClassroomIds]);
+
+  useEffect(() => {
+    if (!hooksReady || !id) return;
+    let cancelled = false;
+
+    const canAccess = (classroomId: string): boolean => {
       if (role === "ADMIN" || role === "SUPER_ADMIN") return true;
       if (isTeacher && teacherClassroomIds.includes(classroomId)) return true;
       if (isParent && parentClassroomIds.includes(classroomId)) return true;
       if (isStudent && studentClassroomId === classroomId) return true;
       return false;
-    },
-    [role, isTeacher, teacherClassroomIds, isParent, parentClassroomIds, isStudent, studentClassroomId],
-  );
+    };
 
-  const load = useCallback(async () => {
-    if (!id) return;
-    setLoading(true);
-    try {
-      const { data: row, error: cErr } = await supabase
-        .from("classrooms")
-        .select(
-          `id, name, grade_level, period, school_id, academic_year_id,
-           courses(id, name), academic_years(id, label)`,
-        )
-        .eq("id", id)
-        .maybeSingle();
+    const run = async () => {
+      setClassroom(null);
+      setStudents([]);
+      setSchedules([]);
+      setLoading(true);
+      try {
+        const { data: row, error: cErr } = await supabase
+          .from("classrooms")
+          .select(
+            `id, name, grade_level, period, school_id, academic_year_id,
+             courses(id, name), academic_years(id, label)`,
+          )
+          .eq("id", id)
+          .maybeSingle();
 
-      if (cErr) throw cErr;
-      if (!row) {
-        toast({ title: "Turma não encontrada", variant: "destructive" });
-        navigate(exitRoute, { replace: true });
-        return;
-      }
+        if (cancelled) return;
+        if (cErr) throw cErr;
+        if (!row) {
+          toast({ title: "Turma não encontrada", variant: "destructive" });
+          navigate(exitRoute, { replace: true });
+          return;
+        }
 
-      const cls = row as ClassroomRow;
+        const cls = row as ClassroomRow;
 
-      if (!canAccessClassroom(cls.id)) {
-        toast({ title: "Sem permissão para ver esta turma", variant: "destructive" });
-        navigate(exitRoute, { replace: true });
-        return;
-      }
+        if (!canAccess(cls.id)) {
+          toast({ title: "Sem permissão para ver esta turma", variant: "destructive" });
+          navigate(exitRoute, { replace: true });
+          return;
+        }
 
-      let schedulesQuery = supabase
-        .from("schedules")
-        .select(
-          `id, day_of_week, start_time, end_time, room, shift, academic_year_id,
-           subjects(name, code),
-           profiles!schedules_teacher_id_fkey(full_name)`,
-        )
-        .eq("classroom_id", id)
-        .order("day_of_week", { ascending: true })
-        .order("start_time", { ascending: true });
-
-      const yearId = cls.academic_year_id;
-      if (yearId) {
-        schedulesQuery = schedulesQuery.or(`academic_year_id.eq.${yearId},academic_year_id.is.null`);
-      }
-
-      const [{ data: studs, error: sErr }, { data: schRows, error: schErr }] = await Promise.all([
-        supabase
-          .from("students")
-          .select("id, full_name, email, enrollment_number, avatar_color")
+        let schedulesQuery = supabase
+          .from("schedules")
+          .select(
+            `id, day_of_week, start_time, end_time, room, shift, academic_year_id,
+             subjects(name, code),
+             profiles!schedules_teacher_id_fkey(full_name)`,
+          )
           .eq("classroom_id", id)
-          .order("full_name", { ascending: true }),
-        schedulesQuery,
-      ]);
+          .order("day_of_week", { ascending: true })
+          .order("start_time", { ascending: true });
 
-      if (sErr) throw sErr;
-      if (schErr) throw schErr;
+        const yearId = cls.academic_year_id;
+        if (yearId) {
+          schedulesQuery = schedulesQuery.or(`academic_year_id.eq.${yearId},academic_year_id.is.null`);
+        }
 
-      setClassroom(cls);
-      setStudents((studs ?? []) as StudentBrief[]);
-      setSchedules(
-        (schRows ?? []).map((s: ScheduleJoinRow) => ({
-          ...s,
-          start_time: trim5(String(s.start_time ?? "")),
-          end_time: trim5(String(s.end_time ?? "")),
-        })),
-      );
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Erro a carregar turma";
-      toast({ title: "Erro", description: msg, variant: "destructive" });
-      navigate(exitRoute, { replace: true });
-    } finally {
-      setLoading(false);
-    }
-  }, [id, navigate, canAccessClassroom, exitRoute]);
+        const [{ data: studs, error: sErr }, { data: schRows, error: schErr }] = await Promise.all([
+          supabase
+            .from("students")
+            .select("id, full_name, email, enrollment_number, avatar_color")
+            .eq("classroom_id", id)
+            .order("full_name", { ascending: true }),
+          schedulesQuery,
+        ]);
 
-  useEffect(() => {
-    if (!hooksReady || !id) return;
-    void load();
-  }, [hooksReady, id, load]);
+        if (cancelled) return;
+        if (sErr) throw sErr;
+        if (schErr) throw schErr;
+
+        setClassroom(cls);
+        setStudents((studs ?? []) as StudentBrief[]);
+        setSchedules(
+          (schRows ?? []).map((s: ScheduleJoinRow) => ({
+            ...s,
+            start_time: trim5(String(s.start_time ?? "")),
+            end_time: trim5(String(s.end_time ?? "")),
+          })),
+        );
+      } catch (e: unknown) {
+        if (cancelled) return;
+        const msg = e instanceof Error ? e.message : "Erro a carregar turma";
+        toast({ title: "Erro", description: msg, variant: "destructive" });
+        navigate(exitRoute, { replace: true });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    hooksReady,
+    id,
+    navigate,
+    exitRoute,
+    role,
+    isTeacher,
+    isParent,
+    isStudent,
+    studentClassroomId,
+    teacherIdsKey,
+    parentIdsKey,
+  ]);
 
   const subjectsFromSchedule = useMemo(() => {
     const map = new Map<string, { id: string; name: string; code: string | null }>();
@@ -227,11 +249,7 @@ const TurmaDetalhe = () => {
   }, [schedules]);
 
   if (!id || !hooksReady || loading) {
-    return (
-      <DashboardLayout>
-        <PageLoadingSkeleton />
-      </DashboardLayout>
-    );
+    return <PageLoadingSkeleton />;
   }
 
   if (!classroom) {
@@ -240,10 +258,10 @@ const TurmaDetalhe = () => {
         <div className="rounded-2xl border border-border bg-card p-10 text-center shadow-card">
           <p className="text-muted-foreground">Turma não encontrada.</p>
           <Link
-            to="/turmas"
+            to={exitRoute}
             className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-primary underline-offset-4 hover:underline"
           >
-            <ArrowLeft className="h-4 w-4" /> Voltar às turmas
+            <ArrowLeft className="h-4 w-4" /> Voltar
           </Link>
         </div>
       </DashboardLayout>
