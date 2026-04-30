@@ -20,7 +20,7 @@ import {
 import { Bus, Plus, Pencil, Trash2, MapPin, Users, ListChecks, Printer, Search, Wallet } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { isNativeMobileApp } from "@/lib/nativeApp";
+import { isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { RouteFormDialog, type RouteRow } from "@/components/transportes/RouteFormDialog";
 import { StopFormDialog, type StopRow } from "@/components/transportes/StopFormDialog";
 import { TransportEnrollmentDialog, type TransportEnrollment } from "@/components/transportes/TransportEnrollmentDialog";
@@ -473,7 +473,7 @@ const Transportes = () => {
         <Button
           type="button"
           size="icon"
-          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
           aria-label={transportTab === "inscricoes" ? "Inscrever aluno" : "Nova rota"}
           onClick={() => {
             if (transportTab === "inscricoes") {

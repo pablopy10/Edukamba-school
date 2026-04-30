@@ -10,7 +10,7 @@ import { GuardianFormDialog, GuardianRow } from "@/components/educadores/Guardia
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
-import { isNativeMobileApp, showPageKpiCards } from "@/lib/nativeApp";
+import { isNativeMobileApp, showPageKpiCards, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { Button } from "@/components/ui/button";
 
 type ClassroomOpt = { id: string; name: string };
@@ -495,7 +495,7 @@ const Educadores = () => {
         <Button
           type="button"
           size="icon"
-          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
           aria-label="Novo educador"
           onClick={() => { setEditing(null); setFormOpen(true); }}
         >

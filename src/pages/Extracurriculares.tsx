@@ -22,7 +22,7 @@ import {
   CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { showPageKpiCards, isNativeMobileApp } from "@/lib/nativeApp";
+import { showPageKpiCards, isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ActivityFormDialog, type ActivityRow } from "@/components/extracurriculares/ActivityFormDialog";
@@ -553,7 +553,7 @@ const Extracurriculares = () => {
         <Button
           type="button"
           size="icon"
-          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
           aria-label="Nova atividade"
           onClick={handleNew}
         >

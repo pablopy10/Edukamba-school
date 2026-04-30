@@ -17,7 +17,7 @@ import { MaterialRequestFormDialog, type RequestRow } from "@/components/materia
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
-import { isNativeMobileApp, showPageKpiCards } from "@/lib/nativeApp";
+import { isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME, showPageKpiCards } from "@/lib/nativeApp";
 
 type Category = "papelaria" | "laboratorio" | "artes" | "desporto" | "tecnologia";
 
@@ -338,7 +338,7 @@ const Material = () => {
 
         {/* Filters */}
         <div className="flex flex-col gap-3 rounded-2xl bg-card p-4 shadow-card">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className={cn("flex flex-col gap-3", !native && "sm:flex-row sm:items-center")}>
             <div className="relative w-full sm:max-w-sm">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={1.75} />
               <input
@@ -430,7 +430,7 @@ const Material = () => {
         <Button
           type="button"
           size="icon"
-          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
           aria-label="Novo material"
           onClick={() => { setEditingMaterial(null); setShowMaterialDialog(true); }}
         >
@@ -441,7 +441,7 @@ const Material = () => {
         <Button
           type="button"
           size="icon"
-          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
           aria-label="Novo pedido"
           onClick={() => { setEditingRequest(null); setShowRequestDialog(true); }}
         >

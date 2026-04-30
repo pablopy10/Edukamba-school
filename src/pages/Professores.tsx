@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
-import { isNativeMobileApp, showPageKpiCards } from "@/lib/nativeApp";
+import { isNativeMobileApp, showPageKpiCards, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { Button } from "@/components/ui/button";
 
 type SubjectOpt = { id: string; name: string };
@@ -418,7 +418,7 @@ const Professores = () => {
         <Button
           type="button"
           size="icon"
-          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
           aria-label="Novo professor"
           onClick={() => { setEditing(null); setFormOpen(true); }}
         >

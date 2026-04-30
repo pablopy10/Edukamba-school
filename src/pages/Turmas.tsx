@@ -13,7 +13,7 @@ import { ClassroomFormDialog, ClassroomRow } from "@/components/turmas/Classroom
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { ExcelImportDialog } from "@/components/shared/ExcelImportDialog";
 import { useUserRole } from "@/hooks/useUserRole";
-import { isNativeMobileApp, showPageKpiCards } from "@/lib/nativeApp";
+import { isNativeMobileApp, showPageKpiCards, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { Button } from "@/components/ui/button";
 
 type ClassroomWithJoins = ClassroomRow & {
@@ -307,7 +307,7 @@ const Turmas = () => {
         <Button
           type="button"
           size="icon"
-          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
           aria-label="Nova turma"
           onClick={() => { setEditing(null); setFormOpen(true); }}
         >

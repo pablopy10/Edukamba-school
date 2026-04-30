@@ -18,7 +18,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { isNativeMobileApp } from "@/lib/nativeApp";
+import { isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 
 type Option = { id: string; name: string; subjectId?: string | null; period?: string | null };
 type TimeSlotRow = {
@@ -749,7 +749,7 @@ const Horarios = () => {
               <Button
                 type="button"
                 size="icon"
-                className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+                className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
                 aria-label="Nova aula"
                 onClick={handleNew}
               >

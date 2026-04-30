@@ -9,7 +9,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CourseFormDialog, CourseRow } from "@/components/cursos/CourseFormDialog";
-import { showPageKpiCards, isNativeMobileApp } from "@/lib/nativeApp";
+import { showPageKpiCards, isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { Button } from "@/components/ui/button";
 
 type CourseWithStats = CourseRow & {
@@ -339,7 +339,7 @@ const Cursos = () => {
         <Button
           type="button"
           size="icon"
-          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
           aria-label="Novo curso"
           onClick={() => { setEditing(null); setFormOpen(true); }}
         >

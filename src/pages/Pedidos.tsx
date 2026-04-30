@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { showPageKpiCards, isNativeMobileApp } from "@/lib/nativeApp";
+import { showPageKpiCards, isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 
 type Reason = "doenca" | "ferias" | "pessoal" | "luto" | "formacao" | "outro";
 type StatusDB = "PENDING" | "APPROVED" | "REJECTED";
@@ -520,7 +520,7 @@ const Pedidos = () => {
         <Button
           type="button"
           size="icon"
-          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
           aria-label="Novo pedido"
           onClick={() => { setEditing(null); setDialogOpen(true); }}
         >

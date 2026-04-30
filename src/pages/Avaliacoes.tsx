@@ -40,7 +40,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { useAuth } from "@/hooks/useAuth";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
-import { showPageKpiCards, isNativeMobileApp } from "@/lib/nativeApp";
+import { showPageKpiCards, isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { Button } from "@/components/ui/button";
 
 type EvalType = "teste" | "exame" | "trabalho" | "oral";
@@ -429,7 +429,7 @@ const Avaliacoes = () => {
         {/* Filters */}
         {!isParent && (
         <div className="flex flex-col gap-3 rounded-2xl bg-card p-4 shadow-card">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className={cn("flex flex-col gap-3", !native && "sm:flex-row sm:items-center sm:justify-between")}>
             <div className="relative w-full sm:max-w-sm">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={1.75} />
               <input
@@ -535,7 +535,7 @@ const Avaliacoes = () => {
         <Button
           type="button"
           size="icon"
-          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
           aria-label="Nova avaliação"
           onClick={openCreate}
         >
