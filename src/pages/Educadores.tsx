@@ -11,6 +11,7 @@ import { GuardianFormDialog, GuardianRow } from "@/components/educadores/Guardia
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
+import { showPageKpiCards } from "@/lib/nativeApp";
 
 type ClassroomOpt = { id: string; name: string };
 type StudentOpt = { id: string; full_name: string; classroom_id: string | null; parent_id: string | null };
@@ -211,6 +212,7 @@ const Educadores = () => {
           )}
         </div>
 
+        {showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             { label: "Total de Educadores", value: String(stats.total), color: "bg-pastel-blue text-pastel-blue-foreground" },
@@ -226,6 +228,7 @@ const Educadores = () => {
             </div>
           ))}
         </div>
+        )}
 
         <div className="rounded-2xl bg-card shadow-card">
           <div className="flex items-center justify-between border-b border-border p-5">

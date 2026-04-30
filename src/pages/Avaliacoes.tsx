@@ -41,6 +41,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { useAuth } from "@/hooks/useAuth";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
+import { showPageKpiCards } from "@/lib/nativeApp";
 
 type EvalType = "teste" | "exame" | "trabalho" | "oral";
 
@@ -394,7 +395,7 @@ const Avaliacoes = () => {
         </div>
 
         {/* Stats */}
-        {!studentReadOnly && (
+        {!studentReadOnly && showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             { label: "Total", value: stats.total, color: "bg-pastel-lilac text-pastel-lilac-foreground" },

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
+import { showPageKpiCards } from "@/lib/nativeApp";
 
 type SubjectOpt = { id: string; name: string };
 
@@ -171,6 +172,7 @@ const Professores = () => {
         </div>
 
         {/* Stats row */}
+        {showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             { label: "Total de Professores", value: String(stats.total), color: "bg-pastel-blue text-pastel-blue-foreground" },
@@ -186,6 +188,7 @@ const Professores = () => {
             </div>
           ))}
         </div>
+        )}
 
         {/* Table card */}
         <div className="rounded-2xl bg-card shadow-card">

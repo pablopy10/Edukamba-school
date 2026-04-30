@@ -9,6 +9,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { OFFLINE_SYNC_FLUSH_EVENT, useOfflineSync } from "@/hooks/useOfflineSync";
 import { supabaseRestTable } from "@/lib/supabaseRestUrls";
+import { showPageKpiCards } from "@/lib/nativeApp";
 
 type AssessmentInfo = {
   id: string;
@@ -375,6 +376,7 @@ const AvaliacaoNotas = () => {
         </div>
 
         {/* Stats */}
+        {showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
           <StatBlock label="Alunos" value={students.length} color="bg-pastel-lilac text-pastel-lilac-foreground" />
           <StatBlock label="Notas dadas" value={stats.count} color="bg-pastel-blue text-pastel-blue-foreground" />
@@ -382,6 +384,7 @@ const AvaliacaoNotas = () => {
           <StatBlock label="Aprovados" value={stats.count ? `${stats.passed}/${stats.count}` : "—"} color="bg-pastel-green text-pastel-green-foreground" />
           <StatBlock label="Máx / Mín" value={stats.count ? `${stats.max} / ${stats.min}` : "—"} color="bg-pastel-pink text-pastel-pink-foreground" />
         </div>
+        )}
 
         {/* Search */}
         <div className="flex items-center gap-2 rounded-2xl bg-card p-3 shadow-card">

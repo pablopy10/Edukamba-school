@@ -12,6 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
+import { showPageKpiCards } from "@/lib/nativeApp";
 
 type Opt = { id: string; name: string };
 type YearOpt = { id: string; label: string; is_active: boolean | null };
@@ -220,7 +221,7 @@ const Matriculas = () => {
         </div>
         )}
 
-        {!isParent && (
+        {!isParent && showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             { label: "Total de Matrículas", value: String(stats.total), color: "bg-pastel-blue text-pastel-blue-foreground" },

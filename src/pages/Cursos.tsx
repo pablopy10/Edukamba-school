@@ -10,6 +10,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CourseFormDialog, CourseRow } from "@/components/cursos/CourseFormDialog";
+import { showPageKpiCards } from "@/lib/nativeApp";
 
 type CourseWithStats = CourseRow & {
   classroomCount: number;
@@ -160,6 +161,7 @@ const Cursos = () => {
           </div>
         </div>
 
+        {showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             { label: "Total de Cursos", value: stats.total, color: "bg-pastel-blue text-pastel-blue-foreground" },
@@ -175,6 +177,7 @@ const Cursos = () => {
             </div>
           ))}
         </div>
+        )}
 
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-foreground">Catálogo de Cursos</h2>

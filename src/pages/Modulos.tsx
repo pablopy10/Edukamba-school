@@ -3,6 +3,7 @@ import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Search, Package, Eye, EyeOff, RotateCcw, Check, AlertCircle, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useModules, moduleMeta, ModuleKey, modulePlan, isModuleAllowedForPlan } from "@/context/ModulesContext";
+import { showPageKpiCards } from "@/lib/nativeApp";
 
 const Modulos = () => {
   const { modules, setModule, setAll, resetDefaults, plan } = useModules();
@@ -82,6 +83,7 @@ const Modulos = () => {
         </div>
 
         {/* Stats */}
+        {showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <div className="rounded-2xl bg-card p-5 shadow-card">
             <span className="inline-block rounded-full bg-pastel-blue px-3 py-1 text-xs font-medium text-pastel-blue-foreground">Total de Módulos</span>
@@ -100,6 +102,7 @@ const Modulos = () => {
             <p className="mt-3 text-3xl font-bold text-foreground">{Math.round((enabledCount / total) * 100)}%</p>
           </div>
         </div>
+        )}
 
         {/* Bulk actions */}
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-4 shadow-card">

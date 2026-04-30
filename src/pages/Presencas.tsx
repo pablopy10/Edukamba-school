@@ -34,6 +34,7 @@ import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { OFFLINE_SYNC_FLUSH_EVENT, useOfflineSync } from "@/hooks/useOfflineSync";
 import { supabaseRestTable } from "@/lib/supabaseRestUrls";
+import { showPageKpiCards } from "@/lib/nativeApp";
 
 type Status = "PRESENT" | "ABSENT" | "LATE" | "JUSTIFIED" | "DISCIPLINARY";
 
@@ -662,7 +663,7 @@ const Presencas = () => {
         </div>
 
         {/* Stats */}
-        {!isParent && (
+        {!isParent && showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
           <div className="rounded-2xl bg-pastel-blue p-5 shadow-card">
             <p className="text-xs font-semibold uppercase tracking-wider text-pastel-blue-foreground/80">Total de Alunos</p>

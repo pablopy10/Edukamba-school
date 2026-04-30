@@ -175,7 +175,11 @@ export const SidebarMobileDrawer = ({
   onOpenChange: (open: boolean) => void;
 }) => (
   <Sheet open={open} onOpenChange={onOpenChange}>
-    <SheetContent side="left" className="sidebar-scroll flex w-[min(100vw,22rem)] flex-col overflow-y-auto border-sidebar-border bg-sidebar p-0 pt-12">
+    <SheetContent
+      side="left"
+      overlayClassName="z-[110]"
+      className="sidebar-scroll z-[110] flex w-[min(100vw,22rem)] flex-col overflow-y-auto border-sidebar-border bg-sidebar p-0 pt-12"
+    >
       <SheetTitle className="sr-only">Menu de navegação</SheetTitle>
       <SidebarNavigation onNavigate={() => onOpenChange(false)} scrollClassName="flex-1 px-5 pb-8" />
     </SheetContent>

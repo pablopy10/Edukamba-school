@@ -12,6 +12,7 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { showPageKpiCards } from "@/lib/nativeApp";
 
 type Reason = "doenca" | "ferias" | "pessoal" | "luto" | "formacao" | "outro";
 type StatusDB = "PENDING" | "APPROVED" | "REJECTED";
@@ -191,6 +192,7 @@ const Pedidos = () => {
         </div>
 
         {/* Stats */}
+        {showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             { label: "Total", value: stats.total, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
@@ -204,6 +206,7 @@ const Pedidos = () => {
             </div>
           ))}
         </div>
+        )}
 
         {/* Filters */}
         <div className="flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-card">

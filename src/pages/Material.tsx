@@ -18,6 +18,7 @@ import { MaterialRequestFormDialog, type RequestRow } from "@/components/materia
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
+import { showPageKpiCards } from "@/lib/nativeApp";
 
 type Category = "papelaria" | "laboratorio" | "artes" | "desporto" | "tecnologia";
 
@@ -309,6 +310,7 @@ const Material = () => {
         </div>
 
         {/* Stats */}
+        {showPageKpiCards() && (
         <div className={cn("grid gap-4", (isParent || isTeacher || isStudent) ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-4")}>
           {((isParent || isTeacher || isStudent)
             ? [
@@ -328,6 +330,7 @@ const Material = () => {
             </div>
           ))}
         </div>
+        )}
 
         {/* Filters */}
         <div className="flex flex-col gap-3 rounded-2xl bg-card p-4 shadow-card">

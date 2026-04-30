@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { EventFormDialog, type EventRow } from "@/components/eventos/EventFormDialog";
+import { showPageKpiCards } from "@/lib/nativeApp";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -206,6 +207,7 @@ const Eventos = () => {
           </div>
         </div>
 
+        {showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             { label: "Total", value: stats.total, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
@@ -221,6 +223,7 @@ const Eventos = () => {
             </div>
           ))}
         </div>
+        )}
 
         <div className="flex flex-col gap-3 rounded-2xl bg-card p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full sm:max-w-sm">

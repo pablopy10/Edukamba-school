@@ -13,6 +13,7 @@ import { ClassroomFormDialog, ClassroomRow } from "@/components/turmas/Classroom
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { ExcelImportDialog } from "@/components/shared/ExcelImportDialog";
 import { useUserRole } from "@/hooks/useUserRole";
+import { showPageKpiCards } from "@/lib/nativeApp";
 
 type ClassroomWithJoins = ClassroomRow & {
   courses?: { id: string; name: string } | null;
@@ -193,6 +194,7 @@ const Turmas = () => {
           </div>
         </div>
 
+        {showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             { label: "Total de Turmas", value: stats.total, color: "bg-pastel-blue text-pastel-blue-foreground" },
@@ -208,6 +210,7 @@ const Turmas = () => {
             </div>
           ))}
         </div>
+        )}
 
         {loading ? (
           <div className="flex items-center justify-center py-20 text-muted-foreground">

@@ -23,6 +23,7 @@ import {
   CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { showPageKpiCards } from "@/lib/nativeApp";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ActivityFormDialog, type ActivityRow } from "@/components/extracurriculares/ActivityFormDialog";
@@ -250,6 +251,7 @@ const Extracurriculares = () => {
           )}
         </div>
 
+        {showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
             <p className="text-xs font-medium text-muted-foreground">Atividades</p>
@@ -268,6 +270,7 @@ const Extracurriculares = () => {
             <p className="mt-1 text-2xl font-bold text-foreground">{totalCapacity}</p>
           </div>
         </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[220px]">
