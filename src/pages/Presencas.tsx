@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Check, X, Clock, Loader2, MinusCircle, FileText, AlertTriangle, SlidersHorizontal, Search } from "lucide-react";
+import { Check, X, Clock, Loader2, MinusCircle, FileText, AlertTriangle, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn, compareNatural } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -29,7 +29,6 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
@@ -377,6 +376,14 @@ const Presencas = () => {
     })();
   }, [schoolId, selectedYearId, isParent, parentLoading, parentClassroomIds.join(","), isTeacher, teacherLoading, teacherClassroomIds.join(","), isStudent, studentLoading, studentClassroomId]);
 
+  /** Na app nativa, professores não devem ficar em «todas as turmas». */
+  useEffect(() => {
+    if (!native || userRole !== "TEACHER") return;
+    if (classroomId !== "all") return;
+    if (classrooms.length === 0) return;
+    setClassroomId(classrooms[0].id);
+  }, [native, userRole, classroomId, classrooms]);
+
   // Compute month days
   const monthDays = useMemo(() => getMonthDays(year, month0), [year, month0]);
   const visibleDays = monthDays;
@@ -390,6 +397,36 @@ const Presencas = () => {
     setYear(normalized.getFullYear());
     setMonth0(normalized.getMonth());
   }, []);
+
+  const shiftNativeWeek = useCallback((deltaWeeks: number) => {
+    setNativeSelectedDay((prev) => {
+      const base = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate());
+      base.setDate(base.getDate() + deltaWeeks * 7);
+      base.setHours(0, 0, 0, 0);
+      setYear(base.getFullYear());
+      setMonth0(base.getMonth());
+      return base;
+    });
+  }, []);
+
+  const attendanceDateBounds = useMemo(() => {
+    if (native) {
+      let minT = Infinity;
+      let maxT = -Infinity;
+      for (const d of nativeWeekDays) {
+        const t = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        minT = Math.min(minT, t);
+        maxT = Math.max(maxT, t);
+      }
+      const min = new Date(minT);
+      const max = new Date(maxT);
+      return { startDate: fmtISO(min), endDate: fmtISO(max) };
+    }
+    return {
+      startDate: fmtISO(new Date(year, month0, 1)),
+      endDate: fmtISO(new Date(year, month0 + 1, 0)),
+    };
+  }, [native, nativeWeekDays, year, month0]);
 
   const filteredStudentsNative = useMemo(() => {
     const q = studentFilterNative.trim().toLowerCase();
@@ -446,14 +483,14 @@ const Presencas = () => {
     return () => { cancelled = true; };
   }, [schoolId, classroomId, isParent, parentLoading, childIds.join(","), isStudent, studentLoading, studentId]);
 
-  // Load attendance separately when month/year/school/classroom changes
+  // Load attendance separately when date range / school / classroom changes
   useEffect(() => {
     if (!schoolId) return;
     let cancelled = false;
     setAttendanceLoading(true);
 
-    const startDate = fmtISO(new Date(year, month0, 1));
-    const endDate = fmtISO(new Date(year, month0 + 1, 0));
+    const startDate = attendanceDateBounds.startDate;
+    const endDate = attendanceDateBounds.endDate;
 
     (async () => {
       let q = supabase
@@ -475,13 +512,13 @@ const Presencas = () => {
       setAttendanceLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [schoolId, classroomId, year, month0]);
+  }, [schoolId, classroomId, attendanceDateBounds.startDate, attendanceDateBounds.endDate]);
 
   useEffect(() => {
     const onSynced = () => {
       if (!schoolId) return;
-      const startDate = fmtISO(new Date(year, month0, 1));
-      const endDate = fmtISO(new Date(year, month0 + 1, 0));
+      const startDate = attendanceDateBounds.startDate;
+      const endDate = attendanceDateBounds.endDate;
       void (async () => {
         let q = supabase
           .from("attendance")
@@ -502,7 +539,7 @@ const Presencas = () => {
     };
     window.addEventListener(OFFLINE_SYNC_FLUSH_EVENT, onSynced);
     return () => window.removeEventListener(OFFLINE_SYNC_FLUSH_EVENT, onSynced);
-  }, [schoolId, classroomId, year, month0]);
+  }, [schoolId, classroomId, attendanceDateBounds.startDate, attendanceDateBounds.endDate]);
 
   const applyStatus = async (student: Student, date: Date, next: Status | null) => {
     if (!schoolId) return;
@@ -757,11 +794,11 @@ const Presencas = () => {
           <div className="flex flex-col gap-5 pb-4">
             <section className="space-y-4">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1 pr-2">
                   <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                     Presenças
                   </span>
-                  <h2 className="truncate text-xl font-semibold tracking-tight text-foreground">
+                  <h2 className="text-xl font-semibold tracking-tight text-foreground">
                     {formatWeekRangePt(nativeWeekDays)}
                   </h2>
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -770,93 +807,69 @@ const Presencas = () => {
                       : "Acompanhe a frequência por dia."}
                   </p>
                 </div>
-                <Sheet>
-                  <SheetTrigger asChild>
-                    <Button type="button" variant="outline" size="sm" className="shrink-0 gap-2 rounded-full shadow-sm">
-                      <SlidersHorizontal className="h-4 w-4" />
-                      Filtros
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent side="bottom" className="rounded-t-2xl px-6 pb-8 pt-2">
-                    <SheetHeader className="pb-4 text-left">
-                      <SheetTitle>Mês, ano e turma</SheetTitle>
-                    </SheetHeader>
-                    <div className="flex flex-col gap-4">
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium text-muted-foreground">Mês</p>
-                        <Select value={String(month0)} onValueChange={(v) => setMonth0(Number(v))}>
-                          <SelectTrigger className="rounded-xl bg-card">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {MONTHS_PT.map((m, i) => (
-                              <SelectItem key={m} value={String(i)}>
-                                {m}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium text-muted-foreground">Ano</p>
-                        <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-                          <SelectTrigger className="rounded-xl bg-card">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {[year - 1, year, year + 1].map((y) => (
-                              <SelectItem key={y} value={String(y)}>
-                                {y}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium text-muted-foreground">Turma</p>
-                        <Select value={classroomId} onValueChange={setClassroomId} disabled={isParent || isStudent}>
-                          <SelectTrigger className="rounded-xl bg-card">
-                            <SelectValue placeholder="Turma" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {!isParent && !isStudent && <SelectItem value="all">Todas as turmas</SelectItem>}
-                            {classrooms.map((c) => (
-                              <SelectItem key={c.id} value={c.id}>
-                                {c.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </SheetContent>
-                </Sheet>
+                {!isParent && !isStudent ? (
+                  <Select value={classroomId} onValueChange={setClassroomId} disabled={classrooms.length === 0}>
+                    <SelectTrigger className="h-10 w-[min(46vw,11.5rem)] shrink-0 rounded-full border-border/80 bg-card px-3 text-left text-sm shadow-card">
+                      <SelectValue placeholder="Turma" />
+                    </SelectTrigger>
+                    <SelectContent align="end">
+                      {userRole !== "TEACHER" && <SelectItem value="all">Todas as turmas</SelectItem>}
+                      {classrooms.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : null}
               </div>
 
-              <div className="flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {nativeWeekDays.map((d) => {
-                  const isWk = d.getDay() === 0 || d.getDay() === 6;
-                  const selected = sameCalendarDay(d, nativeSelectedDay);
-                  return (
-                    <button
-                      key={d.toISOString()}
-                      type="button"
-                      onClick={() => pickNativeDay(d)}
-                      className={cn(
-                        "flex h-[5.25rem] w-14 shrink-0 flex-col items-center justify-center rounded-2xl border transition-all active:scale-[0.98]",
-                        selected
-                          ? "border-primary bg-primary text-primary-foreground shadow-md ring-4 ring-primary/15"
-                          : "border-border/80 bg-card text-foreground shadow-card",
-                        isWk && !selected && "opacity-70",
-                      )}
-                    >
-                      <span className={cn("text-[11px] font-medium uppercase", selected ? "text-primary-foreground/85" : "text-muted-foreground")}>
-                        {WEEKDAY_SHORT_PT[d.getDay()]}
-                      </span>
-                      <span className="mt-1 text-lg font-semibold tabular-nums">{d.getDate()}</span>
-                    </button>
-                  );
-                })}
+              <div className="flex w-full max-w-full items-stretch gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-auto min-h-[5.25rem] w-10 shrink-0 rounded-2xl border-border/80 shadow-card"
+                  aria-label="Semana anterior"
+                  onClick={() => shiftNativeWeek(-1)}
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </Button>
+                <div className="flex min-w-0 flex-1 gap-1">
+                  {nativeWeekDays.map((d) => {
+                    const isWk = d.getDay() === 0 || d.getDay() === 6;
+                    const selected = sameCalendarDay(d, nativeSelectedDay);
+                    return (
+                      <button
+                        key={d.toISOString()}
+                        type="button"
+                        onClick={() => pickNativeDay(d)}
+                        className={cn(
+                          "flex min-h-[5.25rem] min-w-0 flex-1 flex-col items-center justify-center rounded-2xl border px-0.5 py-1 transition-all active:scale-[0.98]",
+                          selected
+                            ? "border-primary bg-primary text-primary-foreground shadow-md ring-2 ring-primary/15"
+                            : "border-border/80 bg-card text-foreground shadow-card",
+                          isWk && !selected && "opacity-70",
+                        )}
+                      >
+                        <span className={cn("truncate text-[10px] font-semibold uppercase leading-tight sm:text-[11px]", selected ? "text-primary-foreground/85" : "text-muted-foreground")}>
+                          {WEEKDAY_SHORT_PT[d.getDay()]}
+                        </span>
+                        <span className="mt-0.5 text-base font-semibold tabular-nums sm:text-lg">{d.getDate()}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-auto min-h-[5.25rem] w-10 shrink-0 rounded-2xl border-border/80 shadow-card"
+                  aria-label="Semana seguinte"
+                  onClick={() => shiftNativeWeek(1)}
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </Button>
               </div>
             </section>
 
