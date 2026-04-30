@@ -351,27 +351,15 @@ const Disciplinas = () => {
       </div>
 
       {native && (
-        <>
-          <Button
-            type="button"
-            size="icon"
-            className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
-            aria-label="Nova disciplina"
-            onClick={handleNew}
-          >
-            <Plus className="h-6 w-6" />
-          </Button>
-          <Button
-            type="button"
-            size="icon"
-            variant="secondary"
-            className="fixed bottom-[7.25rem] right-5 z-40 h-12 w-12 rounded-2xl border border-border shadow-lg"
-            aria-label="Importar Excel"
-            onClick={() => setImportOpen(true)}
-          >
-            <Upload className="h-5 w-5" />
-          </Button>
-        </>
+        <Button
+          type="button"
+          size="icon"
+          className="fixed bottom-24 right-5 z-40 h-14 w-14 rounded-2xl bg-primary text-primary-foreground shadow-lg"
+          aria-label="Nova disciplina"
+          onClick={handleNew}
+        >
+          <Plus className="h-6 w-6" />
+        </Button>
       )}
 
       <SubjectFormDialog
@@ -381,6 +369,7 @@ const Disciplinas = () => {
         onSaved={fetchSubjects}
       />
 
+      {!native && (
       <ExcelImportDialog
         open={importOpen}
         onOpenChange={setImportOpen}
@@ -391,6 +380,7 @@ const Disciplinas = () => {
         onImportRow={handleImportRow}
         onCompleted={fetchSubjects}
       />
+      )}
 
       <AlertDialog open={!!deleteId} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
