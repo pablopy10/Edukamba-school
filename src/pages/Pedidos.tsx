@@ -53,6 +53,21 @@ const daysBetween = (a: string, b: string) => {
   return Math.max(1, Math.round((d2 - d1) / 86400000) + 1);
 };
 
+/** Roles em PT (valores iguais ao Topbar). */
+const profileRoleLabelsPt: Record<string, string> = {
+  SUPER_ADMIN: "Super administrador",
+  ADMIN: "Administrador",
+  TEACHER: "Professor",
+  PARENT: "Encarregado",
+  STUDENT: "Aluno",
+};
+
+const profileRoleLabelPt = (role: string | null | undefined) => {
+  if (!role?.trim()) return "";
+  const k = role.trim().toUpperCase();
+  return profileRoleLabelsPt[k] ?? role;
+};
+
 type Row = AbsenceRecord & {
   profile?: { id: string; full_name: string; role: string | null } | null;
 };
@@ -309,7 +324,7 @@ const Pedidos = () => {
                           </span>
                           <div className="min-w-0">
                             <p className="font-semibold text-foreground">{name}</p>
-                            <p className="text-xs text-muted-foreground">{r.profile?.role ?? ""}</p>
+                            <p className="text-xs text-muted-foreground">{profileRoleLabelPt(r.profile?.role)}</p>
                           </div>
                         </div>
                         <span className={cn("shrink-0 rounded-full px-3 py-1 text-xs font-semibold", statusMeta[status].color)}>
@@ -436,7 +451,7 @@ const Pedidos = () => {
                           </span>
                           <div>
                             <p className="font-semibold text-foreground">{name}</p>
-                            <p className="text-xs text-muted-foreground">{r.profile?.role ?? ""}</p>
+                            <p className="text-xs text-muted-foreground">{profileRoleLabelPt(r.profile?.role)}</p>
                           </div>
                         </div>
                       </td>
