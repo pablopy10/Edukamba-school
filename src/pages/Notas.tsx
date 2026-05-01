@@ -59,7 +59,12 @@ const Notas = () => {
   const { selectedYearId } = useAcademicYear();
   const isPrivileged = role === "ADMIN" || role === "SUPER_ADMIN";
 
-  const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
+  const {
+    isTeacher,
+    classroomIds: teacherClassroomIds,
+    subjectId: teacherSubjectId,
+    loading: teacherLoading,
+  } = useTeacherClassrooms();
   const {
     isStudent,
     studentId,
@@ -74,6 +79,8 @@ const Notas = () => {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<GradeDisplayRow[]>([]);
   const [classroomOpts, setClassroomOpts] = useState<{ id: string; name: string }[]>([]);
+  /** Nome da disciplina do perfil professor (para exibição sem opção «Todas»). */
+  const [teacherSubjectName, setTeacherSubjectName] = useState<string | null>(null);
 
   const [classroomFilter, setClassroomFilter] = useState<string>("all");
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
@@ -114,6 +121,30 @@ const Notas = () => {
     [selectedYearId, isTeacher, teacherClassroomIds.join(",")],
   );
 
+  const classroomOptsKey = useMemo(() => classroomOpts.map((c) => c.id).join(","), [classroomOpts]);
+
+  useEffect(() => {
+    if (!isTeacher || !teacherSubjectId || !schoolId) {
+      setTeacherSubjectName(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase.from("subjects").select("name").eq("id", teacherSubjectId).eq("school_id", schoolId).maybeSingle();
+      if (!cancelled) setTeacherSubjectName(((data?.name as string | null) ?? "").trim() || null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isTeacher, teacherSubjectId, schoolId]);
+
+  /** Professor: sempre uma turma concreta (primeira ao carregar turmas disponíveis). */
+  useEffect(() => {
+    if (!isTeacher || teacherLoading) return;
+    if (classroomOpts.length === 0) return;
+    setClassroomFilter((prev) => (prev !== "all" && classroomOpts.some((c) => c.id === prev) ? prev : classroomOpts[0].id));
+  }, [isTeacher, teacherLoading, classroomOptsKey]);
+
   const loadGrades = useCallback(async () => {
     setLoading(true);
     const sid = schoolId ?? (await loadSchool());
@@ -126,6 +157,12 @@ const Notas = () => {
     const yearId = selectedYearId;
 
     if (isTeacher && teacherClassroomIds.length === 0) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+
+    if (isTeacher && !teacherSubjectId) {
       setRows([]);
       setLoading(false);
       return;
@@ -177,11 +214,22 @@ const Notas = () => {
         query = query.in("assessments.classroom_id", parentClassroomIds);
       }
     } else if (isTeacher) {
-      if (classroomFilter === "all") {
-        query = query.in("assessments.classroom_id", teacherClassroomIds);
+      let classId: string | null = null;
+      if (classroomOpts.length > 0) {
+        classId =
+          classroomFilter !== "all" && teacherClassroomIds.includes(classroomFilter)
+            ? classroomFilter
+            : classroomOpts[0].id;
       } else {
-        query = query.eq("assessments.classroom_id", classroomFilter);
+        classId = teacherClassroomIds[0] ?? null;
       }
+      if (!classId) {
+        setRows([]);
+        setLoading(false);
+        return;
+      }
+      query = query.eq("assessments.classroom_id", classId);
+      query = query.eq("assessments.subject_id", teacherSubjectId!);
     } else if (isPrivileged) {
       if (classroomFilter !== "all") {
         query = query.eq("assessments.classroom_id", classroomFilter);
@@ -236,7 +284,9 @@ const Notas = () => {
     parentClassroomIds.join(","),
     isTeacher,
     teacherClassroomIds.join(","),
+    teacherSubjectId,
     classroomFilter,
+    classroomOptsKey,
     isPrivileged,
   ]);
 
@@ -283,7 +333,7 @@ const Notas = () => {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
-      if (subjectFilter !== "all" && r.subjectName !== subjectFilter) return false;
+      if (!isTeacher && subjectFilter !== "all" && r.subjectName !== subjectFilter) return false;
       if (!q) return true;
       return (
         r.studentName.toLowerCase().includes(q) ||
@@ -293,7 +343,12 @@ const Notas = () => {
         (r.teacher_comment ?? "").toLowerCase().includes(q)
       );
     });
-  }, [rows, subjectFilter, search]);
+  }, [rows, subjectFilter, search, isTeacher]);
+
+  const teacherClassroomSelectValue = useMemo(() => {
+    if (!isTeacher || classroomOpts.length === 0) return null;
+    return classroomOpts.some((c) => c.id === classroomFilter) ? classroomFilter : classroomOpts[0].id;
+  }, [isTeacher, classroomOpts, classroomFilter]);
 
   const showStudentColumn = !(isStudent || isParent);
 
@@ -327,19 +382,33 @@ const Notas = () => {
             <div className="flex min-w-[200px] flex-1 flex-col gap-1.5">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Turma</span>
               {canPickClassroom ? (
-                <Select value={classroomFilter} onValueChange={setClassroomFilter}>
-                  <SelectTrigger className="h-11 rounded-xl border-border bg-background">
-                    <SelectValue placeholder="Turma" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas as turmas visíveis</SelectItem>
-                    {classroomOpts.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                isTeacher && classroomOpts.length === 0 ? (
+                  <div
+                    className={cn(
+                      "flex h-11 items-center rounded-xl border border-border bg-muted/40 px-3 text-sm text-muted-foreground",
+                    )}
+                  >
+                    Sem turmas com horário neste ano letivo
+                  </div>
+                ) : (
+                  <Select
+                    value={isTeacher ? (teacherClassroomSelectValue ?? "") : classroomFilter}
+                    onValueChange={setClassroomFilter}
+                    disabled={isTeacher && classroomOpts.length === 0}
+                  >
+                    <SelectTrigger className="h-11 rounded-xl border-border bg-background">
+                      <SelectValue placeholder="Turma" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {isPrivileged && <SelectItem value="all">Todas as turmas visíveis</SelectItem>}
+                      {classroomOpts.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )
               ) : (
                 <div
                   className={cn(
@@ -353,19 +422,29 @@ const Notas = () => {
 
             <div className="flex min-w-[180px] flex-1 flex-col gap-1.5">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Disciplina</span>
-              <Select value={subjectFilter} onValueChange={setSubjectFilter}>
-                <SelectTrigger className="h-11 rounded-xl border-border bg-background">
-                  <SelectValue placeholder="Disciplina" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {subjectsInData.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {isTeacher ? (
+                <div
+                  className={cn(
+                    "flex h-11 items-center rounded-xl border border-border bg-muted/40 px-3 text-sm font-medium text-foreground",
+                  )}
+                >
+                  {teacherSubjectName ?? (teacherSubjectId ? "…" : "Disciplina não definida")}
+                </div>
+              ) : (
+                <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+                  <SelectTrigger className="h-11 rounded-xl border-border bg-background">
+                    <SelectValue placeholder="Disciplina" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    {subjectsInData.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div className="relative min-w-[200px] flex-[2]">
