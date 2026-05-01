@@ -12,12 +12,15 @@ import { useParentChildren } from "@/hooks/useParentChildren";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { showPageKpiCards } from "@/lib/nativeApp";
 
+type TermRow = { id: string; name: string; term_number: number; start_date: string; end_date: string };
+
 type AssessmentJoin = {
   id: string;
   title: string;
   date: string;
   classroom_id: string | null;
   subject_id: string | null;
+  term_id: string | null;
   academic_year_id: string | null;
   subjects: { name: string | null } | null;
   classrooms: { name: string | null } | null;
@@ -46,6 +49,25 @@ type GradeDisplayRow = {
 
 const formatDatePt = (iso: string) =>
   new Date(iso + "T12:00:00").toLocaleDateString("pt-PT", { day: "2-digit", month: "short", year: "numeric" });
+
+const todayIsoLocal = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+const dIso = (s: string) => s.slice(0, 10);
+
+/** Preferência ao trimestre calendário; fora desses períodos usa o seguinte não iniciado ou, se o ano já terminou, o último trimestre. */
+function resolveDefaultTermId(terms: TermRow[]): string | null {
+  if (!terms.length) return null;
+  const sorted = [...terms].sort((a, b) => a.term_number - b.term_number);
+  const today = todayIsoLocal();
+  const current = sorted.find((t) => today >= dIso(t.start_date) && today <= dIso(t.end_date));
+  if (current) return current.id;
+  const upcoming = sorted.find((t) => today < dIso(t.start_date));
+  if (upcoming) return upcoming.id;
+  return sorted[sorted.length - 1].id;
+}
 
 /** Normaliza `assessments` quando vem objeto único ou array da API. */
 const singleAssessment = (a: AssessmentJoin | AssessmentJoin[] | null | undefined): AssessmentJoin | null => {
@@ -81,6 +103,9 @@ const Notas = () => {
   const [classroomOpts, setClassroomOpts] = useState<{ id: string; name: string }[]>([]);
   /** Nome da disciplina do perfil professor (para exibição sem opção «Todas»). */
   const [teacherSubjectName, setTeacherSubjectName] = useState<string | null>(null);
+  const [terms, setTerms] = useState<TermRow[]>([]);
+  const [termsFetching, setTermsFetching] = useState(false);
+  const [selectedTermId, setSelectedTermId] = useState<string | null>(null);
 
   const [classroomFilter, setClassroomFilter] = useState<string>("all");
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
@@ -120,6 +145,54 @@ const Notas = () => {
     },
     [selectedYearId, isTeacher, teacherClassroomIds.join(",")],
   );
+
+  const termsKey = useMemo(() => terms.map((t) => t.id).join(","), [terms]);
+
+  const effectiveTermId = useMemo((): string | null => {
+    if (!terms.length) return null;
+    if (selectedTermId !== null && terms.some((t) => t.id === selectedTermId)) return selectedTermId;
+    return resolveDefaultTermId(terms);
+  }, [terms, selectedTermId, termsKey]);
+
+  useEffect(() => {
+    if (!schoolId || !selectedYearId) {
+      setTerms([]);
+      setTermsFetching(false);
+      setSelectedTermId(null);
+      return;
+    }
+    let cancelled = false;
+    setTermsFetching(true);
+    void (async () => {
+      const { data, error } = await supabase
+        .from("academic_terms")
+        .select("id, name, term_number, start_date, end_date")
+        .eq("school_id", schoolId)
+        .eq("academic_year_id", selectedYearId)
+        .order("term_number");
+      if (cancelled) return;
+      if (error) {
+        toast({ title: "Erro a carregar trimestres", description: error.message, variant: "destructive" });
+        setTerms([]);
+      } else {
+        setTerms((data ?? []) as TermRow[]);
+      }
+      setTermsFetching(false);
+    })();
+    return () => {
+      cancelled = true;
+      setTermsFetching(false);
+    };
+  }, [schoolId, selectedYearId]);
+
+  /** Ao mudar a lista de trimestres, descarta seleção antiga só se já não existir. */
+  useEffect(() => {
+    if (terms.length === 0) {
+      setSelectedTermId(null);
+      return;
+    }
+    setSelectedTermId((prev) => (prev !== null && terms.some((t) => t.id === prev) ? prev : null));
+  }, [termsKey]);
 
   const classroomOptsKey = useMemo(() => classroomOpts.map((c) => c.id).join(","), [classroomOpts]);
 
@@ -182,6 +255,17 @@ const Notas = () => {
       }
     }
 
+    if (termsFetching) {
+      setLoading(true);
+      return;
+    }
+
+    if (!terms.length || !effectiveTermId) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+
     let query = supabase
       .from("grades")
       .select(`
@@ -195,6 +279,7 @@ const Notas = () => {
           date,
           classroom_id,
           subject_id,
+          term_id,
           academic_year_id,
           subjects (name),
           classrooms (name)
@@ -202,7 +287,8 @@ const Notas = () => {
         students (full_name, classroom_id)
       `)
       .eq("assessments.academic_year_id", yearId)
-      .eq("assessments.school_id", sid);
+      .eq("assessments.school_id", sid)
+      .eq("assessments.term_id", effectiveTermId);
 
     if (isStudent && studentId) {
       query = query.eq("student_id", studentId);
@@ -288,6 +374,10 @@ const Notas = () => {
     classroomFilter,
     classroomOptsKey,
     isPrivileged,
+    termsFetching,
+    terms.length,
+    termsKey,
+    effectiveTermId,
   ]);
 
   useEffect(() => {
@@ -358,7 +448,7 @@ const Notas = () => {
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Notas</h1>
           <p className="text-sm text-muted-foreground">
-            Consulte as notas por turma e por disciplina, no ano letivo seleccionado.
+            Consulte as notas por trimestre, turma e disciplina, no ano letivo seleccionado.
           </p>
         </div>
       )}
@@ -379,6 +469,37 @@ const Notas = () => {
       {selectedYearId && (
         <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-soft sm:p-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
+            <div className="flex min-w-[160px] flex-1 flex-col gap-1.5">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Trimestre</span>
+              {termsFetching ? (
+                <div className="h-11 animate-pulse rounded-xl bg-muted/60" />
+              ) : terms.length === 0 ? (
+                <div
+                  className={cn(
+                    "flex h-11 items-center rounded-xl border border-border bg-muted/40 px-3 text-xs text-muted-foreground",
+                  )}
+                >
+                  Sem trimestres definidos neste ano letivo
+                </div>
+              ) : (
+                <Select
+                  value={effectiveTermId ?? terms[0].id}
+                  onValueChange={(v) => setSelectedTermId(v)}
+                >
+                  <SelectTrigger className="h-11 rounded-xl border-border bg-background">
+                    <SelectValue placeholder="Trimestre" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {terms.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
             <div className="flex min-w-[200px] flex-1 flex-col gap-1.5">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Turma</span>
               {canPickClassroom ? (
