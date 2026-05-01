@@ -56,8 +56,6 @@ const bucketAttendance = (status: string | null, notes: string | null): "present
   return "present";
 };
 
-const CHART_LIMIT = 25000;
-
 function attendanceFromTooltipPayload(payload: TooltipProps<number, string>["payload"]): {
   present: number;
   absent: number;
@@ -134,7 +132,7 @@ export const AttendanceCard = () => {
   const [classroomId, setClassroomId] = useState<string>("ALL");
   const [data, setData] = useState<WeekBucket[]>(() => emptyMonths());
 
-  /** Limites YYYY-MM-DD; se a BD tiver início/fim trocados, corrige para o intervalo não ficar vazio. */
+  /** Limites estritos do ano letivo (YYYY-MM-DD). */
   const dateBounds = useMemo(() => {
     const clip = (s: string) => s.trim().slice(0, 10);
     if (selectedYear) {
@@ -154,6 +152,21 @@ export const AttendanceCard = () => {
       end: `${y}-12-31`,
     };
   }, [selectedYear]);
+
+  /**
+   * Intervalo usado na query: envolve os anos civis de início e fim do ano letivo
+   * (ex. Set/2025–Jun/2026 → 2025-01-01 … 2026-12-31) para não perder meses se
+   * `end_date` na BD estiver incorreto; o gráfico continua a agregar por mês civil.
+   */
+  const queryDateBounds = useMemo(() => {
+    if (!selectedYear) return dateBounds;
+    const ys = Number(dateBounds.start.slice(0, 4));
+    const ye = Number(dateBounds.end.slice(0, 4));
+    if (!Number.isFinite(ys) || !Number.isFinite(ye)) return dateBounds;
+    const yLo = Math.min(ys, ye);
+    const yHi = Math.max(ys, ye);
+    return { start: `${yLo}-01-01`, end: `${yHi}-12-31` };
+  }, [selectedYear, dateBounds.start, dateBounds.end]);
 
   // Turmas no select: admin = todas do ano; professor = só turmas com horário (schedules) ∩ ano letivo atual.
   useEffect(() => {
@@ -259,12 +272,10 @@ export const AttendanceCard = () => {
         let query = supabase
           .from("attendance")
           .select("date, notes, status, classroom_id")
-          .eq("school_id", schoolId)
-          .gte("date", dateBounds.start)
-          .lte("date", dateBounds.end)
+          .gte("date", queryDateBounds.start)
+          .lte("date", queryDateBounds.end)
           .eq("classroom_id", classroomId)
-          .order("date", { ascending: true })
-          .limit(CHART_LIMIT);
+          .order("date", { ascending: true });
 
         const { data: rows, error } = await query;
         if (error) {
@@ -279,11 +290,9 @@ export const AttendanceCard = () => {
       let query = supabase
         .from("attendance")
         .select("date, notes, status, classroom_id")
-        .eq("school_id", schoolId)
-        .gte("date", dateBounds.start)
-        .lte("date", dateBounds.end)
-        .order("date", { ascending: true })
-        .limit(CHART_LIMIT);
+        .gte("date", queryDateBounds.start)
+        .lte("date", queryDateBounds.end)
+        .order("date", { ascending: true });
 
       if (classroomId !== "ALL") {
         query = query.eq("classroom_id", classroomId);
@@ -303,8 +312,8 @@ export const AttendanceCard = () => {
     aggregateRows,
     academicYearLoading,
     classroomId,
-    dateBounds.start,
-    dateBounds.end,
+    queryDateBounds.start,
+    queryDateBounds.end,
     schoolId,
     teacherMode,
     teacherLoading,
