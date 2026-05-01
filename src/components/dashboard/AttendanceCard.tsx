@@ -120,8 +120,11 @@ function barCountLabel(value: number | string): string {
   return String(Math.round(n));
 }
 
+const isUuidLike = (id: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+
 export const AttendanceCard = () => {
-  const { selectedYear, selectedYearId } = useAcademicYear();
+  const { selectedYear, selectedYearId, loading: academicYearLoading } = useAcademicYear();
   const { role, loading: roleLoading } = useUserRole();
   /** Evita tratar como admin antes do perfil estar definido (cache/async). */
   const teacherMode = !roleLoading && role === "TEACHER";
@@ -221,8 +224,18 @@ export const AttendanceCard = () => {
 
   const aggregateRows = useCallback((rows: { date: string; status: string | null; notes: string | null }[]) => {
     const months = emptyMonths();
+    const toDateKey = (raw: unknown): string => {
+      if (typeof raw === "string") return raw;
+      if (raw instanceof Date) {
+        const y = raw.getFullYear();
+        const m = String(raw.getMonth() + 1).padStart(2, "0");
+        const d = String(raw.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+      }
+      return String(raw ?? "");
+    };
     for (const row of rows) {
-      const monthIdx = calendarMonthIndexFromIso(row.date);
+      const monthIdx = calendarMonthIndexFromIso(toDateKey(row.date));
       if (monthIdx === null) continue;
       const side = bucketAttendance(row.status, row.notes);
       if (side === "absent") months[monthIdx].absent += 1;
@@ -238,13 +251,20 @@ export const AttendanceCard = () => {
         return;
       }
 
+      /** Evita intervalo só com ano civil (errado) antes de `academic_years` estar resolvido. */
+      if (academicYearLoading) {
+        setData(emptyMonths());
+        return;
+      }
+
       if (!schoolId) {
         setData(emptyMonths());
         return;
       }
 
       if (teacherMode) {
-        if (teacherLoading || !classroomId) {
+        /** Estado inicial é "ALL"; professores nunca usam todas as turmas — esperar UUID real. */
+        if (teacherLoading || !classroomId || classroomId === "ALL" || !isUuidLike(classroomId)) {
           setData(emptyMonths());
           return;
         }
@@ -291,6 +311,7 @@ export const AttendanceCard = () => {
     void load();
   }, [
     aggregateRows,
+    academicYearLoading,
     classroomId,
     dateBounds.start,
     dateBounds.end,
