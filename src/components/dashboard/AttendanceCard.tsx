@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TooltipProps } from "recharts";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip, LabelList } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { sortByName, cn } from "@/lib/utils";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -125,25 +124,28 @@ const isUuidLike = (id: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 
 export const AttendanceCard = () => {
-  const { user } = useAuth();
-  const { selectedYear, selectedYearId, loading: academicYearLoading } = useAcademicYear();
+  const { selectedYear, selectedYearId, schoolId, loading: academicYearLoading } = useAcademicYear();
   const { role, loading: roleLoading } = useUserRole();
   /** Evita tratar como admin antes do perfil estar definido (cache/async). */
   const teacherMode = !roleLoading && role === "TEACHER";
   const { classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
 
-  const [schoolId, setSchoolId] = useState<string | null>(null);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [classroomId, setClassroomId] = useState<string>("ALL");
   const [data, setData] = useState<WeekBucket[]>(() => emptyMonths());
 
-  /** Limites YYYY-MM-DD em calendário local da escola (evita desvio UTC com toISOString). */
+  /** Limites YYYY-MM-DD; se a BD tiver início/fim trocados, corrige para o intervalo não ficar vazio. */
   const dateBounds = useMemo(() => {
+    const clip = (s: string) => s.trim().slice(0, 10);
     if (selectedYear) {
-      return {
-        start: selectedYear.start_date.slice(0, 10),
-        end: selectedYear.end_date.slice(0, 10),
-      };
+      let start = clip(selectedYear.start_date);
+      let end = clip(selectedYear.end_date);
+      if (start > end) {
+        const t = start;
+        start = end;
+        end = t;
+      }
+      return { start, end };
     }
     const now = new Date();
     const y = now.getFullYear();
@@ -152,22 +154,6 @@ export const AttendanceCard = () => {
       end: `${y}-12-31`,
     };
   }, [selectedYear]);
-
-  /** Mesmo padrão que Presencas.tsx: depende de `user` do useAuth para não ficar com schoolId null se a sessão ainda não existia na primeira montagem. */
-  useEffect(() => {
-    if (!user?.id) {
-      setSchoolId(null);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", user.id).maybeSingle();
-      if (!cancelled) setSchoolId(profile?.school_id ?? null);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
 
   // Turmas no select: admin = todas do ano; professor = só turmas com horário (schedules) ∩ ano letivo atual.
   useEffect(() => {
@@ -277,6 +263,7 @@ export const AttendanceCard = () => {
           .gte("date", dateBounds.start)
           .lte("date", dateBounds.end)
           .eq("classroom_id", classroomId)
+          .order("date", { ascending: true })
           .limit(CHART_LIMIT);
 
         const { data: rows, error } = await query;
@@ -295,6 +282,7 @@ export const AttendanceCard = () => {
         .eq("school_id", schoolId)
         .gte("date", dateBounds.start)
         .lte("date", dateBounds.end)
+        .order("date", { ascending: true })
         .limit(CHART_LIMIT);
 
       if (classroomId !== "ALL") {
