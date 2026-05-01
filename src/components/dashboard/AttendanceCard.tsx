@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TooltipProps } from "recharts";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip, LabelList } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { sortByName, cn } from "@/lib/utils";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -124,6 +125,7 @@ const isUuidLike = (id: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 
 export const AttendanceCard = () => {
+  const { user } = useAuth();
   const { selectedYear, selectedYearId, loading: academicYearLoading } = useAcademicYear();
   const { role, loading: roleLoading } = useUserRole();
   /** Evita tratar como admin antes do perfil estar definido (cache/async). */
@@ -151,21 +153,21 @@ export const AttendanceCard = () => {
     };
   }, [selectedYear]);
 
+  /** Mesmo padrão que Presencas.tsx: depende de `user` do useAuth para não ficar com schoolId null se a sessão ainda não existia na primeira montagem. */
   useEffect(() => {
+    if (!user?.id) {
+      setSchoolId(null);
+      return;
+    }
     let cancelled = false;
     void (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        if (!cancelled) setSchoolId(null);
-        return;
-      }
       const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", user.id).maybeSingle();
       if (!cancelled) setSchoolId(profile?.school_id ?? null);
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [user?.id]);
 
   // Turmas no select: admin = todas do ano; professor = só turmas com horário (schedules) ∩ ano letivo atual.
   useEffect(() => {
