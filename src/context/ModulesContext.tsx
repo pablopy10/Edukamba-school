@@ -13,6 +13,7 @@ export type ModuleKey =
   | "presencas"
   | "horario"
   | "avaliacoes"
+  | "notas"
   | "eventos"
   | "extracurriculares"
   | "pedidos"
@@ -34,6 +35,7 @@ export const moduleMeta: Record<ModuleKey, { label: string; description: string;
   presencas: { label: "Presenças", description: "Registo diário de presenças dos alunos.", path: "/presencas" },
   horario: { label: "Horário", description: "Horário das turmas e dos professores.", path: "/horario" },
   avaliacoes: { label: "Avaliações", description: "Testes, exames e trabalhos avaliados.", path: "/avaliacoes" },
+  notas: { label: "Notas", description: "Consulta de notas por turma e disciplina.", path: "/notas" },
   eventos: { label: "Eventos", description: "Eventos escolares e calendário institucional.", path: "/eventos" },
   extracurriculares: { label: "Extracurriculares", description: "Atividades fora do plano curricular.", path: "/extracurriculares" },
   pedidos: { label: "Pedidos", description: "Pedidos de ausência e aprovações.", path: "/pedidos" },
@@ -60,6 +62,7 @@ export const modulePlan: Record<ModuleKey, PlanType> = {
   presencas: "Essencial",
   horario: "Essencial",
   avaliacoes: "Essencial",
+  notas: "Essencial",
   eventos: "Essencial",
   pagamentos: "Essencial",
   financas: "Essencial",

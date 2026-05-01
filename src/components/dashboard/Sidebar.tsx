@@ -1,5 +1,5 @@
 import type { ElementType } from "react";
-import { GraduationCap, Home, Users, Receipt, BookOpen, Presentation, Contact, PersonStanding, UsersRound, CalendarDays, BookMarked, CalendarCheck, Smartphone, BookOpenCheck, BarChart3, Clock, UserCircle, Settings, Package, LogOut, ChevronRight, Sparkles, Wallet, TrendingUp, Bus } from "lucide-react";
+import { GraduationCap, Home, Users, Receipt, BookOpen, Presentation, Contact, PersonStanding, UsersRound, CalendarDays, BookMarked, Table2, CalendarCheck, Smartphone, BookOpenCheck, BarChart3, Clock, UserCircle, Settings, Package, LogOut, ChevronRight, Sparkles, Wallet, TrendingUp, Bus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useModules, ModuleKey } from "@/context/ModulesContext";
@@ -14,9 +14,9 @@ export type NavItem = { icon: ElementType; label: string; to: string; hasArrow?:
 
 // Role-based visible routes. Admin/SuperAdmin see everything (subject to module toggles).
 const roleAllowedRoutes: Record<Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">, string[]> = {
-  TEACHER: ["/dashboard", "/alunos", "/turmas", "/avaliacoes", "/presencas", "/horario", "/material", "/pedidos", "/eventos", "/educadores"],
-  PARENT: ["/dashboard", "/alunos", "/avaliacoes", "/pagamentos", "/horario", "/matriculas", "/eventos", "/presencas", "/material"],
-  STUDENT: ["/dashboard", "/presencas", "/horario", "/avaliacoes", "/eventos", "/material"],
+  TEACHER: ["/dashboard", "/alunos", "/turmas", "/avaliacoes", "/notas", "/presencas", "/horario", "/material", "/pedidos", "/eventos", "/educadores"],
+  PARENT: ["/dashboard", "/alunos", "/avaliacoes", "/notas", "/pagamentos", "/horario", "/matriculas", "/eventos", "/presencas", "/material"],
+  STUDENT: ["/dashboard", "/presencas", "/horario", "/avaliacoes", "/notas", "/eventos", "/material"],
 };
 
 const roleAllowedOther: Record<Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">, string[]> = {
@@ -37,6 +37,7 @@ const menu: NavItem[] = [
   { icon: UsersRound, label: "Presenças", to: "/presencas", moduleKey: "presencas" },
   { icon: CalendarDays, label: "Horário", to: "/horario", moduleKey: "horario" },
   { icon: BookMarked, label: "Avaliações", to: "/avaliacoes", moduleKey: "avaliacoes" },
+  { icon: Table2, label: "Notas", to: "/notas", moduleKey: "notas" },
   { icon: CalendarCheck, label: "Eventos", to: "/eventos", moduleKey: "eventos" },
   { icon: Sparkles, label: "Extracurriculares", to: "/extracurriculares", moduleKey: "extracurriculares" },
   { icon: Bus, label: "Transporte", to: "/transportes", moduleKey: "transportes" },
