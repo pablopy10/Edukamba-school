@@ -1,4 +1,4 @@
-import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -48,26 +48,9 @@ import { UserRoleProvider } from "./hooks/useUserRole";
 import { SelectedChildProvider } from "./context/SelectedChildContext";
 import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
 import { queryClient } from "@/lib/queryClient";
-import {
-  edukambaQueryPersister,
-  QUERY_CACHE_BUSTER,
-  QUERY_PERSIST_MAX_AGE_MS,
-} from "@/lib/queryPersister";
-import { QueryCacheAuthSync } from "@/components/QueryCacheAuthSync";
 
 const App = () => (
-  <PersistQueryClientProvider
-    client={queryClient}
-    persistOptions={{
-      persister: edukambaQueryPersister,
-      maxAge: QUERY_PERSIST_MAX_AGE_MS,
-      buster: QUERY_CACHE_BUSTER,
-      dehydrateOptions: {
-        shouldDehydrateMutation: () => false,
-      },
-    }}
-  >
-    <QueryCacheAuthSync />
+  <QueryClientProvider client={queryClient}>
     <OfflineSyncProvider>
       <ModulesProvider>
         <AcademicYearProvider>
@@ -131,7 +114,7 @@ const App = () => (
         </AcademicYearProvider>
       </ModulesProvider>
     </OfflineSyncProvider>
-  </PersistQueryClientProvider>
+  </QueryClientProvider>
 );
 
 export default App;
