@@ -1,6 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
-import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -49,34 +47,27 @@ import { AcademicYearProvider } from "./context/AcademicYearContext";
 import { UserRoleProvider } from "./hooks/useUserRole";
 import { SelectedChildProvider } from "./context/SelectedChildContext";
 import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 60 * 1000,
-      gcTime: 1000 * 60 * 60 * 24 * 7,
-      retry: (failureCount) => {
-        if (typeof navigator !== "undefined" && !navigator.onLine) return false;
-        return failureCount < 2;
-      },
-      /** Permite servir dados persistidos offline quando aplicável. */
-      networkMode: "offlineFirst",
-    },
-  },
-});
-
-const persister = createAsyncStoragePersister({
-  storage: window.localStorage,
-});
+import { queryClient } from "@/lib/queryClient";
+import {
+  edukambaQueryPersister,
+  QUERY_CACHE_BUSTER,
+  QUERY_PERSIST_MAX_AGE_MS,
+} from "@/lib/queryPersister";
+import { QueryCacheAuthSync } from "@/components/QueryCacheAuthSync";
 
 const App = () => (
   <PersistQueryClientProvider
     client={queryClient}
     persistOptions={{
-      persister,
-      maxAge: 1000 * 60 * 60 * 24 * 7,
+      persister: edukambaQueryPersister,
+      maxAge: QUERY_PERSIST_MAX_AGE_MS,
+      buster: QUERY_CACHE_BUSTER,
+      dehydrateOptions: {
+        shouldDehydrateMutation: () => false,
+      },
     }}
   >
+    <QueryCacheAuthSync />
     <OfflineSyncProvider>
       <ModulesProvider>
         <AcademicYearProvider>

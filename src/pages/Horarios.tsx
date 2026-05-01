@@ -20,29 +20,11 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
+import { useHorariosDatasetQuery } from "@/hooks/queries/useHorariosDatasetQuery";
+import type { HorariosFetchScope } from "@/lib/api/fetchHorariosDataset";
+import type { ScheduleRow, TimeSlotRow } from "@/lib/api/fetchHorariosDataset";
 
 type Option = { id: string; name: string; subjectId?: string | null; period?: string | null };
-type TimeSlotRow = {
-  id: string;
-  shift: "MORNING" | "AFTERNOON" | "EVENING";
-  start_time: string;
-  end_time: string;
-  position: number;
-  is_break: boolean;
-  label: string | null;
-};
-type ScheduleRow = {
-  id: string;
-  classroom_id: string;
-  subject_id: string | null;
-  teacher_id: string | null;
-  day_of_week: number;
-  start_time: string;
-  end_time: string;
-  room: string | null;
-  shift: "MORNING" | "AFTERNOON" | "EVENING" | null;
-  notes: string | null;
-};
 
 const DAYS = [
   { value: 1, label: "Segunda" },
@@ -106,7 +88,6 @@ const PASTEL_PALETTE = [
   "bg-pastel-pink text-pastel-pink-foreground",
 ];
 
-const trim5 = (t: string) => t?.slice(0, 5) ?? "";
 const ALL = "__ALL__";
 
 const Horarios = () => {
@@ -146,7 +127,6 @@ const Horarios = () => {
     return t;
   });
 
-  const [loading, setLoading] = useState(true);
   const [openForm, setOpenForm] = useState(false);
   const [openSlots, setOpenSlots] = useState(false);
   const [editing, setEditing] = useState<ScheduleRecord | null>(null);
@@ -166,86 +146,63 @@ const Horarios = () => {
     })();
   }, [user]);
 
-  const loadAll = useCallback(async () => {
-    if (!schoolId) return;
-    if (parentLoading) return;
-    if (isTeacher && teacherLoading) return;
-    if (isStudent && studentLoading) return;
-    setLoading(true);
-    let classroomsQuery = supabase.from("classrooms").select("id, name, period").eq("school_id", schoolId).order("name");
-    if (selectedYearId) classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
-    const [classroomsRes, subjectsRes, teachersRes, slotsRes, schedulesRes] = await Promise.all([
-      classroomsQuery,
-      supabase.from("subjects").select("id, name").eq("school_id", schoolId).order("name"),
-      supabase
-        .from("teachers")
-        .select("id, profile_id, subject_id, profiles:profile_id ( full_name )")
-        .eq("school_id", schoolId),
-      supabase.from("school_time_slots").select("*").eq("school_id", schoolId).order("shift").order("position"),
-      supabase.from("schedules").select("*").eq("school_id", schoolId),
-    ]);
+  const horariosScope = useMemo(
+    (): HorariosFetchScope => ({
+      isParent,
+      parentClassroomIds,
+      isTeacher,
+      teacherClassroomIds,
+      isStudent,
+      studentClassroomId,
+      studentSubjectIds,
+      studentTeacherIds,
+    }),
+    [
+      isParent,
+      parentClassroomIds,
+      isTeacher,
+      teacherClassroomIds,
+      isStudent,
+      studentClassroomId,
+      studentSubjectIds,
+      studentTeacherIds,
+    ],
+  );
 
-    let classroomList = (classroomsRes.data ?? []).map((c: any) => ({ id: c.id, name: c.name, period: c.period ?? null }));
-    if (isParent) {
-      classroomList = classroomList.filter((c) => parentClassroomIds.includes(c.id));
-    }
-    if (isTeacher) {
-      classroomList = classroomList.filter((c) => teacherClassroomIds.includes(c.id));
-    }
-    if (isStudent) {
-      classroomList = classroomList.filter((c) => c.id === studentClassroomId);
-    }
+  const {
+    data: horariosDataset,
+    isPending: horariosPending,
+    refetch: refetchHorarios,
+  } = useHorariosDatasetQuery({
+    schoolId,
+    academicYearId,
+    scope: horariosScope,
+    parentLoading,
+    teacherLoading,
+    studentLoading,
+  });
+
+  useEffect(() => {
+    const d = horariosDataset;
+    if (!d) return;
+    const classroomList = d.classrooms as Option[];
     setClassrooms(classroomList);
-    // Pre-select first classroom if none selected or current selection is not valid
     setClassroomFilter((prev) => {
       if (prev && classroomList.some((c) => c.id === prev)) return prev;
       return classroomList[0]?.id ?? "";
     });
-    let subjectList = (subjectsRes.data ?? []).map((s) => ({ id: s.id, name: s.name }));
-    let teacherList = (teachersRes.data ?? [])
-        .filter((t: any) => !!t.profile_id)
-        .map((t: any) => ({
-          id: t.profile_id,
-          name: t.profiles?.full_name ?? "Sem nome",
-          subjectId: t.subject_id ?? null,
-      }));
-    if (isStudent) {
-      const subjSet = new Set(studentSubjectIds);
-      const teachSet = new Set(studentTeacherIds);
-      subjectList = subjectList.filter((s) => subjSet.has(s.id));
-      teacherList = teacherList.filter((t) => teachSet.has(t.id));
-    }
-    setSubjects(subjectList);
-    setTeachers(teacherList);
-    setTimeSlots(
-      (slotsRes.data ?? []).map((s: any) => ({
-        id: s.id,
-        shift: s.shift,
-        start_time: trim5(s.start_time),
-        end_time: trim5(s.end_time),
-        position: s.position,
-        is_break: s.is_break,
-        label: s.label,
-      })),
-    );
-    setSchedules(
-      (schedulesRes.data ?? []).map((s: any) => ({
-        id: s.id,
-        classroom_id: s.classroom_id,
-        subject_id: s.subject_id,
-        teacher_id: s.teacher_id,
-        day_of_week: s.day_of_week,
-        start_time: trim5(s.start_time),
-        end_time: trim5(s.end_time),
-        room: s.room,
-        shift: s.shift,
-        notes: s.notes,
-      })),
-    );
-    setLoading(false);
-  }, [schoolId, isParent, parentClassroomIds.join(","), parentLoading, selectedYearId, isTeacher, teacherClassroomIds.join(","), teacherLoading, isStudent, studentLoading, studentClassroomId, studentSubjectIds.join(","), studentTeacherIds.join(",")]);
+    setSubjects(d.subjects as Option[]);
+    setTeachers(d.teachers as Option[]);
+    setTimeSlots(d.timeSlots);
+    setSchedules(d.schedules);
+  }, [horariosDataset]);
 
-  useEffect(() => { void loadAll(); }, [loadAll]);
+  const loading =
+    !schoolId ||
+    parentLoading ||
+    (isTeacher && teacherLoading) ||
+    (isStudent && studentLoading) ||
+    (!!schoolId && horariosPending);
 
   // For teachers, lock filters to themselves and their subject
   useEffect(() => {
@@ -447,11 +404,11 @@ const Horarios = () => {
       .eq("id", scheduleId);
     if (error) {
       toast({ title: "Erro ao mover aula", description: error.message, variant: "destructive" });
-      void loadAll();
+      void refetchHorarios();
       return;
     }
     toast({ title: "Aula movida" });
-    void loadAll();
+    void refetchHorarios();
   };
 
   const confirmDelete = async () => {
@@ -463,7 +420,7 @@ const Horarios = () => {
       return;
     }
     toast({ title: "Aula removida" });
-    void loadAll();
+    void refetchHorarios();
   };
 
   const ShiftIcon = SHIFT_META[shiftView].icon;
@@ -907,14 +864,14 @@ const Horarios = () => {
         teachers={teachers}
         timeSlots={timeSlots}
         initial={editing}
-        onSaved={loadAll}
+        onSaved={refetchHorarios}
       />
 
       <TimeSlotsDialog
         open={openSlots}
         onOpenChange={setOpenSlots}
         schoolId={schoolId}
-        onSaved={loadAll}
+        onSaved={refetchHorarios}
         fullScreen={native && isAdmin}
       />
 

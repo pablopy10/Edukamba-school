@@ -7,7 +7,12 @@ import { cn } from "@/lib/utils";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useOfflineSync } from "@/hooks/useOfflineSync";
+import { supabaseRestTable } from "@/lib/supabaseRestUrls";
+import { qk } from "@/hooks/queries/keys";
+import { usePerfilProfileQuery } from "@/hooks/queries/usePerfilProfileQuery";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -79,10 +84,13 @@ const defaultSecurity = { twoFactor: false, loginAlerts: true };
 
 const Perfil = () => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { isOnline, enqueuePendingSync } = useOfflineSync();
+  const { data: perfilDb, isLoading: perfilFetching } = usePerfilProfileQuery(user?.id);
+  const loading = !!user?.id && perfilFetching;
   const [activeTab, setActiveTab] = useState<Tab>("pessoal");
   const [toast, setToast] = useState<{ kind: "success" | "error"; msg: string } | null>(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
@@ -121,29 +129,21 @@ const Perfil = () => {
     window.setTimeout(() => setToast(null), 2800);
   };
 
-  // Load real profile from DB
   useEffect(() => {
     if (!user) return;
-    setLoading(true);
     setEmail(user.email ?? "");
     setEmailDraft(user.email ?? "");
-    supabase
-      .from("profiles")
-      .select("full_name, phone, language, role")
-      .eq("id", user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setProfile({
-            full_name: data.full_name ?? "",
-            phone: data.phone ?? "",
-            language: data.language ?? "pt-PT",
-            role: data.role ?? null,
-          });
-        }
-        setLoading(false);
-      });
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!perfilDb) return;
+    setProfile({
+      full_name: perfilDb.full_name ?? "",
+      phone: perfilDb.phone ?? "",
+      language: perfilDb.language ?? "pt-PT",
+      role: perfilDb.role ?? null,
+    });
+  }, [perfilDb]);
 
   const handleSaveProfile = async () => {
     if (!user) return;
@@ -157,16 +157,36 @@ const Perfil = () => {
     }
     setProfileErrors({});
     setSaving(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        full_name: profile.full_name.trim(),
-        phone: profile.phone?.trim() || null,
-        language: profile.language || "pt-PT",
-      })
-      .eq("id", user.id);
+    const body = {
+      full_name: profile.full_name.trim(),
+      phone: profile.phone?.trim() || null,
+      language: profile.language || "pt-PT",
+    };
+
+    if (!isOnline) {
+      const profilesUrl = `${supabaseRestTable("profiles")}?id=eq.${encodeURIComponent(user.id)}`;
+      enqueuePendingSync({
+        url: profilesUrl,
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      queryClient.setQueryData(qk.perfilProfile(user.id), (prev) =>
+        prev
+          ? {
+              ...prev,
+              ...body,
+            }
+          : prev,
+      );
+      setSaving(false);
+      showToast("success", "Guardado offline — será sincronizado quando voltar a haver rede.");
+      return;
+    }
+
+    const { error } = await supabase.from("profiles").update(body).eq("id", user.id);
     setSaving(false);
     if (error) { showToast("error", error.message); return; }
+    await queryClient.invalidateQueries({ queryKey: qk.perfilProfile(user.id) });
     showToast("success", "Informações pessoais atualizadas.");
   };
 
