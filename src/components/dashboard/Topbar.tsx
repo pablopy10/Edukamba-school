@@ -220,6 +220,35 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
           </div>
         </div>
 
+        {isParent && kids.length > 1 && (
+          <div className="w-full min-w-0 rounded-2xl border border-border/60 bg-muted/25 p-3 shadow-soft/50 ring-1 ring-border/40">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Consultar dados de
+            </p>
+            <Select value={selectedChildId ?? undefined} onValueChange={(v) => setSelectedChildId(v)}>
+              <SelectTrigger
+                aria-label="Selecionar filho ou filha"
+                className="h-12 w-full min-w-0 gap-2 rounded-xl border-border/80 bg-card px-4 text-left text-sm font-semibold text-foreground shadow-soft [&_svg]:shrink-0 [&>span]:line-clamp-1"
+              >
+                <Baby className="h-4 w-4 text-pastel-pink-foreground" strokeWidth={1.75} />
+                <SelectValue placeholder="Filho(a)" />
+              </SelectTrigger>
+              <SelectContent align="center" position="popper" className="max-h-[min(60vh,20rem)] w-[min(100vw-2rem,var(--radix-select-trigger-width))]">
+                {kids.map((c) => (
+                  <SelectItem key={c.id} value={c.id} className="cursor-pointer py-3">
+                    <span className="flex flex-col gap-0.5 text-left">
+                      <span className="font-medium leading-tight">{c.full_name}</span>
+                      {c.classroom_name ? (
+                        <span className="text-xs font-normal text-muted-foreground">{c.classroom_name}</span>
+                      ) : null}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
         <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
           <DialogContent className="gap-4 sm:max-w-md">
             <DialogHeader>

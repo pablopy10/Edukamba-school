@@ -442,11 +442,33 @@ const Presencas = () => {
   const nativeSelectedIso = fmtISO(nativeSelectedDay);
   const isNativeDayWeekend = nativeSelectedDay.getDay() === 0 || nativeSelectedDay.getDay() === 6;
 
+  /**
+   * Professor na app nativa: enquanto a turma do select ainda está em «todas» (valor inicial),
+   * não fazemos pedido de alunos/presenças — espera até o ecrã pré-seleccionar a 1ª turma.
+   */
+  const nativeTeacherAwaitingScopedRoom =
+    native && isTeacher && !teacherLoading && classroomId === "all" && teacherClassroomIds.length > 0;
+
   // Load students only when school or classroom filter changes (not on month change)
   useEffect(() => {
     if (!schoolId) return;
     if (isParent && parentLoading) return;
     if (isStudent && studentLoading) return;
+    if (isTeacher && teacherLoading) {
+      setStudents([]);
+      setStudentsLoading(true);
+      return;
+    }
+    if (nativeTeacherAwaitingScopedRoom) {
+      setStudents([]);
+      setStudentsLoading(true);
+      return;
+    }
+    if (isTeacher && teacherClassroomIds.length === 0) {
+      setStudents([]);
+      setStudentsLoading(false);
+      return;
+    }
     let cancelled = false;
     setStudentsLoading(true);
     (async () => {
@@ -457,6 +479,9 @@ const Presencas = () => {
         .order("full_name");
       if (classroomId !== "all") {
         studentsQuery = studentsQuery.eq("classroom_id", classroomId);
+      } else if (isTeacher && teacherClassroomIds.length > 0) {
+        // Web (ou outros): «Todas as turmas» = apenas turmas onde o professor leciona — nunca escola inteira.
+        studentsQuery = studentsQuery.in("classroom_id", teacherClassroomIds);
       }
       if (isParent) {
         if (childIds.length === 0) {
@@ -480,11 +505,29 @@ const Presencas = () => {
       setStudentsLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [schoolId, classroomId, isParent, parentLoading, childIds.join(","), isStudent, studentLoading, studentId]);
+  }, [
+    schoolId,
+    classroomId,
+    isParent,
+    parentLoading,
+    childIds.join(","),
+    isTeacher,
+    teacherLoading,
+    teacherClassroomIds.join(","),
+    nativeTeacherAwaitingScopedRoom,
+    isStudent,
+    studentLoading,
+    studentId,
+  ]);
 
   // Load attendance separately when date range / school / classroom changes
   useEffect(() => {
     if (!schoolId) return;
+    if (nativeTeacherAwaitingScopedRoom) {
+      setAttendance({});
+      setAttendanceLoading(false);
+      return;
+    }
     let cancelled = false;
     setAttendanceLoading(true);
 
@@ -500,6 +543,8 @@ const Presencas = () => {
         .lte("date", endDate);
       if (classroomId !== "all") {
         q = q.eq("classroom_id", classroomId);
+      } else if (isTeacher && teacherClassroomIds.length > 0) {
+        q = q.in("classroom_id", teacherClassroomIds);
       }
       const { data } = await q;
       if (cancelled) return;
@@ -511,11 +556,20 @@ const Presencas = () => {
       setAttendanceLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [schoolId, classroomId, attendanceDateBounds.startDate, attendanceDateBounds.endDate]);
+  }, [
+    schoolId,
+    classroomId,
+    isTeacher,
+    teacherClassroomIds.join(","),
+    nativeTeacherAwaitingScopedRoom,
+    attendanceDateBounds.startDate,
+    attendanceDateBounds.endDate,
+  ]);
 
   useEffect(() => {
     const onSynced = () => {
       if (!schoolId) return;
+      if (nativeTeacherAwaitingScopedRoom) return;
       const startDate = attendanceDateBounds.startDate;
       const endDate = attendanceDateBounds.endDate;
       void (async () => {
@@ -527,6 +581,8 @@ const Presencas = () => {
           .lte("date", endDate);
         if (classroomId !== "all") {
           q = q.eq("classroom_id", classroomId);
+        } else if (isTeacher && teacherClassroomIds.length > 0) {
+          q = q.in("classroom_id", teacherClassroomIds);
         }
         const { data } = await q;
         const map: Record<string, AttendanceRow> = {};
@@ -538,7 +594,15 @@ const Presencas = () => {
     };
     window.addEventListener(OFFLINE_SYNC_FLUSH_EVENT, onSynced);
     return () => window.removeEventListener(OFFLINE_SYNC_FLUSH_EVENT, onSynced);
-  }, [schoolId, classroomId, attendanceDateBounds.startDate, attendanceDateBounds.endDate]);
+  }, [
+    schoolId,
+    classroomId,
+    isTeacher,
+    teacherClassroomIds.join(","),
+    nativeTeacherAwaitingScopedRoom,
+    attendanceDateBounds.startDate,
+    attendanceDateBounds.endDate,
+  ]);
 
   const applyStatus = async (student: Student, date: Date, next: Status | null) => {
     if (!schoolId) return;
