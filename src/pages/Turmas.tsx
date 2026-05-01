@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { Search, Plus, Users, Presentation, Pencil, Trash2, Loader2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ import { ClassroomFormDialog, ClassroomRow } from "@/components/turmas/Classroom
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { ExcelImportDialog } from "@/components/shared/ExcelImportDialog";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { isNativeMobileApp, showPageKpiCards, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { Button } from "@/components/ui/button";
@@ -40,8 +41,9 @@ const periodStyles: Record<string, string> = {
 const Turmas = () => {
   const native = isNativeMobileApp();
   const { selectedYearId } = useAcademicYear();
-  const { role } = useUserRole();
+  const { role, loading: roleLoading } = useUserRole();
   const isTeacher = role === "TEACHER";
+  const { classroomIds: teacherClassroomIds, loading: teacherClassesLoading } = useTeacherClassrooms();
   const [search, setSearch] = useState("");
   const [periodFilter, setPeriodFilter] = useState<string>("all");
   const [courseFilter, setCourseFilter] = useState<string>("all");
@@ -54,23 +56,43 @@ const Turmas = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      let classroomsQuery = supabase
-        .from("classrooms")
-        .select(`id, name, grade_level, period, course_id, academic_year_id, school_id,
-                 courses(id, name), academic_years(id, label)`)
-        .order("name", { ascending: true });
-      if (selectedYearId) classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
+      const classroomSelect = `id, name, grade_level, period, course_id, academic_year_id, school_id,
+                 courses(id, name), academic_years(id, label)`;
 
-      const [{ data: cls, error }, { data: cs }, { data: ys }, { data: students }] = await Promise.all([
-        classroomsQuery,
+      const [
+        classroomsRes,
+        { data: cs, error: coursesError },
+        { data: ys, error: yearsError },
+        { data: students, error: studentsError },
+      ] = await Promise.all([
+        (async () => {
+          if (isTeacher) {
+            if (!selectedYearId || teacherClassroomIds.length === 0) {
+              return { data: [] as Record<string, unknown>[] | null, error: null };
+            }
+            return supabase
+              .from("classrooms")
+              .select(classroomSelect)
+              .eq("academic_year_id", selectedYearId)
+              .in("id", teacherClassroomIds)
+              .order("name", { ascending: true });
+          }
+          let q = supabase.from("classrooms").select(classroomSelect).order("name", { ascending: true });
+          if (selectedYearId) q = q.eq("academic_year_id", selectedYearId);
+          return q;
+        })(),
         supabase.from("courses").select("id, name").order("name"),
         supabase.from("academic_years").select("id, label, is_active").order("start_date", { ascending: true }),
         supabase.from("students").select("id, classroom_id"),
       ]);
-      if (error) throw error;
+
+      const aggregateError = classroomsRes.error ?? coursesError ?? yearsError ?? studentsError;
+      if (aggregateError) throw aggregateError;
+
+      const list = classroomsRes.data ?? [];
 
       const studentCountByClass = new Map<string, number>();
       (students ?? []).forEach((s) => {
@@ -80,21 +102,42 @@ const Turmas = () => {
       });
 
       setClassrooms(
-        (cls ?? []).map((c: any) => ({
+        (list as any[]).map((c: any) => ({
           ...c,
           studentCount: studentCountByClass.get(c.id) ?? 0,
         })),
       );
-      setCourses(cs ?? []);
+
+      if (isTeacher) {
+        const courseIds = new Set((list as any[]).map((row: { course_id: string | null }) => row.course_id).filter(Boolean));
+        setCourses((cs ?? []).filter((course) => courseIds.has(course.id)));
+      } else {
+        setCourses(cs ?? []);
+      }
       setYears(ys ?? []);
-    } catch (e: any) {
-      toast({ title: "Erro a carregar turmas", description: e?.message, variant: "destructive" });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: "Erro a carregar turmas", description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
     }
-  };
+  }, [isTeacher, selectedYearId, teacherClassroomIds]);
 
-  useEffect(() => { load(); }, [selectedYearId]);
+  useEffect(() => {
+    if (roleLoading) return;
+    if (isTeacher && teacherClassesLoading) {
+      setLoading(true);
+      return;
+    }
+    void load();
+  }, [
+    roleLoading,
+    isTeacher,
+    teacherClassesLoading,
+    load,
+    selectedYearId,
+    teacherClassroomIds.join(","),
+  ]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -133,7 +176,11 @@ const Turmas = () => {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Turmas</h1>
-            <p className="text-sm text-muted-foreground">Faça a gestão de todas as turmas da escola.</p>
+            <p className="text-sm text-muted-foreground">
+              {isTeacher
+                ? "Turmas em que tem aulas no horário do ano letivo seleccionado."
+                : "Faça a gestão de todas as turmas da escola."}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative">
@@ -225,39 +272,68 @@ const Turmas = () => {
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-2xl bg-card p-10 text-center shadow-card">
-            <p className="text-sm text-muted-foreground">Nenhuma turma encontrada.</p>
+            <p className="text-sm text-muted-foreground">
+              {isTeacher
+                ? "Sem turmas com horário atribuído neste ano letivo, ou nenhum resultado com os filtros."
+                : "Nenhuma turma encontrada."}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((c) => {
               const color = colorFor(c.id);
               return (
-                <div key={c.id} className="relative flex flex-col gap-4 rounded-2xl bg-card p-5 shadow-card transition-transform hover:-translate-y-1">
+                <div
+                  key={c.id}
+                  className={cn(
+                    "relative overflow-hidden rounded-2xl bg-card shadow-card",
+                    native ? "" : "transition-transform hover:-translate-y-1",
+                  )}
+                >
                   {!isTeacher && (
-                    <div className="absolute right-4 top-4 z-10 flex items-center gap-1">
+                    <div className="absolute right-3 top-3 z-20 flex items-center gap-1">
                       <button
                         title="Editar"
                         type="button"
-                        onClick={() => { setEditing(c); setFormOpen(true); }}
-                        className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
+                        onClick={(ev) => {
+                          ev.preventDefault();
+                          ev.stopPropagation();
+                          setEditing(c);
+                          setFormOpen(true);
+                        }}
+                        className="flex h-9 w-9 items-center justify-center rounded-full bg-card/95 text-muted-foreground shadow-soft ring-1 ring-border backdrop-blur-sm transition-colors hover:bg-pastel-yellow/40 hover:text-pastel-yellow-foreground"
                       >
                         <Pencil className="h-4 w-4" strokeWidth={1.75} />
                       </button>
                       <button
                         title="Eliminar"
                         type="button"
-                        onClick={() => setDeleteId(c.id)}
-                        className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
+                        onClick={(ev) => {
+                          ev.preventDefault();
+                          ev.stopPropagation();
+                          setDeleteId(c.id);
+                        }}
+                        className="flex h-9 w-9 items-center justify-center rounded-full bg-card/95 text-muted-foreground shadow-soft ring-1 ring-border backdrop-blur-sm transition-colors hover:bg-pastel-pink/40 hover:text-pastel-pink-foreground"
                       >
                         <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                       </button>
                     </div>
                   )}
+                  {/*
+                   * Link cobre todo o cartão (inset); iOS/Android recebem taps de forma estável + touch-manipulation.
+                   * Conteúdo só visual (pointer-events-none); botões admin ficam por cima com pointer-events-auto.
+                   */}
                   <Link
                     to={`/turmas/${c.id}`}
+                    aria-label={`Abrir turma ${c.name}`}
                     className={cn(
-                      "group/turma flex flex-col gap-4 rounded-xl outline-none ring-offset-background transition-[var(--transition-smooth)] focus-visible:ring-2 focus-visible:ring-primary",
-                      !isTeacher && "pr-12",
+                      "touch-manipulation absolute inset-0 z-10 rounded-2xl ring-offset-background [-webkit-tap-highlight-color:transparent] transition-opacity active:opacity-90 motion-safe:transition-transform motion-safe:active:scale-[0.985] [&:focus-visible]:z-[15] [&:focus-visible]:outline-none [&:focus-visible]:ring-2 [&:focus-visible]:ring-primary [&:focus-visible]:ring-offset-2",
+                    )}
+                  />
+                  <div
+                    className={cn(
+                      "group/turma pointer-events-none relative z-0 flex min-h-[8.75rem] flex-col gap-4 p-5",
+                      !isTeacher && "pr-14",
                     )}
                   >
                     <div className="flex items-start gap-3">
@@ -265,10 +341,8 @@ const Turmas = () => {
                         <Presentation className="h-6 w-6" strokeWidth={1.75} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-base font-bold text-foreground transition-colors group-hover/turma:text-pastel-blue-foreground">{c.name}</h3>
-                        {c.courses?.name && (
-                          <p className="mt-1 text-xs text-muted-foreground">{c.courses.name}</p>
-                        )}
+                        <h3 className="text-base font-bold text-foreground">{c.name}</h3>
+                        {c.courses?.name && <p className="mt-1 text-xs text-muted-foreground">{c.courses.name}</p>}
                       </div>
                     </div>
 
@@ -279,14 +353,10 @@ const Turmas = () => {
                         </span>
                       )}
                       {c.grade_level && (
-                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
-                          {c.grade_level}
-                        </span>
+                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{c.grade_level}</span>
                       )}
                       {c.academic_years?.label && (
-                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
-                          {c.academic_years.label}
-                        </span>
+                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{c.academic_years.label}</span>
                       )}
                     </div>
 
@@ -296,7 +366,7 @@ const Turmas = () => {
                         {c.studentCount} alunos
                       </span>
                     </div>
-                  </Link>
+                  </div>
                 </div>
               );
             })}
