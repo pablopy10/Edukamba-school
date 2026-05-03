@@ -129,9 +129,11 @@ function TopbarConnectivity({ variant }: { variant: "native" | "desktop" }) {
       const detail =
         httpStatus === 409
           ? `Conflito com dados já existentes no servidor (HTTP 409). Ainda há ${remainingPending} na fila.`
-          : httpStatus !== undefined
-            ? `Resposta HTTP ${httpStatus}. Ainda há ${remainingPending} na fila.`
-            : `O servidor pode estar indisponível ou há um erro nos dados enviados. Ainda há ${remainingPending} na fila.`;
+          : httpStatus === 400
+            ? `Pedido rejeitado pelo servidor (HTTP 400) — pode haver dados incompletos ou em formato inválido. Ainda há ${remainingPending} na fila.`
+            : httpStatus !== undefined
+              ? `Resposta HTTP ${httpStatus}. Ainda há ${remainingPending} na fila.`
+              : `O servidor pode estar indisponível ou há um erro nos dados enviados. Ainda há ${remainingPending} na fila.`;
       toast({
         title: "Ainda não foi possível sincronizar",
         description: detail,

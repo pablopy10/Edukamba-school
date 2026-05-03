@@ -62,12 +62,15 @@ function postgrestBaseTableFromUrl(rawUrl: string): string | null {
   }
 }
 
-/** PostgREST: `resolution=merge-duplicates` faz upsert onde há índice único (student+date em attendance, etc.). */
-function postgrestPreferHeader(method: string, url: string): string {
+/** PostgREST: `resolution=merge-duplicates` em INSERT único (objeto `{}`) faz upsert; em **array** `[...]` o Supabase pode responder 400 — não usar aqui (confiança em 409 + descarte ou retry sem merge). */
+function postgrestPreferHeader(method: string, url: string, body: string | null, opts?: { noMergeDuplicates: boolean }): string {
   if (method === "DELETE") return "return=minimal";
   if (method === "POST") {
     const t = postgrestBaseTableFromUrl(url);
-    if (t && POST_UPSERT_REST_TABLES.has(t)) return "return=minimal,resolution=merge-duplicates";
+    if (!opts?.noMergeDuplicates && t && POST_UPSERT_REST_TABLES.has(t)) {
+      const looksLikeBulkArray = !!(body && /^\s*\[/.test(body));
+      if (!looksLikeBulkArray) return "return=minimal,resolution=merge-duplicates";
+    }
   }
   return "return=minimal";
 }
@@ -128,11 +131,18 @@ async function runFlushOnce(): Promise<RunFlushOnceResult> {
     const entry = queue[0];
     let retriedAuth = false;
 
+    let retried400PlainPost = false;
+
     for (;;) {
+      const prefer = postgrestPreferHeader(entry.method, entry.url, entry.body, {
+        noMergeDuplicates: retried400PlainPost,
+      });
+      const prefersMergeDup = entry.method === "POST" && !retried400PlainPost && prefer.includes("merge-duplicates");
+
       const headers: Record<string, string> = {
         apikey,
         Authorization: `Bearer ${accessToken}`,
-        Prefer: postgrestPreferHeader(entry.method, entry.url),
+        Prefer: prefer,
       };
       if (entry.method !== "DELETE") {
         headers["Content-Type"] = "application/json";
@@ -156,6 +166,12 @@ async function runFlushOnce(): Promise<RunFlushOnceResult> {
           savePendingSync(queue.slice(1));
           succeeded++;
           continue popHead;
+        }
+
+        /** 400 pode vir de Prefer merge-duplicates incompatível (versão PostgREST / payload). Repetimos uma vez sem merge. */
+        if (res.status === 400 && entry.method === "POST" && prefersMergeDup && !retried400PlainPost) {
+          retried400PlainPost = true;
+          continue;
         }
 
         if ((res.status === 401 || res.status === 403) && !retriedAuth) {
