@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { QUERY_DAY_MS } from "@/lib/queryClient";
 import {
   fetchTeacherAlunosQuery,
   fetchTeacherTurmasQuery,
@@ -7,11 +8,18 @@ import {
   teacherTurmasQueryKey,
 } from "@/lib/offline/teacherListQueries";
 import {
-  defaultAttendancePrefetchRange,
+  academicTermsQueryKey,
+  fetchAcademicTerms,
+  fetchTeacherGradesPack,
+  teacherGradesQueryKey,
+} from "@/lib/offline/teacherNotasQueries";
+import {
+  anchoredWideAttendancePrefetchRange,
   fetchPresencasAttendance,
   fetchPresencasStudents,
   presencasAttendanceQueryKey,
   presencasStudentsQueryKey,
+  touchPresencasWideRangeAnchor,
   type PresencasAttendanceKeyInput,
   type PresencasStudentsKeyInput,
 } from "@/lib/offline/presencasQueries";
@@ -56,15 +64,21 @@ export async function prefetchTeacherData(
 
   if (classroomIds.length === 0) return;
 
+  /** Alinha página Presenças / prefetch mesmo após dias sem rede (datas na queryKey estáveis pela sessão). */
+  touchPresencasWideRangeAnchor();
+  const { startDate, endDate } = anchoredWideAttendancePrefetchRange();
+
   await qc.prefetchQuery({
     queryKey: teacherAlunosQueryKey(userId, academicYearId, classroomIds),
     queryFn: () => fetchTeacherAlunosQuery({ academicYearId, classroomIds }),
     networkMode: "offlineFirst",
+    staleTime: QUERY_DAY_MS * 24,
   });
   await qc.prefetchQuery({
     queryKey: teacherTurmasQueryKey(userId, academicYearId, classroomIds),
     queryFn: () => fetchTeacherTurmasQuery({ academicYearId, classroomIds }),
     networkMode: "offlineFirst",
+    staleTime: QUERY_DAY_MS * 24,
   });
 
   const { data: rooms, error: roomsErr } = await supabase
@@ -80,9 +94,41 @@ export async function prefetchTeacherData(
   await qc.prefetchQuery({
     queryKey: ["teacherPrefetch", "classrooms", schoolId, academicYearId, userId] as const,
     queryFn: async () => rooms ?? [],
+    staleTime: QUERY_DAY_MS * 24,
+    networkMode: "offlineFirst",
   });
 
-  const { startDate, endDate } = defaultAttendancePrefetchRange();
+  const { data: teacherRow } = await supabase.from("teachers").select("subject_id").eq("profile_id", userId).maybeSingle();
+  const subjectId = (teacherRow?.subject_id as string | null) ?? null;
+  if (subjectId) {
+    const termRows = await qc.fetchQuery({
+      queryKey: academicTermsQueryKey(schoolId, academicYearId),
+      queryFn: () => fetchAcademicTerms(schoolId, academicYearId),
+      networkMode: "offlineFirst",
+      staleTime: QUERY_DAY_MS * 24,
+    });
+    const gradeTasks: Promise<unknown>[] = [];
+    for (const term of termRows) {
+      for (const cid of classroomIds) {
+        gradeTasks.push(
+          qc.prefetchQuery({
+            queryKey: teacherGradesQueryKey(schoolId, academicYearId, term.id, cid, subjectId),
+            queryFn: () =>
+              fetchTeacherGradesPack({
+                schoolId,
+                academicYearId,
+                termId: term.id,
+                classroomId: cid,
+                subjectId,
+              }),
+            networkMode: "offlineFirst",
+            staleTime: QUERY_DAY_MS * 24,
+          }),
+        );
+      }
+    }
+    await Promise.all(gradeTasks);
+  }
 
   const baseStudents = (classroomId: string): PresencasStudentsKeyInput => ({
     schoolId,
@@ -112,12 +158,16 @@ export async function prefetchTeacherData(
     qc.prefetchQuery({
       queryKey: presencasStudentsQueryKey(baseStudents("all")),
       queryFn: () => fetchPresencasStudents(baseStudents("all")),
+      networkMode: "offlineFirst",
+      staleTime: QUERY_DAY_MS * 24,
     }),
   );
   tasks.push(
     qc.prefetchQuery({
       queryKey: presencasAttendanceQueryKey(baseAttendance("all")),
       queryFn: () => fetchPresencasAttendance(baseAttendance("all")),
+      networkMode: "offlineFirst",
+      staleTime: QUERY_DAY_MS * 24,
     }),
   );
 
@@ -126,12 +176,16 @@ export async function prefetchTeacherData(
       qc.prefetchQuery({
         queryKey: presencasStudentsQueryKey(baseStudents(cid)),
         queryFn: () => fetchPresencasStudents(baseStudents(cid)),
+        networkMode: "offlineFirst",
+        staleTime: QUERY_DAY_MS * 24,
       }),
     );
     tasks.push(
       qc.prefetchQuery({
         queryKey: presencasAttendanceQueryKey(baseAttendance(cid)),
         queryFn: () => fetchPresencasAttendance(baseAttendance(cid)),
+        networkMode: "offlineFirst",
+        staleTime: QUERY_DAY_MS * 24,
       }),
     );
   }

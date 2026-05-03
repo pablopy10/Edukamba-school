@@ -129,14 +129,14 @@ const Auth = () => {
         try {
           const academicYearId = await resolveDefaultAcademicYearId(profile.school_id);
           if (academicYearId) {
-            void prefetchTeacherData(queryClient, {
+            await prefetchTeacherData(queryClient, {
               userId: signInData.user.id,
               schoolId: profile.school_id,
               academicYearId,
             });
           }
         } catch {
-          /* não bloqueia o fluxo de login */
+          /* prefetch best-effort: login continua */
         }
       }
     }

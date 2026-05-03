@@ -40,6 +40,8 @@ import {
   fetchPresencasStudents,
   presencasAttendanceQueryKey,
   presencasStudentsQueryKey,
+  anchoredWideAttendancePrefetchRange,
+  readPresencasWideRangeAnchorIso,
   attendancePackMonth,
   attendancePackRangeFromDates,
   type PresencasAttendanceMap,
@@ -417,11 +419,14 @@ const Presencas = () => {
     });
   }, []);
 
+  /** Professor: mesma janela alargada e âncora que `prefetchTeacherData` — cache hit offline ao mudar de página. */
+  const presencasAnchorPrint = readPresencasWideRangeAnchorIso();
   const attendanceFetchRange = useMemo(() => {
-    /** Web: um único pacote pelo mês do calendário. Nativa: união dos meses da semana visível — troca só de dia dentro da mesma semana não altera estes extremos nem a queryKey. */
+    if (isTeacher) return anchoredWideAttendancePrefetchRange();
+    /** Web: mês corrente. Nativa não-professor: semana visível. */
     if (native) return attendancePackRangeFromDates(nativeWeekDays);
     return attendancePackMonth(new Date(year, month0, 1));
-  }, [native, nativeWeekDays, year, month0]);
+  }, [isTeacher, native, nativeWeekDays, year, month0, presencasAnchorPrint]);
 
   /** Na app nativa, professor: espera primeira turma concreta antes de carregar dados. */
   const nativeTeacherAwaitingScopedRoom =

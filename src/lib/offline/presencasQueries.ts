@@ -32,6 +32,53 @@ export function defaultAttendancePrefetchRange(reference = new Date()) {
   return { startDate: fmtISO(start), endDate: fmtISO(end) };
 }
 
+/**
+ * Persistida em LS para as chaves de presença do professor coincidirem com o prefetch
+ * mesmo dias depois (evita novo intervalo só porque `Date.now` mudou).
+ */
+export const PRESENCAS_WIDE_RANGE_ANCHOR_LS = "edukamba_presencas_wide_anchor_iso";
+
+export function touchPresencasWideRangeAnchor(d = new Date()) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(PRESENCAS_WIDE_RANGE_ANCHOR_LS, d.toISOString());
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearPresencasWideRangeAnchor() {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.removeItem(PRESENCAS_WIDE_RANGE_ANCHOR_LS);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Leitura síncrona da âncora (para deps de memo / queryKey estável pela sessão). */
+export function readPresencasWideRangeAnchorIso(): string {
+  if (typeof localStorage === "undefined") return "";
+  try {
+    return localStorage.getItem(PRESENCAS_WIDE_RANGE_ANCHOR_LS) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function anchoredReferenceDate(): Date {
+  if (typeof localStorage === "undefined") return new Date();
+  const raw = readPresencasWideRangeAnchorIso();
+  if (!raw) return new Date();
+  const t = Date.parse(raw);
+  return Number.isFinite(t) ? new Date(t) : new Date();
+}
+
+/** Mesmo intervalo amplo que o prefetch do professor deve usar sempre online/offline para a mesma âncora. */
+export function anchoredWideAttendancePrefetchRange() {
+  return defaultAttendancePrefetchRange(anchoredReferenceDate());
+}
+
 /** Mês de calendário completo `{startDate,endDate}` em formato ISO (`yyyy-mm-dd`). */
 export function attendancePackMonth(reference: Date): { startDate: string; endDate: string } {
   const y = reference.getFullYear();

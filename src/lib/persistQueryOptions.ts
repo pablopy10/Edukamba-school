@@ -1,7 +1,7 @@
 import { queryPersister, QUERY_CACHE_BUSTER } from "@/lib/queryPersister";
 
-/** Incluir `alunos` e `turmas` para lista do professor funcionar offline (queryKey estável por professor/ano/turmas). */
-const PERSIST_QUERY_ROOTS = new Set(["presencas", "teacherPrefetch", "alunos", "turmas"]);
+/** Roots persistidos: professor offline (alunos/turmas/notas/presenças). */
+const PERSIST_QUERY_ROOTS = new Set(["presencas", "teacherPrefetch", "alunos", "turmas", "notas"]);
 
 export const persistQueryOptions = {
   persister: queryPersister,

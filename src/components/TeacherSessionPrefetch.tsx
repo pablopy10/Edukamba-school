@@ -21,21 +21,6 @@ export function TeacherSessionPrefetch() {
     if (roleLoading || !user?.id || role !== "TEACHER" || !selectedYearId) return;
     let cancelled = false;
 
-    /** Evita saturar CPU/rede antes do primeiro frame e do restore do TanStack Persist. */
-    const schedulePrefetch = (): (() => void) => {
-      if (typeof requestIdleCallback !== "undefined") {
-        const id = requestIdleCallback(
-          () => {
-            void run();
-          },
-          { timeout: 2800 },
-        );
-        return () => cancelIdleCallback(id);
-      }
-      const t = window.setTimeout(() => void run(), 120);
-      return () => clearTimeout(t);
-    };
-
     async function run() {
       if (cancelled) return;
       const { data } = await supabase.from("profiles").select("school_id").eq("id", user.id).maybeSingle();
@@ -53,10 +38,9 @@ export function TeacherSessionPrefetch() {
       }
     }
 
-    const cancelSchedule = schedulePrefetch();
+    void run();
     return () => {
       cancelled = true;
-      cancelSchedule();
     };
   }, [user?.id, role, roleLoading, selectedYearId]);
 

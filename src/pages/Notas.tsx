@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Search, Table2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,8 +12,16 @@ import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { showPageKpiCards } from "@/lib/nativeApp";
-
-type TermRow = { id: string; name: string; term_number: number; start_date: string; end_date: string };
+import { QUERY_DAY_MS } from "@/lib/queryClient";
+import {
+  academicTermsQueryKey,
+  fetchAcademicTerms,
+  fetchTeacherGradesPack,
+  teacherGradesQueryKey,
+  type AcademicTermRow,
+  type TeacherGradeRowRaw,
+} from "@/lib/offline/teacherNotasQueries";
+import { fetchTeacherTurmasQuery, teacherTurmasQueryKey } from "@/lib/offline/teacherListQueries";
 
 type AssessmentJoin = {
   id: string;
@@ -58,7 +67,7 @@ const todayIsoLocal = () => {
 const dIso = (s: string) => s.slice(0, 10);
 
 /** Preferência ao trimestre calendário; fora desses períodos usa o seguinte não iniciado ou, se o ano já terminou, o último trimestre. */
-function resolveDefaultTermId(terms: TermRow[]): string | null {
+function resolveDefaultTermId(terms: AcademicTermRow[]): string | null {
   if (!terms.length) return null;
   const sorted = [...terms].sort((a, b) => a.term_number - b.term_number);
   const today = todayIsoLocal();
@@ -74,6 +83,38 @@ const singleAssessment = (a: AssessmentJoin | AssessmentJoin[] | null | undefine
   if (!a) return null;
   return Array.isArray(a) ? a[0] ?? null : a;
 };
+
+function assessmentFromTeacherGrade(g: TeacherGradeRowRaw) {
+  const a = g.assessments;
+  if (!a) return null;
+  return Array.isArray(a) ? (a[0] ?? null) : a;
+}
+
+function mapTeacherRawToDisplay(raw: TeacherGradeRowRaw[]): GradeDisplayRow[] {
+  const mapped: GradeDisplayRow[] = raw
+    .map((g) => {
+      const ass = assessmentFromTeacherGrade(g);
+      if (!ass) return null;
+      return {
+        id: g.id,
+        score: g.score,
+        teacher_comment: g.teacher_comment,
+        studentId: g.student_id,
+        studentName: g.students?.full_name ?? "—",
+        classroomName: ass.classrooms?.name ?? "—",
+        subjectName: ass.subjects?.name ?? "—",
+        assessmentTitle: ass.title,
+        date: ass.date,
+      };
+    })
+    .filter((g): g is GradeDisplayRow => g !== null);
+  mapped.sort((a, b) => {
+    const d = new Date(b.date).getTime() - new Date(a.date).getTime();
+    if (d !== 0) return d;
+    return `${a.studentName}:${a.subjectName}`.localeCompare(`${b.studentName}:${b.subjectName}`);
+  });
+  return mapped;
+}
 
 const Notas = () => {
   const { user } = useAuth();
@@ -98,18 +139,49 @@ const Notas = () => {
     useParentChildren();
 
   const [schoolId, setSchoolId] = useState<string | null>(null);
+  /** Carregamento da tabela de notas para perfis que não são professor (usa `loadGrades`). */
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<GradeDisplayRow[]>([]);
-  const [classroomOpts, setClassroomOpts] = useState<{ id: string; name: string }[]>([]);
+  /** Turmas para admin/enc.Edu/etc.; o professor usa `teacherTurmasQueryKey` igual ao prefetch. */
+  const [privilegedClassrooms, setPrivilegedClassrooms] = useState<{ id: string; name: string }[]>([]);
   /** Nome da disciplina do perfil professor (para exibição sem opção «Todas»). */
   const [teacherSubjectName, setTeacherSubjectName] = useState<string | null>(null);
-  const [terms, setTerms] = useState<TermRow[]>([]);
-  const [termsFetching, setTermsFetching] = useState(false);
   const [selectedTermId, setSelectedTermId] = useState<string | null>(null);
 
   const [classroomFilter, setClassroomFilter] = useState<string>("all");
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+
+  const { data: terms = [], isFetching: termsFetching } = useQuery({
+    queryKey: academicTermsQueryKey(schoolId ?? "__none__", selectedYearId ?? "__none__"),
+    queryFn: () => fetchAcademicTerms(schoolId!, selectedYearId!),
+    enabled: Boolean(schoolId && selectedYearId),
+    staleTime: QUERY_DAY_MS * 24,
+    networkMode: "offlineFirst",
+  });
+
+  const { data: teacherTurmasPack, isPending: teacherTurmasPending } = useQuery({
+    queryKey: teacherTurmasQueryKey(user?.id ?? "__", selectedYearId ?? "__", teacherClassroomIds),
+    queryFn: () =>
+      fetchTeacherTurmasQuery({
+        academicYearId: selectedYearId!,
+        classroomIds: [...teacherClassroomIds],
+      }),
+    enabled: Boolean(
+      isTeacher && user?.id && selectedYearId && teacherClassroomIds.length > 0 && !teacherLoading,
+    ),
+    staleTime: QUERY_DAY_MS * 24,
+    networkMode: "offlineFirst",
+  });
+
+  const classroomOpts = useMemo(() => {
+    if (isTeacher) {
+      return (teacherTurmasPack?.classrooms ?? [])
+        .map((c) => ({ id: c.id, name: c.name }))
+        .sort((a, b) => a.name.localeCompare(b.name, "pt"));
+    }
+    return privilegedClassrooms;
+  }, [isTeacher, teacherTurmasPack, privilegedClassrooms]);
 
   const canPickClassroom = isPrivileged || isTeacher;
   const lockedClassroomLabel = useMemo(() => {
@@ -130,20 +202,20 @@ const Notas = () => {
 
   const loadClassroomOptions = useCallback(
     async (sid: string) => {
+      if (isTeacher) return;
       if (!selectedYearId) {
-        setClassroomOpts([]);
+        setPrivilegedClassrooms([]);
         return;
       }
-      let cq = supabase.from("classrooms").select("id, name").eq("school_id", sid).eq("academic_year_id", selectedYearId).order("name");
-      const { data } = await cq;
-      let list = (data ?? []) as { id: string; name: string }[];
-      if (isTeacher) {
-        const allow = new Set(teacherClassroomIds);
-        list = list.filter((c) => allow.has(c.id));
-      }
-      setClassroomOpts(list);
+      const { data } = await supabase
+        .from("classrooms")
+        .select("id, name")
+        .eq("school_id", sid)
+        .eq("academic_year_id", selectedYearId)
+        .order("name");
+      setPrivilegedClassrooms((data ?? []) as { id: string; name: string }[]);
     },
-    [selectedYearId, isTeacher, teacherClassroomIds.join(",")],
+    [selectedYearId, isTeacher],
   );
 
   const termsKey = useMemo(() => terms.map((t) => t.id).join(","), [terms]);
@@ -154,36 +226,45 @@ const Notas = () => {
     return resolveDefaultTermId(terms);
   }, [terms, selectedTermId, termsKey]);
 
-  useEffect(() => {
-    if (!schoolId || !selectedYearId) {
-      setTerms([]);
-      setTermsFetching(false);
-      setSelectedTermId(null);
-      return;
-    }
-    let cancelled = false;
-    setTermsFetching(true);
-    void (async () => {
-      const { data, error } = await supabase
-        .from("academic_terms")
-        .select("id, name, term_number, start_date, end_date")
-        .eq("school_id", schoolId)
-        .eq("academic_year_id", selectedYearId)
-        .order("term_number");
-      if (cancelled) return;
-      if (error) {
-        toast({ title: "Erro a carregar trimestres", description: error.message, variant: "destructive" });
-        setTerms([]);
-      } else {
-        setTerms((data ?? []) as TermRow[]);
-      }
-      setTermsFetching(false);
-    })();
-    return () => {
-      cancelled = true;
-      setTermsFetching(false);
-    };
-  }, [schoolId, selectedYearId]);
+  const resolvedTeacherClassroomId = useMemo(() => {
+    if (!isTeacher || classroomOpts.length === 0) return null;
+    if (classroomFilter !== "all" && teacherClassroomIds.includes(classroomFilter)) return classroomFilter;
+    return classroomOpts[0]?.id ?? null;
+  }, [isTeacher, classroomOpts, classroomFilter, teacherClassroomIds]);
+
+  const teacherGradesQueryEnabled = Boolean(
+    isTeacher &&
+      schoolId &&
+      selectedYearId &&
+      effectiveTermId &&
+      resolvedTeacherClassroomId &&
+      teacherSubjectId &&
+      teacherClassroomIds.length > 0 &&
+      !teacherLoading,
+  );
+
+  const { data: teacherGradeRaw = [], isPending: teacherGradesPending } = useQuery({
+    queryKey: teacherGradesQueryKey(
+      schoolId!,
+      selectedYearId!,
+      effectiveTermId!,
+      resolvedTeacherClassroomId!,
+      teacherSubjectId!,
+    ),
+    queryFn: () =>
+      fetchTeacherGradesPack({
+        schoolId: schoolId!,
+        academicYearId: selectedYearId!,
+        termId: effectiveTermId!,
+        classroomId: resolvedTeacherClassroomId!,
+        subjectId: teacherSubjectId!,
+      }),
+    enabled: teacherGradesQueryEnabled,
+    staleTime: QUERY_DAY_MS * 24,
+    networkMode: "offlineFirst",
+  });
+
+  const teacherRows = useMemo(() => mapTeacherRawToDisplay(teacherGradeRaw), [teacherGradeRaw]);
 
   /** Ao mudar a lista de trimestres, descarta seleção antiga só se já não existir. */
   useEffect(() => {
@@ -219,6 +300,7 @@ const Notas = () => {
   }, [isTeacher, teacherLoading, classroomOptsKey]);
 
   const loadGrades = useCallback(async () => {
+    if (isTeacher) return;
     setLoading(true);
     const sid = schoolId ?? (await loadSchool());
     if (!sid || !selectedYearId) {
@@ -228,18 +310,6 @@ const Notas = () => {
     }
 
     const yearId = selectedYearId;
-
-    if (isTeacher && teacherClassroomIds.length === 0) {
-      setRows([]);
-      setLoading(false);
-      return;
-    }
-
-    if (isTeacher && !teacherSubjectId) {
-      setRows([]);
-      setLoading(false);
-      return;
-    }
 
     if (isStudent && (!studentId || !studentClassroomId)) {
       setRows([]);
@@ -299,23 +369,6 @@ const Notas = () => {
       } else {
         query = query.in("assessments.classroom_id", parentClassroomIds);
       }
-    } else if (isTeacher) {
-      let classId: string | null = null;
-      if (classroomOpts.length > 0) {
-        classId =
-          classroomFilter !== "all" && teacherClassroomIds.includes(classroomFilter)
-            ? classroomFilter
-            : classroomOpts[0].id;
-      } else {
-        classId = teacherClassroomIds[0] ?? null;
-      }
-      if (!classId) {
-        setRows([]);
-        setLoading(false);
-        return;
-      }
-      query = query.eq("assessments.classroom_id", classId);
-      query = query.eq("assessments.subject_id", teacherSubjectId!);
     } else if (isPrivileged) {
       if (classroomFilter !== "all") {
         query = query.eq("assessments.classroom_id", classroomFilter);
@@ -359,6 +412,7 @@ const Notas = () => {
     setRows(mapped);
     setLoading(false);
   }, [
+    isTeacher,
     schoolId,
     loadSchool,
     selectedYearId,
@@ -368,12 +422,8 @@ const Notas = () => {
     isParent,
     childIds.join(","),
     parentClassroomIds.join(","),
-    isTeacher,
-    teacherClassroomIds.join(","),
-    teacherSubjectId,
-    classroomFilter,
-    classroomOptsKey,
     isPrivileged,
+    classroomFilter,
     termsFetching,
     terms.length,
     termsKey,
@@ -386,25 +436,16 @@ const Notas = () => {
 
   useEffect(() => {
     if (!schoolId || !selectedYearId) return;
-    loadClassroomOptions(schoolId);
+    void loadClassroomOptions(schoolId);
   }, [schoolId, selectedYearId, loadClassroomOptions]);
 
   useEffect(() => {
     if (roleLoading) return;
-    if (isTeacher && teacherLoading) return;
+    if (isTeacher) return;
     if (isStudent && studentLoading) return;
     if (isParent && parentLoading) return;
-    loadGrades();
-  }, [
-    roleLoading,
-    isTeacher,
-    teacherLoading,
-    isStudent,
-    studentLoading,
-    isParent,
-    parentLoading,
-    loadGrades,
-  ]);
+    void loadGrades();
+  }, [roleLoading, isTeacher, isStudent, studentLoading, isParent, parentLoading, loadGrades]);
 
   useEffect(() => {
     if (isPrivileged) return;
@@ -412,17 +453,30 @@ const Notas = () => {
     setClassroomFilter("all");
   }, [isPrivileged, isTeacher]);
 
+  const displayRows = isTeacher ? teacherRows : rows;
+
+  const tableLoading =
+    selectedYearId && isTeacher
+      ? Boolean(
+          teacherLoading ||
+            !schoolId ||
+            (termsFetching && terms.length === 0) ||
+            (teacherClassroomIds.length > 0 && teacherTurmasPending && !teacherTurmasPack) ||
+            (teacherGradesQueryEnabled && teacherGradesPending),
+        )
+      : loading;
+
   const subjectsInData = useMemo(() => {
     const m = new Map<string, string>();
-    rows.forEach((r) => {
+    displayRows.forEach((r) => {
       if (!m.has(r.subjectName)) m.set(r.subjectName, r.subjectName);
     });
     return Array.from(m.keys()).sort((a, b) => a.localeCompare(b, "pt"));
-  }, [rows]);
+  }, [displayRows]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return rows.filter((r) => {
+    return displayRows.filter((r) => {
       if (!isTeacher && subjectFilter !== "all" && r.subjectName !== subjectFilter) return false;
       if (!q) return true;
       return (
@@ -433,7 +487,7 @@ const Notas = () => {
         (r.teacher_comment ?? "").toLowerCase().includes(q)
       );
     });
-  }, [rows, subjectFilter, search, isTeacher]);
+  }, [displayRows, subjectFilter, search, isTeacher]);
 
   const teacherClassroomSelectValue = useMemo(() => {
     if (!isTeacher || classroomOpts.length === 0) return null;
@@ -591,7 +645,7 @@ const Notas = () => {
 
       {selectedYearId && (
         <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
-          {loading ? (
+          {tableLoading ? (
             <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin" />
               <span className="text-sm">A carregar…</span>

@@ -6,7 +6,7 @@ import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persist
 export const QUERY_CACHE_STORAGE_KEY = "tanstack-query-edukamba-v2";
 
 /** Invalida caches persistidos antigos quando a estrutura dos dados muda. */
-export const QUERY_CACHE_BUSTER = "offline-first-v2";
+export const QUERY_CACHE_BUSTER = "offline-first-v4";
 
 const memoryLocalStorage: Storage = (() => {
   const m = new Map<string, string>();
