@@ -1,0 +1,14 @@
+diff --git a/node_modules/onesignal-cordova-plugin/build-extras-onesignal.gradle b/node_modules/onesignal-cordova-plugin/build-extras-onesignal.gradle
+index 1d0a3e0..805381a 100644
+--- a/node_modules/onesignal-cordova-plugin/build-extras-onesignal.gradle
++++ b/node_modules/onesignal-cordova-plugin/build-extras-onesignal.gradle
+@@ -2,7 +2,8 @@ import java.nio.file.Files
+ 
+ // Required for Android Support Library 26.0.0+ and Google Play services 11.+
+ repositories {
+-  maven { url 'https://maven.google.com' }
++  google()
++  mavenCentral()
+ }
+ 
+ gradle.afterProject { project ->

@@ -24,6 +24,7 @@ allprojects {
     }
 }
 
-task clean(type: Delete) {
-    delete rootProject.buildDir
+// Use layout.buildDirectory instead of deprecated rootProject.buildDir (Gradle 9+).
+tasks.register('clean', Delete) {
+    delete rootProject.layout.buildDirectory
 }

@@ -44,11 +44,24 @@ dependencies {
 
 apply from: 'capacitor.build.gradle'
 
+// Firebase: só aplicar quando google-services.json tiver entrada para ESTE applicationId.
+// Um ficheiro de outra app (ex.: package antigo) fazia falhar processDebugGoogleServices sem isto.
 try {
-    def servicesJSON = file('google-services.json')
-    if (servicesJSON.text) {
-        apply plugin: 'com.google.gms.google-services'
+    def servicesFile = file('google-services.json')
+    if (servicesFile.exists() && servicesFile.text?.trim()) {
+        def appId = android.defaultConfig.applicationId
+        def gs = new groovy.json.JsonSlurper().parse(servicesFile)
+        def hasMatch = gs.client?.any {
+            it?.client_info?.android_client_info?.package_name == appId
+        }
+        if (hasMatch) {
+            apply plugin: 'com.google.gms.google-services'
+        } else {
+            println "[WARN] google-services.json has no Firebase Android client for package '${appId}'. " +
+                    "Register this app ID in Firebase (Project settings) or replace the JSON; FCM/Google Services skipped until then."
+        }
     }
-} catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+} catch (Exception e) {
+    logger.lifecycle("Google Services skipped: ${e.message}")
 }
+
