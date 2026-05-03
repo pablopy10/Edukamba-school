@@ -29,9 +29,26 @@ type OfflineSyncContextValue = {
 
 const OfflineSyncContext = createContext<OfflineSyncContextValue | null>(null);
 
+/** Combina estado explícito com `navigator.onLine` do WebView (em Android o plugin Capacitor por vezes fica atrás ou não dispara). */
+function navigatorReportsOnline(): boolean {
+  return typeof navigator === "undefined" || navigator.onLine;
+}
+
+async function refreshAuthForSync(): Promise<void> {
+  if (!navigatorReportsOnline()) return;
+  try {
+    const { error } = await supabase.auth.refreshSession();
+    if (error) await supabase.auth.getSession();
+  } catch {
+    await supabase.auth.getSession();
+  }
+}
+
 async function runFlushOnce(): Promise<number> {
   const queue = loadPendingSync();
   if (queue.length === 0) return 0;
+
+  await refreshAuthForSync();
 
   const {
     data: { session },
@@ -93,17 +110,43 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
     setPending(loadPendingSync());
   }, []);
 
+  /** Estado explícito (Capacitor) OU `navigator.onLine` do WebView (Android pode divergir do plugin). */
+  const syncWouldAllowAttempts = () => isOnlineRef.current || navigatorReportsOnline();
+
   /** Várias tentativas enquanto a fila diminui (ex.: primeiro POST liberta o seguinte PATCH). Um único evento + invalidate no fim. */
   const flushPending = useCallback(async () => {
     if (flushingRef.current) return;
-    if (!isOnlineRef.current) return;
     if (loadPendingSync().length === 0) return;
+
+    if (!syncWouldAllowAttempts()) return;
+
+    if (
+      Capacitor.isNativePlatform() &&
+      navigatorReportsOnline() &&
+      !isOnlineRef.current
+    ) {
+      try {
+        const s = await Network.getStatus();
+        if (s.connected) {
+          isOnlineRef.current = true;
+          setIsOnline(true);
+        }
+      } catch {
+        isOnlineRef.current = true;
+        setIsOnline(true);
+      }
+    } else if (navigatorReportsOnline() && !isOnlineRef.current) {
+      isOnlineRef.current = true;
+      setIsOnline(true);
+    }
+
+    if (!syncWouldAllowAttempts()) return;
 
     flushingRef.current = true;
     setSyncing(true);
     try {
       let totalSucceeded = 0;
-      while (isOnlineRef.current && loadPendingSync().length > 0) {
+      while (syncWouldAllowAttempts() && loadPendingSync().length > 0) {
         const n = await runFlushOnce();
         refreshPendingFromStorage();
         totalSucceeded += n;
@@ -112,6 +155,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
       refreshPendingFromStorage();
       if (totalSucceeded > 0) {
         window.dispatchEvent(new CustomEvent(OFFLINE_SYNC_FLUSH_EVENT));
+        onlineManager.setOnline(true);
         await queryClient.invalidateQueries();
       }
     } finally {
@@ -120,45 +164,50 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
     }
   }, [refreshPendingFromStorage]);
 
-  /** Rede: Capacitor na shell nativa (mais fiável); senão eventos do browser. */
+  /** Rede: Capacitor + sempre eventos `online`/`offline` do WebView (crítico no Android nativo). */
   useEffect(() => {
-    if (Capacitor.isNativePlatform()) {
-      let removed = false;
-      let listener: { remove: () => Promise<void> } | undefined;
-
-      void Network.getStatus().then((s) => {
-        if (!removed) {
-          isOnlineRef.current = s.connected;
-          setIsOnline(s.connected);
-        }
-      });
-
-      void Network.addListener("networkStatusChange", (status) => {
-        isOnlineRef.current = status.connected;
-        setIsOnline(status.connected);
-      }).then((handle) => {
-        listener = handle;
-      });
-
-      return () => {
-        removed = true;
-        void listener?.remove();
-      };
-    }
-
     const up = () => {
       isOnlineRef.current = true;
       setIsOnline(true);
+      onlineManager.setOnline(true);
     };
     const down = () => {
       isOnlineRef.current = false;
       setIsOnline(false);
+      onlineManager.setOnline(false);
     };
+
     window.addEventListener("online", up);
     window.addEventListener("offline", down);
+
+    let removed = false;
+    let capRemove: { remove: () => Promise<void> } | undefined;
+
+    if (Capacitor.isNativePlatform()) {
+      void Network.getStatus().then((s) => {
+        if (!removed) {
+          const ok = s.connected || navigatorReportsOnline();
+          isOnlineRef.current = ok;
+          setIsOnline(ok);
+          onlineManager.setOnline(ok);
+        }
+      });
+
+      void Network.addListener("networkStatusChange", (status) => {
+        const ok = status.connected || navigatorReportsOnline();
+        isOnlineRef.current = ok;
+        setIsOnline(ok);
+        onlineManager.setOnline(ok);
+      }).then((handle) => {
+        capRemove = handle;
+      });
+    }
+
     return () => {
+      removed = true;
       window.removeEventListener("online", up);
       window.removeEventListener("offline", down);
+      void capRemove?.remove();
     };
   }, []);
 
@@ -166,7 +215,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
   flushPendingRef.current = flushPending;
 
   useEffect(() => {
-    if (!isOnline) return;
+    if (!syncWouldAllowAttempts()) return;
     void flushPending();
   }, [isOnline, flushPending]);
 
@@ -183,14 +232,21 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
       if (Capacitor.isNativePlatform()) {
         try {
           const status = await Network.getStatus();
-          connected = status.connected;
-          setIsOnline(connected);
+          connected = status.connected || navigatorReportsOnline();
           isOnlineRef.current = connected;
+          setIsOnline(connected);
         } catch {
-          /* mantém último estado conhecido */
+          if (navigatorReportsOnline()) {
+            isOnlineRef.current = true;
+            setIsOnline(true);
+            connected = true;
+          }
         }
       }
-      if (!connected) return;
+
+      const allowFlush = connected || navigatorReportsOnline();
+      if (!allowFlush) return;
+      onlineManager.setOnline(allowFlush);
       await flushPendingRef.current();
     };
 
@@ -199,10 +255,19 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
     return () => document.removeEventListener("visibilitychange", tryFlushOnForeground);
   }, []);
 
-  /** Alinha o TanStack Query com o estado de rede real (Capacitor / browser). */
+  /** TanStack só refaz pedidos quando `onlineManager` está alinhado (offlineFirst). */
   useEffect(() => {
-    onlineManager.setOnline(isOnline);
+    onlineManager.setOnline(isOnline || navigatorReportsOnline());
   }, [isOnline]);
+
+  /** Arranque com fila em disco: tenta libertar assim que há rede (timing do WebView/session). */
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      if (loadPendingSync().length === 0) return;
+      void flushPendingRef.current?.();
+    }, 900);
+    return () => window.clearTimeout(id);
+  }, []);
 
   const enqueuePendingSync = useCallback(
     (entry: Pick<PendingSyncEntry, "url" | "method" | "body">) => {
@@ -211,7 +276,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
       );
       savePendingSync(next);
       setPending(next);
-      if (isOnlineRef.current) {
+      if (isOnlineRef.current || navigatorReportsOnline()) {
         void flushPending();
       }
     },
