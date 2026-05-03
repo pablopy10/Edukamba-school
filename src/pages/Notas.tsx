@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useIsRestoring, useQuery } from "@tanstack/react-query";
 import { Search, Table2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -117,6 +117,7 @@ function mapTeacherRawToDisplay(raw: TeacherGradeRowRaw[]): GradeDisplayRow[] {
 }
 
 const Notas = () => {
+  const persistRestoring = useIsRestoring();
   const { user } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
   const { selectedYearId } = useAcademicYear();
@@ -152,7 +153,7 @@ const Notas = () => {
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
 
-  const { data: terms = [], isFetching: termsFetching } = useQuery({
+  const { data: terms = [], isPending: termsPending } = useQuery({
     queryKey: academicTermsQueryKey(schoolId ?? "__none__", selectedYearId ?? "__none__"),
     queryFn: () => fetchAcademicTerms(schoolId!, selectedYearId!),
     enabled: Boolean(schoolId && selectedYearId),
@@ -325,7 +326,7 @@ const Notas = () => {
       }
     }
 
-    if (termsFetching) {
+    if (termsPending) {
       setLoading(true);
       return;
     }
@@ -424,7 +425,7 @@ const Notas = () => {
     parentClassroomIds.join(","),
     isPrivileged,
     classroomFilter,
-    termsFetching,
+    termsPending,
     terms.length,
     termsKey,
     effectiveTermId,
@@ -455,15 +456,18 @@ const Notas = () => {
 
   const displayRows = isTeacher ? teacherRows : rows;
 
+  const teacherNotasShowsBlockingSpinner =
+    teacherLoading ||
+    !schoolId ||
+    (termsPending && terms.length === 0) ||
+    (teacherClassroomIds.length > 0 &&
+      teacherTurmasPending &&
+      teacherTurmasPack === undefined) ||
+    (teacherGradesQueryEnabled && teacherGradesPending);
+
   const tableLoading =
     selectedYearId && isTeacher
-      ? Boolean(
-          teacherLoading ||
-            !schoolId ||
-            (termsFetching && terms.length === 0) ||
-            (teacherClassroomIds.length > 0 && teacherTurmasPending && !teacherTurmasPack) ||
-            (teacherGradesQueryEnabled && teacherGradesPending),
-        )
+      ? !persistRestoring && teacherNotasShowsBlockingSpinner
       : loading;
 
   const subjectsInData = useMemo(() => {
@@ -525,7 +529,7 @@ const Notas = () => {
           <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
             <div className="flex min-w-[160px] flex-1 flex-col gap-1.5">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Trimestre</span>
-              {termsFetching ? (
+              {termsPending && terms.length === 0 ? (
                 <div className="h-11 animate-pulse rounded-xl bg-muted/60" />
               ) : terms.length === 0 ? (
                 <div

@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useIsRestoring, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, X, Clock, Loader2, MinusCircle, FileText, AlertTriangle, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Check,
+  X,
+  Clock,
+  Loader2,
+  MinusCircle,
+  FileText,
+  AlertTriangle,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Cloud,
+} from "lucide-react";
 import { cn, compareNatural } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -128,6 +140,10 @@ const sameCalendarDay = (a: Date, b: Date) =>
 
 const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
+
+/** Presença criada offline (ID temporário) — pendente na fila REST até sincronizar. */
+const attendanceRowQueuedOffline = (row: AttendanceRow | null | undefined) =>
+  !!(row?.id?.startsWith("offline-"));
 
 const avatarPalette = ["blue", "lilac", "yellow", "green", "pink"] as const;
 const avatarBg: Record<(typeof avatarPalette)[number], string> = {
@@ -512,7 +528,7 @@ const Presencas = () => {
 
   const attendanceFetchEnabled = !!attendanceKeyInput && !nativeTeacherAwaitingScopedRoom;
 
-  const { data: students = [], isLoading: studentsQueryLoading } = useQuery({
+  const { data: students = [], isPending: studentsQueryPending } = useQuery({
     queryKey: studentsKeyInput
       ? presencasStudentsQueryKey(studentsKeyInput)
       : (["presencas", "students", "__disabled__"] as const),
@@ -527,7 +543,8 @@ const Presencas = () => {
   });
 
   const studentsLoading =
-    studentsBlockedLoading || (studentsFetchEnabled && studentsQueryLoading && !persistRestoring);
+    studentsBlockedLoading ||
+    (studentsFetchEnabled && studentsQueryPending && !persistRestoring);
 
   useEffect(() => {
     const onSynced = () => {
@@ -652,12 +669,6 @@ const Presencas = () => {
       return "online";
     },
     onMutate: async (vars) => {
-      console.log("[offline-sync debug][Presencas applyStatus] onMutate", {
-        cellKey: vars.cellKey,
-        next: vars.next,
-        isOnlineHook: isOnline,
-        navigatorOnLine: typeof navigator !== "undefined" ? navigator.onLine : undefined,
-      });
       setSavingKey(vars.cellKey);
       await queryClient.cancelQueries({ queryKey: attendanceQueryKeyResolved });
       const previousSnapshot =
@@ -689,12 +700,7 @@ const Presencas = () => {
 
       return { previousSnapshot };
     },
-    onSuccess: (mode, vars) => {
-      console.log("[offline-sync debug][Presencas applyStatus] onSuccess", {
-        mode,
-        cellKey: vars.cellKey,
-      });
-    },
+    onSuccess: () => {},
     onError: (e, _vars, ctx) => {
       if (ctx?.previousSnapshot !== undefined) {
         queryClient.setQueryData(attendanceQueryKeyResolved, ctx.previousSnapshot);
@@ -1066,6 +1072,12 @@ const Presencas = () => {
                                 )}
                               </>
                             )}
+                            {!isSaving && row && attendanceRowQueuedOffline(row) && (
+                              <p className="mt-2 flex w-full shrink-0 basis-full items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                                <Cloud className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                                Pendente — sincroniza com rede
+                              </p>
+                            )}
                           </div>
                         ) : (
                           <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -1268,6 +1280,7 @@ const Presencas = () => {
                             const status = row?.status ?? null;
                             const isSaving = savingKey === key;
                             const hasNotes = !!row?.notes && row.notes.trim().length > 0;
+                            const queuedOffline = attendanceRowQueuedOffline(row);
 
                             const cellInner = (
                               <div className="relative flex justify-center">
@@ -1276,9 +1289,19 @@ const Presencas = () => {
                                 ) : (
                                   <StatusCell status={status} isWeekend={isWk} />
                                 )}
+                                {queuedOffline && !isSaving && (
+                                  <Cloud
+                                    className="pointer-events-none absolute -right-0.5 -top-1 h-3 w-3 text-amber-500"
+                                    aria-hidden
+                                    strokeWidth={2}
+                                  />
+                                )}
                                 {hasNotes && (
                                   <span
-                                    className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-primary"
+                                    className={cn(
+                                      "absolute -top-1 h-2 w-2 rounded-full bg-primary",
+                                      queuedOffline ? "left-5" : "-right-1",
+                                    )}
                                     title="Tem justificação"
                                   />
                                 )}

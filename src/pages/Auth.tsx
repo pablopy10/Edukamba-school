@@ -39,6 +39,8 @@ const Auth = () => {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
+  /** Overlay pós-login: descarrega e persiste dados do professor antes do dashboard (único momento em que a rede é necessária). */
+  const [preparingEnvironment, setPreparingEnvironment] = useState(false);
 
   const [signupName, setSignupName] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
@@ -83,34 +85,38 @@ const Auth = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginLoading(true);
-    const { data: signInData, error } = await supabase.auth.signInWithPassword({
-      email: loginEmail,
-      password: loginPassword,
-    });
-    setLoginLoading(false);
-    if (error) {
-      const msg = error.message ?? "";
-      const looksLikeNetwork =
-        /\bfetch\b/i.test(msg) ||
-        /\bnetwork\b/i.test(msg) ||
-        /offline|timeout|timed out|aborted|cors/i.test(msg);
-      toast({
-        title: "Erro ao entrar",
-        description:
-          error.message === "Invalid login credentials"
-            ? "Credenciais inválidas. Verifique o email e a password."
-            : looksLikeNetwork
-              ? "Não foi possível ligar aos servidores Edukamba. Confirme internet (dados/Wi‑Fi). Redes de escolas ou empresas por vezes bloqueiam *.supabase.co — experimente outra rede ou sem VPN/proxy."
-              : msg,
-        variant: "destructive",
+    setPreparingEnvironment(false);
+    try {
+      const { data: signInData, error } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password: loginPassword,
       });
-      return;
-    }
-    if (signInData.user) {
+      if (error) {
+        const msg = error.message ?? "";
+        const looksLikeNetwork =
+          /\bfetch\b/i.test(msg) ||
+          /\bnetwork\b/i.test(msg) ||
+          /offline|timeout|timed out|aborted|cors/i.test(msg);
+        toast({
+          title: "Erro ao entrar",
+          description:
+            error.message === "Invalid login credentials"
+              ? "Credenciais inválidas. Verifique o email e a password."
+              : looksLikeNetwork
+                ? "Não foi possível ligar aos servidores Edukamba. Confirme internet (dados/Wi‑Fi). Redes de escolas ou empresas por vezes bloqueiam *.supabase.co — experimente outra rede ou sem VPN/proxy."
+                : msg,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const user = signInData.user;
+      if (!user) return;
+
       const { data: profile } = await supabase
         .from("profiles")
         .select("is_active, school_id, role")
-        .eq("id", signInData.user.id)
+        .eq("id", user.id)
         .maybeSingle();
       if (profile && profile.is_active === false) {
         await supabase.auth.signOut();
@@ -121,27 +127,33 @@ const Auth = () => {
         });
         return;
       }
+
       if (
         profile?.role === "TEACHER" &&
         profile.school_id &&
-        signInData.user.id
+        user.id
       ) {
         try {
           const academicYearId = await resolveDefaultAcademicYearId(profile.school_id);
           if (academicYearId) {
+            setPreparingEnvironment(true);
             await prefetchTeacherData(queryClient, {
-              userId: signInData.user.id,
+              userId: user.id,
               schoolId: profile.school_id,
               academicYearId,
             });
           }
         } catch {
-          /* prefetch best-effort: login continua */
+          /* prefetch best-effort: sessão mesmo sem cache completo */
         }
       }
+
+      toast({ title: "Bem-vindo!", description: "Sessão iniciada com sucesso." });
+      navigate("/dashboard", { replace: true });
+    } finally {
+      setLoginLoading(false);
+      setPreparingEnvironment(false);
     }
-    toast({ title: "Bem-vindo!", description: "Sessão iniciada com sucesso." });
-    navigate("/dashboard", { replace: true });
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -204,6 +216,20 @@ const Auth = () => {
 
   return (
     <div className="relative flex min-h-[100dvh] min-h-screen items-center justify-center overflow-hidden bg-background px-6 py-12">
+      {preparingEnvironment && (
+        <div
+          className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-4 bg-background/90 px-6 backdrop-blur-sm"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <Loader2 className="h-10 w-10 animate-spin text-pastel-blue" aria-hidden />
+          <p className="text-center text-lg font-semibold text-foreground">A preparar o seu ambiente…</p>
+          <p className="max-w-sm text-center text-sm text-muted-foreground">
+            A descarregar turmas, alunos e dados para o telemóvel. Pode trabalhar offline depois deste passo.
+          </p>
+        </div>
+      )}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute left-[-10%] top-[-10%] h-[42%] w-[42%] rounded-full bg-pastel-blue/25 blur-3xl" />
         <div className="absolute bottom-[-10%] right-[-10%] h-[42%] w-[42%] rounded-full bg-pastel-lilac/25 blur-3xl" />
