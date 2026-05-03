@@ -77,6 +77,8 @@ interface Classroom {
   name: string;
 }
 
+const EMPTY_CLASSROOM_LIST: Classroom[] = [];
+
 interface AttendanceRow {
   id: string;
   student_id: string;
@@ -306,7 +308,8 @@ const Presencas = () => {
 
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
+  /** Lista de turmas para perfis não-professor (consulta direta). Professores usam cache persistida `teacherPrefetch`. */
+  const [generalClassrooms, setGeneralClassrooms] = useState<Classroom[]>([]);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [justifyTarget, setJustifyTarget] = useState<{ student: Student; date: Date; row: AttendanceRow | null } | null>(null);
   const [justifyText, setJustifyText] = useState("");
@@ -352,14 +355,60 @@ const Presencas = () => {
     })();
   }, [user]);
 
-  // Load classrooms
+  /** Mesma queryKey que `prefetchTeacherData` — nomes das turmas do professor ficam disponíveis offline. */
+  const teacherPrefetchClassroomsQueryKey = useMemo(
+    () =>
+      [
+        "teacherPrefetch",
+        "classrooms",
+        schoolId ?? "__",
+        selectedYearId ?? "__",
+        user?.id ?? "__",
+      ] as const,
+    [schoolId, selectedYearId, user?.id],
+  );
+
+  const { data: teacherPersistedClassrooms } = useQuery({
+    queryKey: teacherPrefetchClassroomsQueryKey,
+    queryFn: async (): Promise<Classroom[]> => {
+      if (!schoolId || !selectedYearId || !user?.id) return [];
+      if (teacherClassroomIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from("classrooms")
+        .select("id, name")
+        .eq("school_id", schoolId)
+        .eq("academic_year_id", selectedYearId)
+        .in("id", teacherClassroomIds)
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as Classroom[];
+    },
+    enabled: Boolean(
+      isTeacher &&
+        schoolId &&
+        selectedYearId &&
+        user?.id &&
+        !teacherLoading &&
+        teacherClassroomIds.length > 0,
+    ),
+    staleTime: QUERY_DAY_MS * 24,
+    networkMode: "offlineFirst",
+  });
+
+  const classrooms = useMemo(
+    () =>
+      isTeacher ? (teacherPersistedClassrooms ?? EMPTY_CLASSROOM_LIST) : generalClassrooms,
+    [isTeacher, teacherPersistedClassrooms, generalClassrooms],
+  );
+
+  // Load classrooms (professor: via useQuery persistida acima)
   useEffect(() => {
+    if (isTeacher) return;
     if (!schoolId) return;
     if (isParent && parentLoading) return;
-    if (isTeacher && teacherLoading) return;
     if (isStudent && studentLoading) return;
     if (!selectedYearId) {
-      setClassrooms([]);
+      setGeneralClassrooms([]);
       setClassroomId("all");
       return;
     }
@@ -372,23 +421,15 @@ const Presencas = () => {
         .order("name");
       if (isParent) {
         if (parentClassroomIds.length === 0) {
-          setClassrooms([]);
+          setGeneralClassrooms([]);
           setClassroomId("all");
           return;
         }
         q = q.in("id", parentClassroomIds);
       }
-      if (isTeacher) {
-        if (teacherClassroomIds.length === 0) {
-          setClassrooms([]);
-          setClassroomId("all");
-          return;
-        }
-        q = q.in("id", teacherClassroomIds);
-      }
       if (isStudent) {
         if (!studentClassroomId) {
-          setClassrooms([]);
+          setGeneralClassrooms([]);
           setClassroomId("all");
           return;
         }
@@ -396,11 +437,45 @@ const Presencas = () => {
       }
       const { data } = await q;
       const list = data ?? [];
-      setClassrooms(list);
-      // Pre-select first classroom by ascending name; fall back to "all" if none.
+      setGeneralClassrooms(list);
       setClassroomId(list[0]?.id ?? "all");
     })();
-  }, [schoolId, selectedYearId, isParent, parentLoading, parentClassroomIds.join(","), isTeacher, teacherLoading, teacherClassroomIds.join(","), isStudent, studentLoading, studentClassroomId]);
+  }, [
+    schoolId,
+    selectedYearId,
+    isParent,
+    parentLoading,
+    parentClassroomIds.join(","),
+    isTeacher,
+    isStudent,
+    studentLoading,
+    studentClassroomId,
+  ]);
+
+  const teacherPrefetchClassroomsFingerprint = useMemo(
+    () =>
+      (teacherPersistedClassrooms ?? EMPTY_CLASSROOM_LIST)
+        .map((c) => `${c.id}:${c.name}`)
+        .sort()
+        .join("|"),
+    [teacherPersistedClassrooms],
+  );
+
+  useEffect(() => {
+    if (!isTeacher) return;
+    const list = teacherPersistedClassrooms ?? EMPTY_CLASSROOM_LIST;
+    if (!selectedYearId || !schoolId) {
+      setClassroomId("all");
+      return;
+    }
+    if (list.length === 0) {
+      setClassroomId("all");
+      return;
+    }
+    setClassroomId((prev) =>
+      prev !== "all" && list.some((c) => c.id === prev) ? prev : list[0]!.id,
+    );
+  }, [isTeacher, schoolId, selectedYearId, teacherPrefetchClassroomsFingerprint]);
 
   /** Na app nativa, professores não devem ficar em «todas as turmas». */
   useEffect(() => {
