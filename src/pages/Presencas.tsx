@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsRestoring, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, X, Clock, Loader2, MinusCircle, FileText, AlertTriangle, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn, compareNatural } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -439,6 +439,7 @@ const Presencas = () => {
     native && isTeacher && !teacherLoading && classroomId === "all" && teacherClassroomIds.length > 0;
 
   const queryClient = useQueryClient();
+  const persistRestoring = useIsRestoring();
 
   const studentsKeyInput: PresencasStudentsKeyInput | null = useMemo(() => {
     if (!schoolId) return null;
@@ -531,10 +532,15 @@ const Presencas = () => {
     enabled: attendanceFetchEnabled,
   });
 
-  const studentsLoading = studentsBlockedLoading || (studentsFetchEnabled && studentsQueryLoading);
+  const studentsLoading =
+    studentsBlockedLoading || (studentsFetchEnabled && studentsQueryLoading && !persistRestoring);
 
   const attendanceLoading =
-    !!schoolId && !nativeTeacherAwaitingScopedRoom && attendanceFetchEnabled && attendanceQueryLoading;
+    !!schoolId &&
+    !nativeTeacherAwaitingScopedRoom &&
+    attendanceFetchEnabled &&
+    attendanceQueryLoading &&
+    !persistRestoring;
 
   useEffect(() => {
     const onSynced = () => {

@@ -53,7 +53,11 @@ import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
 import { queryClient } from "@/lib/queryClient";
 
 const App = () => (
-  <PersistQueryClientProvider client={queryClient} persistOptions={persistQueryOptions}>
+  <PersistQueryClientProvider
+    client={queryClient}
+    persistOptions={persistQueryOptions}
+    onError={() => console.error("[query-persist] restore failed")}
+  >
     <ResumePausedMutationsBridge />
     <QueryPersistenceAuthSync />
     <OfflineSyncProvider>

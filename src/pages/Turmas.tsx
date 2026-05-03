@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useIsRestoring, useQuery } from "@tanstack/react-query";
 import { Search, Plus, Users, Presentation, Pencil, Trash2, Loader2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,6 +47,7 @@ const periodStyles: Record<string, string> = {
 };
 
 const Turmas = () => {
+  const persistRestoring = useIsRestoring();
   const native = isNativeMobileApp();
   const { selectedYearId } = useAcademicYear();
   const { user } = useAuth();
@@ -75,6 +76,7 @@ const Turmas = () => {
   });
 
   const teacherAwaitingHydration =
+    !persistRestoring &&
     isTeacher &&
     !!user?.id &&
     !!selectedYearId &&

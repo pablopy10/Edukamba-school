@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useIsRestoring } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -73,6 +73,7 @@ export const useStudentSelf = () => {
   const { user } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
   const isStudent = role === "STUDENT";
+  const persistRestoring = useIsRestoring();
 
   const q = useQuery({
     queryKey: ["student-self", user?.id],
@@ -88,7 +89,12 @@ export const useStudentSelf = () => {
 
   const loading =
     roleLoading ||
-    (!!user?.id && isStudent && !roleLoading && !data && (q.isPending || q.isLoading));
+    (!!user?.id &&
+      isStudent &&
+      !roleLoading &&
+      !data &&
+      !persistRestoring &&
+      (q.isPending || q.isLoading));
 
   if (!isStudent) {
     return {

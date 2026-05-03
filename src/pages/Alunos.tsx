@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useIsRestoring, useQuery } from "@tanstack/react-query";
 import { Search, Plus, Pencil, Trash2, Loader2, Upload } from "lucide-react";
 import { cn, sortByName } from "@/lib/utils";
 import { Link } from "react-router-dom";
@@ -37,6 +37,7 @@ const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 
 const Alunos = () => {
+  const persistRestoring = useIsRestoring();
   const native = isNativeMobileApp();
   const { user } = useAuth();
   const { selectedYearId } = useAcademicYear();
@@ -152,6 +153,7 @@ const Alunos = () => {
   };
 
   const teacherAwaitingHydration =
+    !persistRestoring &&
     isTeacher &&
     !!user?.id &&
     !!selectedYearId &&
