@@ -1,6 +1,5 @@
 import type { SupportedStorage } from "@supabase/supabase-js";
 import { QUERY_CACHE_STORAGE_KEY } from "@/lib/queryPersister";
-import { queryClient } from "@/lib/queryClient";
 
 /** Memória SSR / fallback (sem persistência entre pedidos no servidor). */
 const memoryBucket = new Map<string, string>();
@@ -34,8 +33,14 @@ function freeLocalStorageChunkForAuth(): void {
   } catch {
     /* ignore */
   }
-  /** Evita que o cliente volte logo a gravar no disco o mesmo volume após remover a chave. */
-  queryClient.clear();
+  /** Evita ciclo estático cliente Supabase ↔ queryClient; mantém disco e RAM coerentes. */
+  void import("@/lib/queryClient").then(({ queryClient }) => {
+    try {
+      queryClient.clear();
+    } catch {
+      /* ignore */
+    }
+  });
 }
 
 /**

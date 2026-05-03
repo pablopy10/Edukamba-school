@@ -40,6 +40,8 @@ import {
   fetchPresencasStudents,
   presencasAttendanceQueryKey,
   presencasStudentsQueryKey,
+  attendancePackMonth,
+  attendancePackRangeFromDates,
   type PresencasAttendanceMap,
   type PresencasAttendanceKeyInput,
   type PresencasStudentsKeyInput,
@@ -415,23 +417,10 @@ const Presencas = () => {
     });
   }, []);
 
-  const attendanceDateBounds = useMemo(() => {
-    if (native) {
-      let minT = Infinity;
-      let maxT = -Infinity;
-      for (const d of nativeWeekDays) {
-        const t = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-        minT = Math.min(minT, t);
-        maxT = Math.max(maxT, t);
-      }
-      const min = new Date(minT);
-      const max = new Date(maxT);
-      return { startDate: fmtISO(min), endDate: fmtISO(max) };
-    }
-    return {
-      startDate: fmtISO(new Date(year, month0, 1)),
-      endDate: fmtISO(new Date(year, month0 + 1, 0)),
-    };
+  const attendanceFetchRange = useMemo(() => {
+    /** Web: um único pacote pelo mês do calendário. Nativa: união dos meses da semana visível — troca só de dia dentro da mesma semana não altera estes extremos nem a queryKey. */
+    if (native) return attendancePackRangeFromDates(nativeWeekDays);
+    return attendancePackMonth(new Date(year, month0, 1));
   }, [native, nativeWeekDays, year, month0]);
 
   /** Na app nativa, professor: espera primeira turma concreta antes de carregar dados. */
@@ -475,16 +464,16 @@ const Presencas = () => {
       classroomId,
       isTeacher,
       teacherClassroomIds,
-      startDate: attendanceDateBounds.startDate,
-      endDate: attendanceDateBounds.endDate,
+      startDate: attendanceFetchRange.startDate,
+      endDate: attendanceFetchRange.endDate,
     };
   }, [
     schoolId,
     classroomId,
     isTeacher,
     teacherClassroomIds.join(","),
-    attendanceDateBounds.startDate,
-    attendanceDateBounds.endDate,
+    attendanceFetchRange.startDate,
+    attendanceFetchRange.endDate,
   ]);
 
   const attendanceQueryKeyResolved = attendanceKeyInput
@@ -526,7 +515,7 @@ const Presencas = () => {
     enabled: studentsFetchEnabled,
   });
 
-  const { data: attendance = {}, isLoading: attendanceQueryLoading } = useQuery({
+  const { data: attendance = {} } = useQuery({
     queryKey: attendanceQueryKeyResolved,
     queryFn: () => fetchPresencasAttendance(attendanceKeyInput!),
     enabled: attendanceFetchEnabled,
@@ -534,13 +523,6 @@ const Presencas = () => {
 
   const studentsLoading =
     studentsBlockedLoading || (studentsFetchEnabled && studentsQueryLoading && !persistRestoring);
-
-  const attendanceLoading =
-    !!schoolId &&
-    !nativeTeacherAwaitingScopedRoom &&
-    attendanceFetchEnabled &&
-    attendanceQueryLoading &&
-    !persistRestoring;
 
   useEffect(() => {
     const onSynced = () => {
@@ -993,7 +975,7 @@ const Presencas = () => {
             )}
 
             <div className="space-y-3">
-              {studentsLoading || attendanceLoading ? (
+              {studentsLoading ? (
                 <div className="flex h-48 items-center justify-center rounded-2xl bg-card text-muted-foreground shadow-card">
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" /> A carregar…
                 </div>

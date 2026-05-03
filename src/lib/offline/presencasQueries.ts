@@ -32,6 +32,36 @@ export function defaultAttendancePrefetchRange(reference = new Date()) {
   return { startDate: fmtISO(start), endDate: fmtISO(end) };
 }
 
+/** Mês de calendário completo `{startDate,endDate}` em formato ISO (`yyyy-mm-dd`). */
+export function attendancePackMonth(reference: Date): { startDate: string; endDate: string } {
+  const y = reference.getFullYear();
+  const m = reference.getMonth();
+  return {
+    startDate: fmtISO(new Date(y, m, 1)),
+    endDate: fmtISO(new Date(y, m + 1, 0)),
+  };
+}
+
+/**
+ * Une **todos os meses de calendário** que intersectam algum dia da lista — ex.: semana Seg–Dom
+ * pode cobrir dois meses; faz um só fetch desse período corrido para cache local.
+ */
+export function attendancePackRangeFromDates(days: readonly Date[]): { startDate: string; endDate: string } {
+  if (!days.length) return attendancePackMonth(new Date());
+  let minTs = Infinity;
+  let maxTs = -Infinity;
+  for (const day of days) {
+    const t = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
+    minTs = Math.min(minTs, t);
+    maxTs = Math.max(maxTs, t);
+  }
+  const lo = new Date(minTs);
+  const hi = new Date(maxTs);
+  const start = new Date(lo.getFullYear(), lo.getMonth(), 1);
+  const end = new Date(hi.getFullYear(), hi.getMonth() + 1, 0);
+  return { startDate: fmtISO(start), endDate: fmtISO(end) };
+}
+
 export type PresencasStudentsKeyInput = {
   schoolId: string;
   classroomId: string;

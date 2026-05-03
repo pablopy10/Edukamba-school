@@ -89,12 +89,19 @@ const Auth = () => {
     });
     setLoginLoading(false);
     if (error) {
+      const msg = error.message ?? "";
+      const looksLikeNetwork =
+        /\bfetch\b/i.test(msg) ||
+        /\bnetwork\b/i.test(msg) ||
+        /offline|timeout|timed out|aborted|cors/i.test(msg);
       toast({
         title: "Erro ao entrar",
         description:
           error.message === "Invalid login credentials"
             ? "Credenciais inválidas. Verifique o email e a password."
-            : error.message,
+            : looksLikeNetwork
+              ? "Não foi possível ligar aos servidores Edukamba. Confirme internet (dados/Wi‑Fi). Redes de escolas ou empresas por vezes bloqueiam *.supabase.co — experimente outra rede ou sem VPN/proxy."
+              : msg,
         variant: "destructive",
       });
       return;
