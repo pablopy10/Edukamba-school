@@ -1,5 +1,7 @@
-import { QueryClientProvider } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { QueryPersistenceAuthSync } from "@/components/QueryPersistenceAuthSync";
+import { persistQueryOptions } from "@/lib/persistQueryOptions";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -50,7 +52,8 @@ import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
 import { queryClient } from "@/lib/queryClient";
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
+  <PersistQueryClientProvider client={queryClient} persistOptions={persistQueryOptions}>
+    <QueryPersistenceAuthSync />
     <OfflineSyncProvider>
       <ModulesProvider>
         <AcademicYearProvider>
@@ -114,7 +117,7 @@ const App = () => (
         </AcademicYearProvider>
       </ModulesProvider>
     </OfflineSyncProvider>
-  </QueryClientProvider>
+  </PersistQueryClientProvider>
 );
 
 export default App;

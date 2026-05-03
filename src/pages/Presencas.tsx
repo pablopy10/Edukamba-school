@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, X, Clock, Loader2, MinusCircle, FileText, AlertTriangle, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn, compareNatural } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,6 +34,15 @@ import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton"
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { OFFLINE_SYNC_FLUSH_EVENT, useOfflineSync } from "@/hooks/useOfflineSync";
+import {
+  fetchPresencasAttendance,
+  fetchPresencasStudents,
+  presencasAttendanceQueryKey,
+  presencasStudentsQueryKey,
+  type PresencasAttendanceMap,
+  type PresencasAttendanceKeyInput,
+  type PresencasStudentsKeyInput,
+} from "@/lib/offline/presencasQueries";
 import { supabaseRestTable } from "@/lib/supabaseRestUrls";
 import { isNativeMobileApp, showPageKpiCards } from "@/lib/nativeApp";
 
@@ -276,10 +286,6 @@ const Presencas = () => {
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [attendance, setAttendance] = useState<Record<string, AttendanceRow>>({});
-  const [studentsLoading, setStudentsLoading] = useState(true);
-  const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [justifyTarget, setJustifyTarget] = useState<{ student: Student; date: Date; row: AttendanceRow | null } | null>(null);
   const [justifyText, setJustifyText] = useState("");
@@ -427,6 +433,125 @@ const Presencas = () => {
     };
   }, [native, nativeWeekDays, year, month0]);
 
+  /** Na app nativa, professor: espera primeira turma concreta antes de carregar dados. */
+  const nativeTeacherAwaitingScopedRoom =
+    native && isTeacher && !teacherLoading && classroomId === "all" && teacherClassroomIds.length > 0;
+
+  const queryClient = useQueryClient();
+
+  const studentsKeyInput: PresencasStudentsKeyInput | null = useMemo(() => {
+    if (!schoolId) return null;
+    return {
+      schoolId,
+      classroomId,
+      isTeacher,
+      teacherClassroomIds,
+      isParent,
+      parentLoading,
+      childIds,
+      isStudent,
+      studentLoading,
+      studentId,
+    };
+  }, [
+    schoolId,
+    classroomId,
+    isTeacher,
+    teacherClassroomIds.join(","),
+    isParent,
+    parentLoading,
+    childIds.join(","),
+    isStudent,
+    studentLoading,
+    studentId,
+  ]);
+
+  const attendanceKeyInput: PresencasAttendanceKeyInput | null = useMemo(() => {
+    if (!schoolId) return null;
+    return {
+      schoolId,
+      classroomId,
+      isTeacher,
+      teacherClassroomIds,
+      startDate: attendanceDateBounds.startDate,
+      endDate: attendanceDateBounds.endDate,
+    };
+  }, [
+    schoolId,
+    classroomId,
+    isTeacher,
+    teacherClassroomIds.join(","),
+    attendanceDateBounds.startDate,
+    attendanceDateBounds.endDate,
+  ]);
+
+  const attendanceQueryKeyResolved = attendanceKeyInput
+    ? presencasAttendanceQueryKey(attendanceKeyInput)
+    : (["presencas", "attendance", "__disabled__"] as const);
+
+  const studentsBlockedLoading =
+    !schoolId ||
+    !selectedYearId ||
+    nativeTeacherAwaitingScopedRoom ||
+    (isParent && parentLoading) ||
+    (isStudent && studentLoading) ||
+    (isTeacher && teacherLoading);
+
+  const teacherNoClassroomsReady = isTeacher && !teacherLoading && teacherClassroomIds.length === 0;
+
+  const parentNoChildrenReady = isParent && !parentLoading && childIds.length === 0;
+
+  const studentMissingReady = isStudent && !studentLoading && !studentId;
+
+  const studentsFetchEnabled =
+    !!studentsKeyInput &&
+    !!selectedYearId &&
+    !nativeTeacherAwaitingScopedRoom &&
+    !teacherNoClassroomsReady &&
+    !parentNoChildrenReady &&
+    !studentMissingReady &&
+    !(isTeacher && teacherLoading) &&
+    !(isParent && parentLoading) &&
+    !(isStudent && studentLoading);
+
+  const attendanceFetchEnabled = !!attendanceKeyInput && !nativeTeacherAwaitingScopedRoom;
+
+  const { data: students = [], isLoading: studentsQueryLoading } = useQuery({
+    queryKey: studentsKeyInput
+      ? presencasStudentsQueryKey(studentsKeyInput)
+      : (["presencas", "students", "__disabled__"] as const),
+    queryFn: () => fetchPresencasStudents(studentsKeyInput!),
+    enabled: studentsFetchEnabled,
+  });
+
+  const { data: attendance = {}, isLoading: attendanceQueryLoading } = useQuery({
+    queryKey: attendanceQueryKeyResolved,
+    queryFn: () => fetchPresencasAttendance(attendanceKeyInput!),
+    enabled: attendanceFetchEnabled,
+  });
+
+  const studentsLoading = studentsBlockedLoading || (studentsFetchEnabled && studentsQueryLoading);
+
+  const attendanceLoading =
+    !!schoolId && !nativeTeacherAwaitingScopedRoom && attendanceFetchEnabled && attendanceQueryLoading;
+
+  useEffect(() => {
+    const onSynced = () => {
+      void queryClient.invalidateQueries({ queryKey: ["presencas", "attendance"] });
+    };
+    window.addEventListener(OFFLINE_SYNC_FLUSH_EVENT, onSynced);
+    return () => window.removeEventListener(OFFLINE_SYNC_FLUSH_EVENT, onSynced);
+  }, [queryClient]);
+
+  const patchAttendanceMap = useCallback(
+    (mapper: (prev: PresencasAttendanceMap) => PresencasAttendanceMap) => {
+      queryClient.setQueryData<PresencasAttendanceMap>(attendanceQueryKeyResolved, (old) =>
+        mapper({ ...(old ?? {}) }),
+      );
+    },
+    [queryClient, attendanceQueryKeyResolved],
+  );
+
   const filteredStudentsNative = useMemo(() => {
     const q = studentFilterNative.trim().toLowerCase();
     const list = [...students].sort((a, b) => compareNatural(a.full_name, b.full_name));
@@ -442,175 +567,20 @@ const Presencas = () => {
   const nativeSelectedIso = fmtISO(nativeSelectedDay);
   const isNativeDayWeekend = nativeSelectedDay.getDay() === 0 || nativeSelectedDay.getDay() === 6;
 
-  /**
-   * Professor na app nativa: enquanto a turma do select ainda está em «todas» (valor inicial),
-   * não fazemos pedido de alunos/presenças — espera até o ecrã pré-seleccionar a 1ª turma.
-   */
-  const nativeTeacherAwaitingScopedRoom =
-    native && isTeacher && !teacherLoading && classroomId === "all" && teacherClassroomIds.length > 0;
+  type ApplyAttendanceVars = {
+    student: Student;
+    date: Date;
+    next: Status | null;
+    cellKey: string;
+    existingBefore?: AttendanceRow;
+    optimisticTempId?: string;
+  };
 
-  // Load students only when school or classroom filter changes (not on month change)
-  useEffect(() => {
-    if (!schoolId) return;
-    if (isParent && parentLoading) return;
-    if (isStudent && studentLoading) return;
-    if (isTeacher && teacherLoading) {
-      setStudents([]);
-      setStudentsLoading(true);
-      return;
-    }
-    if (nativeTeacherAwaitingScopedRoom) {
-      setStudents([]);
-      setStudentsLoading(true);
-      return;
-    }
-    if (isTeacher && teacherClassroomIds.length === 0) {
-      setStudents([]);
-      setStudentsLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setStudentsLoading(true);
-    (async () => {
-      let studentsQuery = supabase
-        .from("students")
-        .select("id, full_name, classroom_id, enrollment_number")
-        .eq("school_id", schoolId)
-        .order("full_name");
-      if (classroomId !== "all") {
-        studentsQuery = studentsQuery.eq("classroom_id", classroomId);
-      } else if (isTeacher && teacherClassroomIds.length > 0) {
-        // Web (ou outros): «Todas as turmas» = apenas turmas onde o professor leciona — nunca escola inteira.
-        studentsQuery = studentsQuery.in("classroom_id", teacherClassroomIds);
-      }
-      if (isParent) {
-        if (childIds.length === 0) {
-          setStudents([]);
-          setStudentsLoading(false);
-          return;
-        }
-        studentsQuery = studentsQuery.in("id", childIds);
-      }
-      if (isStudent) {
-        if (!studentId) {
-          setStudents([]);
-          setStudentsLoading(false);
-          return;
-        }
-        studentsQuery = studentsQuery.eq("id", studentId);
-      }
-      const { data } = await studentsQuery;
-      if (cancelled) return;
-      setStudents(data ?? []);
-      setStudentsLoading(false);
-    })();
-    return () => { cancelled = true; };
-  }, [
-    schoolId,
-    classroomId,
-    isParent,
-    parentLoading,
-    childIds.join(","),
-    isTeacher,
-    teacherLoading,
-    teacherClassroomIds.join(","),
-    nativeTeacherAwaitingScopedRoom,
-    isStudent,
-    studentLoading,
-    studentId,
-  ]);
-
-  // Load attendance separately when date range / school / classroom changes
-  useEffect(() => {
-    if (!schoolId) return;
-    if (nativeTeacherAwaitingScopedRoom) {
-      setAttendance({});
-      setAttendanceLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setAttendanceLoading(true);
-
-    const startDate = attendanceDateBounds.startDate;
-    const endDate = attendanceDateBounds.endDate;
-
-    (async () => {
-      let q = supabase
-        .from("attendance")
-        .select("id, student_id, date, status, notes")
-        .eq("school_id", schoolId)
-        .gte("date", startDate)
-        .lte("date", endDate);
-      if (classroomId !== "all") {
-        q = q.eq("classroom_id", classroomId);
-      } else if (isTeacher && teacherClassroomIds.length > 0) {
-        q = q.in("classroom_id", teacherClassroomIds);
-      }
-      const { data } = await q;
-      if (cancelled) return;
-      const map: Record<string, AttendanceRow> = {};
-      (data ?? []).forEach((row: any) => {
-        map[`${row.student_id}__${row.date}`] = row as AttendanceRow;
-      });
-      setAttendance(map);
-      setAttendanceLoading(false);
-    })();
-    return () => { cancelled = true; };
-  }, [
-    schoolId,
-    classroomId,
-    isTeacher,
-    teacherClassroomIds.join(","),
-    nativeTeacherAwaitingScopedRoom,
-    attendanceDateBounds.startDate,
-    attendanceDateBounds.endDate,
-  ]);
-
-  useEffect(() => {
-    const onSynced = () => {
-      if (!schoolId) return;
-      if (nativeTeacherAwaitingScopedRoom) return;
-      const startDate = attendanceDateBounds.startDate;
-      const endDate = attendanceDateBounds.endDate;
-      void (async () => {
-        let q = supabase
-          .from("attendance")
-          .select("id, student_id, date, status, notes")
-          .eq("school_id", schoolId)
-          .gte("date", startDate)
-          .lte("date", endDate);
-        if (classroomId !== "all") {
-          q = q.eq("classroom_id", classroomId);
-        } else if (isTeacher && teacherClassroomIds.length > 0) {
-          q = q.in("classroom_id", teacherClassroomIds);
-        }
-        const { data } = await q;
-        const map: Record<string, AttendanceRow> = {};
-        (data ?? []).forEach((row: any) => {
-          map[`${row.student_id}__${row.date}`] = row as AttendanceRow;
-        });
-        setAttendance(map);
-      })();
-    };
-    window.addEventListener(OFFLINE_SYNC_FLUSH_EVENT, onSynced);
-    return () => window.removeEventListener(OFFLINE_SYNC_FLUSH_EVENT, onSynced);
-  }, [
-    schoolId,
-    classroomId,
-    isTeacher,
-    teacherClassroomIds.join(","),
-    nativeTeacherAwaitingScopedRoom,
-    attendanceDateBounds.startDate,
-    attendanceDateBounds.endDate,
-  ]);
-
-  const applyStatus = async (student: Student, date: Date, next: Status | null) => {
-    if (!schoolId) return;
-    const key = `${student.id}__${fmtISO(date)}`;
-    setSavingKey(key);
-    try {
-      const existing = attendance[key];
+  const applyStatusMutation = useMutation({
+    mutationFn: async (vars: ApplyAttendanceVars) => {
+      const { student, date, next, cellKey } = vars;
       const attendanceBase = supabaseRestTable("attendance");
+      const existing = vars.existingBefore;
 
       const offlineToast = () => {
         toast.success("Guardado offline — será sincronizado quando voltar a haver rede.");
@@ -618,17 +588,14 @@ const Presencas = () => {
 
       if (!isOnline) {
         if (next === null) {
-          if (!existing) return;
+          if (!existing) return "offline";
           enqueuePendingSync({
             url: `${attendanceBase}?id=eq.${encodeURIComponent(existing.id)}`,
             method: "DELETE",
             body: null,
           });
-          const copy = { ...attendance };
-          delete copy[key];
-          setAttendance(copy);
           offlineToast();
-          return;
+          return "offline";
         }
         if (existing) {
           enqueuePendingSync({
@@ -636,12 +603,8 @@ const Presencas = () => {
             method: "PATCH",
             body: JSON.stringify({ status: next }),
           });
-          setAttendance({
-            ...attendance,
-            [key]: { ...existing, status: next },
-          });
           offlineToast();
-          return;
+          return "offline";
         }
         enqueuePendingSync({
           url: attendanceBase,
@@ -650,67 +613,115 @@ const Presencas = () => {
             student_id: student.id,
             date: fmtISO(date),
             status: next,
-            school_id: schoolId,
+            school_id: schoolId!,
             classroom_id: student.classroom_id,
             teacher_id: user?.id ?? null,
           }),
         });
-        const tempId = `offline-${crypto.randomUUID()}`;
-        setAttendance({
-          ...attendance,
-          [key]: {
-            id: tempId,
-            student_id: student.id,
-            date: fmtISO(date),
-            status: next,
-            notes: null,
-          },
-        });
         offlineToast();
-        return;
+        return "offline";
       }
 
       if (next === null) {
-        if (!existing) return;
+        if (!existing) return "online";
         const { error } = await supabase.from("attendance").delete().eq("id", existing.id);
         if (error) throw error;
-        const copy = { ...attendance };
-        delete copy[key];
-        setAttendance(copy);
         toast.success("Presença removida");
-      } else if (existing) {
-        const { error } = await supabase
-          .from("attendance")
-          .update({ status: next })
-          .eq("id", existing.id);
-        if (error) throw error;
-        setAttendance({
-          ...attendance,
-          [key]: { ...existing, status: next },
-        });
-      } else {
-        const { data, error } = await supabase
-          .from("attendance")
-          .insert({
-            student_id: student.id,
-            date: fmtISO(date),
-            status: next,
-            school_id: schoolId,
-            classroom_id: student.classroom_id,
-            teacher_id: user?.id ?? null,
-          })
-          .select("id, student_id, date, status, notes")
-          .single();
-        if (error) throw error;
-        setAttendance({ ...attendance, [key]: data as AttendanceRow });
+        return "online";
       }
-    } catch (e: any) {
-      toast.error("Erro ao guardar presença", { description: e.message });
-    } finally {
-      setSavingKey(null);
-    }
-  };
 
+      if (existing) {
+        const { error } = await supabase.from("attendance").update({ status: next }).eq("id", existing.id);
+        if (error) throw error;
+        return "online";
+      }
+
+      const { data, error } = await supabase
+        .from("attendance")
+        .insert({
+          student_id: student.id,
+          date: fmtISO(date),
+          status: next,
+          school_id: schoolId!,
+          classroom_id: student.classroom_id,
+          teacher_id: user?.id ?? null,
+        })
+        .select("id, student_id, date, status, notes")
+        .single();
+      if (error) throw error;
+      queryClient.setQueryData<PresencasAttendanceMap>(attendanceQueryKeyResolved, (old) => ({
+        ...(old ?? {}),
+        [cellKey]: data as AttendanceRow,
+      }));
+      return "online";
+    },
+    onMutate: async (vars) => {
+      setSavingKey(vars.cellKey);
+      await queryClient.cancelQueries({ queryKey: attendanceQueryKeyResolved });
+      const previousSnapshot =
+        queryClient.getQueryData<PresencasAttendanceMap>(attendanceQueryKeyResolved) ?? {};
+
+      queryClient.setQueryData<PresencasAttendanceMap>(attendanceQueryKeyResolved, (old) => {
+        const copy = { ...(old ?? {}) } as Record<string, AttendanceRow>;
+        const { cellKey, next, student, date, existingBefore, optimisticTempId } = vars;
+        if (next === null) {
+          const rowPresent = !!(existingBefore ?? copy[cellKey]);
+          if (!rowPresent) return copy as PresencasAttendanceMap;
+          delete copy[cellKey];
+          return copy as PresencasAttendanceMap;
+        }
+        const baseRow = existingBefore ?? copy[cellKey];
+        if (baseRow) {
+          copy[cellKey] = { ...baseRow, status: next };
+          return copy as PresencasAttendanceMap;
+        }
+        copy[cellKey] = {
+          id: optimisticTempId!,
+          student_id: student.id,
+          date: fmtISO(date),
+          status: next,
+          notes: null,
+        };
+        return copy as PresencasAttendanceMap;
+      });
+
+      return { previousSnapshot };
+    },
+    onError: (e, _vars, ctx) => {
+      if (ctx?.previousSnapshot !== undefined) {
+        queryClient.setQueryData(attendanceQueryKeyResolved, ctx.previousSnapshot);
+      }
+      toast.error("Erro ao guardar presença", {
+        description: e instanceof Error ? e.message : String(e),
+      });
+    },
+    onSettled: () => {
+      setSavingKey(null);
+    },
+  });
+
+  const applyStatus = (student: Student, date: Date, next: Status | null) => {
+    if (!schoolId) return;
+    const cellKey = `${student.id}__${fmtISO(date)}`;
+    const snapshot = queryClient.getQueryData<PresencasAttendanceMap>(attendanceQueryKeyResolved) ?? {};
+    const existingBefore = snapshot[cellKey];
+
+    if (next === null && !existingBefore) return;
+
+    let optimisticTempId: string | undefined;
+    if (next !== null && !existingBefore) {
+      optimisticTempId = !isOnline ? `offline-${crypto.randomUUID()}` : `pending-${crypto.randomUUID()}`;
+    }
+
+    applyStatusMutation.mutate({
+      student,
+      date,
+      next,
+      cellKey,
+      existingBefore,
+      optimisticTempId,
+    });
+  };
   const stats = useMemo(() => {
     let present = 0, absent = 0, late = 0, disciplinary = 0, total = 0;
     students.forEach((s) => {
@@ -772,7 +783,10 @@ const Presencas = () => {
             method: "PATCH",
             body: JSON.stringify({ notes: text, status: newStatus }),
           });
-          setAttendance({ ...attendance, [mapKey]: { ...row, notes: text, status: newStatus } });
+          patchAttendanceMap((prev) => ({
+            ...prev,
+            [mapKey]: { ...row, notes: text, status: newStatus },
+          }));
         } else {
           if (!canEdit) {
             toast.error("Sem registo para justificar.");
@@ -792,8 +806,8 @@ const Presencas = () => {
             }),
           });
           const tempId = `offline-${crypto.randomUUID()}`;
-          setAttendance({
-            ...attendance,
+          patchAttendanceMap((prev) => ({
+            ...prev,
             [mapKey]: {
               id: tempId,
               student_id: student.id,
@@ -801,7 +815,7 @@ const Presencas = () => {
               status: "ABSENT",
               notes: text,
             },
-          });
+          }));
         }
         toast.success("Guardado offline — será sincronizado quando voltar a haver rede.");
         setJustifyTarget(null);
@@ -817,7 +831,10 @@ const Presencas = () => {
           .update({ notes: text, status: newStatus })
           .eq("id", row.id);
         if (error) throw error;
-        setAttendance({ ...attendance, [mapKey]: { ...row, notes: text, status: newStatus } });
+        patchAttendanceMap((prev) => ({
+          ...prev,
+          [mapKey]: { ...row, notes: text, status: newStatus },
+        }));
       } else {
         // Only staff can create rows from scratch
         if (!canEdit) {
@@ -838,7 +855,7 @@ const Presencas = () => {
           .select("id, student_id, date, status, notes")
           .single();
         if (error) throw error;
-        setAttendance({ ...attendance, [mapKey]: data as AttendanceRow });
+        patchAttendanceMap((prev) => ({ ...prev, [mapKey]: data as AttendanceRow }));
       }
       toast.success("Justificação guardada");
       setJustifyTarget(null);

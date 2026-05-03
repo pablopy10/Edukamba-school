@@ -1,18 +1,25 @@
 import { QueryClient } from "@tanstack/react-query";
 
-/** Cliente TanStack Query único para a app (Horários, Perfil, Pagamentos, etc.). */
+const DAY_MS = 1000 * 60 * 60 * 24;
+
+/** Cliente TanStack Query único para a app (Horários, Perfil, Presenças persistidas, etc.). */
 export function createAppQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 60 * 1000,
-        gcTime: 1000 * 60 * 60 * 24 * 7,
+        staleTime: DAY_MS * 24,
+        gcTime: DAY_MS * 14,
+        networkMode: "offlineFirst",
+        refetchOnReconnect: true,
+        refetchOnMount: false,
+        refetchOnWindowFocus: false,
         retry: (failureCount) => {
           if (typeof navigator !== "undefined" && !navigator.onLine) return false;
           return failureCount < 2;
         },
       },
       mutations: {
+        networkMode: "offlineFirst",
         retry: (failureCount) => {
           if (typeof navigator !== "undefined" && !navigator.onLine) return false;
           return failureCount < 1;

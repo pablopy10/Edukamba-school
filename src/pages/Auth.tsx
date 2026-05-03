@@ -7,6 +7,8 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
+import { prefetchTeacherData, resolveDefaultAcademicYearId } from "@/lib/prefetchTeacherData";
 import { supabase } from "@/integrations/supabase/client";
 import { isNativeMobileApp } from "@/lib/nativeApp";
 import { cn } from "@/lib/utils";
@@ -100,7 +102,7 @@ const Auth = () => {
     if (signInData.user) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("is_active")
+        .select("is_active, school_id, role")
         .eq("id", signInData.user.id)
         .maybeSingle();
       if (profile && profile.is_active === false) {
@@ -111,6 +113,24 @@ const Auth = () => {
           variant: "destructive",
         });
         return;
+      }
+      if (
+        profile?.role === "TEACHER" &&
+        profile.school_id &&
+        signInData.user.id
+      ) {
+        try {
+          const academicYearId = await resolveDefaultAcademicYearId(profile.school_id);
+          if (academicYearId) {
+            void prefetchTeacherData(queryClient, {
+              userId: signInData.user.id,
+              schoolId: profile.school_id,
+              academicYearId,
+            });
+          }
+        } catch {
+          /* não bloqueia o fluxo de login */
+        }
       }
     }
     toast({ title: "Bem-vindo!", description: "Sessão iniciada com sucesso." });

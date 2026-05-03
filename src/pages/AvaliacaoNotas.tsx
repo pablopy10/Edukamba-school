@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Save, Loader2, GraduationCap, Users, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,6 +39,55 @@ type GradeRow = {
   original_comment?: string;
 };
 
+type GradeInsertPayload = {
+  student_id: string;
+  assessment_id: string;
+  score: number;
+  teacher_comment: string | null;
+};
+type GradeUpdatePayload = { id: string; score: number; teacher_comment: string | null };
+
+function mergeOptimisticGradeRows(
+  base: Record<string, GradeRow>,
+  toInsert: GradeInsertPayload[],
+  toUpdate: GradeUpdatePayload[],
+  toDelete: string[],
+): Record<string, GradeRow> {
+  const nextRows = { ...base };
+  toInsert.forEach((row) => {
+    const sid = row.student_id;
+    nextRows[sid] = {
+      ...nextRows[sid],
+      id: `offline-${crypto.randomUUID()}`,
+      score: String(row.score),
+      teacher_comment: row.teacher_comment ?? "",
+      original_score: row.score,
+      original_comment: row.teacher_comment ?? "",
+    };
+  });
+  toUpdate.forEach((u) => {
+    const sid = Object.keys(nextRows).find((k) => nextRows[k].id === u.id);
+    if (!sid) return;
+    nextRows[sid] = {
+      ...nextRows[sid],
+      score: String(u.score),
+      teacher_comment: u.teacher_comment ?? "",
+      original_score: u.score,
+      original_comment: u.teacher_comment ?? "",
+    };
+  });
+  toDelete.forEach((gid) => {
+    const sid = Object.keys(nextRows).find((k) => nextRows[k].id === gid);
+    if (!sid) return;
+    nextRows[sid] = {
+      student_id: sid,
+      score: "",
+      teacher_comment: "",
+    };
+  });
+  return nextRows;
+}
+
 const monthNames = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
@@ -65,7 +115,6 @@ const AvaliacaoNotas = () => {
   const readOnly = isStudent || role === "PARENT";
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [assessment, setAssessment] = useState<AssessmentInfo | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [rows, setRows] = useState<Record<string, GradeRow>>({});
@@ -176,54 +225,20 @@ const AvaliacaoNotas = () => {
     setRows((prev) => ({ ...prev, [sid]: { ...prev[sid], ...patch } }));
   };
 
-  const handleSave = async () => {
-    if (!assessment || readOnly) return;
-    setSaving(true);
+  const saveGradesMutation = useMutation({
+    mutationFn: async ({
+      toInsert,
+      toUpdate,
+      toDelete,
+    }: {
+      optimisticRows: Record<string, GradeRow>;
+      toInsert: GradeInsertPayload[];
+      toUpdate: GradeUpdatePayload[];
+      toDelete: string[];
+    }) => {
+      const gradesBase = supabaseRestTable("grades");
 
-    const toInsert: any[] = [];
-    const toUpdate: { id: string; score: number; teacher_comment: string | null }[] = [];
-    const toDelete: string[] = [];
-
-    for (const sid of Object.keys(rows)) {
-      const r = rows[sid];
-      const trimmed = r.score.trim();
-      const parsed = trimmed === "" ? NaN : parseFloat(trimmed.replace(",", "."));
-      const comment = r.teacher_comment.trim() || null;
-
-      if (r.id) {
-        if (isNaN(parsed)) {
-          toDelete.push(r.id);
-        } else if (parsed !== r.original_score || comment !== (r.original_comment || null)) {
-          toUpdate.push({ id: r.id, score: parsed, teacher_comment: comment });
-        }
-      } else if (!isNaN(parsed)) {
-        if (parsed < 0 || parsed > 20) {
-          toast({ title: "Nota inválida", description: "As notas devem estar entre 0 e 20.", variant: "destructive" });
-          setSaving(false);
-          return;
-        }
-        toInsert.push({
-          student_id: sid,
-          assessment_id: assessment.id,
-          score: parsed,
-          teacher_comment: comment,
-        });
-      }
-    }
-
-    // Validate updates range
-    for (const u of toUpdate) {
-      if (u.score < 0 || u.score > 20) {
-        toast({ title: "Nota inválida", description: "As notas devem estar entre 0 e 20.", variant: "destructive" });
-        setSaving(false);
-        return;
-      }
-    }
-
-    const gradesBase = supabaseRestTable("grades");
-
-    if (!isOnline) {
-      try {
+      if (!isOnline) {
         if (toInsert.length > 0) {
           enqueuePendingSync({
             url: gradesBase,
@@ -248,46 +263,9 @@ const AvaliacaoNotas = () => {
           });
         }
         toast({ title: "Guardado offline — será sincronizado quando voltar a haver rede." });
-        const nextRows = { ...rows };
-        toInsert.forEach((row: { student_id: string; score: number; teacher_comment: string | null }) => {
-          const sid = row.student_id;
-          nextRows[sid] = {
-            ...nextRows[sid],
-            id: `offline-${crypto.randomUUID()}`,
-            score: String(row.score),
-            teacher_comment: row.teacher_comment ?? "",
-            original_score: row.score,
-            original_comment: row.teacher_comment ?? "",
-          };
-        });
-        toUpdate.forEach((u) => {
-          const sid = Object.keys(nextRows).find((k) => nextRows[k].id === u.id);
-          if (!sid) return;
-          nextRows[sid] = {
-            ...nextRows[sid],
-            score: String(u.score),
-            teacher_comment: u.teacher_comment ?? "",
-            original_score: u.score,
-            original_comment: u.teacher_comment ?? "",
-          };
-        });
-        toDelete.forEach((gid) => {
-          const sid = Object.keys(nextRows).find((k) => nextRows[k].id === gid);
-          if (!sid) return;
-          nextRows[sid] = {
-            student_id: sid,
-            score: "",
-            teacher_comment: "",
-          };
-        });
-        setRows(nextRows);
-      } finally {
-        setSaving(false);
+        return "offline";
       }
-      return;
-    }
 
-    try {
       if (toInsert.length > 0) {
         const { error } = await supabase.from("grades").insert(toInsert);
         if (error) throw error;
@@ -304,13 +282,71 @@ const AvaliacaoNotas = () => {
         if (error) throw error;
       }
       toast({ title: "Notas guardadas com sucesso" });
-      await load();
-    } catch (err: any) {
-      toast({ title: "Erro ao guardar", description: err.message, variant: "destructive" });
-    } finally {
-      setSaving(false);
+      return "online";
+    },
+    onMutate: async (vars) => {
+      const snapshot = { ...rows };
+      setRows(vars.optimisticRows);
+      return { snapshot };
+    },
+    onError: (err: unknown, _vars, ctx) => {
+      if (ctx?.snapshot) setRows(ctx.snapshot);
+      toast({
+        title: "Erro ao guardar",
+        description: err instanceof Error ? err.message : String(err),
+        variant: "destructive",
+      });
+    },
+    onSuccess: async (mode) => {
+      if (mode === "online") await load();
+    },
+  });
+
+  const handleSave = () => {
+    if (!assessment || readOnly) return;
+
+    const toInsert: GradeInsertPayload[] = [];
+    const toUpdate: GradeUpdatePayload[] = [];
+    const toDelete: string[] = [];
+
+    for (const sid of Object.keys(rows)) {
+      const r = rows[sid];
+      const trimmed = r.score.trim();
+      const parsed = trimmed === "" ? NaN : parseFloat(trimmed.replace(",", "."));
+      const comment = r.teacher_comment.trim() || null;
+
+      if (r.id) {
+        if (isNaN(parsed)) {
+          toDelete.push(r.id);
+        } else if (parsed !== r.original_score || comment !== (r.original_comment || null)) {
+          toUpdate.push({ id: r.id, score: parsed, teacher_comment: comment });
+        }
+      } else if (!isNaN(parsed)) {
+        if (parsed < 0 || parsed > 20) {
+          toast({ title: "Nota inválida", description: "As notas devem estar entre 0 e 20.", variant: "destructive" });
+          return;
+        }
+        toInsert.push({
+          student_id: sid,
+          assessment_id: assessment.id,
+          score: parsed,
+          teacher_comment: comment,
+        });
+      }
     }
+
+    for (const u of toUpdate) {
+      if (u.score < 0 || u.score > 20) {
+        toast({ title: "Nota inválida", description: "As notas devem estar entre 0 e 20.", variant: "destructive" });
+        return;
+      }
+    }
+
+    const optimisticRows = mergeOptimisticGradeRows(rows, toInsert, toUpdate, toDelete);
+    saveGradesMutation.mutate({ optimisticRows, toInsert, toUpdate, toDelete });
   };
+
+  const saving = saveGradesMutation.isPending;
 
   if (loading) {
     return (

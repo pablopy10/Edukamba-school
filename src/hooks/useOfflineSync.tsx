@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { onlineManager } from "@tanstack/react-query";
 import { Capacitor } from "@capacitor/core";
 import { Network } from "@capacitor/network";
 import { supabase } from "@/integrations/supabase/client";
@@ -143,6 +144,11 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
     if (!isOnline) return;
     void flushPending();
   }, [isOnline, flushPending]);
+
+  /** Alinha o TanStack Query com o estado de rede real (Capacitor / browser). */
+  useEffect(() => {
+    onlineManager.setOnline(isOnline);
+  }, [isOnline]);
 
   const enqueuePendingSync = useCallback(
     (entry: Pick<PendingSyncEntry, "url" | "method" | "body">) => {
