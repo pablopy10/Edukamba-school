@@ -49,6 +49,29 @@ type OfflineSyncContextValue = {
 
 const OfflineSyncContext = createContext<OfflineSyncContextValue | null>(null);
 
+/** Tabelas com índice único típico e POST idempotentes na reconciliação de fila (evitar 409 ao re-enviar INSERT). */
+const POST_UPSERT_REST_TABLES = new Set(["attendance", "grades"]);
+
+function postgrestBaseTableFromUrl(rawUrl: string): string | null {
+  try {
+    const pathname = new URL(rawUrl).pathname.replace(/\/+$/, "");
+    const m = /^\/rest\/v1\/([^/?]+)$/i.exec(pathname);
+    return m?.[1]?.toLowerCase() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** PostgREST: `resolution=merge-duplicates` faz upsert onde há índice único (student+date em attendance, etc.). */
+function postgrestPreferHeader(method: string, url: string): string {
+  if (method === "DELETE") return "return=minimal";
+  if (method === "POST") {
+    const t = postgrestBaseTableFromUrl(url);
+    if (t && POST_UPSERT_REST_TABLES.has(t)) return "return=minimal,resolution=merge-duplicates";
+  }
+  return "return=minimal";
+}
+
 /** Combina estado explícito com `navigator.onLine` do WebView (em Android o plugin Capacitor por vezes fica atrás ou não dispara). */
 function navigatorReportsOnline(): boolean {
   return typeof navigator === "undefined" || navigator.onLine;
@@ -69,14 +92,12 @@ type RunFlushOnceResult = {
   failedHttpStatus?: number;
 };
 
-/** Processa a fila em disco: pelo menos uma entrada bem-sucedida por chamada até falha; re-tenta uma vez em 401/403 com token novo. */
+/** Processa pedidos FIFO: remove da fila após OK; em HTTP 409 (recurso já existe) também remove este pedido e segue para o seguinte; 401 re-tenta sessão uma vez. */
 async function runFlushOnce(): Promise<RunFlushOnceResult> {
-  const queue = loadPendingSync();
-  if (queue.length === 0) return { succeeded: 0 };
+  if (loadPendingSync().length === 0) return { succeeded: 0 };
 
   await refreshAuthForSync();
 
-  const remaining: PendingSyncEntry[] = [];
   let succeeded = 0;
 
   const loadAccessToken = async (): Promise<string | null> => {
@@ -97,15 +118,21 @@ async function runFlushOnce(): Promise<RunFlushOnceResult> {
 
   const apikey = supabase.supabaseKey;
 
-  outer: for (let i = 0; i < queue.length; i++) {
-    const entry = queue[i];
+  /**
+   * Cada ciclo trabalha apenas a primeira entrada (ordem garantida pela fila ordenada por `createdAt`).
+   */
+  popHead: while (true) {
+    const queue = loadPendingSync();
+    if (queue.length === 0) break;
+
+    const entry = queue[0];
     let retriedAuth = false;
 
     for (;;) {
       const headers: Record<string, string> = {
         apikey,
         Authorization: `Bearer ${accessToken}`,
-        Prefer: "return=minimal",
+        Prefer: postgrestPreferHeader(entry.method, entry.url),
       };
       if (entry.method !== "DELETE") {
         headers["Content-Type"] = "application/json";
@@ -118,9 +145,17 @@ async function runFlushOnce(): Promise<RunFlushOnceResult> {
           body: entry.method === "DELETE" ? undefined : entry.body ?? undefined,
         });
 
-        if (res.ok) {
+        /** Registo já presente na base (duplicado) — tirar este pedido da fila e continuar sem falhar todo o flush. */
+        if (res.status === 409) {
+          savePendingSync(queue.slice(1));
           succeeded++;
-          continue outer;
+          continue popHead;
+        }
+
+        if (res.ok) {
+          savePendingSync(queue.slice(1));
+          succeeded++;
+          continue popHead;
         }
 
         if ((res.status === 401 || res.status === 403) && !retriedAuth) {
@@ -133,18 +168,15 @@ async function runFlushOnce(): Promise<RunFlushOnceResult> {
           }
         }
 
-        remaining.push(...queue.slice(i));
-        savePendingSync(remaining);
+        savePendingSync(queue);
         return { succeeded, stopReason: "failed", failedHttpStatus: res.status };
       } catch {
-        remaining.push(...queue.slice(i));
-        savePendingSync(remaining);
+        savePendingSync(queue);
         return { succeeded, stopReason: "failed" };
       }
     }
   }
 
-  savePendingSync(remaining);
   return { succeeded };
 }
 
@@ -233,7 +265,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
           const batch = await runFlushOnce();
           totalSucceeded += batch.succeeded;
           refreshPendingFromStorage();
-          if (batch.succeeded === 0) {
+          if (batch.stopReason) {
             if (batch.stopReason === "no_session") blocked = "no_session";
             else if (batch.stopReason === "failed") blocked = "server_or_network";
             httpStatus = batch.failedHttpStatus;
