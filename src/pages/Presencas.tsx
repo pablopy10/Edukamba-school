@@ -45,6 +45,7 @@ import { useParentChildren } from "@/hooks/useParentChildren";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { QUERY_DAY_MS } from "@/lib/queryClient";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
+import { useTeacherSessionScope } from "@/hooks/useTeacherSessionScope";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { OFFLINE_SYNC_FLUSH_EVENT, useOfflineSync } from "@/hooks/useOfflineSync";
 import {
@@ -297,16 +298,17 @@ const NativeQuickStatusButton = ({
 const Presencas = () => {
   const native = isNativeMobileApp();
   const { user } = useAuth();
-  const { selectedYearId } = useAcademicYear();
+  const { selectedYearId: ctxYearId, schoolId: ctxSchoolId } = useAcademicYear();
   const { isParent, childIds, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
+  const { data: persistedTeacherSession } = useTeacherSessionScope();
   const { isStudent, studentId, classroomId: studentClassroomId, loading: studentLoading } = useStudentSelf();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month0, setMonth0] = useState(today.getMonth());
   const [classroomId, setClassroomId] = useState<string>("all");
 
-  const [schoolId, setSchoolId] = useState<string | null>(null);
+  const [profileSchoolId, setProfileSchoolId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   /** Lista de turmas para perfis não-professor (consulta direta). Professores usam cache persistida `teacherPrefetch`. */
   const [generalClassrooms, setGeneralClassrooms] = useState<Classroom[]>([]);
@@ -321,9 +323,26 @@ const Presencas = () => {
   });
   const [studentFilterNative, setStudentFilterNative] = useState("");
 
+  const resolvedSchoolId = useMemo(() => {
+    if (isTeacher) {
+      return ctxSchoolId ?? persistedTeacherSession?.schoolId ?? profileSchoolId;
+    }
+    return profileSchoolId;
+  }, [isTeacher, ctxSchoolId, persistedTeacherSession?.schoolId, profileSchoolId]);
+
+  const resolvedYearId = useMemo(() => {
+    if (!isTeacher) return ctxYearId ?? null;
+    return ctxYearId ?? persistedTeacherSession?.academicYearId ?? null;
+  }, [isTeacher, ctxYearId, persistedTeacherSession?.academicYearId]);
+
+  const roleForAcl = useMemo(
+    () => userRole ?? (isTeacher ? (persistedTeacherSession?.role ?? null) : null),
+    [userRole, isTeacher, persistedTeacherSession?.role],
+  );
+
   const { isOnline, enqueuePendingSync } = useOfflineSync();
 
-  const canEdit = (userRole === "ADMIN" || userRole === "TEACHER") && !isParent && !isStudent;
+  const canEdit = (roleForAcl === "ADMIN" || roleForAcl === "TEACHER") && !isParent && !isStudent;
 
   useEffect(() => {
     if (!native) return;
@@ -349,7 +368,7 @@ const Presencas = () => {
         .eq("id", user.id)
         .maybeSingle();
       if (data) {
-        setSchoolId(data.school_id);
+        setProfileSchoolId(data.school_id);
         setUserRole(data.role);
       }
     })();
@@ -361,23 +380,23 @@ const Presencas = () => {
       [
         "teacherPrefetch",
         "classrooms",
-        schoolId ?? "__",
-        selectedYearId ?? "__",
+        resolvedSchoolId ?? "__",
+        resolvedYearId ?? "__",
         user?.id ?? "__",
       ] as const,
-    [schoolId, selectedYearId, user?.id],
+    [resolvedSchoolId, resolvedYearId, user?.id],
   );
 
   const { data: teacherPersistedClassrooms } = useQuery({
     queryKey: teacherPrefetchClassroomsQueryKey,
     queryFn: async (): Promise<Classroom[]> => {
-      if (!schoolId || !selectedYearId || !user?.id) return [];
+      if (!resolvedSchoolId || !resolvedYearId || !user?.id) return [];
       if (teacherClassroomIds.length === 0) return [];
       const { data, error } = await supabase
         .from("classrooms")
         .select("id, name")
-        .eq("school_id", schoolId)
-        .eq("academic_year_id", selectedYearId)
+        .eq("school_id", resolvedSchoolId)
+        .eq("academic_year_id", resolvedYearId)
         .in("id", teacherClassroomIds)
         .order("name");
       if (error) throw error;
@@ -385,8 +404,8 @@ const Presencas = () => {
     },
     enabled: Boolean(
       isTeacher &&
-        schoolId &&
-        selectedYearId &&
+        resolvedSchoolId &&
+        resolvedYearId &&
         user?.id &&
         !teacherLoading &&
         teacherClassroomIds.length > 0,
@@ -401,13 +420,13 @@ const Presencas = () => {
     [isTeacher, teacherPersistedClassrooms, generalClassrooms],
   );
 
-  // Load classrooms (professor: via useQuery persistida acima)
+  // Load classrooms (não-professor: consulta Supabase)
   useEffect(() => {
     if (isTeacher) return;
-    if (!schoolId) return;
+    if (!profileSchoolId) return;
     if (isParent && parentLoading) return;
     if (isStudent && studentLoading) return;
-    if (!selectedYearId) {
+    if (!ctxYearId) {
       setGeneralClassrooms([]);
       setClassroomId("all");
       return;
@@ -416,8 +435,8 @@ const Presencas = () => {
       let q = supabase
         .from("classrooms")
         .select("id, name")
-        .eq("school_id", schoolId)
-        .eq("academic_year_id", selectedYearId)
+        .eq("school_id", profileSchoolId)
+        .eq("academic_year_id", ctxYearId)
         .order("name");
       if (isParent) {
         if (parentClassroomIds.length === 0) {
@@ -441,8 +460,8 @@ const Presencas = () => {
       setClassroomId(list[0]?.id ?? "all");
     })();
   }, [
-    schoolId,
-    selectedYearId,
+    profileSchoolId,
+    ctxYearId,
     isParent,
     parentLoading,
     parentClassroomIds.join(","),
@@ -464,7 +483,7 @@ const Presencas = () => {
   useEffect(() => {
     if (!isTeacher) return;
     const list = teacherPersistedClassrooms ?? EMPTY_CLASSROOM_LIST;
-    if (!selectedYearId || !schoolId) {
+    if (!resolvedYearId || !resolvedSchoolId) {
       setClassroomId("all");
       return;
     }
@@ -475,15 +494,15 @@ const Presencas = () => {
     setClassroomId((prev) =>
       prev !== "all" && list.some((c) => c.id === prev) ? prev : list[0]!.id,
     );
-  }, [isTeacher, schoolId, selectedYearId, teacherPrefetchClassroomsFingerprint]);
+  }, [isTeacher, resolvedSchoolId, resolvedYearId, teacherPrefetchClassroomsFingerprint]);
 
   /** Na app nativa, professores não devem ficar em «todas as turmas». */
   useEffect(() => {
-    if (!native || userRole !== "TEACHER") return;
+    if (!native || roleForAcl !== "TEACHER") return;
     if (classroomId !== "all") return;
     if (classrooms.length === 0) return;
     setClassroomId(classrooms[0].id);
-  }, [native, userRole, classroomId, classrooms]);
+  }, [native, roleForAcl, classroomId, classrooms]);
 
   // Compute month days
   const monthDays = useMemo(() => getMonthDays(year, month0), [year, month0]);
@@ -527,9 +546,9 @@ const Presencas = () => {
   const persistRestoring = useIsRestoring();
 
   const studentsKeyInput: PresencasStudentsKeyInput | null = useMemo(() => {
-    if (!schoolId) return null;
+    if (!resolvedSchoolId) return null;
     return {
-      schoolId,
+      schoolId: resolvedSchoolId,
       classroomId,
       isTeacher,
       teacherClassroomIds,
@@ -541,7 +560,7 @@ const Presencas = () => {
       studentId,
     };
   }, [
-    schoolId,
+    resolvedSchoolId,
     classroomId,
     isTeacher,
     teacherClassroomIds.join(","),
@@ -554,9 +573,9 @@ const Presencas = () => {
   ]);
 
   const attendanceKeyInput: PresencasAttendanceKeyInput | null = useMemo(() => {
-    if (!schoolId) return null;
+    if (!resolvedSchoolId) return null;
     return {
-      schoolId,
+      schoolId: resolvedSchoolId,
       classroomId,
       isTeacher,
       teacherClassroomIds,
@@ -564,7 +583,7 @@ const Presencas = () => {
       endDate: attendanceFetchRange.endDate,
     };
   }, [
-    schoolId,
+    resolvedSchoolId,
     classroomId,
     isTeacher,
     teacherClassroomIds.join(","),
@@ -577,8 +596,8 @@ const Presencas = () => {
     : (["presencas", "attendance", "__disabled__"] as const);
 
   const studentsBlockedLoading =
-    !schoolId ||
-    !selectedYearId ||
+    !resolvedSchoolId ||
+    !resolvedYearId ||
     nativeTeacherAwaitingScopedRoom ||
     (isParent && parentLoading) ||
     (isStudent && studentLoading) ||
@@ -592,7 +611,7 @@ const Presencas = () => {
 
   const studentsFetchEnabled =
     !!studentsKeyInput &&
-    !!selectedYearId &&
+    !!resolvedYearId &&
     !nativeTeacherAwaitingScopedRoom &&
     !teacherNoClassroomsReady &&
     !parentNoChildrenReady &&
@@ -703,7 +722,7 @@ const Presencas = () => {
             student_id: student.id,
             date: fmtISO(date),
             status: next,
-            school_id: schoolId!,
+            school_id: resolvedSchoolId!,
             classroom_id: student.classroom_id,
             teacher_id: user?.id ?? null,
           }),
@@ -732,7 +751,7 @@ const Presencas = () => {
           student_id: student.id,
           date: fmtISO(date),
           status: next,
-          school_id: schoolId!,
+          school_id: resolvedSchoolId!,
           classroom_id: student.classroom_id,
           teacher_id: user?.id ?? null,
         })
@@ -792,7 +811,7 @@ const Presencas = () => {
   });
 
   const applyStatus = (student: Student, date: Date, next: Status | null) => {
-    if (!schoolId) return;
+    if (!resolvedSchoolId) return;
     const cellKey = `${student.id}__${fmtISO(date)}`;
     const snapshot = queryClient.getQueryData<PresencasAttendanceMap>(attendanceQueryKeyResolved) ?? {};
     const existingBefore = snapshot[cellKey];
@@ -854,7 +873,7 @@ const Presencas = () => {
   })();
 
   const submitJustification = async () => {
-    if (!justifyTarget || !schoolId) return;
+    if (!justifyTarget || !resolvedSchoolId) return;
     const { student, date, row } = justifyTarget;
     const text = justifyText.trim();
     if (!text) {
@@ -891,7 +910,7 @@ const Presencas = () => {
               date: fmtISO(date),
               status: "ABSENT" as Status,
               notes: text,
-              school_id: schoolId,
+              school_id: resolvedSchoolId,
               classroom_id: student.classroom_id,
               teacher_id: user?.id ?? null,
             }),
@@ -941,7 +960,7 @@ const Presencas = () => {
             date: fmtISO(date),
             status: "ABSENT" as Status,
             notes: text,
-            school_id: schoolId,
+            school_id: resolvedSchoolId,
             classroom_id: student.classroom_id,
             teacher_id: user?.id ?? null,
           })
@@ -986,7 +1005,7 @@ const Presencas = () => {
                       <SelectValue placeholder="Turma" />
                     </SelectTrigger>
                     <SelectContent align="end">
-                      {userRole !== "TEACHER" && <SelectItem value="all">Todas as turmas</SelectItem>}
+                      {roleForAcl !== "TEACHER" && <SelectItem value="all">Todas as turmas</SelectItem>}
                       {classrooms.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
                           {c.name}

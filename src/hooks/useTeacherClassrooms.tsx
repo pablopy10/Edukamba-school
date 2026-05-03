@@ -7,6 +7,7 @@ import {
   fetchTeacherScheduleScope,
   teacherScheduleScopeQueryKey,
 } from "@/lib/offline/teacherScheduleScope";
+import { useTeacherSessionScope } from "@/hooks/useTeacherSessionScope";
 
 /**
  * Turmas onde o professor tem horário (`schedules`) para o ano letivo seleccionado + `subject_id` de `teachers`.
@@ -18,12 +19,15 @@ export const useTeacherClassrooms = () => {
   const { selectedYearId } = useAcademicYear();
   const persistRestoring = useIsRestoring();
   const isTeacher = role === "TEACHER";
+  const { data: persistSessionScope } = useTeacherSessionScope();
+  const academicYearForSchedule = selectedYearId ?? persistSessionScope?.academicYearId ?? null;
 
-  const queryEnabled = !roleLoading && !!user?.id && isTeacher && !!selectedYearId;
+  const queryEnabled =
+    !roleLoading && !!user?.id && isTeacher && !!academicYearForSchedule;
 
   const scopeQuery = useQuery({
-    queryKey: teacherScheduleScopeQueryKey(user?.id ?? "__none__", selectedYearId ?? "__none__"),
-    queryFn: () => fetchTeacherScheduleScope(user!.id!, selectedYearId!),
+    queryKey: teacherScheduleScopeQueryKey(user?.id ?? "__none__", academicYearForSchedule ?? "__none__"),
+    queryFn: () => fetchTeacherScheduleScope(user!.id!, academicYearForSchedule!),
     enabled: queryEnabled,
     staleTime: QUERY_DAY_MS * 24,
     networkMode: "offlineFirst",

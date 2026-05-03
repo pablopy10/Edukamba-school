@@ -141,6 +141,7 @@ const Auth = () => {
               userId: user.id,
               schoolId: profile.school_id,
               academicYearId,
+              profileRole: profile.role,
             });
           }
         } catch {

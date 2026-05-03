@@ -8,6 +8,41 @@ type RoleContextValue = { role: UserRole; loading: boolean };
 
 const UserRoleContext = createContext<RoleContextValue | null>(null);
 
+const persistedRoleKey = (userId: string) => `edukamba.profileRole.${userId}`;
+
+function readPersistedRole(userId: string): UserRole | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(persistedRoleKey(userId));
+    if (!raw) return null;
+    const v = JSON.parse(raw) as UserRole;
+    if (v === "ADMIN" || v === "TEACHER" || v === "PARENT" || v === "STUDENT" || v === "SUPER_ADMIN" || v === null) {
+      return v;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function writePersistedRole(userId: string, role: UserRole) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(persistedRoleKey(userId), JSON.stringify(role));
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearPersistedRole(userId: string) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.removeItem(persistedRoleKey(userId));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Module-level cache so the role survives unmounts/remounts and is reused
 // across navigations without refetching (eliminates the sidebar flash).
 const roleCache = new Map<string, UserRole>();
@@ -25,6 +60,7 @@ const fetchRole = (userId: string): Promise<UserRole> => {
       .maybeSingle();
     const r = (data?.role as UserRole) ?? null;
     roleCache.set(userId, r);
+    writePersistedRole(userId, r);
     inflight.delete(userId);
     return r;
   })();
@@ -47,6 +83,13 @@ export const UserRoleProvider = ({ children }: { children: ReactNode }) => {
     }
     if (roleCache.has(user.id)) {
       setRole(roleCache.get(user.id) ?? null);
+      setLoading(false);
+      return;
+    }
+    const disk = readPersistedRole(user.id);
+    if (disk !== null) {
+      roleCache.set(user.id, disk);
+      setRole(disk);
       setLoading(false);
       return;
     }

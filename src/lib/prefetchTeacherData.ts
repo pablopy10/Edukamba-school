@@ -27,30 +27,28 @@ import {
   type PresencasAttendanceKeyInput,
   type PresencasStudentsKeyInput,
 } from "@/lib/offline/presencasQueries";
+import { teacherSessionScopeQueryKey } from "@/lib/offline/teacherSessionScope";
 
-export async function resolveDefaultAcademicYearId(schoolId: string): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("academic_years")
-    .select("id, is_active, start_date")
-    .eq("school_id", schoolId)
-    .order("start_date", { ascending: true });
-
-  if (error) throw error;
-  const list = data ?? [];
-  const active = list.find((y) => y.is_active);
-  const stored =
-    typeof localStorage !== "undefined" ? localStorage.getItem("selected_academic_year_id") : null;
-  const initial =
-    active?.id ?? (stored && list.some((y) => y.id === stored) ? stored : list[0]?.id ?? null);
-  return initial;
-}
+export { resolveDefaultAcademicYearId } from "@/lib/offline/resolveDefaultAcademicYearId";
 
 /** Turmas e alunos do professor + presenças num intervalo alargado (cache offline). */
 export async function prefetchTeacherData(
   qc: QueryClient,
-  args: { userId: string; schoolId: string; academicYearId: string },
+  args: { userId: string; schoolId: string; academicYearId: string; profileRole?: string | null },
 ): Promise<void> {
-  const { userId, schoolId, academicYearId } = args;
+  const { userId, schoolId, academicYearId, profileRole } = args;
+
+  await qc.prefetchQuery({
+    queryKey: teacherSessionScopeQueryKey(userId),
+    queryFn: () =>
+      Promise.resolve({
+        schoolId,
+        academicYearId,
+        role: profileRole ?? null,
+      }),
+    staleTime: QUERY_DAY_MS * 24,
+    networkMode: "offlineFirst",
+  });
 
   const scope = await fetchTeacherScheduleScope(userId, academicYearId);
   const { classroomIds, subjectId } = scope;

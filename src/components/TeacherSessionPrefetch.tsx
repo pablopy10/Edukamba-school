@@ -32,6 +32,7 @@ export function TeacherSessionPrefetch() {
           userId: user.id,
           schoolId: data.school_id,
           academicYearId: selectedYearId,
+          profileRole: role,
         });
       } catch {
         /* prefetch best-effort */
