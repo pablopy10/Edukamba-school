@@ -12,6 +12,7 @@ import { onlineManager } from "@tanstack/react-query";
 import { Capacitor } from "@capacitor/core";
 import { Network } from "@capacitor/network";
 import { supabase } from "@/integrations/supabase/client";
+import { queryClient } from "@/lib/queryClient";
 import { loadPendingSync, savePendingSync, type PendingSyncEntry } from "@/lib/pendingSyncStorage";
 
 /** Disparado quando pelo menos um pedido pendente foi sincronizado com sucesso. */
@@ -71,9 +72,6 @@ async function runFlushOnce(): Promise<number> {
   }
 
   savePendingSync(remaining);
-  if (succeeded > 0) {
-    window.dispatchEvent(new CustomEvent(OFFLINE_SYNC_FLUSH_EVENT));
-  }
   return succeeded;
 }
 
@@ -88,10 +86,14 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
   const [syncing, setSyncing] = useState(false);
   const flushingRef = useRef(false);
 
+  /** Última vez que um flush automático iniciou — evita tempestades em visibility + rede. */
+  const lastFlushStartRef = useRef(0);
+
   const refreshPendingFromStorage = useCallback(() => {
     setPending(loadPendingSync());
   }, []);
 
+  /** Várias tentativas enquanto a fila diminui (ex.: primeiro POST liberta o seguinte PATCH). Um único evento + invalidate no fim. */
   const flushPending = useCallback(async () => {
     if (flushingRef.current) return;
     if (!isOnlineRef.current) return;
@@ -100,8 +102,18 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
     flushingRef.current = true;
     setSyncing(true);
     try {
-      await runFlushOnce();
+      let totalSucceeded = 0;
+      while (isOnlineRef.current && loadPendingSync().length > 0) {
+        const n = await runFlushOnce();
+        refreshPendingFromStorage();
+        totalSucceeded += n;
+        if (n === 0) break;
+      }
       refreshPendingFromStorage();
+      if (totalSucceeded > 0) {
+        window.dispatchEvent(new CustomEvent(OFFLINE_SYNC_FLUSH_EVENT));
+        await queryClient.invalidateQueries();
+      }
     } finally {
       flushingRef.current = false;
       setSyncing(false);
@@ -115,10 +127,14 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
       let listener: { remove: () => Promise<void> } | undefined;
 
       void Network.getStatus().then((s) => {
-        if (!removed) setIsOnline(s.connected);
+        if (!removed) {
+          isOnlineRef.current = s.connected;
+          setIsOnline(s.connected);
+        }
       });
 
       void Network.addListener("networkStatusChange", (status) => {
+        isOnlineRef.current = status.connected;
         setIsOnline(status.connected);
       }).then((handle) => {
         listener = handle;
@@ -130,8 +146,14 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
       };
     }
 
-    const up = () => setIsOnline(true);
-    const down = () => setIsOnline(false);
+    const up = () => {
+      isOnlineRef.current = true;
+      setIsOnline(true);
+    };
+    const down = () => {
+      isOnlineRef.current = false;
+      setIsOnline(false);
+    };
     window.addEventListener("online", up);
     window.addEventListener("offline", down);
     return () => {
@@ -140,10 +162,42 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const flushPendingRef = useRef(flushPending);
+  flushPendingRef.current = flushPending;
+
   useEffect(() => {
     if (!isOnline) return;
     void flushPending();
   }, [isOnline, flushPending]);
+
+  /** Ao voltar ao primeiro plano, re-checa rede (nativo) e tenta sincronizar se houver pendências. */
+  useEffect(() => {
+    const tryFlushOnForeground = async () => {
+      if (document.visibilityState !== "visible") return;
+      if (loadPendingSync().length === 0) return;
+      const now = Date.now();
+      if (now - lastFlushStartRef.current < 800) return;
+      lastFlushStartRef.current = now;
+
+      let connected = isOnlineRef.current;
+      if (Capacitor.isNativePlatform()) {
+        try {
+          const status = await Network.getStatus();
+          connected = status.connected;
+          setIsOnline(connected);
+          isOnlineRef.current = connected;
+        } catch {
+          /* mantém último estado conhecido */
+        }
+      }
+      if (!connected) return;
+      await flushPendingRef.current();
+    };
+
+    document.addEventListener("visibilitychange", tryFlushOnForeground);
+    void tryFlushOnForeground();
+    return () => document.removeEventListener("visibilitychange", tryFlushOnForeground);
+  }, []);
 
   /** Alinha o TanStack Query com o estado de rede real (Capacitor / browser). */
   useEffect(() => {
