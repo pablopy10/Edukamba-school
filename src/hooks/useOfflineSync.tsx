@@ -15,14 +15,34 @@ import { supabase } from "@/integrations/supabase/client";
 import { queryClient } from "@/lib/queryClient";
 import { loadPendingSync, savePendingSync, type PendingSyncEntry } from "@/lib/pendingSyncStorage";
 
+const OFFLINE_SYNC_MODE_KEY = "edukamba_offline_sync_mode";
+
 /** Disparado quando pelo menos um pedido pendente foi sincronizado com sucesso. */
 export const OFFLINE_SYNC_FLUSH_EVENT = "edukamba-offline-sync-flushed";
+
+export type OfflineSyncMode = "auto" | "manual";
+
+/** Resultado de `syncNow()` / flush da fila offline. */
+export type OfflineFlushResult = {
+  successCount: number;
+  remainingPending: number;
+  blocked?: "no_network" | "no_session" | "server_or_network";
+  /** Último código HTTP quando `blocked === "server_or_network"`. */
+  httpStatus?: number;
+};
 
 type OfflineSyncContextValue = {
   /** Ligado: rede disponível (Capacitor Network na app nativa; navigator na web). */
   isOnline: boolean;
+  /** WebView/network percebidos como suficientes para tentar REST. */
+  networkAvailableForSync: boolean;
   pendingCount: number;
   syncing: boolean;
+  /** `auto`: fila despacha ao voltar rede · `manual`: apenas em «Sincronizar». */
+  syncMode: OfflineSyncMode;
+  setSyncMode: (mode: OfflineSyncMode) => void;
+  /** Força processamento da fila (manual ou reforço). Devolve contagens úteis para feedback UI. */
+  syncNow: () => Promise<OfflineFlushResult>;
   /** Enfileira um pedido REST PostgREST (URL completa, método, body JSON ou null). */
   enqueuePendingSync: (entry: Pick<PendingSyncEntry, "url" | "method" | "body">) => void;
 };
@@ -35,7 +55,6 @@ function navigatorReportsOnline(): boolean {
 }
 
 async function refreshAuthForSync(): Promise<void> {
-  if (!navigatorReportsOnline()) return;
   try {
     const { error } = await supabase.auth.refreshSession();
     if (error) await supabase.auth.getSession();
@@ -44,52 +63,89 @@ async function refreshAuthForSync(): Promise<void> {
   }
 }
 
-async function runFlushOnce(): Promise<number> {
+type RunFlushOnceResult = {
+  succeeded: number;
+  stopReason?: "no_session" | "failed";
+  failedHttpStatus?: number;
+};
+
+/** Processa a fila em disco: pelo menos uma entrada bem-sucedida por chamada até falha; re-tenta uma vez em 401/403 com token novo. */
+async function runFlushOnce(): Promise<RunFlushOnceResult> {
   const queue = loadPendingSync();
-  if (queue.length === 0) return 0;
+  if (queue.length === 0) return { succeeded: 0 };
 
   await refreshAuthForSync();
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) return 0;
-
-  const apikey = supabase.supabaseKey;
+  const remaining: PendingSyncEntry[] = [];
   let succeeded = 0;
 
-  const remaining: PendingSyncEntry[] = [];
+  const loadAccessToken = async (): Promise<string | null> => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  };
 
-  for (let i = 0; i < queue.length; i++) {
+  let accessToken = await loadAccessToken();
+  if (!accessToken) {
+    const { data } = await supabase.auth.refreshSession();
+    accessToken = data.session?.access_token ?? null;
+  }
+  if (!accessToken) {
+    return { succeeded: 0, stopReason: "no_session" };
+  }
+
+  const apikey = supabase.supabaseKey;
+
+  outer: for (let i = 0; i < queue.length; i++) {
     const entry = queue[i];
-    const headers: Record<string, string> = {
-      apikey,
-      Authorization: `Bearer ${session.access_token}`,
-      Prefer: "return=minimal",
-    };
-    if (entry.method !== "DELETE") {
-      headers["Content-Type"] = "application/json";
-    }
+    let retriedAuth = false;
 
-    try {
-      const res = await fetch(entry.url, {
-        method: entry.method,
-        headers,
-        body: entry.method === "DELETE" ? undefined : entry.body ?? undefined,
-      });
-      if (!res.ok) {
-        remaining.push(...queue.slice(i));
-        break;
+    for (;;) {
+      const headers: Record<string, string> = {
+        apikey,
+        Authorization: `Bearer ${accessToken}`,
+        Prefer: "return=minimal",
+      };
+      if (entry.method !== "DELETE") {
+        headers["Content-Type"] = "application/json";
       }
-      succeeded++;
-    } catch {
-      remaining.push(...queue.slice(i));
-      break;
+
+      try {
+        const res = await fetch(entry.url, {
+          method: entry.method,
+          headers,
+          body: entry.method === "DELETE" ? undefined : entry.body ?? undefined,
+        });
+
+        if (res.ok) {
+          succeeded++;
+          continue outer;
+        }
+
+        if ((res.status === 401 || res.status === 403) && !retriedAuth) {
+          retriedAuth = true;
+          await supabase.auth.refreshSession();
+          const next = await loadAccessToken();
+          if (next) {
+            accessToken = next;
+            continue;
+          }
+        }
+
+        remaining.push(...queue.slice(i));
+        savePendingSync(remaining);
+        return { succeeded, stopReason: "failed", failedHttpStatus: res.status };
+      } catch {
+        remaining.push(...queue.slice(i));
+        savePendingSync(remaining);
+        return { succeeded, stopReason: "failed" };
+      }
     }
   }
 
   savePendingSync(remaining);
-  return succeeded;
+  return { succeeded };
 }
 
 export function OfflineSyncProvider({ children }: { children: ReactNode }) {
@@ -99,9 +155,16 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
   const isOnlineRef = useRef(isOnline);
   isOnlineRef.current = isOnline;
 
+  const [syncMode, setSyncModeState] = useState<OfflineSyncMode>(() => {
+    if (typeof localStorage === "undefined") return "auto";
+    const v = localStorage.getItem(OFFLINE_SYNC_MODE_KEY);
+    return v === "manual" ? "manual" : "auto";
+  });
+
   const [pending, setPending] = useState<PendingSyncEntry[]>(() => loadPendingSync());
   const [syncing, setSyncing] = useState(false);
-  const flushingRef = useRef(false);
+  /** Uma só sincronização de cada vez — chamadas paralelas esperam pela mesma Promise. */
+  const flushInFlightRef = useRef<Promise<OfflineFlushResult> | null>(null);
 
   /** Última vez que um flush automático iniciou — evita tempestades em visibility + rede. */
   const lastFlushStartRef = useRef(0);
@@ -114,54 +177,95 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
   const syncWouldAllowAttempts = () => isOnlineRef.current || navigatorReportsOnline();
 
   /** Várias tentativas enquanto a fila diminui (ex.: primeiro POST liberta o seguinte PATCH). Um único evento + invalidate no fim. */
-  const flushPending = useCallback(async () => {
-    if (flushingRef.current) return;
-    if (loadPendingSync().length === 0) return;
+  const flushPending = useCallback(async (): Promise<OfflineFlushResult> => {
+    if (flushInFlightRef.current !== null) {
+      return flushInFlightRef.current;
+    }
 
-    if (!syncWouldAllowAttempts()) return;
+    const execute = async (): Promise<OfflineFlushResult> => {
+      const initialRemaining = loadPendingSync().length;
+      if (initialRemaining === 0) {
+        return { successCount: 0, remainingPending: 0 };
+      }
 
-    if (
-      Capacitor.isNativePlatform() &&
-      navigatorReportsOnline() &&
-      !isOnlineRef.current
-    ) {
-      try {
-        const s = await Network.getStatus();
-        if (s.connected) {
+      if (!syncWouldAllowAttempts()) {
+        return {
+          successCount: 0,
+          remainingPending: initialRemaining,
+          blocked: "no_network",
+        };
+      }
+
+      if (
+        Capacitor.isNativePlatform() &&
+        navigatorReportsOnline() &&
+        !isOnlineRef.current
+      ) {
+        try {
+          const s = await Network.getStatus();
+          if (s.connected) {
+            isOnlineRef.current = true;
+            setIsOnline(true);
+          }
+        } catch {
           isOnlineRef.current = true;
           setIsOnline(true);
         }
-      } catch {
+      } else if (navigatorReportsOnline() && !isOnlineRef.current) {
         isOnlineRef.current = true;
         setIsOnline(true);
       }
-    } else if (navigatorReportsOnline() && !isOnlineRef.current) {
-      isOnlineRef.current = true;
-      setIsOnline(true);
-    }
 
-    if (!syncWouldAllowAttempts()) return;
+      if (!syncWouldAllowAttempts()) {
+        return {
+          successCount: 0,
+          remainingPending: loadPendingSync().length,
+          blocked: "no_network",
+        };
+      }
 
-    flushingRef.current = true;
-    setSyncing(true);
-    try {
+      setSyncing(true);
       let totalSucceeded = 0;
-      while (syncWouldAllowAttempts() && loadPendingSync().length > 0) {
-        const n = await runFlushOnce();
+      let blocked: OfflineFlushResult["blocked"];
+      let httpStatus: number | undefined;
+      try {
+        while (syncWouldAllowAttempts() && loadPendingSync().length > 0) {
+          const batch = await runFlushOnce();
+          totalSucceeded += batch.succeeded;
+          refreshPendingFromStorage();
+          if (batch.succeeded === 0) {
+            if (batch.stopReason === "no_session") blocked = "no_session";
+            else if (batch.stopReason === "failed") blocked = "server_or_network";
+            httpStatus = batch.failedHttpStatus;
+            break;
+          }
+        }
         refreshPendingFromStorage();
-        totalSucceeded += n;
-        if (n === 0) break;
+        if (totalSucceeded > 0) {
+          window.dispatchEvent(new CustomEvent(OFFLINE_SYNC_FLUSH_EVENT));
+          onlineManager.setOnline(true);
+          await queryClient.invalidateQueries();
+        }
+      } finally {
+        setSyncing(false);
       }
-      refreshPendingFromStorage();
-      if (totalSucceeded > 0) {
-        window.dispatchEvent(new CustomEvent(OFFLINE_SYNC_FLUSH_EVENT));
-        onlineManager.setOnline(true);
-        await queryClient.invalidateQueries();
+
+      const remainingPending = loadPendingSync().length;
+      return {
+        successCount: totalSucceeded,
+        remainingPending,
+        blocked,
+        httpStatus,
+      };
+    };
+
+    const promise = execute().finally(() => {
+      if (flushInFlightRef.current === promise) {
+        flushInFlightRef.current = null;
       }
-    } finally {
-      flushingRef.current = false;
-      setSyncing(false);
-    }
+    });
+    flushInFlightRef.current = promise;
+    return promise;
   }, [refreshPendingFromStorage]);
 
   /** Rede: Capacitor + sempre eventos `online`/`offline` do WebView (crítico no Android nativo). */
@@ -214,14 +318,30 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
   const flushPendingRef = useRef(flushPending);
   flushPendingRef.current = flushPending;
 
+  const setSyncMode = useCallback((mode: OfflineSyncMode) => {
+    try {
+      localStorage.setItem(OFFLINE_SYNC_MODE_KEY, mode);
+    } catch {
+      /* quota / private mode */
+    }
+    setSyncModeState(mode);
+    if (mode === "auto") {
+      queueMicrotask(() => void flushPendingRef.current());
+    }
+  }, []);
+
+  const syncNow = useCallback(() => flushPending(), [flushPending]);
+
   useEffect(() => {
+    if (syncMode !== "auto") return;
     if (!syncWouldAllowAttempts()) return;
     void flushPending();
-  }, [isOnline, flushPending]);
+  }, [isOnline, flushPending, syncMode]);
 
   /** Ao voltar ao primeiro plano, re-checa rede (nativo) e tenta sincronizar se houver pendências. */
   useEffect(() => {
     const tryFlushOnForeground = async () => {
+      if (syncMode !== "auto") return;
       if (document.visibilityState !== "visible") return;
       if (loadPendingSync().length === 0) return;
       const now = Date.now();
@@ -253,7 +373,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
     document.addEventListener("visibilitychange", tryFlushOnForeground);
     void tryFlushOnForeground();
     return () => document.removeEventListener("visibilitychange", tryFlushOnForeground);
-  }, []);
+  }, [syncMode]);
 
   /** TanStack só refaz pedidos quando `onlineManager` está alinhado (offlineFirst). */
   useEffect(() => {
@@ -262,12 +382,13 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
 
   /** Arranque com fila em disco: tenta libertar assim que há rede (timing do WebView/session). */
   useEffect(() => {
+    if (syncMode !== "auto") return undefined;
     const id = window.setTimeout(() => {
       if (loadPendingSync().length === 0) return;
       void flushPendingRef.current?.();
     }, 900);
     return () => window.clearTimeout(id);
-  }, []);
+  }, [syncMode]);
 
   const enqueuePendingSync = useCallback(
     (entry: Pick<PendingSyncEntry, "url" | "method" | "body">) => {
@@ -276,21 +397,36 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
       );
       savePendingSync(next);
       setPending(next);
-      if (isOnlineRef.current || navigatorReportsOnline()) {
+      if (
+        syncMode === "auto" &&
+        (isOnlineRef.current || navigatorReportsOnline())
+      ) {
         void flushPending();
       }
     },
-    [flushPending],
+    [flushPending, syncMode],
   );
 
   const value = useMemo(
     () => ({
       isOnline,
+      networkAvailableForSync: isOnline || navigatorReportsOnline(),
       pendingCount: pending.length,
       syncing,
+      syncMode,
+      setSyncMode,
+      syncNow,
       enqueuePendingSync,
     }),
-    [isOnline, pending.length, syncing, enqueuePendingSync],
+    [
+      isOnline,
+      pending.length,
+      syncing,
+      syncMode,
+      setSyncMode,
+      syncNow,
+      enqueuePendingSync,
+    ],
   );
 
   return <OfflineSyncContext.Provider value={value}>{children}</OfflineSyncContext.Provider>;

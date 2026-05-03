@@ -10,6 +10,7 @@ import {
   Menu,
   Wifi,
   WifiOff,
+  Loader2,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -32,7 +33,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
+import { toast } from "@/hooks/use-toast";
+import { loadPendingSync } from "@/lib/pendingSyncStorage";
 import { cn } from "@/lib/utils";
 import { isNativeMobileApp } from "@/lib/nativeApp";
 import { EdukambaWordmark } from "@/components/branding/EdukambaWordmark";
@@ -56,9 +62,179 @@ const initialsOf = (name: string) =>
 const nativeIconBtn =
   "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent active:scale-[0.98] [&_svg]:h-[1.15rem] [&_svg]:w-[1.15rem]";
 
+function TopbarConnectivity({ variant }: { variant: "native" | "desktop" }) {
+  const {
+    networkAvailableForSync,
+    pendingCount,
+    syncing,
+    syncMode,
+    setSyncMode,
+    syncNow,
+  } = useOfflineSync();
+
+  const ringBase =
+    variant === "native"
+      ? "relative flex h-10 w-10 shrink-0 touch-manipulation items-center justify-center rounded-full shadow-soft ring-2 ring-offset-2 ring-offset-background"
+      : "relative flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full shadow-soft ring-2 ring-offset-2 ring-offset-background";
+
+  const connectivityTitle = !networkAvailableForSync
+    ? "Sem ligação à Internet — modo offline"
+    : pendingCount > 0
+      ? `${pendingCount} alteração(ões) por sincronizar`
+      : "Ligado · sincronizado";
+
+  const onSyncPress = async () => {
+    if (!networkAvailableForSync) {
+      toast({
+        title: "Sem rede",
+        description: "Não há ligação suficiente para sincronizar.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const beforeLen = loadPendingSync().length;
+    if (beforeLen === 0) {
+      toast({ title: "Nada pendente", description: "Não há alterações por enviar ao servidor." });
+      return;
+    }
+    const { successCount, remainingPending, blocked, httpStatus } = await syncNow();
+
+    if (remainingPending === 0) {
+      toast({
+        title: "Sincronização concluída",
+        description:
+          successCount <= 1
+            ? `${successCount} alteração enviada.`
+            : `${successCount} alterações enviadas.`,
+      });
+      return;
+    }
+    if (successCount === 0) {
+      if (blocked === "no_session") {
+        toast({
+          title: "Sessão expirada",
+          description: `Inicie sessão novamente para enviar os ${remainingPending} pedido(s) na fila.`,
+          variant: "destructive",
+        });
+        return;
+      }
+      if (blocked === "no_network") {
+        toast({
+          title: "Sem rede",
+          description: "Não foi possível contactar o servidor. Verifique a ligação e tente outra vez.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const detail =
+        httpStatus !== undefined
+          ? `Resposta HTTP ${httpStatus}. Ainda há ${remainingPending} na fila.`
+          : `O servidor pode estar indisponível ou há um erro nos dados enviados. Ainda há ${remainingPending} na fila.`;
+      toast({
+        title: "Ainda não foi possível sincronizar",
+        description: detail,
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({
+      title: "Sincronização parcial",
+      description: `Enviámos ${successCount}. Ainda ficam ${remainingPending} pendente(s).`,
+      variant: "destructive",
+    });
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Rede e sincronização. ${connectivityTitle}`}
+          title={connectivityTitle}
+          className={cn(
+            ringBase,
+            "transition-[color,background-color]",
+            !networkAvailableForSync &&
+              "bg-destructive/15 text-destructive ring-destructive/35 dark:bg-destructive/25 dark:text-destructive dark:ring-destructive/40",
+            networkAvailableForSync &&
+              pendingCount > 0 &&
+              "bg-pastel-yellow text-pastel-yellow-foreground ring-pastel-yellow/40",
+            networkAvailableForSync &&
+              pendingCount === 0 &&
+              "bg-emerald-500/15 text-emerald-700 ring-emerald-500/25 dark:bg-emerald-500/20 dark:text-emerald-400 dark:ring-emerald-500/35",
+          )}
+        >
+          {variant === "native" ? (
+            !networkAvailableForSync ? (
+              <WifiOff className="h-[1.15rem] w-[1.15rem]" strokeWidth={1.75} aria-hidden />
+            ) : (
+              <Wifi className="h-[1.15rem] w-[1.15rem]" strokeWidth={1.75} aria-hidden />
+            )
+          ) : !networkAvailableForSync ? (
+            <WifiOff className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+          ) : (
+            <Cloud className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+          )}
+          {variant === "native" && pendingCount > 0 && (
+            <span
+              className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-600 px-0.5 text-[10px] font-bold leading-none text-white shadow-sm ring-2 ring-card"
+              aria-hidden
+            >
+              {pendingCount > 9 ? "9+" : pendingCount}
+            </span>
+          )}
+          {syncing ? (
+            <span className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-card/85 dark:bg-background/85">
+              <Loader2 className="h-[1rem] w-[1rem] shrink-0 animate-spin text-primary" aria-hidden />
+            </span>
+          ) : null}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="z-[100] w-[min(calc(100vw-2rem),20rem)] space-y-3 p-4">
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-foreground">Sincronização</p>
+          <p className="text-xs text-muted-foreground">
+            Modo automático envia assim que há rede. Modo manual só quando tocar em «Sincronizar agora».
+          </p>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <Label htmlFor="offline-sync-auto" className="cursor-pointer text-sm font-normal">
+            Automático
+          </Label>
+          <Switch
+            id="offline-sync-auto"
+            checked={syncMode === "auto"}
+            onCheckedChange={(v) => setSyncMode(v ? "auto" : "manual")}
+          />
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full gap-2"
+          disabled={syncing || !networkAvailableForSync}
+          onClick={() => void onSyncPress()}
+        >
+          {syncing ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              A sincronizar…
+            </>
+          ) : (
+            <>Sincronizar agora</>
+          )}
+        </Button>
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          {pendingCount > 0
+            ? `${pendingCount} pendente${pendingCount !== 1 ? "s" : ""} na fila.`
+            : "Sem alterações offline por enviar."}
+        </p>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) => {
   const native = isNativeMobileApp();
-  const { pendingCount, isOnline } = useOfflineSync();
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -120,12 +296,6 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
   const displayRole = profile?.role ? roleLabels[profile.role] ?? profile.role : "";
   const avatarUrl = profile?.avatar_url ?? "";
 
-  const connectivityTitle = !isOnline
-    ? "Sem ligação à Internet — modo offline"
-    : pendingCount > 0
-      ? `${pendingCount} alteração(ões) por sincronizar`
-      : "Ligado · sincronizado";
-
   if (native) {
     return (
       <header className="flex flex-col gap-4">
@@ -160,36 +330,7 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
               <Search strokeWidth={1.75} />
             </button>
 
-            <div
-              className={cn(
-                "relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-soft ring-2 ring-offset-2 ring-offset-background",
-                !isOnline &&
-                  "bg-destructive/15 text-destructive ring-destructive/35 dark:bg-destructive/25 dark:text-destructive dark:ring-destructive/40",
-                isOnline &&
-                  pendingCount > 0 &&
-                  "bg-pastel-yellow text-pastel-yellow-foreground ring-pastel-yellow/40",
-                isOnline &&
-                  pendingCount === 0 &&
-                  "bg-emerald-500/15 text-emerald-700 ring-emerald-500/25 dark:bg-emerald-500/20 dark:text-emerald-400 dark:ring-emerald-500/35",
-              )}
-              title={connectivityTitle}
-              role="status"
-              aria-live="polite"
-            >
-              {!isOnline ? (
-                <WifiOff className="h-[1.15rem] w-[1.15rem]" strokeWidth={1.75} aria-hidden />
-              ) : (
-                <Wifi className="h-[1.15rem] w-[1.15rem]" strokeWidth={1.75} aria-hidden />
-              )}
-              {pendingCount > 0 && (
-                <span
-                  className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-600 px-0.5 text-[10px] font-bold leading-none text-white shadow-sm ring-2 ring-card"
-                  aria-hidden
-                >
-                  {pendingCount > 9 ? "9+" : pendingCount}
-                </span>
-              )}
-            </div>
+            <TopbarConnectivity variant="native" />
 
             <Link to="/chat" aria-label="Chat" className={cn(nativeIconBtn)}>
               <MessageSquare strokeWidth={1.75} />
@@ -358,34 +499,7 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
                 : `${trialDaysLeft} ${trialDaysLeft === 1 ? "dia" : "dias"} de trial`}
             </div>
           )}
-          <div
-            className={cn(
-              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full shadow-soft ring-2 ring-offset-2 ring-offset-background",
-              !isOnline &&
-                "bg-destructive/15 text-destructive ring-destructive/35 dark:bg-destructive/25 dark:text-destructive",
-              isOnline &&
-                pendingCount > 0 &&
-                "bg-pastel-yellow text-pastel-yellow-foreground ring-pastel-yellow/40",
-              isOnline &&
-                pendingCount === 0 &&
-                "bg-emerald-500/15 text-emerald-700 ring-emerald-500/25 dark:bg-emerald-500/20 dark:text-emerald-400",
-            )}
-            title={
-              !isOnline
-                ? "Sem ligação à Internet — modo offline"
-                : pendingCount > 0
-                  ? `${pendingCount} alteração(ões) pendente(s) de sincronização`
-                  : "Sincronizado com o servidor"
-            }
-            role="status"
-            aria-live="polite"
-          >
-            {!isOnline ? (
-              <WifiOff className="h-5 w-5" strokeWidth={1.75} aria-hidden />
-            ) : (
-              <Cloud className="h-5 w-5" strokeWidth={1.75} aria-hidden />
-            )}
-          </div>
+          <TopbarConnectivity variant="desktop" />
           <Link
             to="/chat"
             aria-label="Chat"
