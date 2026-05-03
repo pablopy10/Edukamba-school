@@ -2,6 +2,10 @@ import type { QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { QUERY_DAY_MS } from "@/lib/queryClient";
 import {
+  fetchTeacherScheduleScope,
+  teacherScheduleScopeQueryKey,
+} from "@/lib/offline/teacherScheduleScope";
+import {
   fetchTeacherAlunosQuery,
   fetchTeacherTurmasQuery,
   teacherAlunosQueryKey,
@@ -48,19 +52,15 @@ export async function prefetchTeacherData(
 ): Promise<void> {
   const { userId, schoolId, academicYearId } = args;
 
-  const schedRes = await supabase
-    .from("schedules")
-    .select("classroom_id")
-    .eq("teacher_id", userId)
-    .eq("academic_year_id", academicYearId);
+  const scope = await fetchTeacherScheduleScope(userId, academicYearId);
+  const { classroomIds, subjectId } = scope;
 
-  const classroomIds = Array.from(
-    new Set(
-      (schedRes.data ?? [])
-        .map((s: { classroom_id: string | null }) => s.classroom_id)
-        .filter((id): id is string => !!id),
-    ),
-  );
+  await qc.prefetchQuery({
+    queryKey: teacherScheduleScopeQueryKey(userId, academicYearId),
+    queryFn: () => Promise.resolve(scope),
+    staleTime: QUERY_DAY_MS * 24,
+    networkMode: "offlineFirst",
+  });
 
   if (classroomIds.length === 0) return;
 
@@ -98,8 +98,6 @@ export async function prefetchTeacherData(
     networkMode: "offlineFirst",
   });
 
-  const { data: teacherRow } = await supabase.from("teachers").select("subject_id").eq("profile_id", userId).maybeSingle();
-  const subjectId = (teacherRow?.subject_id as string | null) ?? null;
   if (subjectId) {
     const termRows = await qc.fetchQuery({
       queryKey: academicTermsQueryKey(schoolId, academicYearId),

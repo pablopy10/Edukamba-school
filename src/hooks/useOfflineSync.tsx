@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { toast } from "sonner";
 import { onlineManager } from "@tanstack/react-query";
 import { Capacitor } from "@capacitor/core";
 import { Network } from "@capacitor/network";
@@ -293,6 +294,9 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
           window.dispatchEvent(new CustomEvent(OFFLINE_SYNC_FLUSH_EVENT));
           onlineManager.setOnline(true);
           await queryClient.invalidateQueries();
+          toast.success("Sucesso", {
+            description: "As alterações em fila foram enviadas para o servidor.",
+          });
         }
       } finally {
         setSyncing(false);

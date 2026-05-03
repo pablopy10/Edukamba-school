@@ -596,7 +596,9 @@ const Presencas = () => {
       const existing = vars.existingBefore;
 
       const offlineToast = () => {
-        toast.success("Guardado offline — será sincronizado quando voltar a haver rede.");
+        toast.message("Pendente para envio", {
+          description: "Alteração guardada neste telemóvel — será sincronizada quando voltar a haver rede.",
+        });
       };
 
       if (!isOnline) {
@@ -831,7 +833,9 @@ const Presencas = () => {
             },
           }));
         }
-        toast.success("Guardado offline — será sincronizado quando voltar a haver rede.");
+        toast.message("Pendente para envio", {
+          description: "Justificação na fila — será enviada com rede.",
+        });
         setJustifyTarget(null);
         setJustifyText("");
         return;
@@ -1075,7 +1079,7 @@ const Presencas = () => {
                             {!isSaving && row && attendanceRowQueuedOffline(row) && (
                               <p className="mt-2 flex w-full shrink-0 basis-full items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
                                 <Cloud className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                                Pendente — sincroniza com rede
+                                Pendente para envio
                               </p>
                             )}
                           </div>

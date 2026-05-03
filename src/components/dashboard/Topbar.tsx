@@ -78,10 +78,10 @@ function TopbarConnectivity({ variant }: { variant: "native" | "desktop" }) {
       : "relative flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full shadow-soft ring-2 ring-offset-2 ring-offset-background";
 
   const connectivityTitle = !networkAvailableForSync
-    ? "Sem ligação à Internet — modo offline"
+    ? "Sem Internet — modo offline"
     : pendingCount > 0
-      ? `${pendingCount} alteração(ões) por sincronizar`
-      : "Ligado · sincronizado";
+      ? `Pendente para envio (${pendingCount})`
+      : "Sucesso — sincronizado";
 
   const onSyncPress = async () => {
     if (!networkAvailableForSync) {
@@ -100,13 +100,6 @@ function TopbarConnectivity({ variant }: { variant: "native" | "desktop" }) {
     const { successCount, remainingPending, blocked, httpStatus } = await syncNow();
 
     if (remainingPending === 0) {
-      toast({
-        title: "Sincronização concluída",
-        description:
-          successCount <= 1
-            ? `${successCount} alteração enviada.`
-            : `${successCount} alterações enviadas.`,
-      });
       return;
     }
     if (successCount === 0) {
@@ -229,8 +222,8 @@ function TopbarConnectivity({ variant }: { variant: "native" | "desktop" }) {
         </Button>
         <p className="text-[11px] leading-snug text-muted-foreground">
           {pendingCount > 0
-            ? `${pendingCount} pendente${pendingCount !== 1 ? "s" : ""} na fila.`
-            : "Sem alterações offline por enviar."}
+            ? `${pendingCount} alteração(ões) pendente(s) para envio.`
+            : "Sucesso — sem alterações por enviar."}
         </p>
       </PopoverContent>
     </Popover>

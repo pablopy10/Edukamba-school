@@ -8,10 +8,10 @@ export function OfflineSyncStatusBar({ className }: { className?: string }) {
 
   const hasQueue = pendingCount > 0;
   const label = hasQueue
-    ? `${pendingCount} alteração(ões) por sincronizar no telemóvel`
+    ? `Pendente para envio — ${pendingCount} alteração(ões)`
     : syncing
-      ? "A sincronizar com o servidor…"
-      : "Sincronizado com o servidor";
+      ? "A sincronizar…"
+      : "Sucesso — sincronizado";
 
   return (
     <div
