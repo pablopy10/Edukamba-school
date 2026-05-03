@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Search, Plus, Pencil, Trash2, Loader2, Upload } from "lucide-react";
 import { cn, sortByName } from "@/lib/utils";
 import { Link } from "react-router-dom";
@@ -9,12 +10,18 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "@/hooks/use-toast";
 import { ExcelImportDialog } from "@/components/shared/ExcelImportDialog";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { Button } from "@/components/ui/button";
+import {
+  fetchTeacherAlunosQuery,
+  teacherAlunosQueryKey,
+} from "@/lib/offline/teacherListQueries";
+import { queryClient } from "@/lib/queryClient";
 
 type ClassroomOpt = { id: string; name: string };
 
@@ -31,6 +38,7 @@ const initialsOf = (name: string) =>
 
 const Alunos = () => {
   const native = isNativeMobileApp();
+  const { user } = useAuth();
   const { selectedYearId } = useAcademicYear();
   const { isParent, childIds, loading: parentLoading } = useParentChildren();
   const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
@@ -49,23 +57,53 @@ const Alunos = () => {
   const teacherNative = native && isTeacher;
   const showBulkChrome = !isParent && !isTeacher;
 
-  /** Professor na app nativa: garantir turma válida no Select (sem item «todas»). */
-  const resolvedClassroomFilter = useMemo(() => {
-    if (teacherNative && classrooms.length > 0 && (filterClassroom === "all" || !classrooms.some((c) => c.id === filterClassroom))) {
-      return classrooms[0].id;
-    }
-    return filterClassroom;
-  }, [teacherNative, classrooms, filterClassroom]);
+  const teacherAlunosQuery = useQuery({
+    queryKey: teacherAlunosQueryKey(
+      user?.id ?? "__pending__",
+      selectedYearId ?? "__pending__",
+      teacherClassroomIds,
+    ),
+    queryFn: () =>
+      fetchTeacherAlunosQuery({
+        academicYearId: selectedYearId!,
+        classroomIds: teacherClassroomIds,
+      }),
+    enabled:
+      isTeacher &&
+      !!user?.id &&
+      !!selectedYearId &&
+      !teacherLoading &&
+      teacherClassroomIds.length > 0,
+    networkMode: "offlineFirst",
+  });
+
+  const listStudents = isTeacher ? (teacherAlunosQuery.data?.students ?? []) : students;
+  const listClassrooms = isTeacher ? (teacherAlunosQuery.data?.classrooms ?? []) : classrooms;
 
   useEffect(() => {
-    if (!teacherNative || classrooms.length === 0) return;
-    const first = classrooms[0].id;
-    if (filterClassroom === "all" || !classrooms.some((c) => c.id === filterClassroom)) {
+    if (isTeacher) {
+      setLoading(false);
+    }
+  }, [isTeacher]);
+
+  /** Professor na app nativa: garantir turma válida no Select (sem item «todas»). */
+  const resolvedClassroomFilter = useMemo(() => {
+    if (teacherNative && listClassrooms.length > 0 && (filterClassroom === "all" || !listClassrooms.some((c) => c.id === filterClassroom))) {
+      return listClassrooms[0].id;
+    }
+    return filterClassroom;
+  }, [teacherNative, listClassrooms, filterClassroom]);
+
+  useEffect(() => {
+    if (!teacherNative || listClassrooms.length === 0) return;
+    const first = listClassrooms[0].id;
+    if (filterClassroom === "all" || !listClassrooms.some((c) => c.id === filterClassroom)) {
       setFilterClassroom(first);
     }
-  }, [teacherNative, classrooms, filterClassroom]);
+  }, [teacherNative, listClassrooms, filterClassroom]);
 
   const load = async () => {
+    if (isTeacher) return;
     setLoading(true);
     let classroomsQuery = supabase.from("classrooms").select("id, name, academic_year_id").order("name");
     if (selectedYearId) classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
@@ -82,15 +120,6 @@ const Alunos = () => {
       }
       studentsQuery = studentsQuery.in("id", childIds);
     }
-    if (isTeacher) {
-      if (teacherClassroomIds.length === 0) {
-        setStudents([]);
-        setClassrooms([]);
-        setLoading(false);
-        return;
-      }
-      studentsQuery = studentsQuery.in("classroom_id", teacherClassroomIds);
-    }
     const [{ data: sData, error: sErr }, { data: cData }] = await Promise.all([
       studentsQuery,
       classroomsQuery,
@@ -100,28 +129,44 @@ const Alunos = () => {
     }
     setStudents((sData ?? []) as unknown as StudentRow[]);
     let classroomList = (cData ?? []) as ClassroomOpt[];
-    if (isTeacher) classroomList = classroomList.filter((c) => teacherClassroomIds.includes(c.id));
     const sortedClassrooms = sortByName([...classroomList]);
     setClassrooms(sortedClassrooms);
-
-    if (teacherNative && sortedClassrooms.length > 0) {
-      setFilterClassroom((prev) =>
-        prev !== "all" && sortedClassrooms.some((c) => c.id === prev) ? prev : sortedClassrooms[0].id,
-      );
-    }
 
     setLoading(false);
   };
 
   useEffect(() => {
-    if (parentLoading || teacherLoading) return;
+    if (isTeacher || parentLoading || teacherLoading) return;
     void load();
-  }, [selectedYearId, parentLoading, isParent, childIds.join(","), teacherLoading, isTeacher, teacherClassroomIds.join(",")]);
+  }, [selectedYearId, parentLoading, isParent, childIds.join(","), teacherLoading]);
 
-  const classroomName = (id: string | null) => classrooms.find((c) => c.id === id)?.name ?? "—";
+  const refreshAfterMutation = async () => {
+    if (isTeacher && user?.id) {
+      await queryClient.invalidateQueries({
+        queryKey: ["alunos", user.id],
+        exact: false,
+      });
+      return;
+    }
+    await load();
+  };
+
+  const teacherAwaitingHydration =
+    isTeacher &&
+    !!user?.id &&
+    !!selectedYearId &&
+    !teacherLoading &&
+    teacherClassroomIds.length > 0 &&
+    teacherAlunosQuery.data === undefined &&
+    teacherAlunosQuery.isPending;
+
+  /** Apenas admin/encarregado: o professor usa cache React Query + skeleton acima. */
+  const adminListFetching = !isTeacher && loading;
+
+  const classroomName = (id: string | null) => listClassrooms.find((c) => c.id === id)?.name ?? "—";
 
   const filtered = useMemo(() => {
-    return students.filter((s) => {
+    return listStudents.filter((s) => {
       const matchSearch =
         !search ||
         [s.full_name, s.email ?? "", s.enrollment_number ?? "", classroomName(s.classroom_id)].some((f) =>
@@ -130,7 +175,7 @@ const Alunos = () => {
       const matchClass = resolvedClassroomFilter === "all" || s.classroom_id === resolvedClassroomFilter;
       return matchSearch && matchClass;
     });
-  }, [students, search, resolvedClassroomFilter, classrooms]);
+  }, [listStudents, search, resolvedClassroomFilter, listClassrooms]);
 
   const toggle = (id: string) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
@@ -145,20 +190,20 @@ const Alunos = () => {
     } else {
       toast({ title: "Aluno removido" });
       setDeleting(null);
-      void load();
+      void refreshAfterMutation();
     }
   };
 
   const stats = useMemo(() => {
     return {
-      total: students.length,
-      active: students.length,
-      newThisMonth: students.filter(() => false).length,
+      total: listStudents.length,
+      active: listStudents.length,
+      newThisMonth: listStudents.filter(() => false).length,
       inactive: 0,
     };
-  }, [students]);
+  }, [listStudents]);
 
-  if (parentLoading) return <PageLoadingSkeleton />;
+  if (parentLoading || teacherAwaitingHydration) return <PageLoadingSkeleton />;
 
   const renderStudentCard = (s: StudentRow) => {
     const isSelected = selected.includes(s.id);
@@ -302,7 +347,7 @@ const Alunos = () => {
           <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card">
             <div className={cn("min-w-[200px] flex-1", native && "min-w-0 w-full")}>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Turma</label>
-              {teacherNative && classrooms.length === 0 ? (
+              {teacherNative && listClassrooms.length === 0 ? (
                 <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
                   Sem turmas neste ano letivo.
                 </p>
@@ -317,7 +362,7 @@ const Alunos = () => {
                 </SelectTrigger>
                 <SelectContent>
                   {!teacherNative && <SelectItem value="all">Todas as turmas</SelectItem>}
-                  {classrooms.map((c) => (
+                  {listClassrooms.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.name}
                     </SelectItem>
@@ -381,15 +426,15 @@ const Alunos = () => {
                   Seleccionar todos ({filtered.length})
                 </label>
               )}
-              {loading && (
+              {adminListFetching && (
                 <div className="flex justify-center py-12 text-muted-foreground">
                   <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
                 </div>
               )}
-              {!loading && filtered.length === 0 && (
+              {!adminListFetching && filtered.length === 0 && (
                 <p className="py-10 text-center text-sm text-muted-foreground">Nenhum aluno encontrado.</p>
               )}
-              {!loading && filtered.map(renderStudentCard)}
+              {!adminListFetching && filtered.map(renderStudentCard)}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -412,21 +457,21 @@ const Alunos = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {loading && (
+                  {adminListFetching && (
                     <tr>
                       <td colSpan={6} className="py-10 text-center text-muted-foreground">
                         <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                       </td>
                     </tr>
                   )}
-                  {!loading && filtered.length === 0 && (
+                  {!adminListFetching && filtered.length === 0 && (
                     <tr>
                       <td colSpan={6} className="py-10 text-center text-muted-foreground">
                         Nenhum aluno encontrado.
                       </td>
                     </tr>
                   )}
-                  {!loading &&
+                  {!adminListFetching &&
                     filtered.map((s) => {
                       const isSelected = selected.includes(s.id);
                       const initials = initialsOf(s.full_name) || "??";
@@ -515,7 +560,7 @@ const Alunos = () => {
           {/* Pagination */}
           <div className="flex flex-col items-center justify-between gap-3 border-t border-border p-5 sm:flex-row">
             <p className="text-xs text-muted-foreground">
-              A mostrar {filtered.length} de {students.length} alunos
+              A mostrar {filtered.length} de {listStudents.length} alunos
             </p>
           </div>
         </div>
@@ -535,7 +580,7 @@ const Alunos = () => {
         </NativeMobileFabPortal>
       )}
 
-      <StudentFormDialog open={formOpen} onOpenChange={setFormOpen} classrooms={classrooms} student={editing} onSaved={load} />
+      <StudentFormDialog open={formOpen} onOpenChange={setFormOpen} classrooms={listClassrooms} student={editing} onSaved={refreshAfterMutation} />
 
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
@@ -585,7 +630,7 @@ const Alunos = () => {
           if (!schoolId) throw new Error("Escola não encontrada");
           let classroom_id: string | null = null;
           if (row.classroom) {
-            const match = classrooms.find((c) => c.name.toLowerCase() === row.classroom.toLowerCase());
+            const match = listClassrooms.find((c) => c.name.toLowerCase() === row.classroom.toLowerCase());
             classroom_id = match?.id ?? null;
           }
           let gender: string | null = null;

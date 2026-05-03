@@ -31,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
+import { QUERY_DAY_MS } from "@/lib/queryClient";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { OFFLINE_SYNC_FLUSH_EVENT, useOfflineSync } from "@/hooks/useOfflineSync";
@@ -577,6 +578,8 @@ const Presencas = () => {
   };
 
   const applyStatusMutation = useMutation({
+    networkMode: "always",
+    gcTime: QUERY_DAY_MS * 14,
     mutationFn: async (vars: ApplyAttendanceVars) => {
       const { student, date, next, cellKey } = vars;
       const attendanceBase = supabaseRestTable("attendance");
@@ -656,6 +659,12 @@ const Presencas = () => {
       return "online";
     },
     onMutate: async (vars) => {
+      console.log("[offline-sync debug][Presencas applyStatus] onMutate", {
+        cellKey: vars.cellKey,
+        next: vars.next,
+        isOnlineHook: isOnline,
+        navigatorOnLine: typeof navigator !== "undefined" ? navigator.onLine : undefined,
+      });
       setSavingKey(vars.cellKey);
       await queryClient.cancelQueries({ queryKey: attendanceQueryKeyResolved });
       const previousSnapshot =
@@ -686,6 +695,12 @@ const Presencas = () => {
       });
 
       return { previousSnapshot };
+    },
+    onSuccess: (mode, vars) => {
+      console.log("[offline-sync debug][Presencas applyStatus] onSuccess", {
+        mode,
+        cellKey: vars.cellKey,
+      });
     },
     onError: (e, _vars, ctx) => {
       if (ctx?.previousSnapshot !== undefined) {

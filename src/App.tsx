@@ -1,5 +1,6 @@
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { ResumePausedMutationsBridge } from "@/components/ResumePausedMutationsBridge";
 import { QueryPersistenceAuthSync } from "@/components/QueryPersistenceAuthSync";
 import { persistQueryOptions } from "@/lib/persistQueryOptions";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -53,6 +54,7 @@ import { queryClient } from "@/lib/queryClient";
 
 const App = () => (
   <PersistQueryClientProvider client={queryClient} persistOptions={persistQueryOptions}>
+    <ResumePausedMutationsBridge />
     <QueryPersistenceAuthSync />
     <OfflineSyncProvider>
       <ModulesProvider>

@@ -1,14 +1,15 @@
 import { QueryClient } from "@tanstack/react-query";
 
-const DAY_MS = 1000 * 60 * 60 * 24;
+export const QUERY_DAY_MS = 1000 * 60 * 60 * 24;
 
 /** Cliente TanStack Query único para a app (Horários, Perfil, Presenças persistidas, etc.). */
 export function createAppQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: DAY_MS * 24,
-        gcTime: DAY_MS * 14,
+        staleTime: QUERY_DAY_MS * 24,
+        gcTime: QUERY_DAY_MS * 14,
+        /** Cache persistido primeiro; evita ficar sem dados quando a UI nativa marca offline. */
         networkMode: "offlineFirst",
         refetchOnReconnect: true,
         refetchOnMount: false,
@@ -19,7 +20,12 @@ export function createAppQueryClient() {
         },
       },
       mutations: {
-        networkMode: "offlineFirst",
+        /**
+         * Obriga a correr mutationFn/onMutate mesmo com navigator offline ou Capacitor em falha —
+         * as páginas (Presenças, etc.) fazem enqueue na fila manualmente dentro do mutationFn.
+         */
+        networkMode: "always",
+        gcTime: QUERY_DAY_MS * 14,
         retry: (failureCount) => {
           if (typeof navigator !== "undefined" && !navigator.onLine) return false;
           return failureCount < 1;

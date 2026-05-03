@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Search, Plus, Users, Presentation, Pencil, Trash2, Loader2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,11 +13,18 @@ import {
 import { ClassroomFormDialog, ClassroomRow } from "@/components/turmas/ClassroomFormDialog";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { ExcelImportDialog } from "@/components/shared/ExcelImportDialog";
+import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
+import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { isNativeMobileApp, showPageKpiCards, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { Button } from "@/components/ui/button";
+import {
+  fetchTeacherTurmasQuery,
+  teacherTurmasQueryKey,
+} from "@/lib/offline/teacherListQueries";
+import { queryClient } from "@/lib/queryClient";
 
 type ClassroomWithJoins = ClassroomRow & {
   courses?: { id: string; name: string } | null;
@@ -41,9 +49,40 @@ const periodStyles: Record<string, string> = {
 const Turmas = () => {
   const native = isNativeMobileApp();
   const { selectedYearId } = useAcademicYear();
+  const { user } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
   const isTeacher = role === "TEACHER";
   const { classroomIds: teacherClassroomIds, loading: teacherClassesLoading } = useTeacherClassrooms();
+
+  const teacherTurmasQuery = useQuery({
+    queryKey: teacherTurmasQueryKey(
+      user?.id ?? "__pending__",
+      selectedYearId ?? "__pending__",
+      teacherClassroomIds,
+    ),
+    queryFn: () =>
+      fetchTeacherTurmasQuery({
+        academicYearId: selectedYearId!,
+        classroomIds: teacherClassroomIds,
+      }),
+    enabled:
+      isTeacher &&
+      !!user?.id &&
+      !!selectedYearId &&
+      !teacherClassesLoading &&
+      teacherClassroomIds.length > 0,
+    networkMode: "offlineFirst",
+  });
+
+  const teacherAwaitingHydration =
+    isTeacher &&
+    !!user?.id &&
+    !!selectedYearId &&
+    !teacherClassesLoading &&
+    teacherClassroomIds.length > 0 &&
+    teacherTurmasQuery.data === undefined &&
+    teacherTurmasQuery.isPending;
+
   const [search, setSearch] = useState("");
   const [periodFilter, setPeriodFilter] = useState<string>("all");
   const [courseFilter, setCourseFilter] = useState<string>("all");
@@ -56,7 +95,18 @@ const Turmas = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
+  const listClassrooms = isTeacher ? (teacherTurmasQuery.data?.classrooms ?? []) : classrooms;
+  const listCourses = isTeacher ? (teacherTurmasQuery.data?.courses ?? []) : courses;
+  const listYears = isTeacher ? (teacherTurmasQuery.data?.years ?? []) : years;
+
+  useEffect(() => {
+    if (isTeacher) setLoading(false);
+  }, [isTeacher]);
+
+  const adminTurmasFetching = !isTeacher && loading;
+
   const load = useCallback(async () => {
+    if (isTeacher) return;
     setLoading(true);
     try {
       const classroomSelect = `id, name, grade_level, period, course_id, academic_year_id, school_id,
@@ -69,17 +119,6 @@ const Turmas = () => {
         { data: students, error: studentsError },
       ] = await Promise.all([
         (async () => {
-          if (isTeacher) {
-            if (!selectedYearId || teacherClassroomIds.length === 0) {
-              return { data: [] as Record<string, unknown>[] | null, error: null };
-            }
-            return supabase
-              .from("classrooms")
-              .select(classroomSelect)
-              .eq("academic_year_id", selectedYearId)
-              .in("id", teacherClassroomIds)
-              .order("name", { ascending: true });
-          }
           let q = supabase.from("classrooms").select(classroomSelect).order("name", { ascending: true });
           if (selectedYearId) q = q.eq("academic_year_id", selectedYearId);
           return q;
@@ -102,18 +141,13 @@ const Turmas = () => {
       });
 
       setClassrooms(
-        (list as any[]).map((c: any) => ({
+        (list as Record<string, unknown>[]).map((c) => ({
           ...c,
-          studentCount: studentCountByClass.get(c.id) ?? 0,
-        })),
+          studentCount: studentCountByClass.get(c.id as string) ?? 0,
+        })) as ClassroomWithJoins[],
       );
 
-      if (isTeacher) {
-        const courseIds = new Set((list as any[]).map((row: { course_id: string | null }) => row.course_id).filter(Boolean));
-        setCourses((cs ?? []).filter((course) => courseIds.has(course.id)));
-      } else {
-        setCourses(cs ?? []);
-      }
+      setCourses(cs ?? []);
       setYears(ys ?? []);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -121,33 +155,33 @@ const Turmas = () => {
     } finally {
       setLoading(false);
     }
-  }, [isTeacher, selectedYearId, teacherClassroomIds]);
+  }, [isTeacher, selectedYearId]);
 
   useEffect(() => {
-    if (roleLoading) return;
-    if (isTeacher && teacherClassesLoading) {
-      setLoading(true);
+    if (roleLoading || isTeacher) return;
+    void load();
+  }, [roleLoading, isTeacher, load, selectedYearId]);
+
+  const refreshAfterMutation = async () => {
+    if (isTeacher && user?.id) {
+      await queryClient.invalidateQueries({
+        queryKey: ["turmas", user.id],
+        exact: false,
+      });
       return;
     }
-    void load();
-  }, [
-    roleLoading,
-    isTeacher,
-    teacherClassesLoading,
-    load,
-    selectedYearId,
-    teacherClassroomIds.join(","),
-  ]);
+    await load();
+  };
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    return classrooms.filter((c) => {
+    return listClassrooms.filter((c) => {
       if (periodFilter !== "all" && (c.period ?? "") !== periodFilter) return false;
       if (courseFilter !== "all" && (c.course_id ?? "") !== courseFilter) return false;
       if (!q) return true;
       return [c.name, c.grade_level ?? "", c.courses?.name ?? "", c.period ?? ""].some((f) => f.toLowerCase().includes(q));
     });
-  }, [classrooms, search, periodFilter, courseFilter]);
+  }, [listClassrooms, search, periodFilter, courseFilter]);
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -156,19 +190,24 @@ const Turmas = () => {
       toast({ title: "Erro a eliminar", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Turma eliminada" });
-      load();
+      await refreshAfterMutation();
     }
     setDeleteId(null);
   };
 
   const colorFor = (id: string) => palette[id.charCodeAt(0) % palette.length];
 
-  const stats = useMemo(() => ({
-    total: classrooms.length,
-    manha: classrooms.filter((c) => c.period === "Manhã").length,
-    tarde: classrooms.filter((c) => c.period === "Tarde").length,
-    noite: classrooms.filter((c) => c.period === "Noite").length,
-  }), [classrooms]);
+  const stats = useMemo(
+    () => ({
+      total: listClassrooms.length,
+      manha: listClassrooms.filter((c) => c.period === "Manhã").length,
+      tarde: listClassrooms.filter((c) => c.period === "Tarde").length,
+      noite: listClassrooms.filter((c) => c.period === "Noite").length,
+    }),
+    [listClassrooms],
+  );
+
+  if (roleLoading || teacherAwaitingHydration) return <PageLoadingSkeleton />;
 
   return (
     <>
@@ -239,7 +278,7 @@ const Turmas = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos os cursos</SelectItem>
-                  {courses.map((c) => (
+                  {listCourses.map((c) => (
                     <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -266,7 +305,7 @@ const Turmas = () => {
         </div>
         )}
 
-        {loading ? (
+        {adminTurmasFetching ? (
           <div className="flex items-center justify-center py-20 text-muted-foreground">
             <Loader2 className="mr-2 h-5 w-5 animate-spin" /> A carregar...
           </div>
@@ -391,10 +430,10 @@ const Turmas = () => {
       <ClassroomFormDialog
         open={formOpen}
         onOpenChange={setFormOpen}
-        courses={courses}
-        years={years}
+        courses={listCourses}
+        years={listYears}
         classroom={editing}
-        onSaved={load}
+        onSaved={refreshAfterMutation}
       />
 
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
@@ -436,16 +475,16 @@ const Turmas = () => {
           if (!schoolId) throw new Error("Escola não encontrada");
           let academicYearId: string | undefined;
           if (row.academic_year) {
-            const match = years.find((y) => y.label.toLowerCase() === row.academic_year.toLowerCase());
+            const match = listYears.find((y) => y.label.toLowerCase() === row.academic_year.toLowerCase());
             if (!match) throw new Error(`Ano letivo "${row.academic_year}" não encontrado`);
             academicYearId = match.id;
           } else {
-            academicYearId = selectedYearId || years.find((y) => y.is_active)?.id || years[0]?.id;
+            academicYearId = selectedYearId || listYears.find((y) => y.is_active)?.id || listYears[0]?.id;
           }
           if (!academicYearId) throw new Error("Sem ano lectivo activo");
           let course_id: string | null = null;
           if (row.course) {
-            const match = courses.find((c) => c.name.toLowerCase() === row.course.toLowerCase());
+            const match = listCourses.find((c) => c.name.toLowerCase() === row.course.toLowerCase());
             course_id = match?.id ?? null;
           }
           let period: string | null = null;
@@ -463,7 +502,7 @@ const Turmas = () => {
           });
           if (error) throw new Error(error.message);
         }}
-        onCompleted={load}
+        onCompleted={refreshAfterMutation}
       />
       )}
     </>

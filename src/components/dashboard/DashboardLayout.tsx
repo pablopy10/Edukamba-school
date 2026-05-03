@@ -1,4 +1,5 @@
 import { ReactNode, useState } from "react";
+import { TeacherSessionPrefetch } from "@/components/TeacherSessionPrefetch";
 import { OfflineSyncStatusBar } from "./OfflineSyncStatusBar";
 import { Sidebar, SidebarMobileDrawer } from "./Sidebar";
 import { Topbar } from "./Topbar";
@@ -10,6 +11,7 @@ export const DashboardLayout = ({ children }: { children: ReactNode }) => {
 
   return (
     <div className="flex min-h-screen w-full bg-background font-sans text-foreground">
+      <TeacherSessionPrefetch />
       <Sidebar />
       <SidebarMobileDrawer open={mobileMenuOpen} onOpenChange={setMobileMenuOpen} />
       <main className="flex-1 overflow-x-hidden pb-[calc(5.25rem+env(safe-area-inset-bottom,0px))] lg:pb-0">

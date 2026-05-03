@@ -10,6 +10,7 @@ import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { OFFLINE_SYNC_FLUSH_EVENT, useOfflineSync } from "@/hooks/useOfflineSync";
 import { supabaseRestTable } from "@/lib/supabaseRestUrls";
 import { showPageKpiCards } from "@/lib/nativeApp";
+import { QUERY_DAY_MS } from "@/lib/queryClient";
 
 type AssessmentInfo = {
   id: string;
@@ -226,6 +227,8 @@ const AvaliacaoNotas = () => {
   };
 
   const saveGradesMutation = useMutation({
+    networkMode: "always",
+    gcTime: QUERY_DAY_MS * 14,
     mutationFn: async ({
       toInsert,
       toUpdate,
@@ -285,6 +288,12 @@ const AvaliacaoNotas = () => {
       return "online";
     },
     onMutate: async (vars) => {
+      console.log("[offline-sync debug][AvaliacaoNotas saveGrades] onMutate", {
+        toInsert: vars.toInsert.length,
+        toUpdate: vars.toUpdate.length,
+        toDelete: vars.toDelete.length,
+        navigatorOnLine: typeof navigator !== "undefined" ? navigator.onLine : undefined,
+      });
       const snapshot = { ...rows };
       setRows(vars.optimisticRows);
       return { snapshot };
@@ -298,6 +307,7 @@ const AvaliacaoNotas = () => {
       });
     },
     onSuccess: async (mode) => {
+      console.log("[offline-sync debug][AvaliacaoNotas saveGrades] onSuccess", { mode });
       if (mode === "online") await load();
     },
   });

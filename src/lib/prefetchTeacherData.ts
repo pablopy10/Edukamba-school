@@ -1,6 +1,12 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  fetchTeacherAlunosQuery,
+  fetchTeacherTurmasQuery,
+  teacherAlunosQueryKey,
+  teacherTurmasQueryKey,
+} from "@/lib/offline/teacherListQueries";
+import {
   defaultAttendancePrefetchRange,
   fetchPresencasAttendance,
   fetchPresencasStudents,
@@ -49,6 +55,17 @@ export async function prefetchTeacherData(
   );
 
   if (classroomIds.length === 0) return;
+
+  await qc.prefetchQuery({
+    queryKey: teacherAlunosQueryKey(userId, academicYearId, classroomIds),
+    queryFn: () => fetchTeacherAlunosQuery({ academicYearId, classroomIds }),
+    networkMode: "offlineFirst",
+  });
+  await qc.prefetchQuery({
+    queryKey: teacherTurmasQueryKey(userId, academicYearId, classroomIds),
+    queryFn: () => fetchTeacherTurmasQuery({ academicYearId, classroomIds }),
+    networkMode: "offlineFirst",
+  });
 
   const { data: rooms, error: roomsErr } = await supabase
     .from("classrooms")
