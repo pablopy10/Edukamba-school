@@ -629,12 +629,16 @@ const Presencas = () => {
       : (["presencas", "students", "__disabled__"] as const),
     queryFn: () => fetchPresencasStudents(studentsKeyInput!),
     enabled: studentsFetchEnabled,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    refetchOnMount: true,
   });
 
   const { data: attendance = {} } = useQuery({
     queryKey: attendanceQueryKeyResolved,
     queryFn: () => fetchPresencasAttendance(attendanceKeyInput!),
     enabled: attendanceFetchEnabled,
+    staleTime: 0, // Always fetch in background to stay in sync with DB
+    refetchOnMount: true,
   });
 
   const studentsLoading =
