@@ -295,6 +295,7 @@ const Eventos = () => {
             canMutateEvent={canMutateEvent}
             onEdit={handleEdit}
             onDelete={(id) => setDeleteId(id)}
+            hideActionsColumn={role === "PARENT"}
           />
         )}
       </div>
@@ -691,11 +692,13 @@ const ListView = ({
   canMutateEvent,
   onEdit,
   onDelete,
+  hideActionsColumn = false,
 }: {
   events: EventRow[];
   canMutateEvent: (e: EventRow) => boolean;
   onEdit: (e: EventRow) => void;
   onDelete: (id: string) => void;
+  hideActionsColumn?: boolean;
 }) => {
   const sorted = [...items].sort((a, b) => a.event_date.localeCompare(b.event_date));
 
@@ -715,7 +718,7 @@ const ListView = ({
               <th className="px-6 py-3">Local</th>
               <th className="px-6 py-3">Organizador</th>
               <th className="px-6 py-3">Público</th>
-              <th className="px-6 py-3 text-right">Ações</th>
+              {!hideActionsColumn && <th className="px-6 py-3 text-right">Ações</th>}
             </tr>
           </thead>
           <tbody>
@@ -750,34 +753,36 @@ const ListView = ({
                   <td className="px-6 py-4 text-muted-foreground">{e.location ?? "—"}</td>
                   <td className="px-6 py-4 text-muted-foreground">{e.organizer ?? "—"}</td>
                   <td className="px-6 py-4 text-muted-foreground">{e.audience ?? "—"}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex justify-end gap-1">
-                      {canMutateEvent(e) && (
-                        <>
-                          <button
-                            onClick={() => onEdit(e)}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                            title="Editar"
-                          >
-                            <Pencil className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                          <button
-                            onClick={() => onDelete(e.id)}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                            title="Remover"
-                          >
-                            <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
+                  {!hideActionsColumn && (
+                    <td className="px-6 py-4">
+                      <div className="flex justify-end gap-1">
+                        {canMutateEvent(e) && (
+                          <>
+                            <button
+                              onClick={() => onEdit(e)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                              title="Editar"
+                            >
+                              <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                            </button>
+                            <button
+                              onClick={() => onDelete(e.id)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                              title="Remover"
+                            >
+                              <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  )}
                 </tr>
               );
             })}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-6 py-12 text-center text-sm text-muted-foreground">
+                <td colSpan={hideActionsColumn ? 6 : 7} className="px-6 py-12 text-center text-sm text-muted-foreground">
                   Sem eventos para os filtros aplicados.
                 </td>
               </tr>

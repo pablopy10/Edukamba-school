@@ -383,17 +383,19 @@ const Matriculas = () => {
                   <th className="py-4 pr-4 font-semibold">Ano Lectivo</th>
                   <th className="py-4 pr-4 font-semibold">Data</th>
                   <th className="py-4 pr-4 font-semibold">Estado</th>
-                  <th className="py-4 pr-5 font-semibold text-right">Acções</th>
+                  {!isParent && (
+                    <th className="py-4 pr-5 font-semibold text-right">Acções</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td colSpan={7} className="py-10 text-center text-muted-foreground">
+                  <tr><td colSpan={isParent ? 6 : 7} className="py-10 text-center text-muted-foreground">
                     <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                   </td></tr>
                 )}
                 {!loading && filtered.length === 0 && (
-                  <tr><td colSpan={7} className="py-10 text-center text-muted-foreground">
+                  <tr><td colSpan={isParent ? 6 : 7} className="py-10 text-center text-muted-foreground">
                     Nenhuma matrícula encontrada.
                   </td></tr>
                 )}
@@ -452,20 +454,18 @@ const Matriculas = () => {
                           {statusLabel(st)}
                         </span>
                       </td>
-                      <td className="py-4 pr-5">
-                        <div className="flex items-center justify-end gap-1">
-                          {!isParent && (
-                            <>
-                              <button onClick={() => { setEditing(e); setFormOpen(true); }} title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
-                                <Pencil className="h-4 w-4" strokeWidth={1.75} />
-                              </button>
-                              <button onClick={() => setDeleting(e)} title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
-                                <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
+                      {!isParent && (
+                        <td className="py-4 pr-5">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => { setEditing(e); setFormOpen(true); }} title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
+                              <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                            </button>
+                            <button onClick={() => setDeleting(e)} title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
+                              <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}

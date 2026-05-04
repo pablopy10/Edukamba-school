@@ -407,6 +407,7 @@ const Material = () => {
             native={native}
             items={filteredStock}
             isAdmin={isAdmin}
+            hideActionsColumn={isParent}
             onEdit={(m) => { setEditingMaterial(m); setShowMaterialDialog(true); }}
             onRemove={removeMaterial}
           />
@@ -417,6 +418,7 @@ const Material = () => {
             classrooms={classrooms}
             students={students}
             isAdmin={isAdmin}
+            hideActionsColumn={isParent}
             currentUserId={user?.id ?? null}
             canMarkDeliveries={canMarkDeliveries}
             progressFor={progressFor}
@@ -487,10 +489,11 @@ const Material = () => {
 
 /* ====================== Stock Table ====================== */
 const StockTable = ({
-  items, isAdmin, onEdit, onRemove, native = false,
+  items, isAdmin, hideActionsColumn = false, onEdit, onRemove, native = false,
 }: {
   items: MaterialRow[];
   isAdmin: boolean;
+  hideActionsColumn?: boolean;
   onEdit: (m: MaterialRow) => void;
   onRemove: (id: string) => void;
   native?: boolean;
@@ -531,7 +534,7 @@ const StockTable = ({
                       ) : null}
                     </div>
                   </div>
-                  {isAdmin ? (
+                  {isAdmin && !hideActionsColumn ? (
                     <div className="flex shrink-0 flex-col gap-1">
                       <button type="button" onClick={() => onEdit(s)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
                         <Pencil className="h-4 w-4" strokeWidth={1.75} />
@@ -556,7 +559,7 @@ const StockTable = ({
                 <th className="px-6 py-3">SKU</th>
                 <th className="px-6 py-3 text-right">Quantidade</th>
                 <th className="px-6 py-3">Localização</th>
-                <th className="px-6 py-3 text-right">Ações</th>
+                {!hideActionsColumn && <th className="px-6 py-3 text-right">Ações</th>}
               </tr>
             </thead>
             <tbody>
@@ -593,20 +596,22 @@ const StockTable = ({
                       </div>
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">{s.location ?? "—"}</td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-1">
-                        {isAdmin && (
-                          <>
-                            <button onClick={() => onEdit(s)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
-                              <Pencil className="h-4 w-4" strokeWidth={1.75} />
-                            </button>
-                            <button onClick={() => onRemove(s.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title="Remover">
-                              <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
+                    {!hideActionsColumn && (
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-1">
+                          {isAdmin && (
+                            <>
+                              <button onClick={() => onEdit(s)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
+                                <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                              </button>
+                              <button onClick={() => onRemove(s.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title="Remover">
+                                <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -620,12 +625,13 @@ const StockTable = ({
 
 /* ====================== Requests Table ====================== */
 const RequestsTable = ({
-  requests, classrooms, students, isAdmin, currentUserId, canMarkDeliveries, progressFor, onEdit, onRemove, onMarkDeliveries, native = false,
+  requests, classrooms, students, isAdmin, hideActionsColumn = false, currentUserId, canMarkDeliveries, progressFor, onEdit, onRemove, onMarkDeliveries, native = false,
 }: {
   requests: RequestRow[];
   classrooms: { id: string; name: string }[];
   students: { id: string; full_name: string; classroom_id: string | null }[];
   isAdmin: boolean;
+  hideActionsColumn?: boolean;
   currentUserId: string | null;
   canMarkDeliveries: boolean;
   progressFor: (r: RequestRow) => { brought: number; total: number };
@@ -695,6 +701,7 @@ const RequestsTable = ({
                       </div>
                     </div>
                   </div>
+                  {!hideActionsColumn && (
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:flex-col sm:items-end">
                     {canMarkDeliveries && total > 0 && (
                       <button
@@ -716,6 +723,7 @@ const RequestsTable = ({
                       </>
                     ) : null}
                   </div>
+                  )}
                 </div>
               </div>
             );
@@ -731,7 +739,7 @@ const RequestsTable = ({
                 <th className="px-6 py-3">Destino</th>
                 <th className="px-6 py-3">Data</th>
                 <th className="px-6 py-3">Entregas</th>
-                <th className="px-6 py-3 text-right">Ações</th>
+                {!hideActionsColumn && <th className="px-6 py-3 text-right">Ações</th>}
               </tr>
             </thead>
             <tbody>
@@ -795,29 +803,31 @@ const RequestsTable = ({
                         <span className="text-xs text-muted-foreground">trouxeram</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-1">
-                        {canMarkDeliveries && total > 0 && (
-                          <button
-                            onClick={() => onMarkDeliveries(r)}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-pastel-blue px-3 text-xs font-semibold text-pastel-blue-foreground transition-colors hover:opacity-90"
-                            title="Marcar entregas"
-                          >
-                            <ListChecks className="h-3.5 w-3.5" strokeWidth={2} /> Marcar
-                          </button>
-                        )}
-                        {canEdit && (
-                          <button onClick={() => onEdit(r)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
-                            <Pencil className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                        )}
-                        {canEdit && (
-                          <button onClick={() => onRemove(r.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title="Remover">
-                            <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
+                    {!hideActionsColumn && (
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-1">
+                          {canMarkDeliveries && total > 0 && (
+                            <button
+                              onClick={() => onMarkDeliveries(r)}
+                              className="inline-flex h-8 items-center gap-1.5 rounded-full bg-pastel-blue px-3 text-xs font-semibold text-pastel-blue-foreground transition-colors hover:opacity-90"
+                              title="Marcar entregas"
+                            >
+                              <ListChecks className="h-3.5 w-3.5" strokeWidth={2} /> Marcar
+                            </button>
+                          )}
+                          {canEdit && (
+                            <button onClick={() => onEdit(r)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
+                              <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                            </button>
+                          )}
+                          {canEdit && (
+                            <button onClick={() => onRemove(r.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title="Remover">
+                              <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}

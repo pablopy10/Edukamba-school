@@ -22,6 +22,7 @@ import { ErpExportPaymentsSection } from "@/components/pagamentos/ErpExportPayme
 import { Textarea } from "@/components/ui/textarea";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
 import { useParentChildren } from "@/hooks/useParentChildren";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 
 type FeeRule = {
@@ -160,6 +161,7 @@ const monthNames = [
 const Pagamentos = () => {
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const { isParent, childIds, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
+  const { selectedYearId: globalAcademicYearId } = useAcademicYear();
   const [years, setYears] = useState<AcademicYear[]>([]);
   const [activeYearId, setActiveYearId] = useState<string | null>(null);
   const [rules, setRules] = useState<FeeRule[]>([]);
@@ -585,6 +587,15 @@ const Pagamentos = () => {
   };
 
   useEffect(() => { if (!parentLoading) fetchAll(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [parentLoading, isParent, childIds.join(",")]);
+
+  /** Ano letivo global (header): mantém os quatro separadores de cobranças alinhados ao dropdown. */
+  useEffect(() => {
+    if (!globalAcademicYearId) return;
+    setFeeYearFilter(globalAcademicYearId);
+    setActYearFilter(globalAcademicYearId);
+    setTrYearFilter(globalAcademicYearId);
+    setEnYearFilter(globalAcademicYearId);
+  }, [globalAcademicYearId]);
 
   // Lock classroom filter to parent's child classroom
   useEffect(() => {
