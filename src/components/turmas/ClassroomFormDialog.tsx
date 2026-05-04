@@ -145,6 +145,7 @@ export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classr
           period: period || null,
           course_id: courseId || null,
           academic_year_id: yearId || null,
+          homeroom_teacher_id: homeroomTeacherId === NONE_HOMEROOM ? null : homeroomTeacherId,
         }).eq("id", classroom.id);
         if (error) throw error;
         toast({ title: "Turma actualizada" });
