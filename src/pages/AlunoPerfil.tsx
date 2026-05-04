@@ -169,6 +169,7 @@ const AlunoPerfil = () => {
   const { id } = useParams<{ id: string }>();
   const { role } = useUserRole();
   const isTeacher = role === "TEACHER";
+  const isParent = role === "PARENT";
   const [loading, setLoading] = useState(true);
   const [student, setStudent] = useState<StudentRow | null>(null);
   const [guardian, setGuardian] = useState<{ full_name: string; phone: string | null } | null>(null);
@@ -638,7 +639,7 @@ const AlunoPerfil = () => {
                   {age !== null ? ` · ${age} anos` : ""}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {student.classrooms?.name && student.classroom_id && (
+                  {student.classrooms?.name && student.classroom_id && !isParent && (
                     <Link
                       to={`/turmas/${student.classroom_id}`}
                       className="inline-flex items-center gap-1.5 rounded-full bg-pastel-blue/40 px-3 py-1 text-xs font-medium text-pastel-blue-foreground transition-opacity hover:opacity-90"
@@ -646,7 +647,7 @@ const AlunoPerfil = () => {
                       <GraduationCap className="h-3.5 w-3.5" strokeWidth={2} /> Turma {student.classrooms.name}
                     </Link>
                   )}
-                  {student.classrooms?.name && !student.classroom_id && (
+                  {student.classrooms?.name && (!student.classroom_id || isParent) && (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-pastel-blue/40 px-3 py-1 text-xs font-medium text-pastel-blue-foreground">
                       <GraduationCap className="h-3.5 w-3.5" strokeWidth={2} /> Turma {student.classrooms.name}
                     </span>
@@ -1138,12 +1139,9 @@ const AlunoPerfil = () => {
         {/* Assessments + Attendance */}
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <div className="rounded-2xl bg-card shadow-card">
-            <div className="flex items-center justify-between border-b border-border p-5">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-pastel-blue-foreground" strokeWidth={1.75} />
-                <h2 className="text-lg font-bold text-foreground">Avaliações Recentes</h2>
-              </div>
-              <Link to="/avaliacoes" className="text-xs font-medium text-pastel-blue-foreground hover:underline">Ver todas</Link>
+            <div className="flex items-center gap-2 border-b border-border p-5">
+              <FileText className="h-5 w-5 text-pastel-blue-foreground" strokeWidth={1.75} />
+              <h2 className="text-lg font-bold text-foreground">Avaliações Recentes</h2>
             </div>
             {assessments.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">Sem avaliações.</p>
@@ -1172,12 +1170,9 @@ const AlunoPerfil = () => {
           </div>
 
           <div className="rounded-2xl bg-card shadow-card">
-            <div className="flex items-center justify-between border-b border-border p-5">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-pastel-green-foreground" strokeWidth={1.75} />
-                <h2 className="text-lg font-bold text-foreground">Presenças Recentes</h2>
-              </div>
-              <Link to="/presencas" className="text-xs font-medium text-pastel-green-foreground hover:underline">Ver todas</Link>
+            <div className="flex items-center gap-2 border-b border-border p-5">
+              <CheckCircle2 className="h-5 w-5 text-pastel-green-foreground" strokeWidth={1.75} />
+              <h2 className="text-lg font-bold text-foreground">Presenças Recentes</h2>
             </div>
             {attendanceStats.total > 0 && (
               <div className="grid grid-cols-2 gap-3 border-b border-border p-5 sm:grid-cols-5">
@@ -1226,12 +1221,9 @@ const AlunoPerfil = () => {
 
         {/* Teachers */}
         <div className="rounded-2xl bg-card shadow-card">
-          <div className="flex items-center justify-between border-b border-border p-5">
-            <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-pastel-pink-foreground" strokeWidth={1.75} />
-              <h2 className="text-lg font-bold text-foreground">Professores</h2>
-            </div>
-            <Link to="/professores" className="text-xs font-medium text-pastel-pink-foreground hover:underline">Ver todos</Link>
+          <div className="flex items-center gap-2 border-b border-border p-5">
+            <Users className="h-5 w-5 text-pastel-pink-foreground" strokeWidth={1.75} />
+            <h2 className="text-lg font-bold text-foreground">Professores</h2>
           </div>
           {teachers.length === 0 ? (
             <p className="p-8 text-center text-sm text-muted-foreground">Sem professores associados.</p>

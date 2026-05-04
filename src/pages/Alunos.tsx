@@ -464,20 +464,22 @@ const Alunos = () => {
                     <th className="py-4 pr-4 font-semibold">Turma</th>
                     <th className="py-4 pr-4 font-semibold">Diretor de turma</th>
                     <th className="py-4 pr-4 font-semibold">Data Nasc.</th>
-                    <th className="py-4 pr-5 text-right font-semibold">Acções</th>
+                    {!isParent && (
+                      <th className="py-4 pr-5 text-right font-semibold">Acções</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
                   {adminListFetching && (
                     <tr>
-                      <td colSpan={8} className="py-10 text-center text-muted-foreground">
+                      <td colSpan={isParent ? 6 : 7} className="py-10 text-center text-muted-foreground">
                         <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                       </td>
                     </tr>
                   )}
                   {!adminListFetching && filtered.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="py-10 text-center text-muted-foreground">
+                      <td colSpan={isParent ? 6 : 7} className="py-10 text-center text-muted-foreground">
                         Nenhum aluno encontrado.
                       </td>
                     </tr>
@@ -543,33 +545,35 @@ const Alunos = () => {
                           <td className="py-4 pr-4 text-muted-foreground">
                             {s.birth_date ? new Date(s.birth_date).toLocaleDateString("pt-PT") : "—"}
                           </td>
-                          <td className="py-4 pr-5">
-                            <div className="flex items-center justify-end gap-1">
-                              {!isParent && !isTeacher && (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setEditing(s);
-                                      setFormOpen(true);
-                                    }}
-                                    title="Editar"
-                                    className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
-                                  >
-                                    <Pencil className="h-4 w-4" strokeWidth={1.75} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setDeleting(s)}
-                                    title="Eliminar"
-                                    className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
-                                  >
-                                    <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
+                          {!isParent && (
+                            <td className="py-4 pr-5">
+                              <div className="flex items-center justify-end gap-1">
+                                {!isTeacher && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditing(s);
+                                        setFormOpen(true);
+                                      }}
+                                      title="Editar"
+                                      className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
+                                    >
+                                      <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setDeleting(s)}
+                                      title="Eliminar"
+                                      className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
+                                    >
+                                      <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       );
                     })}

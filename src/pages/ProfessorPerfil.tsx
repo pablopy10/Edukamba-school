@@ -497,12 +497,9 @@ const ProfessorPerfil = () => {
 
         {/* Classes */}
         <div className="rounded-2xl bg-card shadow-card">
-          <div className="flex items-center justify-between border-b border-border p-5">
-            <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-pastel-pink-foreground" strokeWidth={1.75} />
-              <h2 className="text-lg font-bold text-foreground">Turmas</h2>
-            </div>
-            <Link to="/turmas" className="text-xs font-medium text-pastel-pink-foreground hover:underline">Ver todas</Link>
+          <div className="flex items-center gap-2 border-b border-border p-5">
+            <Users className="h-5 w-5 text-pastel-pink-foreground" strokeWidth={1.75} />
+            <h2 className="text-lg font-bold text-foreground">Turmas</h2>
           </div>
           {classes.length === 0 ? (
             <p className="p-8 text-center text-sm text-muted-foreground">Sem turmas atribuídas.</p>
@@ -525,12 +522,9 @@ const ProfessorPerfil = () => {
 
         {/* Assessments created */}
         <div className="rounded-2xl bg-card shadow-card">
-          <div className="flex items-center justify-between border-b border-border p-5">
-            <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-pastel-lilac-foreground" strokeWidth={1.75} />
-              <h2 className="text-lg font-bold text-foreground">Avaliações Criadas</h2>
-            </div>
-            <Link to="/avaliacoes" className="text-xs font-medium text-pastel-lilac-foreground hover:underline">Ver todas</Link>
+          <div className="flex items-center gap-2 border-b border-border p-5">
+            <FileText className="h-5 w-5 text-pastel-lilac-foreground" strokeWidth={1.75} />
+            <h2 className="text-lg font-bold text-foreground">Avaliações Criadas</h2>
           </div>
           {assessments.length === 0 ? (
             <p className="p-8 text-center text-sm text-muted-foreground">Sem avaliações criadas.</p>

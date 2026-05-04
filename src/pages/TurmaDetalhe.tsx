@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   BookOpen,
@@ -115,11 +115,13 @@ const TurmaDetalhe = () => {
     [isParent, isStudent],
   );
 
+  const exitLabel = isParent ? "Alunos" : isStudent ? "Painel" : "Turmas";
+
   const teacherIdsKey = useMemo(() => [...teacherClassroomIds].sort().join(","), [teacherClassroomIds]);
   const parentIdsKey = useMemo(() => [...parentClassroomIds].sort().join(","), [parentClassroomIds]);
 
   useEffect(() => {
-    if (!hooksReady || !id) return;
+    if (!hooksReady || !id || isParent) return;
     let cancelled = false;
 
     const canAccess = (classroomId: string): boolean => {
@@ -250,7 +252,15 @@ const TurmaDetalhe = () => {
     return m;
   }, [schedules]);
 
-  if (!id || !hooksReady || loading) {
+  if (!hooksReady) {
+    return <PageLoadingSkeleton />;
+  }
+
+  if (isParent) {
+    return <Navigate to="/alunos" replace />;
+  }
+
+  if (!id || loading) {
     return <PageLoadingSkeleton />;
   }
 
@@ -278,11 +288,11 @@ const TurmaDetalhe = () => {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-col gap-3">
             <Link
-              to="/turmas"
+              to={exitRoute}
               className="inline-flex w-fit items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
-              Turmas
+              {exitLabel}
             </Link>
             <div className="flex flex-wrap items-start gap-4">
               <div className={cn("flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl", avatarStyles[headerTint])}>
