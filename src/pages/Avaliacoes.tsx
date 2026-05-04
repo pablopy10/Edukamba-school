@@ -125,6 +125,7 @@ const Avaliacoes = () => {
   const {
     isStudent,
     classroomId: studentClassroomId,
+    classroomName: studentClassroomName,
     subjectIds: studentSubjectIds,
     teacherIds: studentTeacherIds,
     loading: studentLoading,
