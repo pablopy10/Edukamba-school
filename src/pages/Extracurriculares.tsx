@@ -446,7 +446,7 @@ const Extracurriculares = () => {
                     ) : null}
                   </div>
 
-                  {a.enrollment_fee && a.enrollment_fee > 0 && billingStatus[a.id] && billingStatus[a.id].enrolled > 0 && (
+                  {!isParent && a.enrollment_fee && a.enrollment_fee > 0 && billingStatus[a.id] && billingStatus[a.id].enrolled > 0 && (
                     billingStatus[a.id].billed >= billingStatus[a.id].enrolled ? (
                       <div className="inline-flex items-center gap-1.5 rounded-lg bg-pastel-green px-2.5 py-1.5 text-[11px] font-semibold text-pastel-green-foreground w-fit">
                         <CheckCircle2 className="h-3.5 w-3.5" />
