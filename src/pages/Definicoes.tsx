@@ -22,6 +22,7 @@ import {
   FileText,
   Plus,
   History,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
@@ -282,15 +283,38 @@ const Definicoes = () => {
   type UserRow = {
     id: string;
     full_name: string;
+    email: string | null;
     role: Role | null;
     is_active: boolean | null;
     phone: string | null;
     avatar_url: string | null;
   };
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [usersSearchQuery, setUsersSearchQuery] = useState("");
   const [editUser, setEditUser] = useState<UserRow | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+
+  const filteredUsers = useMemo(() => {
+    const raw = usersSearchQuery.trim().toLowerCase();
+    if (!raw) return users;
+    const qPhone = raw.replace(/\s+/g, "");
+    return users.filter((u) => {
+      const name = (u.full_name ?? "").toLowerCase();
+      const mail = (u.email ?? "").toLowerCase();
+      const phone = (u.phone ?? "").replace(/\s+/g, "").toLowerCase();
+      const r = u.role ?? "TEACHER";
+      const roleLabelLower = ROLE_LABEL[r as Role].toLowerCase();
+      const roleKeyLower = String(r).toLowerCase().replace(/_/g, " ");
+      return (
+        name.includes(raw) ||
+        mail.includes(raw) ||
+        (!!qPhone && phone.includes(qPhone)) ||
+        roleLabelLower.includes(raw) ||
+        roleKeyLower.includes(raw)
+      );
+    });
+  }, [users, usersSearchQuery]);
 
   // Permissions
   type Perm = { module: ModuleKey; can_read: boolean; can_write: boolean; can_delete: boolean };
@@ -373,7 +397,7 @@ const Definicoes = () => {
         yearQuery,
         supabase
           .from("profiles")
-          .select("id, full_name, role, is_active, phone, avatar_url")
+          .select("id, full_name, email, role, is_active, phone, avatar_url")
           .eq("school_id", profile.school_id)
           .order("full_name"),
         supabase
@@ -1415,21 +1439,44 @@ const Definicoes = () => {
         {/* UTILIZADORES */}
         {activeTab === "utilizadores" && (
           <div className="rounded-2xl bg-card shadow-card">
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-5">
+            <div className="flex flex-col gap-4 border-b border-border p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
               <h2 className="text-lg font-bold text-foreground">Utilizadores</h2>
-              <p className="text-sm text-muted-foreground">Total: {users.length}</p>
+              <p className="text-sm text-muted-foreground">
+                {usersSearchQuery.trim()
+                  ? `A mostrar ${filteredUsers.length} de ${users.length}`
+                  : `Total: ${users.length}`}
+              </p>
               </div>
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => setInviteOpen(true)}
-                  className="inline-flex h-10 items-center gap-2 rounded-full bg-pastel-blue px-4 text-sm font-semibold text-pastel-blue-foreground shadow-soft hover:opacity-90"
-                >
-                  <Plus className="h-4 w-4" strokeWidth={2} />
-                  Novo utilizador
-                </button>
-              )}
+              <div className="flex flex-1 flex-wrap items-center gap-3 min-w-[min(100%,280px)] justify-end">
+                <div className="relative w-full max-w-md min-w-[200px] flex-1">
+                  <Search
+                    className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                    strokeWidth={2}
+                  />
+                  <input
+                    type="search"
+                    aria-label="Pesquisar utilizadores"
+                    placeholder="Nome, email, telefone ou função…"
+                    autoComplete="off"
+                    value={usersSearchQuery}
+                    onChange={(e) => setUsersSearchQuery(e.target.value)}
+                    className={cn(inputCls(false), "h-10 w-full pl-10")}
+                  />
+                </div>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setInviteOpen(true)}
+                    className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-pastel-blue px-4 text-sm font-semibold text-pastel-blue-foreground shadow-soft hover:opacity-90"
+                  >
+                    <Plus className="h-4 w-4" strokeWidth={2} />
+                    Novo utilizador
+                  </button>
+                )}
+              </div>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1443,7 +1490,7 @@ const Definicoes = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((u) => (
+                  {filteredUsers.map((u) => (
                     <tr key={u.id} className="border-b border-border last:border-0 hover:bg-muted/40">
                       <td className="py-3.5 pl-5 pr-4 font-medium text-foreground">{u.full_name}</td>
                       <td className="py-3.5 pr-4 text-muted-foreground">{u.phone || "—"}</td>
@@ -1497,6 +1544,13 @@ const Definicoes = () => {
                     <tr>
                       <td colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
                         Sem utilizadores.
+                      </td>
+                    </tr>
+                  )}
+                  {users.length > 0 && filteredUsers.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+                        Nenhum utilizador corresponde à pesquisa.
                       </td>
                     </tr>
                   )}
@@ -1916,7 +1970,7 @@ const Definicoes = () => {
           if (!schoolId) return;
           const { data } = await supabase
             .from("profiles")
-            .select("id, full_name, role, is_active, phone, avatar_url")
+            .select("id, full_name, email, role, is_active, phone, avatar_url")
             .eq("school_id", schoolId)
             .order("full_name");
           if (data) setUsers(data as UserRow[]);
