@@ -7,6 +7,7 @@ import {
   MapPin,
   Presentation,
   Users,
+  UserCog,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +26,7 @@ type ClassroomRow = {
   period: string | null;
   school_id: string;
   academic_year_id: string | null;
+  homeroom_teacher?: { id: string; full_name: string | null } | null;
   courses?: { id: string; name: string } | null;
   academic_years?: { id: string; label: string } | null;
 };
@@ -138,6 +140,7 @@ const TurmaDetalhe = () => {
           .from("classrooms")
           .select(
             `id, name, grade_level, period, school_id, academic_year_id,
+             homeroom_teacher:profiles!classrooms_homeroom_teacher_id_fkey(id, full_name),
              courses(id, name), academic_years(id, label)`,
           )
           .eq("id", id)
@@ -289,6 +292,15 @@ const TurmaDetalhe = () => {
                 <h1 className="text-2xl font-bold tracking-tight text-foreground">{classroom.name}</h1>
                 {classroom.courses?.name && (
                   <p className="mt-1 text-sm text-muted-foreground">{classroom.courses.name}</p>
+                )}
+                {classroom.homeroom_teacher?.full_name && (
+                  <p className="mt-2 inline-flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-pastel-green/25 px-2.5 py-1 text-xs font-semibold text-pastel-green-foreground">
+                      <UserCog className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+                      Diretor de turma
+                    </span>
+                    <span className="font-medium text-foreground">{classroom.homeroom_teacher.full_name}</span>
+                  </p>
                 )}
                 <div className="mt-3 flex flex-wrap gap-2">
                   {classroom.period && (

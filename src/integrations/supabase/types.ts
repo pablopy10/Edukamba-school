@@ -563,6 +563,7 @@ export type Database = {
           course_id: string | null
           created_at: string | null
           grade_level: string | null
+          homeroom_teacher_id: string | null
           id: string
           name: string
           period: string | null
@@ -573,6 +574,7 @@ export type Database = {
           course_id?: string | null
           created_at?: string | null
           grade_level?: string | null
+          homeroom_teacher_id?: string | null
           id?: string
           name: string
           period?: string | null
@@ -583,6 +585,7 @@ export type Database = {
           course_id?: string | null
           created_at?: string | null
           grade_level?: string | null
+          homeroom_teacher_id?: string | null
           id?: string
           name?: string
           period?: string | null
@@ -601,6 +604,13 @@ export type Database = {
             columns: ["course_id"]
             isOneToOne: false
             referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "classrooms_homeroom_teacher_id_fkey"
+            columns: ["homeroom_teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {

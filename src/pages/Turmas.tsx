@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useIsRestoring, useQuery } from "@tanstack/react-query";
-import { Search, Plus, Users, Presentation, Pencil, Trash2, Loader2, Upload } from "lucide-react";
+import { Search, Plus, Users, Presentation, Pencil, Trash2, Loader2, Upload, UserCog } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -29,6 +29,7 @@ import { queryClient } from "@/lib/queryClient";
 type ClassroomWithJoins = ClassroomRow & {
   courses?: { id: string; name: string } | null;
   academic_years?: { id: string; label: string } | null;
+  homeroom_teacher?: { id: string; full_name: string } | null;
   studentCount: number;
 };
 
@@ -111,8 +112,9 @@ const Turmas = () => {
     if (isTeacher) return;
     setLoading(true);
     try {
-      const classroomSelect = `id, name, grade_level, period, course_id, academic_year_id, school_id,
-                 courses(id, name), academic_years(id, label)`;
+      const classroomSelect = `id, name, grade_level, period, course_id, academic_year_id, school_id, homeroom_teacher_id,
+                 courses(id, name), academic_years(id, label),
+                 homeroom_teacher:profiles!classrooms_homeroom_teacher_id_fkey(id, full_name)`;
 
       const [
         classroomsRes,
@@ -181,7 +183,9 @@ const Turmas = () => {
       if (periodFilter !== "all" && (c.period ?? "") !== periodFilter) return false;
       if (courseFilter !== "all" && (c.course_id ?? "") !== courseFilter) return false;
       if (!q) return true;
-      return [c.name, c.grade_level ?? "", c.courses?.name ?? "", c.period ?? ""].some((f) => f.toLowerCase().includes(q));
+      return [c.name, c.grade_level ?? "", c.courses?.name ?? "", c.period ?? "", c.homeroom_teacher?.full_name ?? ""].some((f) =>
+        f.toLowerCase().includes(q),
+      );
     });
   }, [listClassrooms, search, periodFilter, courseFilter]);
 
@@ -384,6 +388,13 @@ const Turmas = () => {
                       <div className="min-w-0 flex-1">
                         <h3 className="text-base font-bold text-foreground">{c.name}</h3>
                         {c.courses?.name && <p className="mt-1 text-xs text-muted-foreground">{c.courses.name}</p>}
+                        {c.homeroom_teacher?.full_name && (
+                          <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <UserCog className="h-3.5 w-3.5 shrink-0 text-pastel-blue-foreground/80" strokeWidth={1.75} aria-hidden />
+                            <span className="font-medium text-foreground/90">Diretor de turma:</span>
+                            {c.homeroom_teacher.full_name}
+                          </p>
+                        )}
                       </div>
                     </div>
 

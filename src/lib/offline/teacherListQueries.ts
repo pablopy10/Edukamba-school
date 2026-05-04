@@ -70,6 +70,7 @@ export async function fetchTeacherAlunosQuery(args: {
 export type TeacherTurmasClassroom = ClassroomRow & {
   courses?: { id: string; name: string } | null;
   academic_years?: { id: string; label: string } | null;
+  homeroom_teacher?: { id: string; full_name: string } | null;
   studentCount: number;
 };
 
@@ -97,8 +98,9 @@ export async function fetchTeacherTurmasQuery(args: {
     return { classrooms: [], courses: [], years: [] };
   }
 
-  const classroomSelect = `id, name, grade_level, period, course_id, academic_year_id, school_id,
-                 courses(id, name), academic_years(id, label)`;
+  const classroomSelect = `id, name, grade_level, period, course_id, academic_year_id, school_id, homeroom_teacher_id,
+                 courses(id, name), academic_years(id, label),
+                 homeroom_teacher:profiles!classrooms_homeroom_teacher_id_fkey(id, full_name)`;
 
   const [
     classroomsRes,

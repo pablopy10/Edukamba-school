@@ -18,6 +18,7 @@ export type ClassroomRow = {
   course_id: string | null;
   academic_year_id: string | null;
   school_id: string | null;
+  homeroom_teacher_id?: string | null;
 };
 
 type Opt = { id: string; name: string };
@@ -38,6 +39,11 @@ const PERIODS = [
   { value: "Noite", label: "Noite" },
 ];
 
+const NONE_HOMEROOM = "__none__";
+
+/** Perfis elegíveis como diretor de turma (não inclui alunos nem encargados). */
+const HOMEROOM_STAFF_ROLES = ["TEACHER", "ADMIN", "SUPER_ADMIN"] as const;
+
 export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classroom, onSaved }: Props) => {
   const { selectedYearId } = useAcademicYear();
   const isEdit = !!classroom;
@@ -47,6 +53,9 @@ export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classr
   const [period, setPeriod] = useState<string>("");
   const [courseId, setCourseId] = useState<string>("");
   const [yearId, setYearId] = useState<string>("");
+  const [homeroomTeacherId, setHomeroomTeacherId] = useState<string>(NONE_HOMEROOM);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [staffOptions, setStaffOptions] = useState<{ id: string; full_name: string }[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -56,12 +65,71 @@ export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classr
         setPeriod(classroom.period ?? "");
         setCourseId(classroom.course_id ?? "");
         setYearId(classroom.academic_year_id ?? "");
+        setHomeroomTeacherId(classroom.homeroom_teacher_id ?? NONE_HOMEROOM);
       } else {
         const activeYear = years.find((y) => y.is_active);
         setName(""); setGradeLevel(""); setPeriod(""); setCourseId(""); setYearId(selectedYearId ?? activeYear?.id ?? "");
+        setHomeroomTeacherId(NONE_HOMEROOM);
       }
     }
   }, [open, classroom, years, selectedYearId]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      setStaffLoading(true);
+      try {
+        let schoolId = classroom?.school_id ?? null;
+        if (!schoolId) {
+          const { data: userRes } = await supabase.auth.getUser();
+          const uid = userRes.user?.id;
+          if (!uid) {
+            setStaffOptions([]);
+            return;
+          }
+          const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", uid).maybeSingle();
+          schoolId = profile?.school_id ?? null;
+        }
+        if (!schoolId) {
+          setStaffOptions([]);
+          return;
+        }
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .eq("school_id", schoolId)
+          .in("role", [...HOMEROOM_STAFF_ROLES])
+          .order("full_name", { ascending: true });
+        if (cancelled) return;
+        if (error) throw error;
+        let rows = (data ?? []).map((p) => ({ id: p.id, full_name: p.full_name?.trim() || "Sem nome" }));
+        const hid = classroom?.homeroom_teacher_id;
+        if (hid && !rows.some((r) => r.id === hid)) {
+          const { data: extra } = await supabase
+            .from("profiles")
+            .select("id, full_name")
+            .eq("id", hid)
+            .maybeSingle();
+          if (cancelled) return;
+          if (extra) {
+            rows = [
+              ...rows,
+              { id: extra.id, full_name: extra.full_name?.trim() || "Sem nome" },
+            ].sort((a, b) => a.full_name.localeCompare(b.full_name, "pt"));
+          }
+        }
+        setStaffOptions(rows);
+      } catch {
+        if (!cancelled) setStaffOptions([]);
+      } finally {
+        if (!cancelled) setStaffLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, classroom?.school_id, classroom?.homeroom_teacher_id]);
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -94,6 +162,7 @@ export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classr
           course_id: courseId || null,
           academic_year_id: yearId || null,
           school_id: schoolId,
+          homeroom_teacher_id: homeroomTeacherId === NONE_HOMEROOM ? null : homeroomTeacherId,
         });
         if (error) throw error;
         toast({ title: "Turma criada" });
@@ -162,6 +231,26 @@ export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classr
               <SelectContent>
                 {years.map((y) => (
                   <SelectItem key={y.id} value={y.id}>{y.label}{y.is_active ? " (activo)" : ""}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="sm:col-span-2">
+            <Label>Diretor de turma</Label>
+            <Select
+              value={homeroomTeacherId === NONE_HOMEROOM || staffOptions.some((s) => s.id === homeroomTeacherId) ? homeroomTeacherId : NONE_HOMEROOM}
+              onValueChange={setHomeroomTeacherId}
+              disabled={staffLoading}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={staffLoading ? "A carregar..." : staffOptions.length === 0 ? "Adicione funcionários (admin/professor)" : "Seleccionar..."}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE_HOMEROOM}>Nenhum</SelectItem>
+                {staffOptions.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
