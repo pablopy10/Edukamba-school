@@ -1,11 +1,5 @@
 -- Paperwork / non-teaching roles (school staff with admin-like RLS helpers).
-
-ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'DIRECTOR';
-ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'SECRETARY';
-ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'TREASURER';
-ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'LIBRARIAN';
-ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'STOCK_MANAGER';
-ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'RECEPTIONIST';
+-- Enum literals are added in 20260504103000_staff_roles_user_role_enum_values.sql (separate commit).
 
 COMMENT ON TYPE public.user_role IS 'Includes school staff besides TEACHER; auth_is_school_admin() bundles management roles for RLS.';
 
