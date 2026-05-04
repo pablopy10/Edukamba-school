@@ -11,7 +11,7 @@ BEGIN
   INSERT INTO public.notifications (recipient_id, title, description, link, category, school_id)
   SELECT id, p_title, p_description, p_link, p_category, p_school_id
   FROM public.profiles
-  WHERE school_id = p_school_id AND role::text = p_role AND is_active = true;
+  WHERE school_id = p_school_id AND role::text = p_role AND COALESCE(is_active, true) = true;
 END;
 $$;
 
@@ -27,7 +27,7 @@ BEGIN
   JOIN public.students s ON s.parent_id = p.id
   WHERE s.classroom_id = p_classroom_id
     AND s.school_id = p_school_id
-    AND p.is_active = true;
+    AND COALESCE(p.is_active, true) = true;
 END;
 $$;
 
@@ -40,7 +40,7 @@ BEGIN
   INSERT INTO public.notifications (recipient_id, title, description, link, category, school_id)
   SELECT id, p_title, p_description, p_link, p_category, p_school_id
   FROM public.profiles
-  WHERE school_id = p_school_id AND is_active = true;
+  WHERE school_id = p_school_id AND COALESCE(is_active, true) = true;
 END;
 $$;
 
