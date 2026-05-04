@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { shouldInitializeOneSignalNative, setOneSignalNativeExternalUser } from "@/lib/oneSignalNative";
 import { setOneSignalExternalUser, shouldInitializeOneSignalWeb } from "@/lib/oneSignalWeb";
@@ -9,8 +10,39 @@ import { setOneSignalExternalUser, shouldInitializeOneSignalWeb } from "@/lib/on
  */
 export function OneSignalWebBridge() {
   const lastUserRef = useRef<string | undefined>(undefined);
+  const navigate = useNavigate();
+  const listenersAttached = useRef(false);
 
   useEffect(() => {
+    const attachListeners = async () => {
+      if (listenersAttached.current) return;
+      listenersAttached.current = true;
+
+      const handleClick = (event: any) => {
+        const data = event?.notification?.additionalData;
+        if (data && typeof data.link === "string") {
+          navigate(data.link);
+        }
+      };
+
+      if (shouldInitializeOneSignalWeb()) {
+        const { default: OneSignal } = await import("react-onesignal");
+        OneSignal.Notifications.addEventListener("click", handleClick);
+      }
+
+      if (shouldInitializeOneSignalNative()) {
+        try {
+          const mod = await import("onesignal-cordova-plugin");
+          const OneSignal = mod.default;
+          if (OneSignal?.Notifications?.addEventListener) {
+            OneSignal.Notifications.addEventListener("click", handleClick);
+          }
+        } catch (e) {
+          console.warn("Failed to attach native onesignal listener", e);
+        }
+      }
+    };
+
     const run = async (userId: string | undefined) => {
       if (userId === lastUserRef.current) return;
       lastUserRef.current = userId;
@@ -29,6 +61,8 @@ export function OneSignalWebBridge() {
           await applyNativePushPreference(true);
         }
       }
+      
+      void attachListeners();
     };
 
     if (!shouldInitializeOneSignalWeb() && !shouldInitializeOneSignalNative()) return;
@@ -44,7 +78,7 @@ export function OneSignalWebBridge() {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [navigate]);
 
   return null;
 }

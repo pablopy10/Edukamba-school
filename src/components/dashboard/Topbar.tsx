@@ -243,6 +243,39 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
     null,
   );
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+
+    const fetchUnread = async () => {
+      const { count } = await supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("recipient_id", user.id)
+        .is("read_at", null);
+      if (!cancelled) setUnreadCount(count ?? 0);
+    };
+
+    void fetchUnread();
+
+    const channel = supabase
+      .channel(`notifs_topbar_${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notifications", filter: `recipient_id=eq.${user.id}` },
+        () => {
+          if (!cancelled) void fetchUnread();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -332,8 +365,11 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
             <Link to="/chat" aria-label="Chat" className={cn(nativeIconBtn)}>
               <MessageSquare strokeWidth={1.75} />
             </Link>
-            <Link to="/notificacoes" aria-label="Notificações" className={cn(nativeIconBtn)}>
+            <Link to="/notificacoes" aria-label="Notificações" className={cn(nativeIconBtn, "relative")}>
               <Bell strokeWidth={1.75} />
+              {unreadCount > 0 && (
+                <span className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-card" />
+              )}
             </Link>
             <Link
               to="/perfil"
@@ -507,9 +543,12 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
           <Link
             to="/notificacoes"
             aria-label="Notificações"
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-card text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent"
+            className="relative flex h-11 w-11 items-center justify-center rounded-full bg-card text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent"
           >
             <Bell className="h-5 w-5" strokeWidth={1.75} />
+            {unreadCount > 0 && (
+              <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-card" />
+            )}
           </Link>
           <Link to="/perfil" className="flex items-center gap-3 pl-2 transition-opacity hover:opacity-80">
             <div className="hidden text-right sm:block">

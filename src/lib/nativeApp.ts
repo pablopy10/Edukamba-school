@@ -21,7 +21,6 @@ export const NATIVE_MOBILE_FAB_BUTTON_CLASSNAME =
 
 /** Rotas do dashboard não disponíveis na app Capacitor (menu + acesso directo). */
 const NATIVE_BLOCKED_ROUTE_PREFIXES = [
-  "/pagamentos",
   "/relatorios",
   "/timesheet",
   "/modulos",
