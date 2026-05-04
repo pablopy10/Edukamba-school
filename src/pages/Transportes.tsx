@@ -27,6 +27,7 @@ import { StopFormDialog, type StopRow } from "@/components/transportes/StopFormD
 import { TransportEnrollmentDialog, type TransportEnrollment } from "@/components/transportes/TransportEnrollmentDialog";
 import { cn } from "@/lib/utils";
 import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
+import { useParentChildren } from "@/hooks/useParentChildren";
 
 type Enrollment = TransportEnrollment & {
   student?: { full_name: string; classroom_id: string | null };
@@ -108,6 +109,9 @@ const Transportes = () => {
   }, [schoolId]);
 
   const isAdmin = isSchoolManagementRole(role);
+  const isParent = role === "PARENT";
+  const canEnroll = isAdmin || isParent;
+  const { childIds } = useParentChildren();
 
   const filteredRoutes = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -116,6 +120,10 @@ const Transportes = () => {
       [r.name, r.driver_name, r.vehicle_plate, r.description].some((v) => (v ?? "").toLowerCase().includes(q)),
     );
   }, [routes, search]);
+
+  const visibleEnrollments = useMemo(() => {
+    return isParent ? enrollments.filter(e => childIds.includes(e.student_id)) : enrollments;
+  }, [enrollments, isParent, childIds]);
 
   const enrollmentsByRoute = useMemo(() => {
     const map = new Map<string, Enrollment[]>();
@@ -211,7 +219,7 @@ const Transportes = () => {
           <TabsList>
             <TabsTrigger value="rotas"><Bus className="mr-2 h-4 w-4" />Rotas</TabsTrigger>
             <TabsTrigger value="inscricoes"><Users className="mr-2 h-4 w-4" />Inscrições</TabsTrigger>
-            <TabsTrigger value="lista"><ListChecks className="mr-2 h-4 w-4" />Lista de passageiros</TabsTrigger>
+            {!isParent && <TabsTrigger value="lista"><ListChecks className="mr-2 h-4 w-4" />Lista de passageiros</TabsTrigger>}
           </TabsList>
 
           {/* ROTAS */}
@@ -318,65 +326,109 @@ const Transportes = () => {
           <TabsContent value="inscricoes" className="mt-4">
             <div className="mb-4 flex items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">Alunos inscritos no transporte</h2>
-              {isAdmin && !native && (
+              {canEnroll && !native && (
                 <Button onClick={() => { setEditEnroll(null); setEnrollOpen(true); }} disabled={routes.length === 0}>
                   <Plus className="mr-2 h-4 w-4" /> Inscrever aluno
                 </Button>
               )}
             </div>
-            <Card>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Aluno</TableHead>
-                    <TableHead>Rota</TableHead>
-                    <TableHead>Direção</TableHead>
-                    <TableHead>Paragem ida</TableHead>
-                    <TableHead>Paragem regresso</TableHead>
-                    <TableHead>Início</TableHead>
-                    <TableHead>Estado</TableHead>
-                    {isAdmin && <TableHead className="text-right">Ações</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {enrollments.length === 0 ? (
-                    <TableRow><TableCell colSpan={isAdmin ? 8 : 7} className="text-center text-muted-foreground py-8">Sem inscrições.</TableCell></TableRow>
-                  ) : (
-                    enrollments.map((e) => {
-                      const route = routes.find((r) => r.id === e.route_id);
-                      return (
-                        <TableRow key={e.id}>
-                          <TableCell className="font-medium">{e.student?.full_name ?? "—"}</TableCell>
-                          <TableCell>{route?.name ?? "—"}</TableCell>
-                          <TableCell>{directionLabel(e.direction)}</TableCell>
-                          <TableCell>{e.pickup_stop?.name ?? "—"}</TableCell>
-                          <TableCell>{e.dropoff_stop?.name ?? "—"}</TableCell>
-                          <TableCell>{e.start_date}</TableCell>
-                          <TableCell>
-                            <Badge variant={e.status === "ACTIVE" ? "default" : "secondary"}>
-                              {e.status === "ACTIVE" ? "Ativa" : e.status === "INACTIVE" ? "Inativa" : "Cancelada"}
-                            </Badge>
-                          </TableCell>
-                          {isAdmin && (
-                            <TableCell className="text-right">
-                              <Button size="sm" variant="ghost" onClick={() => handleRegenerateFees(e.id)} title="Gerar mensalidades">
-                                <Wallet className="h-4 w-4" />
-                              </Button>
-                              <Button size="sm" variant="ghost" onClick={() => { setEditEnroll(e); setEnrollOpen(true); }}>
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button size="sm" variant="ghost" onClick={() => setDeleteEnrollId(e.id)}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
+            {native ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {visibleEnrollments.length === 0 ? (
+                  <Card className="p-8 text-center text-muted-foreground">Sem inscrições.</Card>
+                ) : (
+                  visibleEnrollments.map((e) => {
+                    const route = routes.find((r) => r.id === e.route_id);
+                    return (
+                      <Card key={e.id} className="flex flex-col gap-3 p-4">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h3 className="text-lg font-semibold">{e.student?.full_name ?? "—"}</h3>
+                            <p className="text-sm text-muted-foreground">{route?.name ?? "—"}</p>
+                          </div>
+                          <Badge variant={e.status === "ACTIVE" ? "default" : "secondary"}>
+                            {e.status === "ACTIVE" ? "Ativa" : e.status === "INACTIVE" ? "Inativa" : "Cancelada"}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div><span className="text-muted-foreground">Direção:</span> {directionLabel(e.direction)}</div>
+                          <div><span className="text-muted-foreground">Início:</span> {e.start_date}</div>
+                          <div className="col-span-2"><span className="text-muted-foreground">Ida:</span> {e.pickup_stop?.name ?? "—"}</div>
+                          <div className="col-span-2"><span className="text-muted-foreground">Regresso:</span> {e.dropoff_stop?.name ?? "—"}</div>
+                        </div>
+                        {isAdmin && (
+                          <div className="mt-1 flex justify-end gap-2 border-t border-border pt-3">
+                            <Button size="sm" variant="outline" onClick={() => handleRegenerateFees(e.id)} title="Gerar mensalidades">
+                              <Wallet className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => { setEditEnroll(e); setEnrollOpen(true); }}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="outline" className="text-destructive" onClick={() => setDeleteEnrollId(e.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </Card>
+                    );
+                  })
+                )}
+              </div>
+            ) : (
+              <Card>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Aluno</TableHead>
+                      <TableHead>Rota</TableHead>
+                      <TableHead>Direção</TableHead>
+                      <TableHead>Paragem ida</TableHead>
+                      <TableHead>Paragem regresso</TableHead>
+                      <TableHead>Início</TableHead>
+                      <TableHead>Estado</TableHead>
+                      {isAdmin && <TableHead className="text-right">Ações</TableHead>}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {visibleEnrollments.length === 0 ? (
+                      <TableRow><TableCell colSpan={isAdmin ? 8 : 7} className="text-center text-muted-foreground py-8">Sem inscrições.</TableCell></TableRow>
+                    ) : (
+                      visibleEnrollments.map((e) => {
+                        const route = routes.find((r) => r.id === e.route_id);
+                        return (
+                          <TableRow key={e.id}>
+                            <TableCell className="font-medium">{e.student?.full_name ?? "—"}</TableCell>
+                            <TableCell>{route?.name ?? "—"}</TableCell>
+                            <TableCell>{directionLabel(e.direction)}</TableCell>
+                            <TableCell>{e.pickup_stop?.name ?? "—"}</TableCell>
+                            <TableCell>{e.dropoff_stop?.name ?? "—"}</TableCell>
+                            <TableCell>{e.start_date}</TableCell>
+                            <TableCell>
+                              <Badge variant={e.status === "ACTIVE" ? "default" : "secondary"}>
+                                {e.status === "ACTIVE" ? "Ativa" : e.status === "INACTIVE" ? "Inativa" : "Cancelada"}
+                              </Badge>
                             </TableCell>
-                          )}
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </Card>
+                            {isAdmin && (
+                              <TableCell className="text-right">
+                                <Button size="sm" variant="ghost" onClick={() => handleRegenerateFees(e.id)} title="Gerar mensalidades">
+                                  <Wallet className="h-4 w-4" />
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => { setEditEnroll(e); setEnrollOpen(true); }}>
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => setDeleteEnrollId(e.id)}>
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </Card>
+            )}
           </TabsContent>
 
           {/* LISTA DE PASSAGEIROS */}
@@ -471,7 +523,7 @@ const Transportes = () => {
         </Tabs>
       </div>
 
-      {native && isAdmin && transportTab !== "lista" && (
+      {native && (isAdmin || (isParent && transportTab === "inscricoes")) && transportTab !== "lista" && (
         <NativeMobileFabPortal>
           <Button
             type="button"
@@ -486,7 +538,7 @@ const Transportes = () => {
                 }
                 setEditEnroll(null);
                 setEnrollOpen(true);
-              } else {
+              } else if (isAdmin) {
                 setEditRoute(null);
                 setRouteOpen(true);
               }
@@ -525,6 +577,8 @@ const Transportes = () => {
           routes={routes.map((r) => ({ id: r.id, name: r.name, monthly_fee: r.monthly_fee }))}
           initial={editEnroll}
           onSaved={loadAll}
+          isParent={isParent}
+          childIds={childIds}
         />
       )}
 

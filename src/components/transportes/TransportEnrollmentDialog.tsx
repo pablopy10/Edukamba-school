@@ -33,8 +33,9 @@ type Props = {
   schoolId: string;
   routes: Route[];
   initial?: TransportEnrollment | null;
-  defaultRouteId?: string;
   onSaved: () => void;
+  isParent?: boolean;
+  childIds?: string[];
 };
 
 export const TransportEnrollmentDialog = ({
@@ -45,6 +46,8 @@ export const TransportEnrollmentDialog = ({
   initial,
   defaultRouteId,
   onSaved,
+  isParent,
+  childIds,
 }: Props) => {
   const [saving, setSaving] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
@@ -83,12 +86,21 @@ export const TransportEnrollmentDialog = ({
 
   useEffect(() => {
     if (!open) return;
-    supabase
+    let query = supabase
       .from("students")
       .select("id, full_name")
       .eq("school_id", schoolId)
-      .order("full_name")
-      .then(({ data }) => setStudents((data as Student[]) ?? []));
+      .order("full_name");
+      
+    if (isParent) {
+      if (!childIds || childIds.length === 0) {
+        setStudents([]);
+        return;
+      }
+      query = query.in("id", childIds);
+    }
+    
+    query.then(({ data }) => setStudents((data as Student[]) ?? []));
   }, [open, schoolId]);
 
   useEffect(() => {
@@ -259,10 +271,12 @@ export const TransportEnrollmentDialog = ({
             <Label>Notas</Label>
             <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
           </div>
-          <div className="md:col-span-2 flex items-center gap-3 rounded-lg bg-muted/40 p-3">
-            <Switch checked={generateFees} onCheckedChange={setGenerateFees} />
-            <Label>Gerar mensalidades automaticamente após guardar</Label>
-          </div>
+          {!isParent && (
+            <div className="md:col-span-2 flex items-center gap-3 rounded-lg bg-muted/40 p-3">
+              <Switch checked={generateFees} onCheckedChange={setGenerateFees} />
+              <Label>Gerar mensalidades automaticamente após guardar</Label>
+            </div>
+          )}
         </div>
         <DialogFooter className="flex-shrink-0">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>

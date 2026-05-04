@@ -42,6 +42,7 @@ import { Button } from "@/components/ui/button";
 import { UserPlus, Wallet } from "lucide-react";
 import { CheckCircle2 } from "lucide-react";
 import { isSchoolManagementOrTeacher, isSchoolManagementRole } from "@/lib/schoolStaffRoles";
+import { useParentChildren } from "@/hooks/useParentChildren";
 
 type ActivityCategory = "musica" | "desporto" | "arte" | "tecnologia" | "academico" | "teatro";
 
@@ -84,6 +85,9 @@ const Extracurriculares = () => {
 
   const canEdit = isSchoolManagementOrTeacher(role);
   const canDelete = isSchoolManagementRole(role);
+  const isParent = role === "PARENT";
+  const canEnroll = canEdit || isParent;
+  const { childIds } = useParentChildren();
 
   useEffect(() => {
     (async () => {
@@ -456,13 +460,13 @@ const Extracurriculares = () => {
                     ) : null
                   )}
 
-                  {canEdit && (
+                  {canEnroll && (
                     <button
                       onClick={() => { setEnrollActivity(a); setEnrollOpen(true); }}
                       className="mt-1 inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-accent transition-colors"
                     >
                       <UserPlus className="h-3.5 w-3.5" />
-                      Gerir inscrições
+                      {isParent ? "Inscrever" : "Gerir inscrições"}
                     </button>
                   )}
                 </div>
@@ -583,6 +587,8 @@ const Extracurriculares = () => {
         activity={enrollActivity}
         schoolId={schoolId}
         canEdit={canEdit}
+        isParent={isParent}
+        childIds={childIds}
       />
 
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>

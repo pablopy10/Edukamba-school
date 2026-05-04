@@ -162,7 +162,6 @@ const TEACHER_NAV_PREFIXES = [
   "/educadores",
 ] as const;
 
-/** Encarregado de educação — alinhado à Sidebar. */
 const PARENT_NAV_PREFIXES = [
   "/dashboard",
   "/alunos",
@@ -175,6 +174,8 @@ const PARENT_NAV_PREFIXES = [
   "/presencas",
   "/material",
   "/professores",
+  "/extracurriculares",
+  "/transportes",
 ] as const;
 
 /** Aluno — alinhado à Sidebar. */

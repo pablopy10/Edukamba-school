@@ -17,9 +17,17 @@ export function OneSignalWebBridge() {
 
       if (shouldInitializeOneSignalWeb()) {
         await setOneSignalExternalUser(userId ?? null);
+        if (userId) {
+          const { applyWebPushPreference } = await import("@/lib/oneSignalWeb");
+          await applyWebPushPreference(true);
+        }
       }
       if (shouldInitializeOneSignalNative()) {
         await setOneSignalNativeExternalUser(userId ?? null);
+        if (userId) {
+          const { applyNativePushPreference } = await import("@/lib/oneSignalNative");
+          await applyNativePushPreference(true);
+        }
       }
     };
 

@@ -18,9 +18,11 @@ type Props = {
   activity: ActivityRow | null;
   schoolId: string | null;
   canEdit: boolean;
+  isParent?: boolean;
+  childIds?: string[];
 };
 
-export function EnrollmentManagerDialog({ open, onOpenChange, activity, schoolId, canEdit }: Props) {
+export function EnrollmentManagerDialog({ open, onOpenChange, activity, schoolId, canEdit, isParent, childIds }: Props) {
   const [loading, setLoading] = useState(false);
   const [working, setWorking] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
@@ -31,12 +33,24 @@ export function EnrollmentManagerDialog({ open, onOpenChange, activity, schoolId
   const load = async () => {
     if (!activity || !schoolId) return;
     setLoading(true);
+    let studentsQuery = supabase
+      .from("students")
+      .select("id, full_name, classroom_id, classroom:classrooms(name)")
+      .eq("school_id", schoolId)
+      .order("full_name");
+      
+    if (isParent) {
+      if (!childIds || childIds.length === 0) {
+        setStudents([]);
+        setEnrollments([]);
+        setLoading(false);
+        return;
+      }
+      studentsQuery = studentsQuery.in("id", childIds);
+    }
+
     const [{ data: studs }, { data: enrolls }] = await Promise.all([
-      supabase
-        .from("students")
-        .select("id, full_name, classroom_id, classroom:classrooms(name)")
-        .eq("school_id", schoolId)
-        .order("full_name"),
+      studentsQuery,
       supabase
         .from("extracurricular_enrollments")
         .select("id, student_id, status")
@@ -204,7 +218,7 @@ export function EnrollmentManagerDialog({ open, onOpenChange, activity, schoolId
                     <label className="flex items-center gap-3 flex-1 cursor-pointer">
                       <Checkbox
                         checked={isEnrolled}
-                        disabled={!canEdit || working}
+                        disabled={(!canEdit && !isParent) || working}
                         onCheckedChange={(c) => toggleEnrollment(s.id, !!c)}
                       />
                       <div className="flex-1">

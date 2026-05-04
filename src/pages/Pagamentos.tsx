@@ -1372,7 +1372,7 @@ const Pagamentos = () => {
             <TabsTrigger value="enrollment-fees">Matrículas</TabsTrigger>
             <TabsTrigger value="activity-fees">Extracurriculares</TabsTrigger>
             <TabsTrigger value="transport-fees">Transporte</TabsTrigger>
-            {!isParent && <TabsTrigger value="family">Descontos por familiar</TabsTrigger>}
+            <TabsTrigger value="family">Descontos por familiar</TabsTrigger>
             {!isParent && <TabsTrigger value="overrides">Descontos por aluno</TabsTrigger>}
             {!isParent && (
               <TabsTrigger value="erp-export" className="gap-1.5">
@@ -2363,7 +2363,7 @@ const Pagamentos = () => {
                   <CardTitle>Desconto automático por familiar</CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">Quando um educador tem vários filhos na escola, aplica-se um desconto.</p>
                 </div>
-                <Button onClick={openNewFamily} size="sm" className="gap-2"><Plus className="h-4 w-4" /> Nova regra</Button>
+                {!isParent && <Button onClick={openNewFamily} size="sm" className="gap-2"><Plus className="h-4 w-4" /> Nova regra</Button>}
               </CardHeader>
               <CardContent>
                 {familyRules.length === 0 ? (
@@ -2375,7 +2375,7 @@ const Pagamentos = () => {
                         <tr className="border-b text-left text-muted-foreground">
                           <th className="py-2 px-2">Posição do familiar</th>
                           <th className="py-2 px-2">Desconto</th>
-                          <th className="py-2 px-2 text-right">Ações</th>
+                          {!isParent && <th className="py-2 px-2 text-right">Ações</th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -2383,10 +2383,12 @@ const Pagamentos = () => {
                           <tr key={f.id} className="border-b hover:bg-muted/30">
                             <td className="py-2 px-2 font-medium">{f.sibling_position}º filho ou superior</td>
                             <td className="py-2 px-2"><Badge variant="secondary">{f.discount_percentage}%</Badge></td>
-                            <td className="py-2 px-2 text-right">
-                              <Button size="icon" variant="ghost" onClick={() => openEditFamily(f)}><Pencil className="h-4 w-4" /></Button>
-                              <Button size="icon" variant="ghost" onClick={() => setDeleteFamily(f.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                            </td>
+                            {!isParent && (
+                              <td className="py-2 px-2 text-right">
+                                <Button size="icon" variant="ghost" onClick={() => openEditFamily(f)}><Pencil className="h-4 w-4" /></Button>
+                                <Button size="icon" variant="ghost" onClick={() => setDeleteFamily(f.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
