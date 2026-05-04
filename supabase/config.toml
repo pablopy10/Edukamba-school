@@ -3,6 +3,9 @@ project_id = "mrjftwvygqoimexwgclm"
 [functions.invite-teacher]
 verify_jwt = true
 
+[functions.invite-school-user]
+verify_jwt = true
+
 [functions.invite-guardian]
 verify_jwt = true
 

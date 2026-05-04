@@ -20,6 +20,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
+import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 import { useHorariosDatasetQuery } from "@/hooks/queries/useHorariosDatasetQuery";
 import type { HorariosFetchScope } from "@/lib/api/fetchHorariosDataset";
 import type { ScheduleRow, TimeSlotRow } from "@/lib/api/fetchHorariosDataset";
@@ -96,7 +97,7 @@ const Horarios = () => {
   const { isParent, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const { role } = useUserRole();
   const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
-  const isAdmin = role === "ADMIN";
+  const isAdmin = role === "SUPER_ADMIN" || isSchoolManagementRole(role);
   const { subjectId: teacherSubjectId } = useTeacherClassrooms();
   const {
     isStudent,

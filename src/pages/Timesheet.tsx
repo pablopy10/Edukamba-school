@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
+import { ROLE_LABEL_INVITE } from "@/components/definicoes/InviteStaffUserDialog";
+import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 
 type EntryStatus = "completo" | "em_curso" | "incompleto";
 
@@ -40,8 +42,7 @@ type TimeEntry = {
 type Employee = { id: string; name: string; role: string };
 
 const roleLabels: Record<string, string> = {
-  ADMIN: "Administrador",
-  TEACHER: "Professor",
+  ...ROLE_LABEL_INVITE,
   PARENT: "Encarregado de Educação",
   STUDENT: "Aluno",
   SUPER_ADMIN: "Super Administrador",
@@ -100,7 +101,7 @@ const Timesheet = () => {
       });
   }, [user]);
 
-  const isAdmin = myRole === "ADMIN" || myRole === "SUPER_ADMIN";
+  const isAdmin = isSchoolManagementRole(myRole);
 
   const loadAll = async () => {
     if (!schoolId) return;

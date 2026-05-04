@@ -14,6 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from "@/components/ui/button";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { showPageKpiCards, isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
+import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 
 type Reason = "doenca" | "ferias" | "pessoal" | "luto" | "formacao" | "outro";
 type StatusDB = "PENDING" | "APPROVED" | "REJECTED";
@@ -91,7 +92,7 @@ const Pedidos = () => {
   const [editing, setEditing] = useState<Row | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Row | null>(null);
 
-  const isAdmin = role === "ADMIN";
+  const isAdmin = role != null && (role === "SUPER_ADMIN" || isSchoolManagementRole(role));
   const isTeacher = role === "TEACHER";
 
   const loadProfile = async () => {

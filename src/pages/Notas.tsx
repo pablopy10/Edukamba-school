@@ -13,6 +13,7 @@ import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { showPageKpiCards } from "@/lib/nativeApp";
+import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 import { QUERY_DAY_MS } from "@/lib/queryClient";
 import {
   academicTermsQueryKey,
@@ -126,7 +127,7 @@ const Notas = () => {
   const { user } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
   const { selectedYearId: ctxYearId, schoolId: ctxSchoolId } = useAcademicYear();
-  const isPrivileged = role === "ADMIN" || role === "SUPER_ADMIN";
+  const isPrivileged = isSchoolManagementRole(role);
 
   const {
     isTeacher,

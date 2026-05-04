@@ -2,7 +2,19 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
-export type UserRole = "ADMIN" | "TEACHER" | "PARENT" | "STUDENT" | "SUPER_ADMIN" | null;
+export type UserRole =
+  | "ADMIN"
+  | "TEACHER"
+  | "PARENT"
+  | "STUDENT"
+  | "SUPER_ADMIN"
+  | "DIRECTOR"
+  | "SECRETARY"
+  | "TREASURER"
+  | "LIBRARIAN"
+  | "STOCK_MANAGER"
+  | "RECEPTIONIST"
+  | null;
 
 type RoleContextValue = { role: UserRole; loading: boolean };
 
@@ -16,8 +28,22 @@ function readPersistedRole(userId: string): UserRole | null {
     const raw = localStorage.getItem(persistedRoleKey(userId));
     if (!raw) return null;
     const v = JSON.parse(raw) as UserRole;
-    if (v === "ADMIN" || v === "TEACHER" || v === "PARENT" || v === "STUDENT" || v === "SUPER_ADMIN" || v === null) {
-      return v;
+    if (v === null) return null;
+    const allowed: UserRole[] = [
+      "ADMIN",
+      "TEACHER",
+      "PARENT",
+      "STUDENT",
+      "SUPER_ADMIN",
+      "DIRECTOR",
+      "SECRETARY",
+      "TREASURER",
+      "LIBRARIAN",
+      "STOCK_MANAGER",
+      "RECEPTIONIST",
+    ];
+    if (allowed.includes(v as UserRole)) {
+      return v as UserRole;
     }
     return null;
   } catch {

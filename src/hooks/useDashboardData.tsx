@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { SCHOOL_MANAGEMENT_ROLES } from "@/lib/schoolStaffRoles";
+
+const DASHBOARD_STAFF_ROLE_FILTER = [...new Set([...SCHOOL_MANAGEMENT_ROLES, "TEACHER"])];
 
 export interface DashboardCounts {
   students: number;
@@ -116,7 +119,7 @@ export const useDashboardData = () => {
           supabase
             .from("profiles")
             .select("id", { count: "exact", head: true })
-            .in("role", ["ADMIN", "TEACHER"]),
+            .in("role", DASHBOARD_STAFF_ROLE_FILTER),
           classroomsQuery,
           supabase.from("students").select("id, gender"),
           supabase

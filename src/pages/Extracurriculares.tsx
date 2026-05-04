@@ -41,6 +41,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { UserPlus, Wallet } from "lucide-react";
 import { CheckCircle2 } from "lucide-react";
+import { isSchoolManagementOrTeacher, isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 
 type ActivityCategory = "musica" | "desporto" | "arte" | "tecnologia" | "academico" | "teatro";
 
@@ -81,8 +82,8 @@ const Extracurriculares = () => {
   const [enrollOpen, setEnrollOpen] = useState(false);
   const [enrollActivity, setEnrollActivity] = useState<ActivityRow | null>(null);
 
-  const canEdit = role === "ADMIN" || role === "TEACHER";
-  const canDelete = role === "ADMIN";
+  const canEdit = isSchoolManagementOrTeacher(role);
+  const canDelete = isSchoolManagementRole(role);
 
   useEffect(() => {
     (async () => {

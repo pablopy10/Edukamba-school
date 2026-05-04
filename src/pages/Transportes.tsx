@@ -26,6 +26,7 @@ import { RouteFormDialog, type RouteRow } from "@/components/transportes/RouteFo
 import { StopFormDialog, type StopRow } from "@/components/transportes/StopFormDialog";
 import { TransportEnrollmentDialog, type TransportEnrollment } from "@/components/transportes/TransportEnrollmentDialog";
 import { cn } from "@/lib/utils";
+import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 
 type Enrollment = TransportEnrollment & {
   student?: { full_name: string; classroom_id: string | null };
@@ -106,7 +107,7 @@ const Transportes = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schoolId]);
 
-  const isAdmin = role === "ADMIN";
+  const isAdmin = isSchoolManagementRole(role);
 
   const filteredRoutes = useMemo(() => {
     const q = search.trim().toLowerCase();

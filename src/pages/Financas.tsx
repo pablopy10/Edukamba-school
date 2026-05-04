@@ -26,6 +26,7 @@ import {
   LineChart, Line,
 } from "recharts";
 import { useUserRole } from "@/hooks/useUserRole";
+import { isSchoolManagementOrTeacher } from "@/lib/schoolStaffRoles";
 import {
   enrichErpPaymentsWithStudentNames,
   fetchValidatedPaymentsForErpYear,
@@ -120,8 +121,7 @@ const Financas = () => {
   const [generatingId, setGeneratingId] = useState<string | null>(null);
 
   const { role } = useUserRole();
-  const staffCanExportErp =
-    role === "ADMIN" || role === "SUPER_ADMIN" || role === "TEACHER";
+  const staffCanExportErp = isSchoolManagementOrTeacher(role);
 
   type ErpPaymentLine = ErpPaymentExportRow & { studentName: string };
 

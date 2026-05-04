@@ -3306,7 +3306,18 @@ export type Database = {
         | "LATE"
         | "DISCIPLINARY"
       payment_status: "PENDING" | "VALIDATED" | "REJECTED"
-      user_role: "SUPER_ADMIN" | "ADMIN" | "TEACHER" | "PARENT" | "STUDENT"
+      user_role:
+        | "SUPER_ADMIN"
+        | "ADMIN"
+        | "DIRECTOR"
+        | "SECRETARY"
+        | "TREASURER"
+        | "LIBRARIAN"
+        | "STOCK_MANAGER"
+        | "RECEPTIONIST"
+        | "TEACHER"
+        | "PARENT"
+        | "STUDENT"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3443,7 +3454,19 @@ export const Constants = {
         "DISCIPLINARY",
       ],
       payment_status: ["PENDING", "VALIDATED", "REJECTED"],
-      user_role: ["SUPER_ADMIN", "ADMIN", "TEACHER", "PARENT", "STUDENT"],
+      user_role: [
+        "SUPER_ADMIN",
+        "ADMIN",
+        "DIRECTOR",
+        "SECRETARY",
+        "TREASURER",
+        "LIBRARIAN",
+        "STOCK_MANAGER",
+        "RECEPTIONIST",
+        "TEACHER",
+        "PARENT",
+        "STUDENT",
+      ],
     },
   },
 } as const

@@ -9,6 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { HOMEROOM_ELIGIBLE_PROFILE_ROLES } from "@/lib/schoolStaffRoles";
 
 export type ClassroomRow = {
   id: string;
@@ -42,7 +43,7 @@ const PERIODS = [
 const NONE_HOMEROOM = "__none__";
 
 /** Perfis elegíveis como diretor de turma (não inclui alunos nem encargados). */
-const HOMEROOM_STAFF_ROLES = ["TEACHER", "ADMIN", "SUPER_ADMIN"] as const;
+const HOMEROOM_STAFF_ROLES = [...HOMEROOM_ELIGIBLE_PROFILE_ROLES];
 
 export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classroom, onSaved }: Props) => {
   const { selectedYearId } = useAcademicYear();

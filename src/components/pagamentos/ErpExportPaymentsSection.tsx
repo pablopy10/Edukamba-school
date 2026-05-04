@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, FileSpreadsheet, RotateCcw } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
+import { isSchoolManagementOrTeacher } from "@/lib/schoolStaffRoles";
 import {
   enrichErpPaymentsWithStudentNames,
   fetchValidatedPaymentsForErpFilters,
@@ -32,7 +33,7 @@ function defaultErpExportDateRange(): { dateFrom: string; dateTo: string } {
 
 export const ErpExportPaymentsSection = ({ schoolId }: Props) => {
   const { role } = useUserRole();
-  const staffOk = role === "ADMIN" || role === "SUPER_ADMIN" || role === "TEACHER";
+  const staffOk = isSchoolManagementOrTeacher(role);
 
   const [dateFrom, setDateFrom] = useState<string>(() => defaultErpExportDateRange().dateFrom);
   const [dateTo, setDateTo] = useState<string>(() => defaultErpExportDateRange().dateTo);

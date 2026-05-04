@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { toast } from "sonner";
+import { isSchoolManagementOrTeacher } from "@/lib/schoolStaffRoles";
 import {
   Select,
   SelectContent,
@@ -342,7 +343,7 @@ const Presencas = () => {
 
   const { isOnline, enqueuePendingSync } = useOfflineSync();
 
-  const canEdit = (roleForAcl === "ADMIN" || roleForAcl === "TEACHER") && !isParent && !isStudent;
+  const canEdit = isSchoolManagementOrTeacher(roleForAcl) && !isParent && !isStudent;
 
   useEffect(() => {
     if (!native) return;

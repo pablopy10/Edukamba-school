@@ -18,6 +18,7 @@ import { useParentChildren } from "@/hooks/useParentChildren";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { isNativeMobileApp } from "@/lib/nativeApp";
+import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 
 type ClassroomRow = {
   id: string;
@@ -125,7 +126,7 @@ const TurmaDetalhe = () => {
     let cancelled = false;
 
     const canAccess = (classroomId: string): boolean => {
-      if (role === "ADMIN" || role === "SUPER_ADMIN") return true;
+      if (isSchoolManagementRole(role)) return true;
       if (isTeacher && teacherClassroomIds.includes(classroomId)) return true;
       if (isParent && parentClassroomIds.includes(classroomId)) return true;
       if (isStudent && studentClassroomId === classroomId) return true;

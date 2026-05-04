@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { EventFormDialog, type EventRow } from "@/components/eventos/EventFormDialog";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { showPageKpiCards, isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
+import { isSchoolManagementOrTeacher, isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -79,12 +80,12 @@ const Eventos = () => {
   const [editing, setEditing] = useState<EventRow | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const canCreateEvent = role === "ADMIN" || role === "TEACHER" || role === "SUPER_ADMIN";
+  const canCreateEvent = role === "SUPER_ADMIN" || isSchoolManagementOrTeacher(role);
 
   const canMutateEvent = useCallback(
     (e: EventRow) => {
       if (!userId) return false;
-      if (role === "ADMIN" || role === "SUPER_ADMIN") return true;
+      if (role === "SUPER_ADMIN" || isSchoolManagementRole(role)) return true;
       if (role === "TEACHER") return (e.created_by ?? null) === userId;
       return false;
     },

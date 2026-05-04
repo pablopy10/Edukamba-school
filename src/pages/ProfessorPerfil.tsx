@@ -8,6 +8,7 @@ import { toast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Button } from "@/components/ui/button";
 import { academicDegreeLabel } from "@/lib/teacherAcademic";
+import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 
 type AvatarColor = "lilac" | "blue" | "yellow" | "green" | "pink";
 
@@ -623,7 +624,8 @@ const ProfessorPerfil = () => {
             <div className="flex flex-col divide-y divide-border">
               {feedbacks.map((f) => {
                 const isPraise = f.kind === "PRAISE";
-                const canEdit = f.reporter_id === currentUserId || currentUserRole === "ADMIN";
+                const canEdit =
+                  f.reporter_id === currentUserId || isSchoolManagementRole(currentUserRole);
                 return (
                   <div key={f.id} className="flex flex-col gap-3 p-5 transition-colors hover:bg-muted/30 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex min-w-0 flex-1 items-start gap-3">

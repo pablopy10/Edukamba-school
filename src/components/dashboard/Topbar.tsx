@@ -42,11 +42,11 @@ import { loadPendingSync } from "@/lib/pendingSyncStorage";
 import { cn } from "@/lib/utils";
 import { isNativeMobileApp } from "@/lib/nativeApp";
 import { EdukambaWordmark } from "@/components/branding/EdukambaWordmark";
+import { ROLE_LABEL_INVITE } from "@/components/definicoes/InviteStaffUserDialog";
 
 const roleLabels: Record<string, string> = {
   SUPER_ADMIN: "Super Admin",
-  ADMIN: "Administrador",
-  TEACHER: "Professor",
+  ...ROLE_LABEL_INVITE,
   PARENT: "Encarregado",
   STUDENT: "Aluno",
 };

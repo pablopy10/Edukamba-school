@@ -31,6 +31,8 @@ import type { Database } from "@/integrations/supabase/types";
 import { TermsAndHolidaysManager } from "@/components/definicoes/TermsAndHolidaysManager";
 import { NewAcademicYearWizard } from "@/components/definicoes/NewAcademicYearWizard";
 import { AuditLogsPanel } from "@/components/definicoes/AuditLogsPanel";
+import { InviteStaffUserDialog } from "@/components/definicoes/InviteStaffUserDialog";
+import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -159,10 +161,27 @@ const SaveBar = ({
   </div>
 );
 
-const ROLES: Role[] = ["ADMIN", "TEACHER", "PARENT", "STUDENT"];
+const ROLES: Role[] = [
+  "ADMIN",
+  "DIRECTOR",
+  "SECRETARY",
+  "TREASURER",
+  "LIBRARIAN",
+  "STOCK_MANAGER",
+  "RECEPTIONIST",
+  "TEACHER",
+  "PARENT",
+  "STUDENT",
+];
 const ROLE_LABEL: Record<Role, string> = {
   SUPER_ADMIN: "Super Admin",
   ADMIN: "Administrador",
+  DIRECTOR: "Director",
+  SECRETARY: "Secretaria",
+  TREASURER: "Tesoureiro",
+  LIBRARIAN: "Bibliotecário",
+  STOCK_MANAGER: "Gestor de stock",
+  RECEPTIONIST: "Rececionista",
   TEACHER: "Professor",
   PARENT: "Encarregado",
   STUDENT: "Aluno",
@@ -271,6 +290,7 @@ const Definicoes = () => {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [editUser, setEditUser] = useState<UserRow | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   // Permissions
   type Perm = { module: ModuleKey; can_read: boolean; can_write: boolean; can_delete: boolean };
@@ -477,7 +497,7 @@ const Definicoes = () => {
   };
 
   const defaultPerm = (role: Role, mod: ModuleKey): Omit<Perm, "module"> => {
-    if (role === "ADMIN" || role === "SUPER_ADMIN")
+    if (role === "ADMIN" || role === "SUPER_ADMIN" || isSchoolManagementRole(role))
       return { can_read: true, can_write: true, can_delete: true };
     if (role === "TEACHER") {
       const w = ["avaliacoes", "presencas", "eventos", "material"].includes(mod);
@@ -1395,9 +1415,21 @@ const Definicoes = () => {
         {/* UTILIZADORES */}
         {activeTab === "utilizadores" && (
           <div className="rounded-2xl bg-card shadow-card">
-            <div className="border-b border-border p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-5">
+              <div>
               <h2 className="text-lg font-bold text-foreground">Utilizadores</h2>
               <p className="text-sm text-muted-foreground">Total: {users.length}</p>
+              </div>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setInviteOpen(true)}
+                  className="inline-flex h-10 items-center gap-2 rounded-full bg-pastel-blue px-4 text-sm font-semibold text-pastel-blue-foreground shadow-soft hover:opacity-90"
+                >
+                  <Plus className="h-4 w-4" strokeWidth={2} />
+                  Novo utilizador
+                </button>
+              )}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1876,6 +1908,20 @@ const Definicoes = () => {
             </div>
           )
         )}
+
+      <InviteStaffUserDialog
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        onInvited={async () => {
+          if (!schoolId) return;
+          const { data } = await supabase
+            .from("profiles")
+            .select("id, full_name, role, is_active, phone, avatar_url")
+            .eq("school_id", schoolId)
+            .order("full_name");
+          if (data) setUsers(data as UserRow[]);
+        }}
+      />
 
         {/* Edit user modal */}
         {editUser && (

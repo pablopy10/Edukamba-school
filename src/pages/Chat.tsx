@@ -14,8 +14,10 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import type { UserRole } from "@/hooks/useUserRole";
+import { ROLE_LABEL_INVITE } from "@/components/definicoes/InviteStaffUserDialog";
 
-type Role = "ADMIN" | "TEACHER" | "PARENT" | "STUDENT" | "SUPER_ADMIN" | null;
+type Role = UserRole;
 
 type Contact = {
   id: string;
@@ -73,14 +75,11 @@ const formatTime = (iso: string | null) => {
   return d.toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit" });
 };
 const roleLabel = (r: Role) => {
-  switch (r) {
-    case "ADMIN": return "Administrador";
-    case "TEACHER": return "Professor";
-    case "PARENT": return "Educador";
-    case "STUDENT": return "Aluno";
-    case "SUPER_ADMIN": return "Super admin";
-    default: return "Membro";
-  }
+  if (!r) return "Membro";
+  if (r === "PARENT") return "Educador";
+  if (r === "STUDENT") return "Aluno";
+  if (r === "SUPER_ADMIN") return "Super admin";
+  return ROLE_LABEL_INVITE[r as keyof typeof ROLE_LABEL_INVITE] ?? r;
 };
 
 // Allowed-pair check (UI mirror of RLS): students excluded entirely; teacher↔student forbidden

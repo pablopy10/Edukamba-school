@@ -25,6 +25,7 @@ import { useAcademicYear } from "@/context/AcademicYearContext";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 
 type ReportKey =
   | "alunos"
@@ -147,7 +148,7 @@ const Relatorios = () => {
     load();
   }, [user?.id, selectedYearId]);
 
-  const isAdmin = role === "ADMIN";
+  const isAdmin = isSchoolManagementRole(role);
 
   const meta = reports.find((r) => r.key === active)!;
 

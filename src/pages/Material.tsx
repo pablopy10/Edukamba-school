@@ -19,6 +19,7 @@ import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME, showPageKpiCards } from "@/lib/nativeApp";
+import { isSchoolManagementOrTeacher, isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 
 type Category = "papelaria" | "laboratorio" | "artes" | "desporto" | "tecnologia";
 
@@ -78,9 +79,9 @@ const Material = () => {
   const [editingRequest, setEditingRequest] = useState<RequestRow | null>(null);
   const [deliveryDialog, setDeliveryDialog] = useState<RequestRow | null>(null);
 
-  const isAdmin = userRole === "ADMIN";
-  const canMarkDeliveries = (userRole === "ADMIN" || userRole === "TEACHER") && !isStudent;
-  const canRequest = (userRole === "ADMIN" || userRole === "TEACHER") && !isStudent;
+  const isAdmin = isSchoolManagementRole(userRole);
+  const canMarkDeliveries = isSchoolManagementOrTeacher(userRole) && !isStudent;
+  const canRequest = isSchoolManagementOrTeacher(userRole) && !isStudent;
 
   // Parents never see stock; force them onto the requests tab.
   useEffect(() => {

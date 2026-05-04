@@ -49,6 +49,7 @@ import {
   type TeacherAssessmentRow,
 } from "@/lib/offline/teacherAvaliacoesQueries";
 import { useUserRole } from "@/hooks/useUserRole";
+import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { useAuth } from "@/hooks/useAuth";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
@@ -522,7 +523,7 @@ const Avaliacoes = () => {
     (a: Assessment) => {
       if (studentReadOnly) return false;
       if (roleLoading || !user?.id) return false;
-      if (role === "ADMIN" || role === "SUPER_ADMIN") return true;
+      if (isSchoolManagementRole(role)) return true;
       if (role === "TEACHER") return (a.created_by ?? null) === user.id;
       return false;
     },

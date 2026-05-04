@@ -4,6 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useModules, ModuleKey } from "@/context/ModulesContext";
 import { useUserRole, UserRole } from "@/hooks/useUserRole";
+import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 
 type NavItem = {
   icon: ElementType;
@@ -40,7 +41,7 @@ export const MobileBottomNav = () => {
   const { modules } = useModules();
   const { role, loading } = useUserRole();
 
-  const isPrivileged = role === "ADMIN" || role === "SUPER_ADMIN";
+  const isPrivileged = role === "SUPER_ADMIN" || (role != null && isSchoolManagementRole(role));
 
   if (loading || role === null) {
     return (

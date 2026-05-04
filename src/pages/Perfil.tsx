@@ -23,6 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { ROLE_LABEL_INVITE } from "@/components/definicoes/InviteStaffUserDialog";
 
 type Tab = "pessoal" | "credenciais" | "preferencias" | "seguranca";
 
@@ -60,14 +61,11 @@ const tabs: { id: Tab; label: string; icon: typeof User }[] = [
 ];
 
 const roleLabel = (r: string | null | undefined) => {
-  switch (r) {
-    case "ADMIN": return "Administrador";
-    case "TEACHER": return "Professor";
-    case "PARENT": return "Educador";
-    case "STUDENT": return "Aluno";
-    case "SUPER_ADMIN": return "Super admin";
-    default: return "Funcionário";
-  }
+  if (!r) return "Funcionário";
+  if (r === "PARENT") return "Educador";
+  if (r === "STUDENT") return "Aluno";
+  if (r === "SUPER_ADMIN") return "Super admin";
+  return ROLE_LABEL_INVITE[r as keyof typeof ROLE_LABEL_INVITE] ?? "Funcionário";
 };
 
 const PREFS_KEY = "perfil:prefs";

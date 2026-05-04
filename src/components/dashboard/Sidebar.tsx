@@ -9,6 +9,7 @@ import { useUserRole, UserRole } from "@/hooks/useUserRole";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { EdukambaWordmark } from "@/components/branding/EdukambaWordmark";
 import { isDashboardRouteBlockedOnNative, isNativeMobileApp } from "@/lib/nativeApp";
+import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 
 export type NavItem = { icon: ElementType; label: string; to: string; hasArrow?: boolean; moduleKey?: ModuleKey };
 
@@ -72,7 +73,7 @@ function SidebarNavigation({
   const { modules } = useModules();
   const { role, loading: roleLoading } = useUserRole();
 
-  const isPrivileged = role === "ADMIN" || role === "SUPER_ADMIN";
+  const isPrivileged = role === "SUPER_ADMIN" || (role != null && isSchoolManagementRole(role));
   const native = isNativeMobileApp();
 
   const visibleMenu = menu.filter((item) => {
