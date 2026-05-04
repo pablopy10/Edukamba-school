@@ -260,6 +260,11 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
 
     void fetchUnread();
 
+    const handleNotificationsUpdated = () => {
+      if (!cancelled) void fetchUnread();
+    };
+    window.addEventListener("notifications_updated", handleNotificationsUpdated);
+
     const channel = supabase
       .channel(`notifs_topbar_${user.id}`)
       .on(
@@ -273,6 +278,7 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
 
     return () => {
       cancelled = true;
+      window.removeEventListener("notifications_updated", handleNotificationsUpdated);
       void supabase.removeChannel(channel);
     };
   }, [user?.id]);

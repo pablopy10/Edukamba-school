@@ -176,6 +176,7 @@ const Notificacoes = () => {
       showToast("error", "Erro ao actualizar notificações.");
       loadNotifications();
     } else {
+      window.dispatchEvent(new Event("notifications_updated"));
       showToast("success", `${ids.length} notificação(ões) actualizada(s).`);
     }
   };
@@ -193,6 +194,7 @@ const Notificacoes = () => {
       showToast("error", "Erro ao eliminar notificações.");
       loadNotifications();
     } else {
+      window.dispatchEvent(new Event("notifications_updated"));
       showToast("success", `${ids.length} notificação(ões) eliminada(s).`);
     }
   };
