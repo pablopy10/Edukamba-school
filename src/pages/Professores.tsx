@@ -69,7 +69,7 @@ async function fetchParentScopedTeachers(classroomIds: string[]): Promise<{
   if (profileIds.length > 0) {
     const { data: tData, error: tErr } = await supabase
       .from("teachers")
-      .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, profiles(full_name, phone)")
+      .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, education_institution, academic_degree, field_of_study, birth_date, profiles(full_name, phone)")
       .in("profile_id", profileIds)
       .order("created_at", { ascending: false });
 
@@ -98,6 +98,10 @@ async function fetchParentScopedTeachers(classroomIds: string[]): Promise<{
       hire_date: null,
       employee_id: null,
       avatar_color: "lilac",
+      education_institution: null,
+      academic_degree: null,
+      field_of_study: null,
+      birth_date: null,
       profiles: prof ? { full_name: prof.full_name, phone: prof.phone } : null,
       isHomeroomDirector: true,
       isSyntheticParentRow: true,
@@ -140,7 +144,7 @@ const Professores = () => {
     const [{ data: tData, error: tErr }, { data: sData }] = await Promise.all([
       supabase
         .from("teachers")
-        .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, profiles(full_name, phone)")
+        .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, education_institution, academic_degree, field_of_study, birth_date, profiles(full_name, phone)")
         .order("created_at", { ascending: false }),
       supabase.from("subjects").select("id, name").order("name"),
     ]);

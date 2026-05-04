@@ -13,6 +13,10 @@ interface InvitePayload {
   hire_date?: string | null;
   employee_id?: string | null;
   avatar_color?: string;
+  education_institution?: string | null;
+  academic_degree?: string | null;
+  field_of_study?: string | null;
+  birth_date?: string | null;
   password?: string | null; // if provided, create with password instead of invite
   send_invite?: boolean; // default true if no password
 }
@@ -111,6 +115,10 @@ Deno.serve(async (req) => {
       hire_date: body.hire_date ?? null,
       employee_id: body.employee_id ?? null,
       avatar_color: body.avatar_color ?? "blue",
+      education_institution: body.education_institution?.trim() || null,
+      academic_degree: body.academic_degree?.trim() || null,
+      field_of_study: body.field_of_study?.trim() || null,
+      birth_date: body.birth_date?.trim() || null,
     }).select().single();
 
     if (tErr) throw tErr;

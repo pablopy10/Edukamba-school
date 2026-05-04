@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { ACADEMIC_DEGREE_OPTIONS } from "@/lib/teacherAcademic";
 
 export type TeacherRow = {
   id: string;
@@ -15,6 +16,10 @@ export type TeacherRow = {
   hire_date: string | null;
   employee_id: string | null;
   avatar_color: string | null;
+  education_institution: string | null;
+  academic_degree: string | null;
+  field_of_study: string | null;
+  birth_date: string | null;
   profiles: { full_name: string; phone: string | null } | null;
   /** Só modo educador: professor é diretor de turma do(s) turma(s) do educando. */
   isHomeroomDirector?: boolean;
@@ -43,6 +48,10 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
   const [subjectId, setSubjectId] = useState<string>("");
   const [employeeId, setEmployeeId] = useState("");
   const [hireDate, setHireDate] = useState("");
+  const [educationInstitution, setEducationInstitution] = useState("");
+  const [academicDegree, setAcademicDegree] = useState<string>("__none__");
+  const [fieldOfStudy, setFieldOfStudy] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [avatarColor, setAvatarColor] = useState("blue");
   const [mode, setMode] = useState<"invite" | "password">("invite");
   const [password, setPassword] = useState("");
@@ -55,10 +64,15 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
         setSubjectId(teacher.subject_id ?? "");
         setEmployeeId(teacher.employee_id ?? "");
         setHireDate(teacher.hire_date ?? "");
+        setEducationInstitution(teacher.education_institution ?? "");
+        setAcademicDegree(teacher.academic_degree?.trim() ? teacher.academic_degree! : "__none__");
+        setFieldOfStudy(teacher.field_of_study ?? "");
+        setBirthDate(teacher.birth_date ?? "");
         setAvatarColor(teacher.avatar_color ?? "blue");
       } else {
         setFullName(""); setEmail(""); setPhone(""); setSubjectId("");
         setEmployeeId(""); setHireDate(""); setAvatarColor("blue");
+        setEducationInstitution(""); setAcademicDegree("__none__"); setFieldOfStudy(""); setBirthDate("");
         setMode("invite"); setPassword("");
       }
     }
@@ -77,6 +91,10 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
           employee_id: employeeId || null,
           hire_date: hireDate || null,
           avatar_color: avatarColor,
+          education_institution: educationInstitution.trim() || null,
+          academic_degree: academicDegree === "__none__" ? null : academicDegree,
+          field_of_study: fieldOfStudy.trim() || null,
+          birth_date: birthDate || null,
         }).eq("id", teacher.id);
         if (tErr) throw tErr;
 
@@ -168,6 +186,35 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
           <div>
             <Label htmlFor="hd">Data de admissão</Label>
             <Input id="hd" type="date" value={hireDate} onChange={(e) => setHireDate(e.target.value)} />
+          </div>
+          <div className="sm:col-span-2">
+            <Label htmlFor="edu-inst">Onde estudou (instituição)</Label>
+            <Input
+              id="edu-inst"
+              value={educationInstitution}
+              onChange={(e) => setEducationInstitution(e.target.value)}
+              placeholder="Escola, faculdade ou universidade"
+            />
+          </div>
+          <div>
+            <Label>Grau académico</Label>
+            <Select value={academicDegree} onValueChange={setAcademicDegree}>
+              <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Sem informação</SelectItem>
+                {ACADEMIC_DEGREE_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="field-study">Área de estudo</Label>
+            <Input id="field-study" value={fieldOfStudy} onChange={(e) => setFieldOfStudy(e.target.value)} placeholder="Ex.: Matemática" />
+          </div>
+          <div>
+            <Label htmlFor="bd">Data de nascimento</Label>
+            <Input id="bd" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
           </div>
           <div className="sm:col-span-2">
             <Label>Cor do avatar</Label>

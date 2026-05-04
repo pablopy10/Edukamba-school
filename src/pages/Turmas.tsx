@@ -395,13 +395,11 @@ const Turmas = () => {
                       <div className="min-w-0 flex-1">
                         <h3 className="text-base font-bold text-foreground">{c.name}</h3>
                         {c.courses?.name && <p className="mt-1 text-xs text-muted-foreground">{c.courses.name}</p>}
-                        {c.homeroom_teacher?.full_name && (
-                          <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <UserCog className="h-3.5 w-3.5 shrink-0 text-pastel-blue-foreground/80" strokeWidth={1.75} aria-hidden />
-                            <span className="font-medium text-foreground/90">Diretor de turma:</span>
-                            {c.homeroom_teacher.full_name}
-                          </p>
-                        )}
+                        <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+                          <UserCog className="h-3.5 w-3.5 shrink-0 text-pastel-green-foreground/90" strokeWidth={1.75} aria-hidden />
+                          <span className="font-medium text-foreground">Diretor de turma:</span>
+                          <span className="text-foreground/90">{c.homeroom_teacher?.full_name ?? "—"}</span>
+                        </p>
                       </div>
                     </div>
 

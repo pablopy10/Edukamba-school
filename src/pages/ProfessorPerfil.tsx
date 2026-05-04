@@ -7,6 +7,7 @@ import { TeacherFeedbackDialog, type TeacherFeedbackRecord } from "@/components/
 import { toast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Button } from "@/components/ui/button";
+import { academicDegreeLabel } from "@/lib/teacherAcademic";
 
 type AvatarColor = "lilac" | "blue" | "yellow" | "green" | "pink";
 
@@ -56,6 +57,10 @@ interface TeacherRow {
   employee_id: string | null;
   avatar_color: string | null;
   is_active: boolean | null;
+  education_institution: string | null;
+  academic_degree: string | null;
+  field_of_study: string | null;
+  birth_date: string | null;
   profiles: { full_name: string; phone: string | null; avatar_url: string | null; email: string | null } | null;
   subjects: { name: string } | null;
 }
@@ -131,7 +136,7 @@ const ProfessorPerfil = () => {
       if (profileId) {
         const { data: byProf } = await supabase
           .from("teachers")
-          .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, is_active, profiles(full_name, phone, avatar_url, email), subjects(name)")
+          .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, is_active, education_institution, academic_degree, field_of_study, birth_date, profiles(full_name, phone, avatar_url, email), subjects(name)")
           .eq("profile_id", profileId)
           .limit(1)
           .maybeSingle();
@@ -153,6 +158,10 @@ const ProfessorPerfil = () => {
             employee_id: null,
             avatar_color: "lilac",
             is_active: true,
+            education_institution: null,
+            academic_degree: null,
+            field_of_study: null,
+            birth_date: null,
             profiles: prof ?? { full_name: "—", phone: null, avatar_url: null, email: null },
             subjects: null,
           };
@@ -160,7 +169,7 @@ const ProfessorPerfil = () => {
       } else if (teacherTableId) {
         const { data: t } = await supabase
           .from("teachers")
-          .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, is_active, profiles(full_name, phone, avatar_url, email), subjects(name)")
+          .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, is_active, education_institution, academic_degree, field_of_study, birth_date, profiles(full_name, phone, avatar_url, email), subjects(name)")
           .eq("id", teacherTableId)
           .maybeSingle();
         if (cancelled) return;
@@ -304,6 +313,7 @@ const ProfessorPerfil = () => {
   const fullName = teacher.profiles?.full_name ?? "Professor";
   const avatarColor = (teacher.avatar_color as AvatarColor) || "blue";
   const yearsExp = yearsSince(teacher.hire_date);
+  const ageYears = yearsSince(teacher.birth_date);
 
   return (
     <>
@@ -469,8 +479,28 @@ const ProfessorPerfil = () => {
                   <p className="font-medium text-foreground">{teacher.employee_id || "—"}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Experiência</p>
+                  <p className="text-xs text-muted-foreground">Experiência na escola</p>
                   <p className="font-medium text-foreground">{yearsExp !== null ? `${yearsExp} anos` : "—"}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-muted-foreground">Onde estudou</p>
+                  <p className="font-medium text-foreground">{teacher.education_institution?.trim() || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Grau académico</p>
+                  <p className="font-medium text-foreground">{academicDegreeLabel(teacher.academic_degree)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Área de estudo</p>
+                  <p className="font-medium text-foreground">{teacher.field_of_study?.trim() || "—"}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-muted-foreground">Data de nascimento</p>
+                  <p className="font-medium text-foreground">
+                    {teacher.birth_date
+                      ? `${formatDate(teacher.birth_date)}${ageYears !== null ? ` (${ageYears} ${ageYears === 1 ? "ano" : "anos"})` : ""}`
+                      : "—"}
+                  </p>
                 </div>
               </div>
             </div>

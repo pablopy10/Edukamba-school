@@ -2727,9 +2727,13 @@ export type Database = {
       }
       teachers: {
         Row: {
+          academic_degree: string | null
           avatar_color: string | null
+          birth_date: string | null
           created_at: string
+          education_institution: string | null
           employee_id: string | null
+          field_of_study: string | null
           hire_date: string | null
           id: string
           is_active: boolean | null
@@ -2739,9 +2743,13 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          academic_degree?: string | null
           avatar_color?: string | null
+          birth_date?: string | null
           created_at?: string
+          education_institution?: string | null
           employee_id?: string | null
+          field_of_study?: string | null
           hire_date?: string | null
           id?: string
           is_active?: boolean | null
@@ -2751,9 +2759,13 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          academic_degree?: string | null
           avatar_color?: string | null
+          birth_date?: string | null
           created_at?: string
+          education_institution?: string | null
           employee_id?: string | null
+          field_of_study?: string | null
           hire_date?: string | null
           id?: string
           is_active?: boolean | null
