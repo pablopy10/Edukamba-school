@@ -33,7 +33,8 @@ import { TermsAndHolidaysManager } from "@/components/definicoes/TermsAndHoliday
 import { NewAcademicYearWizard } from "@/components/definicoes/NewAcademicYearWizard";
 import { AuditLogsPanel } from "@/components/definicoes/AuditLogsPanel";
 import { InviteStaffUserDialog } from "@/components/definicoes/InviteStaffUserDialog";
-import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
+import { isSchoolSettingsAdmin } from "@/lib/schoolStaffRoles";
+import { isDefinicoesTabAllowed } from "@/lib/staffNavAccess";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -143,17 +144,17 @@ const SaveBar = ({
   onClick,
   disabled,
   saving,
-  isAdmin,
+  canSave,
 }: {
   onClick: () => void;
   disabled?: boolean;
   saving?: boolean;
-  isAdmin?: boolean;
+  canSave?: boolean;
 }) => (
   <div className="mt-6 flex justify-end">
     <button
       onClick={onClick}
-      disabled={disabled || saving || !isAdmin}
+      disabled={disabled || saving || !canSave}
       className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:opacity-50"
     >
       {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" strokeWidth={2} />}
@@ -192,29 +193,47 @@ type ModuleKey =
   | "alunos"
   | "professores"
   | "turmas"
+  | "cursos"
+  | "disciplinas"
   | "horarios"
+  | "pedidos"
+  | "matriculas"
   | "avaliacoes"
+  | "notas"
   | "presencas"
   | "eventos"
+  | "extracurriculares"
   | "material"
-  | "matriculas"
+  | "pagamentos"
+  | "financas"
+  | "transportes"
+  | "timesheet"
   | "relatorios"
-  | "faturacao"
+  | "modulos"
   | "definicoes";
 
 const MODULES: { key: ModuleKey; label: string; desc: string }[] = [
   { key: "alunos", label: "Alunos", desc: "Fichas, matrículas e contactos." },
   { key: "professores", label: "Professores", desc: "Equipa pedagógica e atribuições." },
-  { key: "turmas", label: "Turmas", desc: "Turmas, anos e cursos." },
+  { key: "turmas", label: "Turmas", desc: "Turmas e agrupamentos." },
+  { key: "cursos", label: "Cursos", desc: "Catálogo de cursos da escola." },
+  { key: "disciplinas", label: "Disciplinas", desc: "Disciplinas por curso." },
   { key: "horarios", label: "Horários", desc: "Horários semanais e blocos." },
-  { key: "avaliacoes", label: "Avaliações", desc: "Testes, exames e notas." },
-  { key: "presencas", label: "Presenças", desc: "Marcação de presenças e faltas." },
-  { key: "eventos", label: "Eventos", desc: "Calendário escolar." },
-  { key: "material", label: "Material", desc: "Inventário e pedidos." },
   { key: "matriculas", label: "Matrículas", desc: "Inscrições no ano letivo." },
-  { key: "relatorios", label: "Relatórios", desc: "Relatórios e exportações." },
-  { key: "faturacao", label: "Faturação", desc: "Pagamentos e propinas." },
-  { key: "definicoes", label: "Definições", desc: "Configurações da escola." },
+  { key: "pedidos", label: "Pedidos de Ausência", desc: "Ausências da equipa escolar." },
+  { key: "avaliacoes", label: "Avaliações", desc: "Testes e instrumentos avaliativos." },
+  { key: "notas", label: "Notas", desc: "Lançamento e consulta de notas." },
+  { key: "presencas", label: "Presenças", desc: "Registo diário com alunos." },
+  { key: "eventos", label: "Eventos", desc: "Calendário escolar." },
+  { key: "extracurriculares", label: "Extracurriculares", desc: "Atividades e clubes." },
+  { key: "material", label: "Material", desc: "Inventário e pedidos à escola." },
+  { key: "pagamentos", label: "Pagamentos / Propinas", desc: "Cobranças aos encarregados." },
+  { key: "financas", label: "Finanças da escola", desc: "Receitas internas e despesas." },
+  { key: "transportes", label: "Transportes", desc: "Rotas e taxas escolares." },
+  { key: "timesheet", label: "Timesheet", desc: "Registo horário dos funcionários." },
+  { key: "relatorios", label: "Relatórios", desc: "Exportações e análises." },
+  { key: "modulos", label: "Visibilidade de módulos", desc: "Ativar/ocultar módulos por plano (exclusivo).." },
+  { key: "definicoes", label: "Escola na cloud", desc: "Dados da marca, marca e SaaS (exclusivo)." },
 ];
 
 const NOTIFICATION_CHANNELS: { key: string; label: string; desc: string }[] = [
@@ -245,7 +264,23 @@ const Definicoes = () => {
   const [saving, setSaving] = useState(false);
   const [myRole, setMyRole] = useState<Role | null>(null);
   const [schoolId, setSchoolId] = useState<string | null>(null);
-  const isAdmin = myRole === "ADMIN" || myRole === "SUPER_ADMIN";
+  /** Apenas ADMIN/Super: escola na cloud, marca, SaaS e módulos. */
+  const settingsAdmin = isSchoolSettingsAdmin(myRole);
+  /** ADMIN/Super ou director: utilizadores e políticas pedagógicas operacionais. */
+  const operationsAdmin = settingsAdmin || myRole === "DIRECTOR";
+
+  const visibleDefinicoesTabs = useMemo(
+    () => tabs.filter((t) => myRole === null || isDefinicoesTabAllowed(myRole, t.id)),
+    [myRole],
+  );
+
+  useEffect(() => {
+    if (!myRole) return;
+    if (!visibleDefinicoesTabs.some((t) => t.id === activeTab)) {
+      const fallback = visibleDefinicoesTabs[0]?.id ?? activeTab;
+      if (fallback !== activeTab) setActiveTab(fallback as Tab);
+    }
+  }, [myRole, activeTab, visibleDefinicoesTabs]);
 
   // School
   const [school, setSchool] = useState({
@@ -521,13 +556,73 @@ const Definicoes = () => {
   };
 
   const defaultPerm = (role: Role, mod: ModuleKey): Omit<Perm, "module"> => {
-    if (role === "ADMIN" || role === "SUPER_ADMIN" || isSchoolManagementRole(role))
-      return { can_read: true, can_write: true, can_delete: true };
+    const FULL = (): Omit<Perm, "module"> => ({
+      can_read: true,
+      can_write: true,
+      can_delete: true,
+    });
+    const R = (): Omit<Perm, "module"> => ({
+      can_read: true,
+      can_write: false,
+      can_delete: false,
+    });
+    const RW = (): Omit<Perm, "module"> => ({
+      can_read: true,
+      can_write: true,
+      can_delete: false,
+    });
+    const N = (): Omit<Perm, "module"> => ({
+      can_read: false,
+      can_write: false,
+      can_delete: false,
+    });
+
+    if (role === "ADMIN" || role === "SUPER_ADMIN") return FULL();
+
+    if (role === "DIRECTOR") {
+      if (mod === "modulos" || mod === "definicoes") return N();
+      return FULL();
+    }
+
+    if (role === "SECRETARY") {
+      const academicRw = ["alunos", "turmas", "cursos", "disciplinas", "horarios", "matriculas", "pedidos"].includes(mod);
+      if (academicRw) return RW();
+      if (mod === "pagamentos" || mod === "notas" || mod === "relatorios") return R();
+      if (mod === "modulos" || mod === "definicoes" || mod === "financas" || mod === "transportes" || mod === "timesheet") return N();
+      if (mod === "presencas" || mod === "professores" || mod === "extracurriculares" || mod === "avaliacoes" || mod === "material") return R();
+      return R();
+    }
+
+    if (role === "TREASURER") {
+      if (mod === "pagamentos" || mod === "financas" || mod === "transportes") return RW();
+      if (mod === "alunos" || mod === "matriculas" || mod === "material") return R();
+      if (mod === "notas" || mod === "avaliacoes") return N();
+      return N();
+    }
+
+    if (role === "STOCK_MANAGER" || role === "LIBRARIAN") {
+      if (mod === "material") return RW();
+      if (mod === "alunos" || mod === "professores") return R();
+      if (mod === "financas" || mod === "notas" || mod === "turmas" || mod === "avaliacoes") return N();
+      return N();
+    }
+
+    if (role === "RECEPTIONIST") {
+      if (mod === "horarios" || mod === "eventos" || mod === "professores") return R();
+      if (mod === "alunos") return R();
+      if (mod === "pedidos") return RW();
+      if (mod === "pagamentos" || mod === "financas" || mod === "matriculas" || mod === "notas" || mod === "avaliacoes") return N();
+      return N();
+    }
+
     if (role === "TEACHER") {
       const w = ["avaliacoes", "presencas", "eventos", "material"].includes(mod);
       return { can_read: true, can_write: w, can_delete: false };
     }
-    return { can_read: ["alunos", "eventos", "avaliacoes"].includes(mod), can_write: false, can_delete: false };
+    if (role === "PARENT" || role === "STUDENT") {
+      return { can_read: ["alunos", "eventos", "avaliacoes"].includes(mod), can_write: false, can_delete: false };
+    }
+    return R();
   };
 
   // ===== Notifications: load when tab/role changes =====
@@ -1012,16 +1107,16 @@ const Definicoes = () => {
           <p className="text-sm text-muted-foreground">
             Faça a gestão das definições gerais da escola, marca, utilizadores e permissões.
           </p>
-          {!isAdmin && (
-            <p className="mt-2 rounded-xl bg-pastel-yellow/40 px-3 py-2 text-xs text-pastel-yellow-foreground">
-              Apenas administradores podem alterar as definições.
+          {operationsAdmin && !settingsAdmin && (
+            <p className="mt-2 rounded-xl bg-pastel-blue/35 px-3 py-2 text-xs text-pastel-blue-foreground">
+              Como director gere utilizadores e permissões. Alterações à marca, dados da instituição e fatura Edukamba ficam apenas com o administrador.
             </p>
           )}
         </div>
 
         {/* Tabs */}
         <div className="flex flex-wrap gap-2 rounded-2xl bg-card p-2 shadow-card">
-          {tabs.map((t) => {
+          {visibleDefinicoesTabs.map((t) => {
             const Icon = t.icon;
             const active = activeTab === t.id;
             return (
@@ -1049,7 +1144,7 @@ const Definicoes = () => {
                   className={inputCls(!!schoolErrors.name)}
                   value={school.name}
                   maxLength={120}
-                  disabled={!isAdmin}
+                  disabled={!settingsAdmin}
                   onChange={(e) => setSchool({ ...school, name: e.target.value })}
                 />
               </Field>
@@ -1058,7 +1153,7 @@ const Definicoes = () => {
                   className={inputCls(!!schoolErrors.nif)}
                   value={school.nif}
                   maxLength={40}
-                  disabled={!isAdmin}
+                  disabled={!settingsAdmin}
                   onChange={(e) => setSchool({ ...school, nif: e.target.value })}
                 />
               </Field>
@@ -1068,13 +1163,13 @@ const Definicoes = () => {
                     className={inputCls(!!schoolErrors.address)}
                     value={school.address}
                     maxLength={200}
-                    disabled={!isAdmin}
+                    disabled={!settingsAdmin}
                     onChange={(e) => setSchool({ ...school, address: e.target.value })}
                   />
                 </Field>
               </div>
             </div>
-            <SaveBar onClick={handleSaveSchool} saving={saving} isAdmin={isAdmin} />
+            <SaveBar onClick={handleSaveSchool} saving={saving} canSave={settingsAdmin} />
           </SectionCard>
         )}
 
@@ -1096,7 +1191,7 @@ const Definicoes = () => {
                   <label
                     className={cn(
                       "flex h-10 cursor-pointer items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-soft hover:bg-accent",
-                      (!isAdmin || logoUploading) && "opacity-50 cursor-not-allowed",
+                      (!settingsAdmin || logoUploading) && "opacity-50 cursor-not-allowed",
                     )}
                   >
                     {logoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" strokeWidth={1.75} />}
@@ -1105,7 +1200,7 @@ const Definicoes = () => {
                       type="file"
                       accept="image/*"
                       className="hidden"
-                      disabled={!isAdmin || logoUploading}
+                      disabled={!settingsAdmin || logoUploading}
                       onChange={handleLogoUpload}
                     />
                   </label>
@@ -1116,14 +1211,14 @@ const Definicoes = () => {
                 <div className="flex items-center gap-3">
                   <input
                     type="color"
-                    disabled={!isAdmin}
+                    disabled={!settingsAdmin}
                     value={school.primary_color}
                     onChange={(e) => setSchool({ ...school, primary_color: e.target.value })}
                     className="h-11 w-14 cursor-pointer rounded-xl border border-border bg-card"
                   />
                   <input
                     className={inputCls(false)}
-                    disabled={!isAdmin}
+                    disabled={!settingsAdmin}
                     value={school.primary_color}
                     onChange={(e) => setSchool({ ...school, primary_color: e.target.value })}
                   />
@@ -1133,21 +1228,21 @@ const Definicoes = () => {
                 <div className="flex items-center gap-3">
                   <input
                     type="color"
-                    disabled={!isAdmin}
+                    disabled={!settingsAdmin}
                     value={school.secondary_color}
                     onChange={(e) => setSchool({ ...school, secondary_color: e.target.value })}
                     className="h-11 w-14 cursor-pointer rounded-xl border border-border bg-card"
                   />
                   <input
                     className={inputCls(false)}
-                    disabled={!isAdmin}
+                    disabled={!settingsAdmin}
                     value={school.secondary_color}
                     onChange={(e) => setSchool({ ...school, secondary_color: e.target.value })}
                   />
                 </div>
               </Field>
             </div>
-            <SaveBar onClick={handleSaveBrand} saving={saving} isAdmin={isAdmin} />
+            <SaveBar onClick={handleSaveBrand} saving={saving} canSave={settingsAdmin} />
           </SectionCard>
         )}
 
@@ -1179,7 +1274,7 @@ const Definicoes = () => {
                     </Select>
                   </Field>
                 </div>
-                {isAdmin && (
+                {settingsAdmin && (
                   <button
                     type="button"
                     onClick={handleCreateAcademicYear}
@@ -1190,7 +1285,7 @@ const Definicoes = () => {
                     Novo ano letivo
                   </button>
                 )}
-                {isAdmin && year.id && (
+                {settingsAdmin && year.id && (
                   <button
                     type="button"
                     onClick={() => setConfirmDeleteYearId(year.id)}
@@ -1216,7 +1311,7 @@ const Definicoes = () => {
                   <Field label="Ano letivo">
                     <input
                       className={inputCls(false)}
-                      disabled={!isAdmin}
+                      disabled={!settingsAdmin}
                       value={year.label}
                       onChange={(e) => setYear({ ...year, label: e.target.value })}
                     />
@@ -1225,7 +1320,7 @@ const Definicoes = () => {
                     <input
                       type="date"
                       className={inputCls(false)}
-                      disabled={!isAdmin}
+                      disabled={!settingsAdmin}
                       value={year.start_date}
                       onChange={(e) => setYear({ ...year, start_date: e.target.value })}
                     />
@@ -1234,7 +1329,7 @@ const Definicoes = () => {
                     <input
                       type="date"
                       className={inputCls(false)}
-                      disabled={!isAdmin}
+                      disabled={!settingsAdmin}
                       value={year.end_date}
                       onChange={(e) => setYear({ ...year, end_date: e.target.value })}
                     />
@@ -1242,7 +1337,7 @@ const Definicoes = () => {
                 </div>
               )}
               <div className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
-                {year.id && !years.find((y) => y.id === year.id)?.is_active && isAdmin && (
+                {year.id && !years.find((y) => y.id === year.id)?.is_active && settingsAdmin && (
                   <button
                     type="button"
                     onClick={handleSetActiveAcademic}
@@ -1254,7 +1349,7 @@ const Definicoes = () => {
                 )}
                 <button
                   onClick={handleSaveAcademic}
-                  disabled={!year.id || saving || !isAdmin}
+                  disabled={!year.id || saving || !settingsAdmin}
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" strokeWidth={2} />}
@@ -1267,14 +1362,14 @@ const Definicoes = () => {
               title="Trimestres e Férias"
               desc="Defina as datas dos 1º, 2º e 3º trimestres e marque os períodos de férias dos alunos."
             >
-              <TermsAndHolidaysManager schoolId={schoolId} academicYearId={year.id ?? null} isAdmin={isAdmin} />
+              <TermsAndHolidaysManager schoolId={schoolId} academicYearId={year.id ?? null} isAdmin={settingsAdmin} />
             </SectionCard>
 
             <SectionCard
               title="Configuração de Novo Ano Letivo"
               desc="Crie o próximo ciclo escolar e clone automaticamente a estrutura do ano anterior — turmas, cursos e tabela de preços — sem trabalho manual."
             >
-              <NewAcademicYearWizard schoolId={schoolId} isAdmin={isAdmin} />
+              <NewAcademicYearWizard schoolId={schoolId} isAdmin={settingsAdmin} />
             </SectionCard>
 
             <SectionCard
@@ -1288,7 +1383,7 @@ const Definicoes = () => {
                     min={0}
                     step={0.1}
                     className={inputCls(false)}
-                    disabled={!isAdmin}
+                    disabled={!settingsAdmin}
                     value={academicSettings.honor_roll_min_average}
                     onChange={(e) =>
                       setAcademicSettings((s) => ({
@@ -1304,7 +1399,7 @@ const Definicoes = () => {
                     min={1}
                     step={1}
                     className={inputCls(false)}
-                    disabled={!isAdmin}
+                    disabled={!settingsAdmin}
                     value={academicSettings.grading_max_score}
                     onChange={(e) =>
                       setAcademicSettings((s) => ({
@@ -1316,7 +1411,7 @@ const Definicoes = () => {
                 </Field>
               </div>
               <div className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
-                <SaveBar onClick={handleSaveAcademicSettings} saving={savingAcademicSettings} isAdmin={isAdmin} />
+                <SaveBar onClick={handleSaveAcademicSettings} saving={savingAcademicSettings} canSave={settingsAdmin} />
               </div>
             </SectionCard>
 
@@ -1328,7 +1423,7 @@ const Definicoes = () => {
                 <Field label="Cobrar multa por atraso?">
                   <select
                     className={inputCls(false)}
-                    disabled={!isAdmin}
+                    disabled={!settingsAdmin}
                     value={academicSettings.late_fee_enabled ? "yes" : "no"}
                     onChange={(e) =>
                       setAcademicSettings((s) => ({ ...s, late_fee_enabled: e.target.value === "yes" }))
@@ -1341,7 +1436,7 @@ const Definicoes = () => {
                 <Field label="Tipo de multa">
                   <select
                     className={inputCls(false)}
-                    disabled={!isAdmin || !academicSettings.late_fee_enabled}
+                    disabled={!settingsAdmin || !academicSettings.late_fee_enabled}
                     value={academicSettings.late_fee_type}
                     onChange={(e) =>
                       setAcademicSettings((s) => ({
@@ -1366,7 +1461,7 @@ const Definicoes = () => {
                     min={0}
                     step={academicSettings.late_fee_type === "percentage" ? 0.5 : 100}
                     className={inputCls(false)}
-                    disabled={!isAdmin || !academicSettings.late_fee_enabled}
+                    disabled={!settingsAdmin || !academicSettings.late_fee_enabled}
                     value={academicSettings.late_fee_value}
                     onChange={(e) =>
                       setAcademicSettings((s) => ({
@@ -1382,7 +1477,7 @@ const Definicoes = () => {
                 vencimento ou já regularizadas não são afetadas.
               </p>
               <div className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
-                <SaveBar onClick={handleSaveAcademicSettings} saving={savingAcademicSettings} isAdmin={isAdmin} />
+                <SaveBar onClick={handleSaveAcademicSettings} saving={savingAcademicSettings} canSave={settingsAdmin} />
               </div>
             </SectionCard>
 
@@ -1397,7 +1492,7 @@ const Definicoes = () => {
                     min={0}
                     step={100}
                     className={inputCls(false)}
-                    disabled={!isAdmin}
+                    disabled={!settingsAdmin}
                     value={academicSettings.enrollment_fee_new}
                     onChange={(e) =>
                       setAcademicSettings((s) => ({
@@ -1413,7 +1508,7 @@ const Definicoes = () => {
                     min={0}
                     step={100}
                     className={inputCls(false)}
-                    disabled={!isAdmin}
+                    disabled={!settingsAdmin}
                     value={academicSettings.enrollment_fee_renewal}
                     onChange={(e) =>
                       setAcademicSettings((s) => ({
@@ -1430,7 +1525,7 @@ const Definicoes = () => {
                 validação pela administração.
               </p>
               <div className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
-                <SaveBar onClick={handleSaveAcademicSettings} saving={savingAcademicSettings} isAdmin={isAdmin} />
+                <SaveBar onClick={handleSaveAcademicSettings} saving={savingAcademicSettings} canSave={settingsAdmin} />
               </div>
             </SectionCard>
           </div>
@@ -1465,7 +1560,7 @@ const Definicoes = () => {
                     className={cn(inputCls(false), "h-10 w-full pl-10")}
                   />
                 </div>
-                {isAdmin && (
+                {operationsAdmin && (
                   <button
                     type="button"
                     onClick={() => setInviteOpen(true)}
@@ -1497,7 +1592,7 @@ const Definicoes = () => {
                       <td className="py-3.5 pr-4">
                         <select
                           value={u.role ?? "TEACHER"}
-                          disabled={!isAdmin || u.id === user?.id}
+                          disabled={!operationsAdmin || u.id === user?.id}
                           onChange={(e) => updateUserRole(u.id, e.target.value as Role)}
                           className="h-9 rounded-full border border-border bg-card px-3 text-xs font-medium text-foreground disabled:opacity-50"
                         >
@@ -1513,7 +1608,7 @@ const Definicoes = () => {
                           {statusBadge(u.is_active)}
                           <Toggle
                             checked={u.is_active !== false}
-                            disabled={!isAdmin || u.id === user?.id}
+                            disabled={!operationsAdmin || u.id === user?.id}
                             onChange={(v) => toggleUserActive(u.id, v)}
                           />
                         </div>
@@ -1522,7 +1617,7 @@ const Definicoes = () => {
                         <div className="flex items-center justify-end gap-1">
                           <button
                             title="Editar"
-                            disabled={!isAdmin}
+                            disabled={!operationsAdmin}
                             onClick={() => setEditUser(u)}
                             className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground disabled:opacity-50"
                           >
@@ -1530,7 +1625,7 @@ const Definicoes = () => {
                           </button>
                           <button
                             title="Remover"
-                            disabled={!isAdmin || u.id === user?.id}
+                            disabled={!operationsAdmin || u.id === user?.id}
                             onClick={() => setRemoveId(u.id)}
                             className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground disabled:opacity-50"
                           >
@@ -1603,14 +1698,19 @@ const Definicoes = () => {
                 <PermissionsTable
                   perms={rolePerms}
                   onChange={setRolePermField}
-                  disabled={!isAdmin || activeRole === "ADMIN"}
+                  disabled={!operationsAdmin || (activeRole === "ADMIN" && !settingsAdmin)}
                 />
                 {activeRole === "ADMIN" && (
                   <p className="mt-3 rounded-xl bg-pastel-yellow/40 p-3 text-xs text-pastel-yellow-foreground">
                     Administradores têm sempre todas as permissões.
                   </p>
                 )}
-                <SaveBar onClick={saveRolePerms} disabled={activeRole === "ADMIN"} saving={saving} isAdmin={isAdmin} />
+                <SaveBar
+                  onClick={saveRolePerms}
+                  disabled={activeRole === "ADMIN"}
+                  saving={saving}
+                  canSave={operationsAdmin && (activeRole !== "ADMIN" || settingsAdmin)}
+                />
               </>
             ) : (
               <>
@@ -1618,7 +1718,7 @@ const Definicoes = () => {
                   <select
                     className={inputCls(false)}
                     value={activeUserId}
-                    disabled={!isAdmin}
+                    disabled={!operationsAdmin}
                     onChange={(e) => setActiveUserId(e.target.value)}
                   >
                     <option value="">— Selecione —</option>
@@ -1633,8 +1733,8 @@ const Definicoes = () => {
                 </Field>
                 {activeUserId && (
                   <>
-                    <PermissionsTable perms={userPerms} onChange={setUserPermField} disabled={!isAdmin} />
-                    <SaveBar onClick={saveUserPerms} saving={saving} isAdmin={isAdmin} />
+                    <PermissionsTable perms={userPerms} onChange={setUserPermField} disabled={!operationsAdmin} />
+                    <SaveBar onClick={saveUserPerms} saving={saving} canSave={operationsAdmin} />
                   </>
                 )}
               </>
@@ -1671,13 +1771,13 @@ const Definicoes = () => {
                   </div>
                   <Toggle
                     checked={notifPrefs[c.key] ?? true}
-                    disabled={!isAdmin}
+                    disabled={!operationsAdmin}
                     onChange={(v) => setNotifPrefs((p) => ({ ...p, [c.key]: v }))}
                   />
                 </div>
               ))}
             </div>
-            <SaveBar onClick={saveNotifPrefs} saving={saving} isAdmin={isAdmin} />
+            <SaveBar onClick={saveNotifPrefs} saving={saving} canSave={operationsAdmin} />
           </SectionCard>
         )}
 
@@ -1801,7 +1901,7 @@ const Definicoes = () => {
                       </ul>
                       <button
                         type="button"
-                        disabled={!isAdmin || isCurrent}
+                        disabled={!settingsAdmin || isCurrent}
                         onClick={() =>
                           setPlanRequest({
                             open: true,
@@ -1835,8 +1935,8 @@ const Definicoes = () => {
                 {(["SEMESTRAL", "ANNUAL"] as const).map((c) => (
                   <button
                     key={c}
-                    onClick={() => isAdmin && saveBillingCycle(c)}
-                    disabled={!isAdmin}
+                    onClick={() => settingsAdmin && saveBillingCycle(c)}
+                    disabled={!settingsAdmin}
                     className={cn(
                       "flex flex-col items-start gap-1 rounded-2xl border-2 p-5 text-left transition-[var(--transition-smooth)] disabled:opacity-50",
                       sub.billing_cycle === c ? "border-pastel-blue bg-pastel-blue/20" : "border-border bg-card hover:border-pastel-blue/50",
@@ -1916,7 +2016,7 @@ const Definicoes = () => {
                                 Ver comprovativo
                               </button>
                             )}
-                            {isAdmin && inv.status !== "paid" && (
+                            {settingsAdmin && inv.status !== "paid" && (
                               <button
                                 onClick={() => {
                                   setProofInvoice(inv);
@@ -1950,14 +2050,14 @@ const Definicoes = () => {
 
         {/* AUDITORIA */}
         {activeTab === "auditoria" && (
-          isAdmin ? (
+          operationsAdmin ? (
             <AuditLogsPanel />
           ) : (
             <div className="rounded-2xl bg-card p-8 text-center shadow-card">
               <Shield className="mx-auto mb-3 h-10 w-10 text-muted-foreground" strokeWidth={1.5} />
               <h2 className="text-lg font-bold text-foreground">Acesso restrito</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Apenas administradores podem consultar os logs de auditoria.
+                Apenas administradores ou diretores da escola podem consultar os logs de auditoria.
               </p>
             </div>
           )

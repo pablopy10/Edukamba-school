@@ -20,6 +20,18 @@ export function isSchoolManagementOrTeacher(role: string | null | undefined): bo
   return role === "TEACHER" || isSchoolManagementRole(role);
 }
 
+/** Apenas estas funções gerem definições da escola na cloud (nome, marca, SaaS), módulos e políticas privilegiadas. */
+export type SchoolSettingsRole = "ADMIN" | "SUPER_ADMIN";
+
+export function isSchoolSettingsAdmin(role: string | null | undefined): role is SchoolSettingsRole {
+  return role === "ADMIN" || role === "SUPER_ADMIN";
+}
+
+/** Apenas estes perfis podem apagar registos de forma irreversível (RLS deve limitar igual). */
+export function canSchoolHardDeleteRole(role: string | null | undefined): boolean {
+  return role === "ADMIN" || role === "SUPER_ADMIN" || role === "DIRECTOR";
+}
+
 /** Elegível como diretor de turma (perfil na escola). */
 export const HOMEROOM_ELIGIBLE_PROFILE_ROLES = [
   ...SCHOOL_MANAGEMENT_ROLES,

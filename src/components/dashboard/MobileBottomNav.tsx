@@ -3,8 +3,8 @@ import { Home, UsersRound, CalendarDays, BookMarked, BookOpenCheck, Smartphone }
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useModules, ModuleKey } from "@/context/ModulesContext";
-import { useUserRole, UserRole } from "@/hooks/useUserRole";
-import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
+import { useUserRole } from "@/hooks/useUserRole";
+import { isNavPathAllowedForRole } from "@/lib/staffNavAccess";
 
 type NavItem = {
   icon: ElementType;
@@ -22,13 +22,6 @@ const bottomNavItems: NavItem[] = [
   { icon: Smartphone, label: "Pedidos", to: "/pedidos", moduleKey: "pedidos" },
 ];
 
-/** Igual à Sidebar: rotas permitidas por perfil (Admin/SuperAdmin ignorado aqui). */
-const roleAllowedRoutes: Record<Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">, string[]> = {
-  TEACHER: ["/dashboard", "/alunos", "/turmas", "/avaliacoes", "/presencas", "/horario", "/material", "/pedidos", "/eventos", "/educadores"],
-  PARENT: ["/dashboard", "/alunos", "/avaliacoes", "/pagamentos", "/horario", "/matriculas", "/eventos", "/presencas", "/material", "/professores"],
-  STUDENT: ["/dashboard", "/presencas", "/horario", "/avaliacoes", "/eventos", "/material"],
-};
-
 function routeActive(pathname: string, itemPath: string): boolean {
   if (itemPath === "/dashboard") {
     return pathname === "/dashboard" || pathname === "/";
@@ -40,8 +33,6 @@ export const MobileBottomNav = () => {
   const location = useLocation();
   const { modules } = useModules();
   const { role, loading } = useUserRole();
-
-  const isPrivileged = role === "SUPER_ADMIN" || (role != null && isSchoolManagementRole(role));
 
   if (loading || role === null) {
     return (
@@ -64,9 +55,7 @@ export const MobileBottomNav = () => {
 
   const visible = bottomNavItems.filter((item) => {
     if (item.moduleKey && !modules[item.moduleKey]) return false;
-    if (isPrivileged) return true;
-    const allowed = roleAllowedRoutes[role as Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">] ?? [];
-    return allowed.includes(item.to);
+    return isNavPathAllowedForRole(role, item.to);
   });
 
   if (visible.length === 0) return null;

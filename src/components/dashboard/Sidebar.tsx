@@ -5,26 +5,17 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useModules, ModuleKey } from "@/context/ModulesContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useUserRole, UserRole } from "@/hooks/useUserRole";
+import { useUserRole } from "@/hooks/useUserRole";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { EdukambaWordmark } from "@/components/branding/EdukambaWordmark";
 import { isDashboardRouteBlockedOnNative, isNativeMobileApp } from "@/lib/nativeApp";
-import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
+import {
+  canOpenDefinicoesPage,
+  canOpenModulosPage,
+  isNavPathAllowedForRole,
+} from "@/lib/staffNavAccess";
 
 export type NavItem = { icon: ElementType; label: string; to: string; hasArrow?: boolean; moduleKey?: ModuleKey };
-
-// Role-based visible routes. Admin/SuperAdmin see everything (subject to module toggles).
-const roleAllowedRoutes: Record<Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">, string[]> = {
-  TEACHER: ["/dashboard", "/alunos", "/turmas", "/avaliacoes", "/notas", "/presencas", "/horario", "/material", "/pedidos", "/eventos", "/educadores"],
-  PARENT: ["/dashboard", "/alunos", "/avaliacoes", "/notas", "/pagamentos", "/horario", "/matriculas", "/eventos", "/presencas", "/material", "/professores"],
-  STUDENT: ["/dashboard", "/presencas", "/horario", "/avaliacoes", "/notas", "/eventos", "/material"],
-};
-
-const roleAllowedOther: Record<Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">, string[]> = {
-  TEACHER: ["/perfil"],
-  PARENT: ["/perfil"],
-  STUDENT: ["/perfil"],
-};
 
 const menu: NavItem[] = [
   { icon: Home, label: "Painel de Controlo", to: "/dashboard" },
@@ -73,24 +64,22 @@ function SidebarNavigation({
   const { modules } = useModules();
   const { role, loading: roleLoading } = useUserRole();
 
-  const isPrivileged = role === "SUPER_ADMIN" || (role != null && isSchoolManagementRole(role));
   const native = isNativeMobileApp();
 
   const visibleMenu = menu.filter((item) => {
     if (native && isDashboardRouteBlockedOnNative(item.to)) return false;
     if (item.moduleKey && !modules[item.moduleKey]) return false;
     if (roleLoading || role === null) return false;
-    if (isPrivileged) return true;
-    const allowed = roleAllowedRoutes[role as Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">] ?? [];
-    return allowed.includes(item.to);
+    return isNavPathAllowedForRole(role, item.to);
   });
 
   const visibleOther = other.filter((item) => {
     if (native && isDashboardRouteBlockedOnNative(item.to)) return false;
     if (roleLoading || role === null) return false;
-    if (isPrivileged) return true;
-    const allowed = roleAllowedOther[role as Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">] ?? [];
-    return allowed.includes(item.to);
+    if (item.to === "/perfil") return isNavPathAllowedForRole(role, "/perfil");
+    if (item.to === "/definicoes") return canOpenDefinicoesPage(role);
+    if (item.to === "/modulos") return canOpenModulosPage(role);
+    return isNavPathAllowedForRole(role, item.to);
   });
 
   const handleLogout = async () => {

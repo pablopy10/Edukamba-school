@@ -1,5 +1,5 @@
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ResumePausedMutationsBridge } from "@/components/ResumePausedMutationsBridge";
 import { QueryPersistenceAuthSync } from "@/components/QueryPersistenceAuthSync";
 import { persistQueryOptions } from "@/lib/persistQueryOptions";
@@ -47,10 +47,34 @@ import Pesquisa from "./pages/Pesquisa.tsx";
 import Transportes from "./pages/Transportes.tsx";
 import { ModulesProvider } from "./context/ModulesContext";
 import { AcademicYearProvider } from "./context/AcademicYearContext";
-import { UserRoleProvider } from "./hooks/useUserRole";
+import { UserRoleProvider, useUserRole } from "./hooks/useUserRole";
+import { canOpenDefinicoesPage, canOpenModulosPage } from "@/lib/staffNavAccess";
 import { SelectedChildProvider } from "./context/SelectedChildContext";
 import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
 import { queryClient } from "@/lib/queryClient";
+
+function RouteSpinner() {
+  return (
+    <div className="flex h-[40vh] min-h-[12rem] items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+    </div>
+  );
+}
+
+/** Bloqueio directo por URL — Admin/Super em módulos; Admin/Super/Director em definições. */
+function GatedModulosRoute() {
+  const { role, loading } = useUserRole();
+  if (loading) return <RouteSpinner />;
+  if (!canOpenModulosPage(role)) return <Navigate to="/dashboard" replace />;
+  return <Modulos />;
+}
+
+function GatedDefinicoesRoute() {
+  const { role, loading } = useUserRole();
+  if (loading) return <RouteSpinner />;
+  if (!canOpenDefinicoesPage(role)) return <Navigate to="/dashboard" replace />;
+  return <Definicoes />;
+}
 
 const App = () => (
   <PersistQueryClientProvider
@@ -105,8 +129,8 @@ const App = () => (
                         <Route path="/relatorios" element={<Relatorios />} />
                         <Route path="/timesheet" element={<Timesheet />} />
                         <Route path="/perfil" element={<Perfil />} />
-                        <Route path="/definicoes" element={<Definicoes />} />
-                        <Route path="/modulos" element={<Modulos />} />
+                        <Route path="/definicoes" element={<GatedDefinicoesRoute />} />
+                        <Route path="/modulos" element={<GatedModulosRoute />} />
                         <Route path="/notificacoes" element={<Notificacoes />} />
                         <Route path="/chat" element={<Chat />} />
                         <Route path="/pesquisa" element={<Pesquisa />} />
