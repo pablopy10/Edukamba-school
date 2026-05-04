@@ -44,7 +44,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
-import { QUERY_DAY_MS } from "@/lib/queryClient";
+import { QUERY_DAY_MS, QUERY_HOUR_MS } from "@/lib/queryClient";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { useTeacherSessionScope } from "@/hooks/useTeacherSessionScope";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
@@ -411,7 +411,7 @@ const Presencas = () => {
         !teacherLoading &&
         teacherClassroomIds.length > 0,
     ),
-    staleTime: QUERY_DAY_MS * 24,
+    staleTime: 0,
     networkMode: "offlineFirst",
   });
 

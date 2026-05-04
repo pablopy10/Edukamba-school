@@ -139,7 +139,7 @@ const AvaliacaoNotas = () => {
         visibleStudentId: isStudent && studentId ? studentId : null,
       }),
     enabled: Boolean(id && (scopeKey === "full" || (isStudent && studentId))),
-    staleTime: QUERY_DAY_MS * 24,
+    staleTime: 0,
     networkMode: "offlineFirst",
   });
 

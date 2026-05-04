@@ -23,7 +23,7 @@ export function useTeacherSessionScope() {
       return r;
     },
     enabled: Boolean(user?.id && !roleLoading && role === "TEACHER"),
-    staleTime: QUERY_DAY_MS * 24,
+    staleTime: 0,
     networkMode: "offlineFirst",
     gcTime: QUERY_DAY_MS * 14,
   });

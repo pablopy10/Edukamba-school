@@ -192,7 +192,7 @@ const Avaliacoes = () => {
         teacherClassroomIds.length > 0 &&
         !teacherLoading,
     ),
-    staleTime: QUERY_DAY_MS * 24,
+    staleTime: 0,
     networkMode: "offlineFirst",
   });
 

@@ -173,7 +173,7 @@ const Notas = () => {
     queryKey: academicTermsQueryKey(resolvedSchoolId ?? "__none__", resolvedYearId ?? "__none__"),
     queryFn: () => fetchAcademicTerms(resolvedSchoolId!, resolvedYearId!),
     enabled: Boolean(resolvedSchoolId && resolvedYearId),
-    staleTime: QUERY_DAY_MS * 24,
+    staleTime: 0,
     networkMode: "offlineFirst",
   });
 
@@ -191,7 +191,7 @@ const Notas = () => {
         teacherClassroomIds.length > 0 &&
         !teacherLoading,
     ),
-    staleTime: QUERY_DAY_MS * 24,
+    staleTime: 0,
     networkMode: "offlineFirst",
   });
 
@@ -281,7 +281,7 @@ const Notas = () => {
         subjectId: teacherSubjectId!,
       }),
     enabled: teacherGradesQueryEnabled,
-    staleTime: QUERY_DAY_MS * 24,
+    staleTime: 0,
     networkMode: "offlineFirst",
   });
 
@@ -289,7 +289,7 @@ const Notas = () => {
     queryKey: teacherSubjectDetailQueryKey(resolvedSchoolId ?? "__none__", teacherSubjectId ?? "__none__"),
     queryFn: () => fetchTeacherSubjectDetail(resolvedSchoolId!, teacherSubjectId!),
     enabled: Boolean(isTeacher && resolvedSchoolId && teacherSubjectId),
-    staleTime: QUERY_DAY_MS * 24,
+    staleTime: 0,
     networkMode: "offlineFirst",
   });
 
