@@ -92,6 +92,25 @@ const formatDateLong = (iso: string) => {
 };
 const tt = (t?: string | null) => (t ? t.slice(0, 5) : "");
 
+const todayIsoLocal = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+const isoDateSlice = (s: string) => s.slice(0, 10);
+
+/** Trimestre que contém hoje · senão o próximo não iniciado · senão o último (igual Preferências em Notas). */
+function resolveCurrentTermIdFromList(terms: Term[]): string | null {
+  if (!terms.length) return null;
+  const sorted = [...terms].sort((a, b) => a.term_number - b.term_number);
+  const today = todayIsoLocal();
+  const current = sorted.find((t) => today >= isoDateSlice(t.start_date) && today <= isoDateSlice(t.end_date));
+  if (current) return current.id;
+  const upcoming = sorted.find((t) => today < isoDateSlice(t.start_date));
+  if (upcoming) return upcoming.id;
+  return sorted[sorted.length - 1].id;
+}
+
 const Avaliacoes = () => {
   const navigate = useNavigate();
   const native = isNativeMobileApp();
@@ -99,7 +118,7 @@ const Avaliacoes = () => {
   const { data: persistedTeacherSession } = useTeacherSessionScope();
   const persistRestoring = useIsRestoring();
   const queryClient = useQueryClient();
-  const { isParent, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
+  const { isParent, classroomIds: parentClassroomIds, selectedChild, loading: parentLoading } = useParentChildren();
   const { user } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
   const { isTeacher, classroomIds: teacherClassroomIds, subjectId: teacherSubjectId, loading: teacherLoading } = useTeacherClassrooms();
@@ -188,6 +207,36 @@ const Avaliacoes = () => {
   const displayTeachers = isTeacher ? teacherTeachersOpts : teachers;
   const displayTerms = isTeacher ? teacherTermsPack : terms;
   const displayHolidays = isTeacher ? teacherHolidaysPack : holidays;
+
+  /** Aluno ou educador: uma única turma fixa, sem alterar o filtro. */
+  const lockedClassroomId = useMemo(() => {
+    if (isStudent && studentClassroomId) return studentClassroomId;
+    if (isParent && selectedChild?.classroom_id) return selectedChild.classroom_id;
+    return null;
+  }, [isStudent, studentClassroomId, isParent, selectedChild?.classroom_id]);
+
+  const classroomFilterLocked = lockedClassroomId !== null;
+
+  const classroomsForSelect = useMemo(() => {
+    if (classroomFilterLocked && lockedClassroomId) {
+      const fromList = displayClassrooms.find((c) => c.id === lockedClassroomId);
+      if (fromList) return [fromList];
+      const label =
+        (isStudent ? studentClassroomName : null) ||
+        (isParent ? selectedChild?.classroom_name : null) ||
+        "Turma";
+      return [{ id: lockedClassroomId, name: label }];
+    }
+    return sortByName(displayClassrooms);
+  }, [
+    classroomFilterLocked,
+    lockedClassroomId,
+    displayClassrooms,
+    isStudent,
+    studentClassroomName,
+    isParent,
+    selectedChild?.classroom_name,
+  ]);
 
   const teachersInSubjectFilter = useMemo(() => {
     if (subjectFilter === "all") return displayTeachers;
@@ -353,11 +402,30 @@ const Avaliacoes = () => {
     setSubjectFilter(teacherSubjectId);
   }, [isTeacher, teacherSubjectId]);
 
-  // Lock filters to the student's own scope
   useEffect(() => {
-    if (!isStudent) return;
-    if (studentClassroomId) setClassroomFilter(studentClassroomId);
-  }, [isStudent, studentClassroomId]);
+    if (!lockedClassroomId) return;
+    setClassroomFilter(lockedClassroomId);
+  }, [lockedClassroomId]);
+
+  const displayTermsKey = useMemo(() => displayTerms.map((t) => t.id).join(","), [displayTerms]);
+
+  useEffect(() => {
+    if (displayTerms.length === 0) return;
+    const currentId = resolveCurrentTermIdFromList(displayTerms);
+    if (!currentId) return;
+    setTermFilter((prev) => {
+      const prevStillValid = prev !== "all" && displayTerms.some((t) => t.id === prev);
+      if (!prevStillValid || prev === "all") return currentId;
+      return prev;
+    });
+  }, [displayTermsKey, displayTerms]);
+
+  const effectiveTermFilterValue = useMemo(() => {
+    if (!displayTerms.length) return termFilter;
+    if (termFilter === "all") return "all";
+    if (displayTerms.some((t) => t.id === termFilter)) return termFilter;
+    return resolveCurrentTermIdFromList(displayTerms) ?? "all";
+  }, [termFilter, displayTerms]);
 
   const classroomMap = useMemo(() => new Map(displayClassrooms.map((c) => [c.id, c.name])), [displayClassrooms]);
   const subjectMap = useMemo(() => new Map(displaySubjects.map((s) => [s.id, s.name])), [displaySubjects]);
@@ -571,8 +639,7 @@ const Avaliacoes = () => {
         </div>
         )}
 
-        {/* Filters */}
-        {!isParent && (
+        {/* Filtros: visíveis para todos (web e nativa), com turma fixa para aluno/educador. */}
         <div className="flex flex-col gap-3 rounded-2xl bg-card p-4 shadow-card">
           <div className={cn("flex flex-col gap-3", !native && "sm:flex-row sm:items-center sm:justify-between")}>
             <div className="relative w-full sm:max-w-sm">
@@ -616,20 +683,30 @@ const Avaliacoes = () => {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={classroomFilter} onValueChange={setClassroomFilter} disabled={isStudent}>
+            <Select
+              value={
+                classroomFilterLocked && lockedClassroomId
+                  ? lockedClassroomId
+                  : classroomsForSelect.some((c) => c.id === classroomFilter)
+                    ? classroomFilter
+                    : "all"
+              }
+              onValueChange={setClassroomFilter}
+              disabled={classroomFilterLocked || isStudent}
+            >
               <SelectTrigger className="h-10 rounded-full">
                 <SelectValue placeholder="Turma" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas as turmas</SelectItem>
-                {sortByName(displayClassrooms).map((c) => (
+                {!classroomFilterLocked && <SelectItem value="all">Todas as turmas</SelectItem>}
+                {classroomsForSelect.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Select value={termFilter} onValueChange={setTermFilter}>
+            <Select value={effectiveTermFilterValue} onValueChange={setTermFilter}>
               <SelectTrigger className="h-10 rounded-full">
                 <SelectValue placeholder="Trimestre" />
               </SelectTrigger>
@@ -644,8 +721,6 @@ const Avaliacoes = () => {
             </Select>
           </div>
         </div>
-        )}
-
         {pageLoading ? (
           <div className="flex items-center justify-center rounded-2xl bg-card py-16 shadow-card">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
