@@ -254,7 +254,7 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
         .from("notifications")
         .select("id", { count: "exact", head: true })
         .eq("recipient_id", user.id)
-        .is("read_at", null);
+        .eq("status", "unread");
       if (!cancelled) setUnreadCount(count ?? 0);
     };
 

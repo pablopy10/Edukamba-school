@@ -19,6 +19,7 @@ import {
   Dot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isNativeMobileApp } from "@/lib/nativeApp";
 
 type Category = "academico" | "administrativo" | "evento" | "mensagem" | "sistema";
 type Status = "unread" | "read" | "archived";
@@ -222,12 +223,14 @@ const Notificacoes = () => {
                 className="h-11 w-72 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             </div>
-            <button
-              onClick={() => markRead(items.filter((i) => i.status === "unread").map((i) => i.id))}
-              className="flex h-11 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent"
-            >
-              <CheckCheck className="h-4 w-4" strokeWidth={1.75} /> Marcar todas como lidas
-            </button>
+            {!isNativeMobileApp() && (
+              <button
+                onClick={() => markRead(items.filter((i) => i.status === "unread").map((i) => i.id))}
+                className="hidden h-11 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent sm:flex"
+              >
+                <CheckCheck className="h-4 w-4" strokeWidth={1.75} /> Marcar todas como lidas
+              </button>
+            )}
           </div>
         </div>
 
