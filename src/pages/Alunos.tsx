@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useIsRestoring, useQuery } from "@tanstack/react-query";
-import { Search, Plus, Pencil, Trash2, Loader2, Upload } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, Loader2, Upload, UserCog } from "lucide-react";
 import { cn, sortByName } from "@/lib/utils";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -110,7 +110,9 @@ const Alunos = () => {
     if (selectedYearId) classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
     let studentsQuery = supabase
       .from("students")
-      .select("id, full_name, email, phone, birth_date, gender, enrollment_number, classroom_id, avatar_color, school_id, classrooms(id, name)")
+      .select(
+        "id, full_name, email, phone, birth_date, gender, enrollment_number, classroom_id, avatar_color, school_id, classrooms(id, name, homeroom_teacher:profiles!classrooms_homeroom_teacher_id_fkey(full_name))",
+      )
       .order("created_at", { ascending: false });
     if (isParent) {
       if (childIds.length === 0) {
@@ -252,6 +254,12 @@ const Alunos = () => {
               <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
                 Turma: {classroomName(s.classroom_id)}
               </span>
+              {s.classrooms?.homeroom_teacher?.full_name ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-pastel-green/25 px-2.5 py-1 text-xs font-medium text-pastel-green-foreground">
+                  <UserCog className="h-3 w-3 shrink-0" strokeWidth={1.75} />
+                  Diretor: {s.classrooms.homeroom_teacher.full_name}
+                </span>
+              ) : null}
               <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
                 Nº matrícula: {s.enrollment_number ?? "—"}
               </span>
@@ -454,6 +462,7 @@ const Alunos = () => {
                     <th className="py-4 pr-4 font-semibold">Nome do Aluno</th>
                     <th className="py-4 pr-4 font-semibold">ID Aluno</th>
                     <th className="py-4 pr-4 font-semibold">Turma</th>
+                    <th className="py-4 pr-4 font-semibold">Diretor de turma</th>
                     <th className="py-4 pr-4 font-semibold">Data Nasc.</th>
                     <th className="py-4 pr-5 text-right font-semibold">Acções</th>
                   </tr>
@@ -461,14 +470,14 @@ const Alunos = () => {
                 <tbody>
                   {adminListFetching && (
                     <tr>
-                      <td colSpan={6} className="py-10 text-center text-muted-foreground">
+                      <td colSpan={8} className="py-10 text-center text-muted-foreground">
                         <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                       </td>
                     </tr>
                   )}
                   {!adminListFetching && filtered.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-10 text-center text-muted-foreground">
+                      <td colSpan={8} className="py-10 text-center text-muted-foreground">
                         Nenhum aluno encontrado.
                       </td>
                     </tr>
@@ -520,6 +529,16 @@ const Alunos = () => {
                             <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
                               {classroomName(s.classroom_id)}
                             </span>
+                          </td>
+                          <td className="py-4 pr-4 text-foreground">
+                            {s.classrooms?.homeroom_teacher?.full_name ? (
+                              <span className="inline-flex items-center gap-1 text-sm">
+                                <UserCog className="h-3.5 w-3.5 shrink-0 text-pastel-green-foreground" strokeWidth={1.75} />
+                                {s.classrooms.homeroom_teacher.full_name}
+                              </span>
+                            ) : (
+                              "—"
+                            )}
                           </td>
                           <td className="py-4 pr-4 text-muted-foreground">
                             {s.birth_date ? new Date(s.birth_date).toLocaleDateString("pt-PT") : "—"}

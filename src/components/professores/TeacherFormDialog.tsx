@@ -16,6 +16,10 @@ export type TeacherRow = {
   employee_id: string | null;
   avatar_color: string | null;
   profiles: { full_name: string; phone: string | null } | null;
+  /** Só modo educador: professor é diretor de turma do(s) turma(s) do educando. */
+  isHomeroomDirector?: boolean;
+  /** Diretor só em perfil (sem linha teachers), lista sintética. */
+  isSyntheticParentRow?: boolean;
 };
 
 type SubjectOpt = { id: string; name: string };

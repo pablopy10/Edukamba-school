@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Plus, Mail, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Search, Plus, Mail, Pencil, Trash2, Loader2, MessageCircle, UserCog } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,9 @@ import { toast } from "@/hooks/use-toast";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { isNativeMobileApp, showPageKpiCards, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { Button } from "@/components/ui/button";
+import { useUserRole } from "@/hooks/useUserRole";
+import { useParentChildren } from "@/hooks/useParentChildren";
+import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 
 type SubjectOpt = { id: string; name: string };
 
@@ -25,9 +28,100 @@ const avatarStyles: Record<string, string> = {
 const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 
+async function fetchParentScopedTeachers(classroomIds: string[]): Promise<{
+  rows: TeacherRow[];
+  subjects: SubjectOpt[];
+}> {
+  const emptySubjects: SubjectOpt[] = [];
+  if (classroomIds.length === 0) return { rows: [], subjects: emptySubjects };
+
+  const { data: clsRows } = await supabase
+    .from("classrooms")
+    .select("homeroom_teacher_id")
+    .in("id", classroomIds);
+
+  const homeroomProfiles = new Set(
+    ((clsRows ?? []) as { homeroom_teacher_id: string | null }[])
+      .map((r) => r.homeroom_teacher_id)
+      .filter((x): x is string => !!x),
+  );
+
+  const { data: schRows } = await supabase
+    .from("schedules")
+    .select("teacher_id")
+    .in("classroom_id", classroomIds);
+
+  let profileIds = [
+    ...new Set(
+      ((schRows ?? []) as { teacher_id: string | null }[])
+        .map((s) => s.teacher_id)
+        .filter((x): x is string => !!x),
+    ),
+  ];
+  homeroomProfiles.forEach((pid) => {
+    if (!profileIds.includes(pid)) profileIds.push(pid);
+  });
+
+  const { data: allSubjects } = await supabase.from("subjects").select("id, name").order("name");
+
+  const byProfile = new Map<string, TeacherRow>();
+
+  if (profileIds.length > 0) {
+    const { data: tData, error: tErr } = await supabase
+      .from("teachers")
+      .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, profiles(full_name, phone)")
+      .in("profile_id", profileIds)
+      .order("created_at", { ascending: false });
+
+    if (tErr) throw tErr;
+
+    const raw = ((tData ?? []) as unknown as TeacherRow[]).filter((t) => t.profile_id);
+    raw.forEach((row) => {
+      const pid = row.profile_id as string;
+      if (!byProfile.has(pid)) byProfile.set(pid, { ...row });
+    });
+  }
+
+  /** Diretores só com perfil, sem fichas teachers */
+  const synthetic: TeacherRow[] = [];
+  for (const pid of homeroomProfiles) {
+    if (byProfile.has(pid)) {
+      const r = byProfile.get(pid)!;
+      byProfile.set(pid, { ...r, isHomeroomDirector: true });
+      continue;
+    }
+    const { data: prof } = await supabase.from("profiles").select("full_name, phone").eq("id", pid).maybeSingle();
+    synthetic.push({
+      id: `synthetic-${pid}`,
+      profile_id: pid,
+      subject_id: null,
+      hire_date: null,
+      employee_id: null,
+      avatar_color: "lilac",
+      profiles: prof ? { full_name: prof.full_name, phone: prof.phone } : null,
+      isHomeroomDirector: true,
+      isSyntheticParentRow: true,
+    });
+  }
+
+  let rows = [...byProfile.values(), ...synthetic];
+  rows = rows.sort((a, b) =>
+    (a.profiles?.full_name ?? "").localeCompare(b.profiles?.full_name ?? "", "pt"),
+  );
+
+  rows = rows.map((r) =>
+    r.profile_id && homeroomProfiles.has(r.profile_id) ? { ...r, isHomeroomDirector: true } : r,
+  );
+
+  return { rows, subjects: allSubjects ?? [] };
+}
+
 const Professores = () => {
   const native = isNativeMobileApp();
   const navigate = useNavigate();
+  const { role, loading: roleLoading } = useUserRole();
+  const isParent = role === "PARENT";
+  const { classroomIds, loading: parentLoading } = useParentChildren();
   const [teachers, setTeachers] = useState<TeacherRow[]>([]);
   const [subjects, setSubjects] = useState<SubjectOpt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,7 +135,7 @@ const Professores = () => {
   const [editing, setEditing] = useState<TeacherRow | null>(null);
   const [deleting, setDeleting] = useState<TeacherRow | null>(null);
 
-  const load = async () => {
+  const loadAdminTeachers = async () => {
     setLoading(true);
     const [{ data: tData, error: tErr }, { data: sData }] = await Promise.all([
       supabase
@@ -58,7 +152,35 @@ const Professores = () => {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  const loadParentTeachers = async () => {
+    setLoading(true);
+    try {
+      if (classroomIds.length === 0) {
+        setTeachers([]);
+        setSubjects([]);
+      } else {
+        const { rows, subjects: subj } = await fetchParentScopedTeachers(classroomIds);
+        setTeachers(rows);
+        setSubjects(subj);
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: "Erro a carregar professores", description: msg, variant: "destructive" });
+      setTeachers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (roleLoading || role === null) return;
+    if (role === "PARENT") {
+      if (!parentLoading) void loadParentTeachers();
+    } else {
+      void loadAdminTeachers();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, roleLoading, parentLoading, classroomIds.join(",")]);
 
   const subjectName = (id: string | null) => subjects.find((s) => s.id === id)?.name ?? "—";
 
@@ -93,7 +215,7 @@ const Professores = () => {
     } else {
       toast({ title: "Professor removido", description: "Conta de acesso também foi eliminada." });
       setDeleting(null);
-      load();
+      void loadAdminTeachers();
     }
   };
 
@@ -101,6 +223,9 @@ const Professores = () => {
     if (!profileId) return;
     navigate(`/chat?to=${profileId}`);
   };
+
+  const professorHref = (t: TeacherRow) =>
+    t.isSyntheticParentRow && t.profile_id ? `/professores/perfil/${t.profile_id}` : `/professores/${t.id}`;
 
   const stats = useMemo(() => ({
     total: teachers.length,
@@ -115,10 +240,57 @@ const Professores = () => {
   }), [teachers]);
 
   const renderTeacherCard = (t: TeacherRow) => {
-    const isSelected = selected.includes(t.id);
     const name = t.profiles?.full_name ?? "—";
     const initials = initialsOf(name) || "??";
     const color = (t.avatar_color as string) || "blue";
+    const href = professorHref(t);
+
+    if (isParent) {
+      return (
+        <div
+          key={t.id}
+          className="rounded-2xl border border-border bg-background p-4 shadow-soft"
+        >
+          <div className="flex gap-3">
+            <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold", avatarStyles[color] ?? avatarStyles.blue)}>
+              {initials}
+            </div>
+            <div className="min-w-0 flex-1">
+              <Link to={href} className="font-semibold text-foreground transition-colors hover:text-pastel-blue-foreground hover:underline">
+                {name}
+              </Link>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {t.isHomeroomDirector && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-pastel-green/35 px-2.5 py-1 text-[11px] font-semibold text-pastel-green-foreground">
+                    <UserCog className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    Diretor de turma
+                  </span>
+                )}
+                <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", "bg-pastel-blue/30 text-pastel-blue-foreground")}>
+                  {subjectName(t.subject_id)}
+                </span>
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                className="rounded-full bg-pastel-blue text-pastel-blue-foreground shadow-soft hover:opacity-90"
+                onClick={() => openChat(t.profile_id)}
+              >
+                <MessageCircle className="mr-1.5 h-4 w-4" strokeWidth={1.75} />
+                Mensagem
+              </Button>
+              <Link to={href} className="text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+                Ver perfil
+              </Link>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const isSelected = selected.includes(t.id);
     return (
       <div
         key={t.id}
@@ -139,7 +311,7 @@ const Professores = () => {
             {initials}
           </div>
           <div className="min-w-0 flex-1">
-            <Link to={`/professores/${t.id}`} className="font-semibold text-foreground transition-colors hover:text-pastel-blue-foreground hover:underline">
+            <Link to={href} className="font-semibold text-foreground transition-colors hover:text-pastel-blue-foreground hover:underline">
               {name}
             </Link>
             <p className="mt-0.5 text-sm text-muted-foreground">{t.profiles?.phone ?? "—"}</p>
@@ -189,14 +361,22 @@ const Professores = () => {
     );
   };
 
+  if (roleLoading || (isParent && parentLoading)) {
+    return <PageLoadingSkeleton />;
+  }
+
   return (
     <>
-      <div className={cn("flex flex-col gap-6", native && "relative pb-28")}>
+      <div className={cn("flex flex-col gap-6", native && !isParent && "relative pb-28")}>
         {/* Page header */}
         <div className={cn("flex flex-col gap-4", native ? "" : "sm:flex-row sm:items-center sm:justify-between")}>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Professores</h1>
-            <p className="text-sm text-muted-foreground">Faça a gestão e acompanhe todos os professores da escola.</p>
+            <p className="text-sm text-muted-foreground">
+              {isParent
+                ? "Professores que dão aula à turma do educando seleccionado (e o diretor de turma, quando definido)."
+                : "Faça a gestão e acompanhe todos os professores da escola."}
+            </p>
           </div>
           <div className={cn("flex flex-wrap items-center gap-3", native && "w-full")}>
             <div className={cn("relative", native ? "min-w-0 flex-1" : "")}>
@@ -212,7 +392,7 @@ const Professores = () => {
                 )}
               />
             </div>
-            {!native && (
+            {!native && !isParent && (
             <button
               onClick={() => { setEditing(null); setFormOpen(true); }}
               className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
@@ -224,6 +404,7 @@ const Professores = () => {
         </div>
 
         {/* Filters row */}
+        {!isParent && (
         <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card">
           <div className={cn("min-w-[180px] flex-1", native && "min-w-0 w-full")}>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Disciplina</label>
@@ -252,9 +433,10 @@ const Professores = () => {
             >Limpar filtros</button>
           )}
         </div>
+        )}
 
         {/* Stats row */}
-        {showPageKpiCards() && (
+        {showPageKpiCards() && !isParent && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             { label: "Total de Professores", value: String(stats.total), color: "bg-pastel-blue text-pastel-blue-foreground" },
@@ -276,7 +458,7 @@ const Professores = () => {
         <div className="rounded-2xl bg-card shadow-card">
           <div className="flex items-center justify-between border-b border-border p-5">
             <h2 className="text-lg font-bold text-foreground">Lista de Professores</h2>
-            {selected.length > 0 && (
+            {selected.length > 0 && !isParent && (
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-muted-foreground">{selected.length} selecionados</span>
                 <button className="rounded-full bg-pastel-pink px-3 py-1.5 text-xs font-medium text-pastel-pink-foreground">
@@ -288,7 +470,7 @@ const Professores = () => {
 
           {native ? (
             <div className="flex flex-col gap-3 p-4">
-              {filtered.length > 0 && (
+              {filtered.length > 0 && !isParent && (
                 <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
                   <input
                     type="checkbox"
@@ -311,6 +493,79 @@ const Professores = () => {
             </div>
           ) : (
           <div className="overflow-x-auto">
+            {isParent ? (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-pastel-blue/40 text-left text-xs uppercase tracking-wider text-pastel-blue-foreground">
+                  <th className="py-4 pl-5 pr-4 font-semibold">Professor</th>
+                  <th className="py-4 pr-4 font-semibold">Disciplina</th>
+                  <th className="py-4 pr-4 font-semibold">Diretor de turma</th>
+                  <th className="py-4 pr-5 font-semibold text-right">Acções</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && (
+                  <tr><td colSpan={4} className="py-10 text-center text-muted-foreground">
+                    <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                  </td></tr>
+                )}
+                {!loading && filtered.length === 0 && (
+                  <tr><td colSpan={4} className="py-10 text-center text-muted-foreground">
+                    {classroomIds.length === 0
+                      ? "Seleccione ou associe um educando a uma turma para ver os professores."
+                      : "Nenhum professor encontrado para a turma do educando seleccionado."}
+                  </td></tr>
+                )}
+                {!loading &&
+                  filtered.map((t) => {
+                    const name = t.profiles?.full_name ?? "—";
+                    const initials = initialsOf(name) || "??";
+                    const color = (t.avatar_color as string) || "blue";
+                    const href = professorHref(t);
+                    return (
+                      <tr key={t.id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                        <td className="py-4 pl-5 pr-4">
+                          <div className="flex items-center gap-3">
+                            <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold", avatarStyles[color] ?? avatarStyles.blue)}>
+                              {initials}
+                            </div>
+                            <Link to={href} className="font-semibold text-foreground hover:text-pastel-blue-foreground hover:underline">
+                              {name}
+                            </Link>
+                          </div>
+                        </td>
+                        <td className="py-4 pr-4">
+                          <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{subjectName(t.subject_id)}</span>
+                        </td>
+                        <td className="py-4 pr-4">
+                          {t.isHomeroomDirector ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-pastel-green/35 px-2 py-1 text-[11px] font-semibold text-pastel-green-foreground">
+                              <UserCog className="h-3 w-3" strokeWidth={1.75} /> Sim
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="py-4 pr-5">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="rounded-full border-pastel-blue/40 text-pastel-blue-foreground hover:bg-pastel-blue/15"
+                              onClick={() => openChat(t.profile_id)}
+                            >
+                              <MessageCircle className="mr-1.5 h-4 w-4 shrink-0" strokeWidth={1.75} />
+                              Mensagem
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+            ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-pastel-blue/40 text-left text-xs uppercase tracking-wider text-pastel-blue-foreground">
@@ -368,7 +623,7 @@ const Professores = () => {
                             {initials}
                           </div>
                           <div>
-                            <Link to={`/professores/${t.id}`} className="font-semibold text-foreground transition-colors hover:text-pastel-blue-foreground hover:underline">
+                            <Link to={professorHref(t)} className="font-semibold text-foreground transition-colors hover:text-pastel-blue-foreground hover:underline">
                               {name}
                             </Link>
                             <p className="text-xs text-muted-foreground">{t.profiles?.phone ?? ""}</p>
@@ -403,6 +658,7 @@ const Professores = () => {
                 })}
               </tbody>
             </table>
+            )}
           </div>
           )}
 
@@ -415,7 +671,7 @@ const Professores = () => {
         </div>
       </div>
 
-      {native && (
+      {native && !isParent && (
         <NativeMobileFabPortal>
           <Button
             type="button"
@@ -429,12 +685,14 @@ const Professores = () => {
         </NativeMobileFabPortal>
       )}
 
+      {!isParent && (
+        <>
       <TeacherFormDialog
         open={formOpen}
         onOpenChange={setFormOpen}
         subjects={subjects}
         teacher={editing}
-        onSaved={load}
+        onSaved={loadAdminTeachers}
       />
 
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
@@ -454,6 +712,8 @@ const Professores = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+        </>
+      )}
     </>
   );
 };

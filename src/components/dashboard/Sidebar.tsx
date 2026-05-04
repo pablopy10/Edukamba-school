@@ -15,7 +15,7 @@ export type NavItem = { icon: ElementType; label: string; to: string; hasArrow?:
 // Role-based visible routes. Admin/SuperAdmin see everything (subject to module toggles).
 const roleAllowedRoutes: Record<Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">, string[]> = {
   TEACHER: ["/dashboard", "/alunos", "/turmas", "/avaliacoes", "/notas", "/presencas", "/horario", "/material", "/pedidos", "/eventos", "/educadores"],
-  PARENT: ["/dashboard", "/alunos", "/avaliacoes", "/notas", "/pagamentos", "/horario", "/matriculas", "/eventos", "/presencas", "/material"],
+  PARENT: ["/dashboard", "/alunos", "/turmas", "/avaliacoes", "/notas", "/pagamentos", "/horario", "/matriculas", "/eventos", "/presencas", "/material", "/professores"],
   STUDENT: ["/dashboard", "/presencas", "/horario", "/avaliacoes", "/notas", "/eventos", "/material"],
 };
 

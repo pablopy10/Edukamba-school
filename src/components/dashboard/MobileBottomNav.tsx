@@ -24,7 +24,7 @@ const bottomNavItems: NavItem[] = [
 /** Igual à Sidebar: rotas permitidas por perfil (Admin/SuperAdmin ignorado aqui). */
 const roleAllowedRoutes: Record<Exclude<UserRole, null | "ADMIN" | "SUPER_ADMIN">, string[]> = {
   TEACHER: ["/dashboard", "/alunos", "/turmas", "/avaliacoes", "/presencas", "/horario", "/material", "/pedidos", "/eventos", "/educadores"],
-  PARENT: ["/dashboard", "/alunos", "/avaliacoes", "/pagamentos", "/horario", "/matriculas", "/eventos", "/presencas", "/material"],
+  PARENT: ["/dashboard", "/alunos", "/turmas", "/avaliacoes", "/pagamentos", "/horario", "/matriculas", "/eventos", "/presencas", "/material", "/professores"],
   STUDENT: ["/dashboard", "/presencas", "/horario", "/avaliacoes", "/eventos", "/material"],
 };
 

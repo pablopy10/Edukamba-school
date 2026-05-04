@@ -16,6 +16,7 @@ import { ExcelImportDialog } from "@/components/shared/ExcelImportDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
+import { useParentChildren } from "@/hooks/useParentChildren";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { isNativeMobileApp, showPageKpiCards, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
@@ -54,7 +55,9 @@ const Turmas = () => {
   const { user } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
   const isTeacher = role === "TEACHER";
+  const isParent = role === "PARENT";
   const { classroomIds: teacherClassroomIds, loading: teacherClassesLoading } = useTeacherClassrooms();
+  const { allClassroomIds, loading: parentLoading } = useParentChildren();
 
   const teacherTurmasQuery = useQuery({
     queryKey: teacherTurmasQueryKey(
@@ -102,11 +105,11 @@ const Turmas = () => {
   const listCourses = isTeacher ? (teacherTurmasQuery.data?.courses ?? []) : courses;
   const listYears = isTeacher ? (teacherTurmasQuery.data?.years ?? []) : years;
 
+  const adminTurmasFetching = !isTeacher && loading;
+
   useEffect(() => {
     if (isTeacher) setLoading(false);
   }, [isTeacher]);
-
-  const adminTurmasFetching = !isTeacher && loading;
 
   const load = useCallback(async () => {
     if (isTeacher) return;
@@ -115,6 +118,45 @@ const Turmas = () => {
       const classroomSelect = `id, name, grade_level, period, course_id, academic_year_id, school_id, homeroom_teacher_id,
                  courses(id, name), academic_years(id, label),
                  homeroom_teacher:profiles!classrooms_homeroom_teacher_id_fkey(id, full_name)`;
+
+      if (isParent) {
+        if (allClassroomIds.length === 0) {
+          setClassrooms([]);
+          setCourses([]);
+          setYears([]);
+          return;
+        }
+        let q = supabase.from("classrooms").select(classroomSelect).in("id", allClassroomIds).order("name", { ascending: true });
+        if (selectedYearId) q = q.eq("academic_year_id", selectedYearId);
+        const { data: clsList, error: cErr } = await q;
+        if (cErr) throw cErr;
+
+        const [{ data: ys }, { data: cs }, { data: studentRows }] = await Promise.all([
+          supabase.from("academic_years").select("id, label, is_active").order("start_date", { ascending: true }),
+          supabase.from("courses").select("id, name").order("name"),
+          supabase.from("students").select("id, classroom_id"),
+        ]);
+
+        const list = clsList ?? [];
+        const studentCountByClass = new Map<string, number>();
+        (studentRows ?? []).forEach((s: { classroom_id?: string | null }) => {
+          if (s.classroom_id) {
+            studentCountByClass.set(s.classroom_id, (studentCountByClass.get(s.classroom_id) ?? 0) + 1);
+          }
+        });
+
+        setClassrooms(
+          (list as Record<string, unknown>[]).map((c) => ({
+            ...c,
+            studentCount: studentCountByClass.get(c.id as string) ?? 0,
+          })) as ClassroomWithJoins[],
+        );
+
+        const courseIds = new Set((list as { course_id?: string | null }[]).map((row) => row.course_id).filter(Boolean) as string[]);
+        setCourses((cs ?? []).filter((course) => courseIds.has(course.id)));
+        setYears(ys ?? []);
+        return;
+      }
 
       const [
         classroomsRes,
@@ -159,12 +201,13 @@ const Turmas = () => {
     } finally {
       setLoading(false);
     }
-  }, [isTeacher, selectedYearId]);
+  }, [isTeacher, isParent, allClassroomIds, selectedYearId]);
 
   useEffect(() => {
     if (roleLoading || isTeacher) return;
+    if (isParent && parentLoading) return;
     void load();
-  }, [roleLoading, isTeacher, load, selectedYearId]);
+  }, [roleLoading, isTeacher, isParent, parentLoading, load, selectedYearId, allClassroomIds.join(",")]);
 
   const refreshAfterMutation = async () => {
     if (isTeacher && user?.id) {
@@ -213,18 +256,20 @@ const Turmas = () => {
     [listClassrooms],
   );
 
-  if (roleLoading || teacherAwaitingHydration) return <PageLoadingSkeleton />;
+  if (roleLoading || teacherAwaitingHydration || (isParent && parentLoading)) return <PageLoadingSkeleton />;
 
   return (
     <>
-      <div className={cn("flex flex-col gap-6", native && !isTeacher && "relative pb-28")}>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className={cn("flex flex-col gap-6", native && !isTeacher && !isParent && "relative pb-28")}>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Turmas</h1>
             <p className="text-sm text-muted-foreground">
               {isTeacher
                 ? "Turmas em que tem aulas no horário do ano letivo seleccionado."
-                : "Faça a gestão de todas as turmas da escola."}
+                : isParent
+                  ? "Turmas dos seus educandos neste ano letivo (com diretor de turma em cada turma)."
+                  : "Faça a gestão de todas as turmas da escola."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -238,7 +283,7 @@ const Turmas = () => {
                 className="h-11 w-72 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             </div>
-            {!isTeacher && (
+            {!isTeacher && !isParent && (
               <>
                 {!native && (
                 <>
@@ -293,7 +338,7 @@ const Turmas = () => {
           </div>
         </div>
 
-        {showPageKpiCards() && (
+        {showPageKpiCards() && !isParent && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             { label: "Total de Turmas", value: stats.total, color: "bg-pastel-blue text-pastel-blue-foreground" },
@@ -335,7 +380,7 @@ const Turmas = () => {
                     native ? "" : "transition-transform hover:-translate-y-1",
                   )}
                 >
-                  {!isTeacher && (
+                  {!isTeacher && !isParent && (
                     <div className="absolute right-3 top-3 z-20 flex items-center gap-1">
                       <button
                         title="Editar"
@@ -378,7 +423,7 @@ const Turmas = () => {
                   <div
                     className={cn(
                       "group/turma pointer-events-none relative z-0 flex min-h-[8.75rem] flex-col gap-4 p-5",
-                      !isTeacher && "pr-14",
+                      !isTeacher && !isParent && "pr-14",
                     )}
                   >
                     <div className="flex items-start gap-3">
@@ -426,7 +471,7 @@ const Turmas = () => {
         )}
       </div>
 
-      {native && !isTeacher && (
+      {native && !isTeacher && !isParent && (
         <NativeMobileFabPortal>
           <Button
             type="button"
@@ -464,7 +509,7 @@ const Turmas = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {!native && (
+      {!native && !isParent && (
       <ExcelImportDialog
         open={importOpen}
         onOpenChange={setImportOpen}

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Mail, Phone, Calendar, GraduationCap, BookOpen, Clock, FileText, Pencil, Award, Users, Briefcase, TrendingUp, Loader2, Plus, ThumbsUp, AlertTriangle, Trash2, Star } from "lucide-react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { ArrowLeft, Mail, Phone, Calendar, GraduationCap, BookOpen, Clock, FileText, Pencil, Award, Users, Briefcase, TrendingUp, Loader2, Plus, ThumbsUp, AlertTriangle, Trash2, Star, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { TeacherFeedbackDialog, type TeacherFeedbackRecord } from "@/components/professores/TeacherFeedbackDialog";
 import { toast } from "@/hooks/use-toast";
+import { useUserRole } from "@/hooks/useUserRole";
+import { Button } from "@/components/ui/button";
 
 type AvatarColor = "lilac" | "blue" | "yellow" | "green" | "pink";
 
@@ -96,7 +98,10 @@ const StatPill = ({ label, value, color }: { label: string; value: string; color
 );
 
 const ProfessorPerfil = () => {
-  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { role } = useUserRole();
+  const isParent = role === "PARENT";
+  const { profileId, id: teacherTableId } = useParams<{ profileId?: string; id?: string }>();
   const [loading, setLoading] = useState(true);
   const [teacher, setTeacher] = useState<TeacherRow | null>(null);
   const [schedule, setSchedule] = useState<ScheduleRow[]>([]);
@@ -112,34 +117,72 @@ const ProfessorPerfil = () => {
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!id) return;
+    const routeKey = profileId ?? teacherTableId;
+    if (!routeKey) return;
     let cancelled = false;
     const load = async () => {
       setLoading(true);
       const { data: auth } = await supabase.auth.getUser();
       if (cancelled) return;
       setCurrentUserId(auth.user?.id ?? null);
-      const { data: t } = await supabase
-        .from("teachers")
-        .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, is_active, profiles(full_name, phone, avatar_url, email), subjects(name)")
-        .eq("id", id)
-        .maybeSingle();
-      if (cancelled) return;
-      const teacherRow = t as unknown as TeacherRow | null;
+
+      let teacherRow: TeacherRow | null = null;
+
+      if (profileId) {
+        const { data: byProf } = await supabase
+          .from("teachers")
+          .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, is_active, profiles(full_name, phone, avatar_url, email), subjects(name)")
+          .eq("profile_id", profileId)
+          .limit(1)
+          .maybeSingle();
+        if (cancelled) return;
+        if (byProf) {
+          teacherRow = byProf as unknown as TeacherRow;
+        } else {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("full_name, phone, avatar_url, email")
+            .eq("id", profileId)
+            .maybeSingle();
+          if (cancelled) return;
+          teacherRow = {
+            id: `synthetic-${profileId}`,
+            profile_id: profileId,
+            subject_id: null,
+            hire_date: null,
+            employee_id: null,
+            avatar_color: "lilac",
+            is_active: true,
+            profiles: prof ?? { full_name: "—", phone: null, avatar_url: null, email: null },
+            subjects: null,
+          };
+        }
+      } else if (teacherTableId) {
+        const { data: t } = await supabase
+          .from("teachers")
+          .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, is_active, profiles(full_name, phone, avatar_url, email), subjects(name)")
+          .eq("id", teacherTableId)
+          .maybeSingle();
+        if (cancelled) return;
+        teacherRow = t as unknown as TeacherRow | null;
+      }
+
       setTeacher(teacherRow);
 
-      if (teacherRow?.profile_id) {
+      const effectiveProfileId = teacherRow?.profile_id ?? null;
+
+      if (effectiveProfileId) {
         const [schRes, asRes] = await Promise.all([
           supabase
             .from("schedules")
             .select("day_of_week, start_time, end_time, room, classrooms(id, name), subjects(name)")
-            .eq("teacher_id", teacherRow.profile_id)
+            .eq("teacher_id", effectiveProfileId)
             .order("day_of_week")
             .order("start_time"),
           supabase
             .from("assessments")
             .select("id, title, date, type, classrooms(name), subjects(name)")
-            .eq("teacher_id", teacherRow.profile_id)
+            .eq("teacher_id", effectiveProfileId)
             .order("date", { ascending: false })
             .limit(10),
         ]);
@@ -160,11 +203,10 @@ const ProfessorPerfil = () => {
           setStudentsCount(0);
         }
 
-        // Load school_id and current user role + feedbacks for this teacher
         const { data: prof } = await supabase
           .from("profiles")
           .select("school_id")
-          .eq("id", teacherRow.profile_id)
+          .eq("id", effectiveProfileId)
           .maybeSingle();
         if (cancelled) return;
         const sId = (prof?.school_id as string | null) ?? null;
@@ -182,10 +224,17 @@ const ProfessorPerfil = () => {
         const { data: fbData } = await supabase
           .from("complaints")
           .select("id, kind, subject, description, severity, status, created_at, reporter_id, reporter:profiles!complaints_reporter_id_fkey(full_name)")
-          .eq("target_profile_id", teacherRow.profile_id)
+          .eq("target_profile_id", effectiveProfileId)
           .eq("target_type", "TEACHER")
           .order("created_at", { ascending: false });
         if (!cancelled) setFeedbacks((fbData ?? []) as unknown as FeedbackRow[]);
+      } else {
+        setSchedule([]);
+        setAssessments([]);
+        setClassroomsCount(0);
+        setStudentsCount(0);
+        setSchoolId(null);
+        setFeedbacks([]);
       }
       if (!cancelled) setLoading(false);
     };
@@ -193,7 +242,7 @@ const ProfessorPerfil = () => {
     return () => {
       cancelled = true;
     };
-  }, [id, reloadKey]);
+  }, [profileId, teacherTableId, reloadKey]);
 
   const scheduleByDay = useMemo(() => {
     const days: Record<number, ScheduleRow[]> = {};
@@ -297,14 +346,32 @@ const ProfessorPerfil = () => {
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Link to="/professores" className="flex h-10 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
-                <Pencil className="h-4 w-4" strokeWidth={2} /> Editar
-              </Link>
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              {teacher.profile_id && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 gap-2 rounded-full border-pastel-blue/40 bg-card px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft hover:bg-pastel-blue/15"
+                  onClick={() => navigate(`/chat?to=${teacher.profile_id}`)}
+                >
+                  <MessageCircle className="h-4 w-4" strokeWidth={2} />
+                  Mensagem
+                </Button>
+              )}
+              {!isParent && (
+                <Link to="/professores" className="flex h-10 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
+                  <Pencil className="h-4 w-4" strokeWidth={2} /> Editar
+                </Link>
+              )}
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 gap-4 border-t border-border pt-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className={cn(
+            "mt-6 grid grid-cols-1 gap-4 border-t border-border pt-5 sm:grid-cols-2",
+            !isParent && "lg:grid-cols-4",
+          )}>
+            {!isParent && (
+            <>
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pastel-blue/40 text-pastel-blue-foreground">
                 <Mail className="h-4 w-4" strokeWidth={1.75} />
@@ -323,6 +390,8 @@ const ProfessorPerfil = () => {
                 <p className="text-sm font-medium text-foreground">{teacher.profiles?.phone || "—"}</p>
               </div>
             </div>
+            </>
+            )}
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pastel-yellow/50 text-pastel-yellow-foreground">
                 <Calendar className="h-4 w-4" strokeWidth={1.75} />

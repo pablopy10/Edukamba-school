@@ -20,7 +20,11 @@ export type StudentRow = {
   classroom_id: string | null;
   avatar_color: string | null;
   school_id: string | null;
-  classrooms?: { id: string; name: string } | null;
+  classrooms?: {
+    id: string;
+    name: string;
+    homeroom_teacher?: { full_name: string | null } | null;
+  } | null;
 };
 
 type ClassroomOpt = { id: string; name: string };
