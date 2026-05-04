@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "650533933795",
+    "project_id": "edukamba-84ae8",
+    "storage_bucket": "edukamba-84ae8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:650533933795:android:67d7be386219cbc6d36bd6",
+        "android_client_info": {
+          "package_name": "com.edukamba.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDIyH8F59689GS5ne6N10Pc58yCUTJH7Y8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

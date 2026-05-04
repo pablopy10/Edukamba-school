@@ -52,6 +52,7 @@ import { canOpenDefinicoesPage, canOpenModulosPage } from "@/lib/staffNavAccess"
 import { SelectedChildProvider } from "./context/SelectedChildContext";
 import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
 import { queryClient } from "@/lib/queryClient";
+import { OneSignalWebBridge } from "@/components/OneSignalWebBridge";
 
 function RouteSpinner() {
   return (
@@ -93,6 +94,7 @@ const App = () => (
                 <Toaster />
                 <Sonner />
                 <BrowserRouter>
+                  <OneSignalWebBridge />
                   <Routes>
                     <Route path="/" element={<NativeAppRoot />} />
                     <Route path="/auth" element={<Auth />} />

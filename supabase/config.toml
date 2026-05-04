@@ -3,8 +3,10 @@ project_id = "mrjftwvygqoimexwgclm"
 [functions.invite-teacher]
 verify_jwt = true
 
+# Preflight OPTIONS não envia JWT; com verify_jwt=true o gateway pode falhar o CORS.
+# Esta função valida Authorization dentro do handler (getUser + perfil).
 [functions.invite-school-user]
-verify_jwt = true
+verify_jwt = false
 
 [functions.invite-guardian]
 verify_jwt = true
@@ -14,3 +16,8 @@ verify_jwt = true
 
 [functions.request-plan-change]
 verify_jwt = true
+
+# Disparada pelo Database Webhook (INSERT em notifications). Os webhooks não trazem JWT de utilizador;
+# a função valida apikey / Authorization com SUPABASE_SERVICE_ROLE_KEY.
+[functions.notifications-push]
+verify_jwt = false

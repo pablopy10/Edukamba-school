@@ -1,9 +1,17 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
-const corsHeaders = {
+const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+function corsJson(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 const INVITABLE_ROLES = new Set([
   "ADMIN",
@@ -25,7 +33,9 @@ interface InvitePayload {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -34,10 +44,7 @@ Deno.serve(async (req) => {
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Missing authorization" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return corsJson({ error: "Missing authorization" }, 401);
     }
 
     const userClient = createClient(SUPABASE_URL, ANON, {
@@ -45,10 +52,7 @@ Deno.serve(async (req) => {
     });
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData.user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return corsJson({ error: "Unauthorized" }, 401);
     }
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
@@ -59,18 +63,12 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (profErr || !callerProfile?.school_id) {
-      return new Response(JSON.stringify({ error: "Perfil inválido" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return corsJson({ error: "Perfil inválido" }, 403);
     }
 
     const callerRole = callerProfile.role as string;
-    if (callerRole !== "ADMIN" && callerRole !== "SUPER_ADMIN") {
-      return new Response(JSON.stringify({ error: "Apenas administradores podem criar utilizadores" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (callerRole !== "ADMIN" && callerRole !== "SUPER_ADMIN" && callerRole !== "DIRECTOR") {
+      return corsJson({ error: "Apenas administradores ou director podem criar utilizadores" }, 403);
     }
 
     const body: InvitePayload = await req.json();
@@ -78,25 +76,20 @@ Deno.serve(async (req) => {
     const fullName = body.full_name?.trim();
     const role = body.role?.trim();
 
+    if (callerRole === "DIRECTOR" && role === "ADMIN") {
+      return corsJson({ error: "Apenas o administrador da escola pode criar outro administrador" }, 403);
+    }
+
     if (!email || !fullName || !role) {
-      return new Response(JSON.stringify({ error: "email, full_name e role são obrigatórios" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return corsJson({ error: "email, full_name e role são obrigatórios" }, 400);
     }
 
     if (!INVITABLE_ROLES.has(role)) {
-      return new Response(JSON.stringify({ error: "Função não permitida para convite" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return corsJson({ error: "Função não permitida para convite" }, 400);
     }
 
     if (body.password != null && body.password !== "" && (body.password as string).length < 6) {
-      return new Response(JSON.stringify({ error: "Password deve ter pelo menos 6 caracteres" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return corsJson({ error: "Password deve ter pelo menos 6 caracteres" }, 400);
     }
 
     const schoolId = callerProfile.school_id;
@@ -139,15 +132,9 @@ Deno.serve(async (req) => {
       is_active: true,
     }, { onConflict: "id" });
 
-    return new Response(JSON.stringify({ user_id: userId }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return corsJson({ user_id: userId }, 200);
   } catch (e) {
     console.error("invite-school-user error", e);
-    return new Response(JSON.stringify({ error: (e as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return corsJson({ error: (e as Error).message }, 500);
   }
 });

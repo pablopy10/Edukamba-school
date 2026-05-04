@@ -23,7 +23,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Capacitor } from "@capacitor/core";
 import { ROLE_LABEL_INVITE } from "@/components/definicoes/InviteStaffUserDialog";
+import { applyNativePushPreference } from "@/lib/oneSignalNative";
+import { applyWebPushPreference } from "@/lib/oneSignalWeb";
+import {
+  USER_NOTIFICATION_PREF,
+  USER_NOTIFICATION_PREF_CHANNELS,
+} from "@/lib/userNotificationPreferenceChannels";
 
 type Tab = "pessoal" | "credenciais" | "preferencias" | "seguranca";
 
@@ -68,16 +75,17 @@ const roleLabel = (r: string | null | undefined) => {
   return ROLE_LABEL_INVITE[r as keyof typeof ROLE_LABEL_INVITE] ?? "Funcionário";
 };
 
-const PREFS_KEY = "perfil:prefs";
+/** Antes as preferências eram só em localStorage; usado para migrar uma vez após carregar da BD. */
+const LEGACY_PREFS_KEY = "perfil:prefs";
 const SECURITY_KEY = "perfil:security";
 
-const defaultPrefs = {
-  emailNotif: true,
-  pushNotif: true,
-  smsNotif: false,
-  weeklyReport: true,
-  eventReminders: true,
+type UserPrefsUi = {
+  pushNotif: boolean;
+  emailNotif: boolean;
+  eventReminders: boolean;
 };
+
+const defaultPrefs: UserPrefsUi = { pushNotif: true, emailNotif: true, eventReminders: true };
 const defaultSecurity = { twoFactor: false, loginAlerts: true };
 
 const Perfil = () => {
@@ -108,12 +116,8 @@ const Perfil = () => {
   const [pwdErrors, setPwdErrors] = useState<Record<string, string>>({});
   const [showPwd, setShowPwd] = useState({ next: false, confirm: false });
 
-  // Preferences (localStorage)
-  const [prefs, setPrefs] = useState(() => {
-    if (typeof window === "undefined") return defaultPrefs;
-    try { return { ...defaultPrefs, ...(JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}")) }; }
-    catch { return defaultPrefs; }
-  });
+  const [prefs, setPrefs] = useState<UserPrefsUi>(defaultPrefs);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
 
   // Security (localStorage)
   const [security, setSecurity] = useState(() => {
@@ -142,6 +146,55 @@ const Perfil = () => {
       role: perfilDb.role ?? null,
     });
   }, [perfilDb]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setPrefsLoaded(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("notification_preferences")
+        .select("channel, enabled")
+        .eq("user_id", user.id)
+        .in("channel", [...USER_NOTIFICATION_PREF_CHANNELS]);
+
+      if (cancelled) return;
+
+      let next: UserPrefsUi = { ...defaultPrefs };
+      if (data && !error) {
+        const byCh = Object.fromEntries(data.map((r) => [r.channel, r.enabled])) as Record<string, boolean>;
+        if (byCh[USER_NOTIFICATION_PREF.PUSH] !== undefined) next.pushNotif = !!byCh[USER_NOTIFICATION_PREF.PUSH];
+        if (byCh[USER_NOTIFICATION_PREF.EMAIL] !== undefined) next.emailNotif = !!byCh[USER_NOTIFICATION_PREF.EMAIL];
+        if (byCh[USER_NOTIFICATION_PREF.EVENT_CALENDAR] !== undefined) {
+          next.eventReminders = !!byCh[USER_NOTIFICATION_PREF.EVENT_CALENDAR];
+        }
+      }
+
+      const hasAnyDb = Boolean(data?.length);
+      if (!hasAnyDb && typeof window !== "undefined") {
+        try {
+          const raw = localStorage.getItem(LEGACY_PREFS_KEY);
+          if (raw) {
+            const j = JSON.parse(raw) as Record<string, unknown>;
+            if (typeof j.pushNotif === "boolean") next.pushNotif = j.pushNotif;
+            if (typeof j.emailNotif === "boolean") next.emailNotif = j.emailNotif;
+            if (typeof j.eventReminders === "boolean") next.eventReminders = j.eventReminders;
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+
+      setPrefs(next);
+      setPrefsLoaded(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   const handleSaveProfile = async () => {
     if (!user) return;
@@ -216,8 +269,52 @@ const Perfil = () => {
     showToast("success", "Palavra-passe atualizada.");
   };
 
-  const handleSavePrefs = () => {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  const handleSavePrefs = async () => {
+    if (!user) return;
+    const schoolId = perfilDb?.school_id;
+    if (!schoolId) {
+      showToast("error", "Sem escola associada ao perfil. Não é possível guardar preferências.");
+      return;
+    }
+    if (!isOnline) {
+      showToast("error", "Precisa de ligação à Internet para guardar preferências.");
+      return;
+    }
+    setSaving(true);
+    const rows = [
+      { school_id: schoolId, user_id: user.id, channel: USER_NOTIFICATION_PREF.PUSH, enabled: prefs.pushNotif },
+      { school_id: schoolId, user_id: user.id, channel: USER_NOTIFICATION_PREF.EMAIL, enabled: prefs.emailNotif },
+      {
+        school_id: schoolId,
+        user_id: user.id,
+        channel: USER_NOTIFICATION_PREF.EVENT_CALENDAR,
+        enabled: prefs.eventReminders,
+      },
+    ];
+    const { error } = await supabase.from("notification_preferences").upsert(rows, { onConflict: "user_id,channel" });
+    if (error) {
+      setSaving(false);
+      showToast("error", error.message);
+      return;
+    }
+
+    try {
+      localStorage.removeItem(LEGACY_PREFS_KEY);
+    } catch {
+      /* ignore */
+    }
+
+    const pushOk = Capacitor.isNativePlatform()
+      ? await applyNativePushPreference(prefs.pushNotif)
+      : await applyWebPushPreference(prefs.pushNotif);
+    setSaving(false);
+    if (!pushOk && prefs.pushNotif) {
+      showToast(
+        "error",
+        "Preferências guardadas, mas não foi possível activar notificações push (permissão ou dispositivo não suportado).",
+      );
+      return;
+    }
     showToast("success", "Preferências guardadas.");
   };
 
@@ -505,30 +602,49 @@ const Perfil = () => {
         {activeTab === "preferencias" && (
           <div className="rounded-2xl bg-card p-6 shadow-card">
             <h2 className="text-lg font-bold text-foreground">Preferências</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Escolha como quer receber notificações e visualizar a app.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Escolha como quer receber notificações. Estas escolhas sincronizam com a conta e com o envio push via OneSignal.
+            </p>
 
             <div className="mt-6 flex flex-col divide-y divide-border">
-              {([
-                { k: "emailNotif" as const, label: "Notificações por email", desc: "Receber alertas no seu email." },
-                { k: "pushNotif" as const, label: "Notificações push", desc: "Receber notificações no navegador." },
-                { k: "smsNotif" as const, label: "Notificações por SMS", desc: "Receber SMS para eventos críticos." },
-                { k: "weeklyReport" as const, label: "Relatório semanal", desc: "Resumo de atividade todas as segundas." },
-                { k: "eventReminders" as const, label: "Lembretes de eventos", desc: "Receber lembretes 30 min antes." },
-              ]).map((p) => (
-                <div key={p.k} className="flex items-center justify-between py-4">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{p.label}</p>
-                    <p className="text-xs text-muted-foreground">{p.desc}</p>
+              {!prefsLoaded && (
+                <p className="py-4 text-sm text-muted-foreground">A carregar preferências…</p>
+              )}
+              {prefsLoaded &&
+                (
+                  [
+                    {
+                      k: "pushNotif" as const,
+                      label: "Notificações push",
+                      desc: "No navegador usa OneSignal (web). Na app Android/iOS, notificações do sistema.",
+                    },
+                    {
+                      k: "emailNotif" as const,
+                      label: "Notificações por email",
+                      desc: "Quando a escola ou os serviços enviarem alertas por email, respeitar-se-á esta opção.",
+                    },
+                    {
+                      k: "eventReminders" as const,
+                      label: "Lembretes de eventos",
+                      desc: "Receber notificações sobre novos eventos no calendário escolar.",
+                    },
+                  ] as const
+                ).map((p) => (
+                  <div key={p.k} className="flex items-center justify-between py-4">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{p.label}</p>
+                      <p className="text-xs text-muted-foreground">{p.desc}</p>
+                    </div>
+                    <Toggle checked={prefs[p.k]} onChange={(v) => setPrefs({ ...prefs, [p.k]: v })} />
                   </div>
-                  <Toggle checked={prefs[p.k]} onChange={(v) => setPrefs({ ...prefs, [p.k]: v })} />
-                </div>
-              ))}
+                ))}
             </div>
 
             <div className="mt-6 flex justify-end">
               <button
                 onClick={handleSavePrefs}
-                className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
+                disabled={saving || !prefsLoaded}
+                className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:opacity-50"
               >
                 <Save className="h-4 w-4" strokeWidth={2} /> Guardar Preferências
               </button>

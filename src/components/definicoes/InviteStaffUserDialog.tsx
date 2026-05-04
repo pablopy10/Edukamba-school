@@ -110,7 +110,8 @@ export const InviteStaffUserDialog = ({ open, onOpenChange, onInvited }: Props) 
         <DialogHeader>
           <DialogTitle>Novo utilizador</DialogTitle>
           <DialogDescription>
-            Convite por email ou criação com password. Fine-tuning de módulos: separador Permissões.
+            Um único pedido ao servidor gere os dois fluxos: com convite envia email; com password cria a conta logo (sem mensagem “convite”).
+            Ajustar módulos: separador Permissões.
           </DialogDescription>
         </DialogHeader>
 
