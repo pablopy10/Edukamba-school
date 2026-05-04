@@ -5,8 +5,13 @@ import type { ClassroomRow } from "@/components/turmas/ClassroomFormDialog";
 type ClassroomOpt = { id: string; name: string };
 
 /** Fingerprint estável das turmas do horário (ordenado) — evita cache errado se o horário mudar com o mesmo ano. */
-function classroomScopeKey(classroomIds: readonly string[]): string {
+export function teacherScheduleClassroomsFingerprint(classroomIds: readonly string[]): string {
   return [...classroomIds].sort().join("|");
+}
+
+/** @deprecated Alias interno; preferir teacherScheduleClassroomsFingerprint. */
+function classroomScopeKey(classroomIds: readonly string[]): string {
+  return teacherScheduleClassroomsFingerprint(classroomIds);
 }
 
 /** Lista de alunos do professor (persistida para offline). */

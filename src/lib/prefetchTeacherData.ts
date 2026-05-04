@@ -10,7 +10,18 @@ import {
   fetchTeacherTurmasQuery,
   teacherAlunosQueryKey,
   teacherTurmasQueryKey,
+  teacherScheduleClassroomsFingerprint,
 } from "@/lib/offline/teacherListQueries";
+import {
+  avaliacaoNotasPackQueryKey,
+  fetchAvaliacaoNotasPack,
+} from "@/lib/offline/avaliacaoNotasQueries";
+import {
+  fetchTeacherAvaliacoesPack,
+  teacherAvaliacoesPackQueryKey,
+  fetchTeacherSubjectDetail,
+  teacherSubjectDetailQueryKey,
+} from "@/lib/offline/teacherAvaliacoesQueries";
 import {
   academicTermsQueryKey,
   fetchAcademicTerms,
@@ -96,7 +107,44 @@ export async function prefetchTeacherData(
     networkMode: "offlineFirst",
   });
 
+  const classroomFp = teacherScheduleClassroomsFingerprint(classroomIds);
+  try {
+    const avalData = await qc.fetchQuery({
+      queryKey: teacherAvaliacoesPackQueryKey(userId, schoolId, academicYearId, classroomFp),
+      queryFn: () => fetchTeacherAvaliacoesPack({ schoolId, academicYearId, classroomIds }),
+      staleTime: QUERY_DAY_MS * 24,
+      networkMode: "offlineFirst",
+    });
+    await Promise.all(
+      (avalData.assessments ?? []).map((a) =>
+        qc.prefetchQuery({
+          queryKey: avaliacaoNotasPackQueryKey(a.id, "full"),
+          queryFn: () =>
+            fetchAvaliacaoNotasPack({
+              assessmentId: a.id,
+              visibleStudentId: null,
+            }),
+          staleTime: QUERY_DAY_MS * 24,
+          networkMode: "offlineFirst",
+        }),
+      ),
+    );
+  } catch {
+    /* best-effort: avaliações e alunos/notas por avaliação */
+  }
+
   if (subjectId) {
+    try {
+      await qc.prefetchQuery({
+        queryKey: teacherSubjectDetailQueryKey(schoolId, subjectId),
+        queryFn: () => fetchTeacherSubjectDetail(schoolId, subjectId),
+        staleTime: QUERY_DAY_MS * 24,
+        networkMode: "offlineFirst",
+      });
+    } catch {
+      /* best-effort nome da disciplina */
+    }
+
     const termRows = await qc.fetchQuery({
       queryKey: academicTermsQueryKey(schoolId, academicYearId),
       queryFn: () => fetchAcademicTerms(schoolId, academicYearId),
@@ -125,7 +173,6 @@ export async function prefetchTeacherData(
     }
     await Promise.all(gradeTasks);
   }
-
   const baseStudents = (classroomId: string): PresencasStudentsKeyInput => ({
     schoolId,
     classroomId,

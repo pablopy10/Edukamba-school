@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useIsRestoring, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   Plus,
@@ -36,6 +37,17 @@ import { AssessmentFormDialog, type AssessmentRecord } from "@/components/avalia
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
+import { useTeacherSessionScope } from "@/hooks/useTeacherSessionScope";
+import { QUERY_DAY_MS } from "@/lib/queryClient";
+import { teacherScheduleClassroomsFingerprint } from "@/lib/offline/teacherListQueries";
+import {
+  fetchTeacherAvaliacoesPack,
+  teacherAvaliacoesPackQueryKey,
+  type AvaliacoesHolidayPack,
+  type AvaliacoesTeacherOption,
+  type AvaliacoesTermPack,
+  type TeacherAssessmentRow,
+} from "@/lib/offline/teacherAvaliacoesQueries";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { useAuth } from "@/hooks/useAuth";
@@ -46,25 +58,13 @@ import { Button } from "@/components/ui/button";
 
 type EvalType = "teste" | "exame" | "trabalho" | "oral";
 
-type Assessment = {
-  id: string;
-  title: string;
-  type: string;
-  date: string;
-  start_time: string | null;
-  end_time: string | null;
-  room: string | null;
-  weight: number | null;
-  description: string | null;
-  classroom_id: string | null;
-  subject_id: string | null;
-  teacher_id: string | null;
-  term_id: string | null;
-  created_by: string | null;
-};
+type Assessment = TeacherAssessmentRow;
 
-type Term = { id: string; term_number: number; name: string; start_date: string; end_date: string };
-type Holiday = { id: string; name: string; start_date: string; end_date: string };
+type Holiday = AvaliacoesHolidayPack;
+
+type Term = AvaliacoesTermPack;
+
+type TeacherOption = AvaliacoesTeacherOption;
 
 type Option = { id: string; name: string };
 
@@ -95,7 +95,10 @@ const tt = (t?: string | null) => (t ? t.slice(0, 5) : "");
 const Avaliacoes = () => {
   const navigate = useNavigate();
   const native = isNativeMobileApp();
-  const { selectedYearId } = useAcademicYear();
+  const { selectedYearId: ctxYearId, schoolId: ctxSchoolId } = useAcademicYear();
+  const { data: persistedTeacherSession } = useTeacherSessionScope();
+  const persistRestoring = useIsRestoring();
+  const queryClient = useQueryClient();
   const { isParent, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const { user } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
@@ -119,11 +122,11 @@ const Avaliacoes = () => {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
-  const [schoolId, setSchoolId] = useState<string | null>(null);
+  const [profileSchoolId, setProfileSchoolId] = useState<string | null>(null);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [classrooms, setClassrooms] = useState<Option[]>([]);
   const [subjects, setSubjects] = useState<Option[]>([]);
-  const [teachers, setTeachers] = useState<Option[]>([]);
+  const [teachers, setTeachers] = useState<TeacherOption[]>([]);
   const [terms, setTerms] = useState<Term[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
 
@@ -131,17 +134,107 @@ const Avaliacoes = () => {
   const [editing, setEditing] = useState<Partial<AssessmentRecord> | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
+  const resolvedSchoolId = useMemo(() => {
+    if (isTeacher)
+      return ctxSchoolId ?? persistedTeacherSession?.schoolId ?? profileSchoolId;
+    return profileSchoolId ?? ctxSchoolId;
+  }, [isTeacher, ctxSchoolId, persistedTeacherSession?.schoolId, profileSchoolId]);
+
+  const resolvedYearId = useMemo(() => {
+    if (!isTeacher) return ctxYearId ?? null;
+    return ctxYearId ?? persistedTeacherSession?.academicYearId ?? null;
+  }, [isTeacher, ctxYearId, persistedTeacherSession?.academicYearId]);
+
+  const teacherClassroomFingerprint = useMemo(
+    () => teacherScheduleClassroomsFingerprint(teacherClassroomIds),
+    [teacherClassroomIds],
+  );
+
+  const teacherAvaliacoesQuery = useQuery({
+    queryKey: teacherAvaliacoesPackQueryKey(
+      user?.id ?? "__none__",
+      resolvedSchoolId ?? "__none__",
+      resolvedYearId ?? "__none__",
+      teacherClassroomFingerprint || "__empty__",
+    ),
+    queryFn: () =>
+      fetchTeacherAvaliacoesPack({
+        schoolId: resolvedSchoolId!,
+        academicYearId: resolvedYearId!,
+        classroomIds: teacherClassroomIds,
+      }),
+    enabled: Boolean(
+      isTeacher &&
+        user?.id &&
+        resolvedSchoolId &&
+        resolvedYearId &&
+        teacherClassroomIds.length > 0 &&
+        !teacherLoading,
+    ),
+    staleTime: QUERY_DAY_MS * 24,
+    networkMode: "offlineFirst",
+  });
+
+  const teacherAssessments = teacherAvaliacoesQuery.data?.assessments ?? [];
+  const teacherClassroomsOpts = teacherAvaliacoesQuery.data?.classrooms ?? [];
+  const teacherSubjectsOpts = teacherAvaliacoesQuery.data?.subjects ?? [];
+  const teacherTeachersOpts = teacherAvaliacoesQuery.data?.teachers ?? [];
+  const teacherTermsPack = teacherAvaliacoesQuery.data?.terms ?? [];
+  const teacherHolidaysPack = teacherAvaliacoesQuery.data?.holidays ?? [];
+
+  const displayAssessments = isTeacher ? teacherAssessments : assessments;
+  const displayClassrooms = isTeacher ? teacherClassroomsOpts : classrooms;
+  const displaySubjects = isTeacher ? teacherSubjectsOpts : subjects;
+  const displayTeachers = isTeacher ? teacherTeachersOpts : teachers;
+  const displayTerms = isTeacher ? teacherTermsPack : terms;
+  const displayHolidays = isTeacher ? teacherHolidaysPack : holidays;
+
+  const teachersInSubjectFilter = useMemo(() => {
+    if (subjectFilter === "all") return displayTeachers;
+    return displayTeachers.filter((t) => (t.subject_id ?? null) === subjectFilter);
+  }, [displayTeachers, subjectFilter]);
+
+  useEffect(() => {
+    if (teacherFilter === "all") return;
+    if (!teachersInSubjectFilter.some((t) => t.id === teacherFilter)) setTeacherFilter("all");
+  }, [teacherFilter, teachersInSubjectFilter]);
+
+  const invalidateTeacherAvalPack = useCallback(() => {
+    if (!isTeacher || !user?.id || !resolvedSchoolId || !resolvedYearId) return;
+    void queryClient.invalidateQueries({
+      queryKey: teacherAvaliacoesPackQueryKey(
+        user.id,
+        resolvedSchoolId,
+        resolvedYearId,
+        teacherClassroomFingerprint || "__empty__",
+      ),
+    });
+  }, [
+    isTeacher,
+    user?.id,
+    resolvedSchoolId,
+    resolvedYearId,
+    teacherClassroomFingerprint,
+    queryClient,
+  ]);
+
   const loadAll = async () => {
+    if (isTeacher) return;
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setLoading(false); return; }
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", user.id).maybeSingle();
     const sid = profile?.school_id ?? null;
-    setSchoolId(sid);
-    if (!sid) { setLoading(false); return; }
+    setProfileSchoolId(sid);
+    if (!sid) {
+      setLoading(false);
+      return;
+    }
 
-    // Restrict trimesters, holidays and assessments to the selected academic year
-    const yearId = selectedYearId;
+    const yearId = resolvedYearId;
 
     const termsBase = supabase
       .from("academic_terms")
@@ -155,30 +248,36 @@ const Avaliacoes = () => {
       .order("start_date");
     let assessmentsQuery = supabase
       .from("assessments")
-      .select("id,title,type,date,start_time,end_time,room,weight,description,classroom_id,subject_id,teacher_id,term_id,academic_year_id,created_by")
+      .select(
+        "id,title,type,date,start_time,end_time,room,weight,description,classroom_id,subject_id,teacher_id,term_id,academic_year_id,created_by",
+      )
       .eq("school_id", sid)
       .order("date", { ascending: true });
     if (yearId) {
-      // Filter assessments directly by academic_year_id (set automatically by DB trigger).
       assessmentsQuery = assessmentsQuery.eq("academic_year_id", yearId);
     }
     if (isParent) {
       if (parentClassroomIds.length === 0) {
-        setAssessments([]); setClassrooms([]); setSubjects([]); setTeachers([]); setTerms([]); setHolidays([]); setLoading(false);
+        setAssessments([]);
+        setClassrooms([]);
+        setSubjects([]);
+        setTeachers([]);
+        setTerms([]);
+        setHolidays([]);
+        setLoading(false);
         return;
       }
       assessmentsQuery = assessmentsQuery.in("classroom_id", parentClassroomIds);
     }
-    if (isTeacher) {
-      if (teacherClassroomIds.length === 0) {
-        setAssessments([]); setClassrooms([]); setSubjects([]); setTeachers([]); setTerms([]); setHolidays([]); setLoading(false);
-        return;
-      }
-      assessmentsQuery = assessmentsQuery.in("classroom_id", teacherClassroomIds);
-    }
     if (isStudent) {
       if (!studentClassroomId) {
-        setAssessments([]); setClassrooms([]); setSubjects([]); setTeachers([]); setTerms([]); setHolidays([]); setLoading(false);
+        setAssessments([]);
+        setClassrooms([]);
+        setSubjects([]);
+        setTeachers([]);
+        setTerms([]);
+        setHolidays([]);
+        setLoading(false);
         return;
       }
       assessmentsQuery = assessmentsQuery.eq("classroom_id", studentClassroomId);
@@ -186,11 +285,14 @@ const Avaliacoes = () => {
 
     const [aRes, cRes, sRes, tRes, termRes, holRes] = await Promise.all([
       assessmentsQuery,
-      (yearId
+      yearId
         ? supabase.from("classrooms").select("id, name").eq("school_id", sid).eq("academic_year_id", yearId).order("name")
-        : supabase.from("classrooms").select("id, name").eq("school_id", sid).order("name")),
+        : supabase.from("classrooms").select("id, name").eq("school_id", sid).order("name"),
       supabase.from("subjects").select("id, name").eq("school_id", sid).order("name"),
-      supabase.from("teachers").select("id, profile_id, profiles:profile_id(full_name)").eq("school_id", sid),
+      supabase
+        .from("teachers")
+        .select("id, profile_id, subject_id, profiles:profile_id(full_name)")
+        .eq("school_id", sid),
       yearId ? termsBase.eq("academic_year_id", yearId) : termsBase,
       yearId ? holidaysBase.eq("academic_year_id", yearId) : holidaysBase,
     ]);
@@ -198,9 +300,6 @@ const Avaliacoes = () => {
     setAssessments((aRes.data ?? []) as Assessment[]);
     {
       let classroomList = cRes.data ?? [];
-      if (isTeacher) {
-        classroomList = classroomList.filter((c) => teacherClassroomIds.includes(c.id));
-      }
       if (isStudent && studentClassroomId) {
         classroomList = classroomList.filter((c) => c.id === studentClassroomId);
       }
@@ -209,9 +308,13 @@ const Avaliacoes = () => {
     {
       let subjectList = sRes.data ?? [];
       let teacherList = (tRes.data ?? [])
-        .filter((t: any) => !!t.profile_id)
-        .map((t: any) => ({ id: t.profile_id, name: t.profiles?.full_name ?? "Sem nome" }))
-        .sort((a, b) => a.name.localeCompare(b.name));
+        .filter((t: { profile_id?: string | null }) => !!t.profile_id)
+        .map((t: { profile_id: string; subject_id?: string | null; profiles?: { full_name?: string | null } | null }) => ({
+          id: t.profile_id,
+          name: t.profiles?.full_name?.trim() || "Sem nome",
+          subject_id: t.subject_id ?? null,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, "pt"));
       if (isStudent) {
         const subjSet = new Set(studentSubjectIds);
         const teachSet = new Set(studentTeacherIds);
@@ -228,11 +331,27 @@ const Avaliacoes = () => {
 
   useEffect(() => {
     if (parentLoading) return;
-    if (isTeacher && teacherLoading) return;
+    if (isTeacher) return;
     if (isStudent && studentLoading) return;
     loadAll();
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [selectedYearId, parentLoading, isParent, parentClassroomIds.join(","), isTeacher, teacherLoading, teacherClassroomIds.join(","), isStudent, studentLoading, studentClassroomId, studentSubjectIds.join(","), studentTeacherIds.join(",")]);
+  }, [
+    resolvedYearId,
+    parentLoading,
+    isParent,
+    parentClassroomIds.join(","),
+    isStudent,
+    studentLoading,
+    studentClassroomId,
+    studentSubjectIds.join(","),
+    studentTeacherIds.join(","),
+    isTeacher,
+  ]);
+
+  useEffect(() => {
+    if (!isTeacher || !teacherSubjectId) return;
+    setSubjectFilter(teacherSubjectId);
+  }, [isTeacher, teacherSubjectId]);
 
   // Lock filters to the student's own scope
   useEffect(() => {
@@ -240,21 +359,20 @@ const Avaliacoes = () => {
     if (studentClassroomId) setClassroomFilter(studentClassroomId);
   }, [isStudent, studentClassroomId]);
 
-  const classroomMap = useMemo(() => new Map(classrooms.map((c) => [c.id, c.name])), [classrooms]);
-  const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s.name])), [subjects]);
-  const teacherMap = useMemo(() => new Map(teachers.map((t) => [t.id, t.name])), [teachers]);
+  const classroomMap = useMemo(() => new Map(displayClassrooms.map((c) => [c.id, c.name])), [displayClassrooms]);
+  const subjectMap = useMemo(() => new Map(displaySubjects.map((s) => [s.id, s.name])), [displaySubjects]);
+  const teacherMap = useMemo(() => new Map(displayTeachers.map((t) => [t.id, t.name])), [displayTeachers]);
 
   const filtered = useMemo(() => {
-    return assessments.filter((e) => {
+    return displayAssessments.filter((e) => {
       if (typeFilter !== "all" && e.type !== typeFilter) return false;
       if (subjectFilter !== "all" && e.subject_id !== subjectFilter) return false;
       if (teacherFilter !== "all" && e.teacher_id !== teacherFilter) return false;
       if (classroomFilter !== "all" && e.classroom_id !== classroomFilter) return false;
       if (termFilter !== "all") {
-        // Resolve effective term: stored term_id, otherwise derive from date
         let effectiveTerm = e.term_id;
         if (!effectiveTerm) {
-          const matched = terms.find((t) => e.date >= t.start_date && e.date <= t.end_date);
+          const matched = displayTerms.find((t) => e.date >= t.start_date && e.date <= t.end_date);
           effectiveTerm = matched?.id ?? null;
         }
         if (effectiveTerm !== termFilter) return false;
@@ -271,7 +389,19 @@ const Avaliacoes = () => {
         teacherName.toLowerCase().includes(q)
       );
     });
-  }, [assessments, typeFilter, subjectFilter, teacherFilter, classroomFilter, termFilter, terms, search, subjectMap, classroomMap, teacherMap]);
+  }, [
+    displayAssessments,
+    typeFilter,
+    subjectFilter,
+    teacherFilter,
+    classroomFilter,
+    termFilter,
+    displayTerms,
+    search,
+    subjectMap,
+    classroomMap,
+    teacherMap,
+  ]);
 
   const stats = useMemo(() => ({
     total: filtered.length,
@@ -284,7 +414,7 @@ const Avaliacoes = () => {
   const conflictIds = useMemo(() => {
     const ids = new Set<string>();
     const byDate = new Map<string, Assessment[]>();
-    for (const a of assessments) {
+    for (const a of displayAssessments) {
       const arr = byDate.get(a.date) ?? [];
       arr.push(a);
       byDate.set(a.date, arr);
@@ -307,17 +437,17 @@ const Avaliacoes = () => {
       }
     }
     return ids;
-  }, [assessments]);
+  }, [displayAssessments]);
 
   // Map of assessmentId -> holiday name for assessments scheduled during a holiday period
   const holidayConflicts = useMemo(() => {
     const map = new Map<string, string>();
-    for (const a of assessments) {
-      const h = holidays.find((hol) => a.date >= hol.start_date && a.date <= hol.end_date);
+    for (const a of displayAssessments) {
+      const h = displayHolidays.find((hol) => a.date >= hol.start_date && a.date <= hol.end_date);
       if (h) map.set(a.id, h.name);
     }
     return map;
-  }, [assessments, holidays]);
+  }, [displayAssessments, displayHolidays]);
 
   const canMutateAssessment = useCallback(
     (a: Assessment) => {
@@ -360,8 +490,22 @@ const Avaliacoes = () => {
       return;
     }
     toast({ title: "Avaliação eliminada" });
-    setAssessments((prev) => prev.filter((a) => a.id !== id));
+    if (isTeacher) {
+      invalidateTeacherAvalPack();
+    } else {
+      setAssessments((prev) => prev.filter((a) => a.id !== id));
+    }
   };
+
+  const teacherPackLoading =
+    isTeacher &&
+    (teacherLoading ||
+      (teacherClassroomIds.length > 0 &&
+        !teacherAvaliacoesQuery.data &&
+        teacherAvaliacoesQuery.isPending &&
+        !persistRestoring));
+
+  const pageLoading = teacherPackLoading || (!isTeacher && loading);
 
   if (parentLoading || (isStudent && studentLoading)) return <PageLoadingSkeleton />;
 
@@ -454,35 +598,55 @@ const Avaliacoes = () => {
               <SelectTrigger className="h-10 rounded-full"><SelectValue placeholder="Disciplina" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas as disciplinas</SelectItem>
-                {subjects.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                {displaySubjects.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={teacherFilter} onValueChange={setTeacherFilter} disabled={isStudent}>
               <SelectTrigger className="h-10 rounded-full"><SelectValue placeholder="Professor" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os professores</SelectItem>
-                {teachers.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                {teachersInSubjectFilter.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={classroomFilter} onValueChange={setClassroomFilter} disabled={isStudent}>
-              <SelectTrigger className="h-10 rounded-full"><SelectValue placeholder="Turma" /></SelectTrigger>
+              <SelectTrigger className="h-10 rounded-full">
+                <SelectValue placeholder="Turma" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas as turmas</SelectItem>
-                {sortByName(classrooms).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                {sortByName(displayClassrooms).map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={termFilter} onValueChange={setTermFilter}>
-              <SelectTrigger className="h-10 rounded-full"><SelectValue placeholder="Trimestre" /></SelectTrigger>
+              <SelectTrigger className="h-10 rounded-full">
+                <SelectValue placeholder="Trimestre" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os trimestres</SelectItem>
-                {terms.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                {displayTerms.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
         </div>
         )}
 
-        {loading ? (
+        {pageLoading ? (
           <div className="flex items-center justify-center rounded-2xl bg-card py-16 shadow-card">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
@@ -509,7 +673,7 @@ const Avaliacoes = () => {
             classroomMap={classroomMap}
             subjectMap={subjectMap}
             conflictIds={conflictIds}
-            holidays={holidays}
+            holidays={displayHolidays}
             holidayConflicts={holidayConflicts}
             onEdit={openEdit}
             onDelete={(id) => setDeleteId(id)}
@@ -549,12 +713,15 @@ const Avaliacoes = () => {
       <AssessmentFormDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        schoolId={schoolId}
-        classrooms={classrooms}
-        subjects={subjects}
-        teachers={teachers}
+        schoolId={resolvedSchoolId ?? profileSchoolId}
+        classrooms={displayClassrooms}
+        subjects={displaySubjects}
+        teachers={displayTeachers}
         initial={editing}
-        onSaved={loadAll}
+        onSaved={() => {
+          invalidateTeacherAvalPack();
+          void loadAll();
+        }}
         lockTeacherId={isTeacher ? user?.id ?? null : null}
         lockSubjectId={isTeacher ? teacherSubjectId : null}
       />

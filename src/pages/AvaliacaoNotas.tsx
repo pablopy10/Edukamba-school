@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useIsRestoring, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Save, Loader2, GraduationCap, Users, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,10 @@ import { OFFLINE_SYNC_FLUSH_EVENT, useOfflineSync } from "@/hooks/useOfflineSync
 import { supabaseRestTable } from "@/lib/supabaseRestUrls";
 import { showPageKpiCards } from "@/lib/nativeApp";
 import { QUERY_DAY_MS } from "@/lib/queryClient";
+import {
+  avaliacaoNotasPackQueryKey,
+  fetchAvaliacaoNotasPack,
+} from "@/lib/offline/avaliacaoNotasQueries";
 
 type AssessmentInfo = {
   id: string;
@@ -110,100 +114,79 @@ const avatarClass = (c?: string | null) => avatarColorMap[c ?? "blue"] ?? avatar
 const AvaliacaoNotas = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const persistRestoring = useIsRestoring();
   const { role } = useUserRole();
   const { isStudent, studentId } = useStudentSelf();
   const { isOnline, enqueuePendingSync } = useOfflineSync();
   const readOnly = isStudent || role === "PARENT";
 
-  const [loading, setLoading] = useState(true);
   const [assessment, setAssessment] = useState<AssessmentInfo | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [rows, setRows] = useState<Record<string, GradeRow>>({});
   const [search, setSearch] = useState("");
 
-  const load = useCallback(async () => {
-    if (!id) return;
-    setLoading(true);
-    const { data: a, error: aErr } = await supabase
-      .from("assessments")
-      .select("id, title, type, date, weight, classroom_id, subject_id, classrooms:classroom_id(name), subjects:subject_id(name)")
-      .eq("id", id)
-      .maybeSingle();
+  const scopeKey = useMemo(() => {
+    if (isStudent && studentId) return `student:${studentId}`;
+    return "full";
+  }, [isStudent, studentId]);
 
-    if (aErr || !a) {
-      toast({ title: "Erro", description: aErr?.message ?? "Avaliação não encontrada", variant: "destructive" });
-      setLoading(false);
-      return;
-    }
+  const packQuery = useQuery({
+    queryKey: avaliacaoNotasPackQueryKey(id ?? "__disabled__", scopeKey),
+    queryFn: () =>
+      fetchAvaliacaoNotasPack({
+        assessmentId: id!,
+        visibleStudentId: isStudent && studentId ? studentId : null,
+      }),
+    enabled: Boolean(id && (scopeKey === "full" || (isStudent && studentId))),
+    staleTime: QUERY_DAY_MS * 24,
+    networkMode: "offlineFirst",
+  });
 
-    const info: AssessmentInfo = {
-      id: a.id,
-      title: a.title,
-      type: a.type,
-      date: a.date,
-      weight: a.weight,
-      classroom_id: a.classroom_id,
-      subject_id: a.subject_id,
-      classroom_name: (a as any).classrooms?.name,
-      subject_name: (a as any).subjects?.name,
-    };
-    setAssessment(info);
-
-    if (!info.classroom_id) {
-      setStudents([]);
-      setRows({});
-      setLoading(false);
-      return;
-    }
-
-    const [stuRes, gRes] = await Promise.all([
-      supabase.from("students").select("id, full_name, enrollment_number, avatar_color").eq("classroom_id", info.classroom_id).order("full_name"),
-      supabase.from("grades").select("id, student_id, score, teacher_comment").eq("assessment_id", id),
-    ]);
-
-    const studentList = (stuRes.data ?? []) as Student[];
-    // Students only see their own row.
-    const visible = isStudent && studentId
-      ? studentList.filter((s) => s.id === studentId)
-      : studentList;
-    setStudents(visible);
-
-    const map: Record<string, GradeRow> = {};
-    studentList.forEach((s) => {
-      map[s.id] = { student_id: s.id, score: "", teacher_comment: "" };
+  useEffect(() => {
+    const d = packQuery.data;
+    if (!d) return;
+    setAssessment({
+      id: d.assessment.id,
+      title: d.assessment.title,
+      type: d.assessment.type,
+      date: d.assessment.date,
+      weight: d.assessment.weight,
+      classroom_id: d.assessment.classroom_id,
+      subject_id: d.assessment.subject_id,
+      classroom_name: d.assessment.classroom_name,
+      subject_name: d.assessment.subject_name,
     });
-    (gRes.data ?? []).forEach((g: any) => {
-      if (map[g.student_id]) {
-        map[g.student_id] = {
-          id: g.id,
-          student_id: g.student_id,
-          score: g.score?.toString() ?? "",
-          teacher_comment: g.teacher_comment ?? "",
-          original_score: g.score,
-          original_comment: g.teacher_comment ?? "",
-        };
+    setStudents(d.visibleStudents as Student[]);
+    setRows(d.gradeRowsTemplate as Record<string, GradeRow>);
+  }, [id, packQuery.data]);
+
+  useEffect(() => {
+    if (!packQuery.isError || packQuery.data) return;
+    const err = packQuery.error;
+    toast({
+      title: "Erro",
+      description: err instanceof Error ? err.message : String(err),
+      variant: "destructive",
+    });
+  }, [packQuery.isError, packQuery.error, packQuery.data]);
+
+  useEffect(() => {
+    const onSynced = () => {
+      if (id) {
+        void queryClient.invalidateQueries({ queryKey: ["avaliacaoNotas", "pack", id] });
       }
-    });
-    setRows(map);
-    setLoading(false);
-  }, [id, isStudent, studentId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    const onSynced = () => void load();
+    };
     window.addEventListener(OFFLINE_SYNC_FLUSH_EVENT, onSynced);
     return () => window.removeEventListener(OFFLINE_SYNC_FLUSH_EVENT, onSynced);
-  }, [load]);
+  }, [id, queryClient]);
 
   const filteredStudents = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return students;
-    return students.filter((s) =>
-      s.full_name.toLowerCase().includes(q) ||
-      (s.enrollment_number ?? "").toLowerCase().includes(q)
+    return students.filter(
+      (s) =>
+        s.full_name.toLowerCase().includes(q) || (s.enrollment_number ?? "").toLowerCase().includes(q),
     );
   }, [students, search]);
 
@@ -242,11 +225,11 @@ const AvaliacaoNotas = () => {
       const gradesBase = supabaseRestTable("grades");
 
       if (!isOnline) {
-        if (toInsert.length > 0) {
+        for (const row of toInsert) {
           enqueuePendingSync({
             url: gradesBase,
             method: "POST",
-            body: JSON.stringify(toInsert),
+            body: JSON.stringify(row),
           });
         }
         for (const u of toUpdate) {
@@ -288,12 +271,6 @@ const AvaliacaoNotas = () => {
       return "online";
     },
     onMutate: async (vars) => {
-      console.log("[offline-sync debug][AvaliacaoNotas saveGrades] onMutate", {
-        toInsert: vars.toInsert.length,
-        toUpdate: vars.toUpdate.length,
-        toDelete: vars.toDelete.length,
-        navigatorOnLine: typeof navigator !== "undefined" ? navigator.onLine : undefined,
-      });
       const snapshot = { ...rows };
       setRows(vars.optimisticRows);
       return { snapshot };
@@ -307,8 +284,9 @@ const AvaliacaoNotas = () => {
       });
     },
     onSuccess: async (mode) => {
-      console.log("[offline-sync debug][AvaliacaoNotas saveGrades] onSuccess", { mode });
-      if (mode === "online") await load();
+      if (mode === "online" && id) {
+        await queryClient.invalidateQueries({ queryKey: avaliacaoNotasPackQueryKey(id, scopeKey) });
+      }
     },
   });
 
@@ -358,6 +336,8 @@ const AvaliacaoNotas = () => {
 
   const saving = saveGradesMutation.isPending;
 
+  const loading = packQuery.isPending && !persistRestoring && !packQuery.data;
+
   if (loading) {
     return (
       <>
@@ -373,7 +353,10 @@ const AvaliacaoNotas = () => {
       <>
         <div className="rounded-2xl bg-card p-8 text-center shadow-card">
           <p className="text-sm text-muted-foreground">Avaliação não encontrada.</p>
-          <button onClick={() => navigate("/avaliacoes")} className="mt-4 inline-flex items-center gap-2 rounded-full bg-pastel-blue px-4 py-2 text-sm font-medium text-pastel-blue-foreground">
+          <button
+            onClick={() => navigate("/avaliacoes")}
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-pastel-blue px-4 py-2 text-sm font-medium text-pastel-blue-foreground"
+          >
             <ArrowLeft className="h-4 w-4" /> Voltar
           </button>
         </div>
@@ -402,33 +385,46 @@ const AvaliacaoNotas = () => {
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Atribuir Notas</p>
                 <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground">{assessment.title}</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {[assessment.subject_name, assessment.classroom_name].filter(Boolean).join(" · ")} · {formatDateLong(assessment.date)}
+                  {[assessment.subject_name, assessment.classroom_name].filter(Boolean).join(" · ")} ·{" "}
+                  {formatDateLong(assessment.date)}
                   {(assessment.weight ?? 0) > 0 ? ` · Peso ${assessment.weight}%` : ""}
                 </p>
               </div>
             </div>
             {!readOnly && (
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="inline-flex h-11 items-center gap-2 self-start rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-opacity hover:opacity-90 disabled:opacity-60 sm:self-auto"
-            >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {saving ? "A guardar..." : "Guardar notas"}
-            </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="inline-flex h-11 items-center gap-2 self-start rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-opacity hover:opacity-90 disabled:opacity-60 sm:self-auto"
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {saving ? "A guardar..." : "Guardar notas"}
+              </button>
             )}
           </div>
         </div>
 
         {/* Stats */}
         {showPageKpiCards() && (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-          <StatBlock label="Alunos" value={students.length} color="bg-pastel-lilac text-pastel-lilac-foreground" />
-          <StatBlock label="Notas dadas" value={stats.count} color="bg-pastel-blue text-pastel-blue-foreground" />
-          <StatBlock label="Média" value={stats.count ? stats.avg.toFixed(1) : "—"} color="bg-pastel-yellow text-pastel-yellow-foreground" />
-          <StatBlock label="Aprovados" value={stats.count ? `${stats.passed}/${stats.count}` : "—"} color="bg-pastel-green text-pastel-green-foreground" />
-          <StatBlock label="Máx / Mín" value={stats.count ? `${stats.max} / ${stats.min}` : "—"} color="bg-pastel-pink text-pastel-pink-foreground" />
-        </div>
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+            <StatBlock label="Alunos" value={students.length} color="bg-pastel-lilac text-pastel-lilac-foreground" />
+            <StatBlock label="Notas dadas" value={stats.count} color="bg-pastel-blue text-pastel-blue-foreground" />
+            <StatBlock
+              label="Média"
+              value={stats.count ? stats.avg.toFixed(1) : "—"}
+              color="bg-pastel-yellow text-pastel-yellow-foreground"
+            />
+            <StatBlock
+              label="Aprovados"
+              value={stats.count ? `${stats.passed}/${stats.count}` : "—"}
+              color="bg-pastel-green text-pastel-green-foreground"
+            />
+            <StatBlock
+              label="Máx / Mín"
+              value={stats.count ? `${stats.max} / ${stats.min}` : "—"}
+              color="bg-pastel-pink text-pastel-pink-foreground"
+            />
+          </div>
         )}
 
         {/* Search */}
@@ -458,7 +454,9 @@ const AvaliacaoNotas = () => {
           <div className="overflow-hidden rounded-2xl bg-card shadow-card">
             <div className="flex items-center justify-between border-b border-border px-6 py-4">
               <h2 className="text-base font-bold text-foreground">Alunos da turma</h2>
-              <span className="text-xs text-muted-foreground">{filteredStudents.length} de {students.length}</span>
+              <span className="text-xs text-muted-foreground">
+                {filteredStudents.length} de {students.length}
+              </span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[700px]">
@@ -478,13 +476,23 @@ const AvaliacaoNotas = () => {
                     const valid = !isNaN(parsed);
                     const passed = valid && parsed >= 10;
                     const failed = valid && parsed < 10;
-                    const initials = s.full_name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
+                    const initials = s.full_name
+                      .split(" ")
+                      .slice(0, 2)
+                      .map((n) => n[0])
+                      .join("")
+                      .toUpperCase();
                     return (
                       <tr key={s.id} className="border-b border-border/60 text-sm transition-colors hover:bg-muted/30">
                         <td className="px-6 py-4 text-muted-foreground">{idx + 1}</td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <span className={cn("flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold", avatarClass(s.avatar_color))}>
+                            <span
+                              className={cn(
+                                "flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold",
+                                avatarClass(s.avatar_color),
+                              )}
+                            >
                               {initials}
                             </span>
                             <span className="font-semibold text-foreground">{s.full_name}</span>
@@ -506,7 +514,7 @@ const AvaliacaoNotas = () => {
                               "h-10 w-24 rounded-full border bg-background px-4 text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-2",
                               passed && "border-pastel-green-foreground/40 bg-pastel-green/30 focus:ring-pastel-green-foreground/40",
                               failed && "border-pastel-pink-foreground/40 bg-pastel-pink/30 focus:ring-pastel-pink-foreground/40",
-                              !valid && "border-border focus:ring-pastel-blue/40"
+                              !valid && "border-border focus:ring-pastel-blue/40",
                             )}
                           />
                         </td>

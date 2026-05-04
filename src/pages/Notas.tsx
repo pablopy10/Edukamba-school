@@ -8,6 +8,7 @@ import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/hooks/useAuth";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
+import { useTeacherSessionScope } from "@/hooks/useTeacherSessionScope";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -21,6 +22,10 @@ import {
   type AcademicTermRow,
   type TeacherGradeRowRaw,
 } from "@/lib/offline/teacherNotasQueries";
+import {
+  fetchTeacherSubjectDetail,
+  teacherSubjectDetailQueryKey,
+} from "@/lib/offline/teacherAvaliacoesQueries";
 import { fetchTeacherTurmasQuery, teacherTurmasQueryKey } from "@/lib/offline/teacherListQueries";
 
 type AssessmentJoin = {
@@ -120,7 +125,7 @@ const Notas = () => {
   const persistRestoring = useIsRestoring();
   const { user } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
-  const { selectedYearId } = useAcademicYear();
+  const { selectedYearId: ctxYearId, schoolId: ctxSchoolId } = useAcademicYear();
   const isPrivileged = role === "ADMIN" || role === "SUPER_ADMIN";
 
   const {
@@ -138,38 +143,52 @@ const Notas = () => {
   } = useStudentSelf();
   const { isParent, childIds, classroomIds: parentClassroomIds, selectedChild, loading: parentLoading } =
     useParentChildren();
+  const { data: persistedTeacherSession } = useTeacherSessionScope();
 
-  const [schoolId, setSchoolId] = useState<string | null>(null);
+  /** `school_id` do perfil (fetch); professores combinam contexto + sessão persistida no login. */
+  const [profileSchoolId, setProfileSchoolId] = useState<string | null>(null);
   /** Carregamento da tabela de notas para perfis que não são professor (usa `loadGrades`). */
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<GradeDisplayRow[]>([]);
-  /** Turmas para admin/enc.Edu/etc.; o professor usa `teacherTurmasQueryKey` igual ao prefetch. */
   const [privilegedClassrooms, setPrivilegedClassrooms] = useState<{ id: string; name: string }[]>([]);
-  /** Nome da disciplina do perfil professor (para exibição sem opção «Todas»). */
-  const [teacherSubjectName, setTeacherSubjectName] = useState<string | null>(null);
   const [selectedTermId, setSelectedTermId] = useState<string | null>(null);
 
   const [classroomFilter, setClassroomFilter] = useState<string>("all");
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
 
+  const resolvedSchoolId = useMemo(() => {
+    if (isTeacher)
+      return ctxSchoolId ?? persistedTeacherSession?.schoolId ?? profileSchoolId;
+    return profileSchoolId ?? ctxSchoolId;
+  }, [isTeacher, ctxSchoolId, persistedTeacherSession?.schoolId, profileSchoolId]);
+
+  const resolvedYearId = useMemo(() => {
+    if (!isTeacher) return ctxYearId ?? null;
+    return ctxYearId ?? persistedTeacherSession?.academicYearId ?? null;
+  }, [isTeacher, ctxYearId, persistedTeacherSession?.academicYearId]);
+
   const { data: terms = [], isPending: termsPending } = useQuery({
-    queryKey: academicTermsQueryKey(schoolId ?? "__none__", selectedYearId ?? "__none__"),
-    queryFn: () => fetchAcademicTerms(schoolId!, selectedYearId!),
-    enabled: Boolean(schoolId && selectedYearId),
+    queryKey: academicTermsQueryKey(resolvedSchoolId ?? "__none__", resolvedYearId ?? "__none__"),
+    queryFn: () => fetchAcademicTerms(resolvedSchoolId!, resolvedYearId!),
+    enabled: Boolean(resolvedSchoolId && resolvedYearId),
     staleTime: QUERY_DAY_MS * 24,
     networkMode: "offlineFirst",
   });
 
   const { data: teacherTurmasPack, isPending: teacherTurmasPending } = useQuery({
-    queryKey: teacherTurmasQueryKey(user?.id ?? "__", selectedYearId ?? "__", teacherClassroomIds),
+    queryKey: teacherTurmasQueryKey(user?.id ?? "__", resolvedYearId ?? "__", teacherClassroomIds),
     queryFn: () =>
       fetchTeacherTurmasQuery({
-        academicYearId: selectedYearId!,
+        academicYearId: resolvedYearId!,
         classroomIds: [...teacherClassroomIds],
       }),
     enabled: Boolean(
-      isTeacher && user?.id && selectedYearId && teacherClassroomIds.length > 0 && !teacherLoading,
+      isTeacher &&
+        user?.id &&
+        resolvedYearId &&
+        teacherClassroomIds.length > 0 &&
+        !teacherLoading,
     ),
     staleTime: QUERY_DAY_MS * 24,
     networkMode: "offlineFirst",
@@ -197,14 +216,14 @@ const Notas = () => {
     if (!user?.id) return null;
     const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", user.id).maybeSingle();
     const sid = profile?.school_id ?? null;
-    setSchoolId(sid);
+    setProfileSchoolId(sid);
     return sid;
   }, [user?.id]);
 
   const loadClassroomOptions = useCallback(
-    async (sid: string) => {
+    async (sid: string, yearId: string | null) => {
       if (isTeacher) return;
-      if (!selectedYearId) {
+      if (!yearId) {
         setPrivilegedClassrooms([]);
         return;
       }
@@ -212,11 +231,11 @@ const Notas = () => {
         .from("classrooms")
         .select("id, name")
         .eq("school_id", sid)
-        .eq("academic_year_id", selectedYearId)
+        .eq("academic_year_id", yearId)
         .order("name");
       setPrivilegedClassrooms((data ?? []) as { id: string; name: string }[]);
     },
-    [selectedYearId, isTeacher],
+    [isTeacher],
   );
 
   const termsKey = useMemo(() => terms.map((t) => t.id).join(","), [terms]);
@@ -235,8 +254,8 @@ const Notas = () => {
 
   const teacherGradesQueryEnabled = Boolean(
     isTeacher &&
-      schoolId &&
-      selectedYearId &&
+      resolvedSchoolId &&
+      resolvedYearId &&
       effectiveTermId &&
       resolvedTeacherClassroomId &&
       teacherSubjectId &&
@@ -246,16 +265,16 @@ const Notas = () => {
 
   const { data: teacherGradeRaw = [], isPending: teacherGradesPending } = useQuery({
     queryKey: teacherGradesQueryKey(
-      schoolId!,
-      selectedYearId!,
+      resolvedSchoolId!,
+      resolvedYearId!,
       effectiveTermId!,
       resolvedTeacherClassroomId!,
       teacherSubjectId!,
     ),
     queryFn: () =>
       fetchTeacherGradesPack({
-        schoolId: schoolId!,
-        academicYearId: selectedYearId!,
+        schoolId: resolvedSchoolId!,
+        academicYearId: resolvedYearId!,
         termId: effectiveTermId!,
         classroomId: resolvedTeacherClassroomId!,
         subjectId: teacherSubjectId!,
@@ -264,6 +283,17 @@ const Notas = () => {
     staleTime: QUERY_DAY_MS * 24,
     networkMode: "offlineFirst",
   });
+
+  const { data: teacherSubjectDetail } = useQuery({
+    queryKey: teacherSubjectDetailQueryKey(resolvedSchoolId ?? "__none__", teacherSubjectId ?? "__none__"),
+    queryFn: () => fetchTeacherSubjectDetail(resolvedSchoolId!, teacherSubjectId!),
+    enabled: Boolean(isTeacher && resolvedSchoolId && teacherSubjectId),
+    staleTime: QUERY_DAY_MS * 24,
+    networkMode: "offlineFirst",
+  });
+
+  const teacherDisciplineLabel =
+    teacherSubjectDetail?.name ?? (teacherSubjectId ? "…" : "Disciplina não definida");
 
   const teacherRows = useMemo(() => mapTeacherRawToDisplay(teacherGradeRaw), [teacherGradeRaw]);
 
@@ -278,21 +308,6 @@ const Notas = () => {
 
   const classroomOptsKey = useMemo(() => classroomOpts.map((c) => c.id).join(","), [classroomOpts]);
 
-  useEffect(() => {
-    if (!isTeacher || !teacherSubjectId || !schoolId) {
-      setTeacherSubjectName(null);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      const { data } = await supabase.from("subjects").select("name").eq("id", teacherSubjectId).eq("school_id", schoolId).maybeSingle();
-      if (!cancelled) setTeacherSubjectName(((data?.name as string | null) ?? "").trim() || null);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [isTeacher, teacherSubjectId, schoolId]);
-
   /** Professor: sempre uma turma concreta (primeira ao carregar turmas disponíveis). */
   useEffect(() => {
     if (!isTeacher || teacherLoading) return;
@@ -303,14 +318,14 @@ const Notas = () => {
   const loadGrades = useCallback(async () => {
     if (isTeacher) return;
     setLoading(true);
-    const sid = schoolId ?? (await loadSchool());
-    if (!sid || !selectedYearId) {
+    const sid = resolvedSchoolId ?? (await loadSchool());
+    if (!sid || !resolvedYearId) {
       setRows([]);
       setLoading(false);
       return;
     }
 
-    const yearId = selectedYearId;
+    const yearId = resolvedYearId;
 
     if (isStudent && (!studentId || !studentClassroomId)) {
       setRows([]);
@@ -414,9 +429,9 @@ const Notas = () => {
     setLoading(false);
   }, [
     isTeacher,
-    schoolId,
+    resolvedSchoolId,
     loadSchool,
-    selectedYearId,
+    resolvedYearId,
     isStudent,
     studentId,
     studentClassroomId,
@@ -436,9 +451,9 @@ const Notas = () => {
   }, [loadSchool]);
 
   useEffect(() => {
-    if (!schoolId || !selectedYearId) return;
-    void loadClassroomOptions(schoolId);
-  }, [schoolId, selectedYearId, loadClassroomOptions]);
+    if (!resolvedSchoolId || !resolvedYearId) return;
+    void loadClassroomOptions(resolvedSchoolId, resolvedYearId);
+  }, [resolvedSchoolId, resolvedYearId, loadClassroomOptions]);
 
   useEffect(() => {
     if (roleLoading) return;
@@ -458,7 +473,7 @@ const Notas = () => {
 
   const teacherNotasShowsBlockingSpinner =
     teacherLoading ||
-    !schoolId ||
+    !resolvedSchoolId ||
     (termsPending && terms.length === 0) ||
     (teacherClassroomIds.length > 0 &&
       teacherTurmasPending &&
@@ -466,7 +481,7 @@ const Notas = () => {
     (teacherGradesQueryEnabled && teacherGradesPending);
 
   const tableLoading =
-    selectedYearId && isTeacher
+    resolvedYearId && isTeacher
       ? !persistRestoring && teacherNotasShowsBlockingSpinner
       : loading;
 
@@ -518,13 +533,13 @@ const Notas = () => {
         </div>
       )}
 
-      {!selectedYearId && (
+      {!resolvedYearId && (
         <div className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground shadow-soft">
           Seleccione um ano letivo no topo da página para ver as notas.
         </div>
       )}
 
-      {selectedYearId && (
+      {resolvedYearId && (
         <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-soft sm:p-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
             <div className="flex min-w-[160px] flex-1 flex-col gap-1.5">
@@ -602,13 +617,24 @@ const Notas = () => {
             <div className="flex min-w-[180px] flex-1 flex-col gap-1.5">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Disciplina</span>
               {isTeacher ? (
-                <div
-                  className={cn(
-                    "flex h-11 items-center rounded-xl border border-border bg-muted/40 px-3 text-sm font-medium text-foreground",
-                  )}
-                >
-                  {teacherSubjectName ?? (teacherSubjectId ? "…" : "Disciplina não definida")}
-                </div>
+                teacherSubjectId ? (
+                  <Select value={teacherSubjectId} disabled>
+                    <SelectTrigger className="h-11 rounded-xl border-border bg-background opacity-100">
+                      <SelectValue>{teacherDisciplineLabel}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={teacherSubjectId}>{teacherDisciplineLabel}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div
+                    className={cn(
+                      "flex h-11 items-center rounded-xl border border-border bg-muted/40 px-3 text-sm font-medium text-foreground",
+                    )}
+                  >
+                    Disciplina não definida
+                  </div>
+                )
               ) : (
                 <Select value={subjectFilter} onValueChange={setSubjectFilter}>
                   <SelectTrigger className="h-11 rounded-xl border-border bg-background">
@@ -647,7 +673,7 @@ const Notas = () => {
         </div>
       )}
 
-      {selectedYearId && (
+      {resolvedYearId && (
         <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
           {tableLoading ? (
             <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
