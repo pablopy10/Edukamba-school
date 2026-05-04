@@ -129,8 +129,8 @@ SECURITY DEFINER
 AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    PERFORM notify_all_users(NEW.school_id, 'Novo Evento: ' || NEW.title, 'Foi criado um novo evento marcado para ' || TO_CHAR(NEW.start_time::timestamp, 'DD/MM/YYYY HH24:MI') || '.', '/eventos', 'evento');
-  ELSIF TG_OP = 'UPDATE' AND (NEW.start_time IS DISTINCT FROM OLD.start_time OR NEW.title IS DISTINCT FROM OLD.title) THEN
+    PERFORM notify_all_users(NEW.school_id, 'Novo Evento: ' || NEW.title, 'Foi criado um novo evento marcado para ' || TO_CHAR(NEW.event_date::date, 'DD/MM/YYYY') || COALESCE(' às ' || TO_CHAR(NEW.start_time::time, 'HH24:MI'), '') || '.', '/eventos', 'evento');
+  ELSIF TG_OP = 'UPDATE' AND (NEW.event_date IS DISTINCT FROM OLD.event_date OR NEW.start_time IS DISTINCT FROM OLD.start_time OR NEW.title IS DISTINCT FROM OLD.title) THEN
     PERFORM notify_all_users(NEW.school_id, 'Evento Atualizado: ' || NEW.title, 'Houve alterações num evento da escola.', '/eventos', 'evento');
   END IF;
   RETURN NEW;
