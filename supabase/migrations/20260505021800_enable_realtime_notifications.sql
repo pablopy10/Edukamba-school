@@ -1,9 +1,11 @@
--- Enable Realtime for the notifications table
-
-BEGIN;
-  -- Remove the table from the publication if it already exists to avoid errors
-  ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS public.notifications;
-  
-  -- Add the table to the supabase_realtime publication
-  ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
-COMMIT;
+-- Enable Realtime for the notifications table safely
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'notifications'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+  END IF;
+END
+$$;
