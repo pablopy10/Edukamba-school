@@ -122,3 +122,19 @@ export async function applyNativePushPreference(wantPush: boolean): Promise<bool
     return false;
   }
 }
+
+/** Regista o email do utilizador no OneSignal nativo para o canal de email. */
+export async function addOneSignalNativeEmailAddress(email: string): Promise<void> {
+  if (!shouldInitializeOneSignalNative()) return;
+  if (!email?.trim()) return;
+
+  await initOneSignalNative();
+  const OneSignal = await getPlugin();
+  if (!OneSignal) return;
+
+  try {
+    OneSignal.User.addEmail(email.trim());
+  } catch {
+    /* noop */
+  }
+}
