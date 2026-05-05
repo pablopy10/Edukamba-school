@@ -225,32 +225,34 @@ Deno.serve(async (req) => {
   }
   console.log("notifications-push: OneSignal push OK", osRes.status, osText);
 
-  // --- Email notification ---
+  // --- Email notification (best-effort — falhas nunca afetam o push) ---
   let emailResult: { status: number; body: string } | null = null;
   if (emailEnabled) {
-    const emailPayload: Record<string, unknown> = {
-      app_id: appId,
-      include_aliases: { external_id: [recipientId] },
-      target_channel: "email",
-      email_subject: title,
-      email_body: buildEmailBody(title, description, link),
-    };
+    try {
+      const emailPayload: Record<string, unknown> = {
+        app_id: appId,
+        include_aliases: { external_id: [recipientId] },
+        target_channel: "email",
+        email_subject: title,
+        email_body: buildEmailBody(title, description, link),
+      };
 
-    console.log("notifications-push: email payload", JSON.stringify({ ...emailPayload, email_body: "[omitted]" }));
+      const emailRes = await fetch("https://api.onesignal.com/notifications", {
+        method: "POST",
+        headers: osHeaders,
+        body: JSON.stringify(emailPayload),
+      });
 
-    const emailRes = await fetch("https://api.onesignal.com/notifications", {
-      method: "POST",
-      headers: osHeaders,
-      body: JSON.stringify(emailPayload),
-    });
+      const emailText = await emailRes.text();
+      emailResult = { status: emailRes.status, body: emailText };
 
-    const emailText = await emailRes.text();
-    emailResult = { status: emailRes.status, body: emailText };
-
-    if (!emailRes.ok) {
-      console.warn("notifications-push: OneSignal email FAILED", emailRes.status, emailText);
-    } else {
-      console.log("notifications-push: OneSignal email OK", emailRes.status, emailText);
+      if (!emailRes.ok) {
+        console.warn("notifications-push: OneSignal email FAILED", emailRes.status, emailText);
+      } else {
+        console.log("notifications-push: OneSignal email OK", emailRes.status, emailText);
+      }
+    } catch (emailErr) {
+      console.warn("notifications-push: email exception (ignorado)", String(emailErr));
     }
   }
 
