@@ -70,6 +70,10 @@ export default {
             DEFAULT: "hsl(var(--pastel-pink))",
             foreground: "hsl(var(--pastel-pink-foreground))",
           },
+          orange: {
+            DEFAULT: "hsl(var(--pastel-orange))",
+            foreground: "hsl(var(--pastel-orange-foreground))",
+          },
         },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",

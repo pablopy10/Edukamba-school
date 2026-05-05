@@ -51,6 +51,8 @@ All colors MUST be HSL.
     --pastel-green-foreground: 145 50% 25%;
     --pastel-pink: 340 90% 88%;
     --pastel-pink-foreground: 340 50% 35%;
+    --pastel-orange: 28 100% 84%;
+    --pastel-orange-foreground: 24 70% 35%;
 
     --success: 145 65% 45%;
     --warning: 35 95% 60%;
