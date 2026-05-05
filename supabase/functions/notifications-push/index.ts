@@ -207,6 +207,8 @@ Deno.serve(async (req) => {
     pushPayload.url = link;
   }
 
+  console.log("notifications-push: sending push to", recipientId, "title:", title);
+
   const osRes = await fetch("https://api.onesignal.com/notifications", {
     method: "POST",
     headers: osHeaders,
@@ -215,14 +217,16 @@ Deno.serve(async (req) => {
 
   const osText = await osRes.text();
   if (!osRes.ok) {
-    console.error("notifications-push: OneSignal push", osRes.status, osText);
+    console.error("notifications-push: OneSignal push FAILED", osRes.status, osText);
     return new Response(
       JSON.stringify({ error: "OneSignal recusou o envio push", status: osRes.status, detail: osText }),
       { status: 502, headers: { "Content-Type": "application/json" } },
     );
   }
+  console.log("notifications-push: OneSignal push OK", osRes.status, osText);
 
   // --- Email notification ---
+  let emailResult: { status: number; body: string } | null = null;
   if (emailEnabled) {
     const emailPayload: Record<string, unknown> = {
       app_id: appId,
@@ -232,20 +236,26 @@ Deno.serve(async (req) => {
       email_body: buildEmailBody(title, description, link),
     };
 
+    console.log("notifications-push: email payload", JSON.stringify({ ...emailPayload, email_body: "[omitted]" }));
+
     const emailRes = await fetch("https://api.onesignal.com/notifications", {
       method: "POST",
       headers: osHeaders,
       body: JSON.stringify(emailPayload),
     });
 
+    const emailText = await emailRes.text();
+    emailResult = { status: emailRes.status, body: emailText };
+
     if (!emailRes.ok) {
-      const emailText = await emailRes.text();
-      console.warn("notifications-push: OneSignal email", emailRes.status, emailText);
+      console.warn("notifications-push: OneSignal email FAILED", emailRes.status, emailText);
+    } else {
+      console.log("notifications-push: OneSignal email OK", emailRes.status, emailText);
     }
   }
 
-  return new Response(JSON.stringify({ ok: true, email_sent: emailEnabled }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
+  return new Response(
+    JSON.stringify({ ok: true, email_sent: emailEnabled, email_result: emailResult }),
+    { status: 200, headers: { "Content-Type": "application/json" } },
+  );
 });
