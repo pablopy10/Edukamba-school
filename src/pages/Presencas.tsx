@@ -98,7 +98,7 @@ const STATUS_CONFIG: Record<Status, { bg: string; Icon: typeof Check; label: str
   PRESENT: { bg: "bg-pastel-blue text-pastel-blue-foreground", Icon: Check, label: "Presente" },
   ABSENT: { bg: "bg-destructive text-white", Icon: X, label: "Falta" },
   LATE: { bg: "bg-pastel-yellow text-pastel-yellow-foreground", Icon: Clock, label: "Atrasado" },
-  JUSTIFIED: { bg: "bg-pastel-green text-pastel-green-foreground", Icon: Check, label: "Justificado" },
+  JUSTIFIED: { bg: "bg-pastel-orange text-pastel-orange-foreground", Icon: Check, label: "Justificado" },
   DISCIPLINARY: { bg: "bg-pastel-lilac text-pastel-lilac-foreground", Icon: AlertTriangle, label: "Falta disciplinar" },
 };
 
@@ -163,8 +163,8 @@ const nativeCardAccent = (status: Status | null) => {
   switch (status) {
     case "PRESENT":
       return "border-l-4 border-pastel-blue";
-    case "JUSTIFIED":
-      return "border-l-4 border-pastel-green";
+case "JUSTIFIED":
+    return "border-l-4 border-pastel-orange";
     case "LATE":
       return "border-l-4 border-pastel-yellow";
     case "ABSENT":
@@ -1191,7 +1191,7 @@ const Presencas = () => {
                                 <StatusCell status={status} isWeekend={isNativeDayWeekend} />
                               )}
                               {hasNotes && (
-                                <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-primary" title="Tem justificação" />
+                                <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-pastel-orange" title="Tem justificação" />
                               )}
                             </div>
                             {!isNativeDayWeekend && showJustifyTrigger ? (
