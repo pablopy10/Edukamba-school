@@ -14,7 +14,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION notify_classroom_parents(p_school_id uuid, p_classroom_id uuid, p_title text, p_description text, p_link text, p_category text)
+CREATE OR REPLACE FUNCTION notify_classroom_parents(p_classroom_id uuid, p_school_id uuid, p_title text, p_description text, p_link text, p_category text)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
