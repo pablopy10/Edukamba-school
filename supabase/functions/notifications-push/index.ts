@@ -5,13 +5,11 @@
  *   x-notification-push-secret com o mesmo valor (além ou em substituição da verificação por service role).
  * O External ID na app corresponde ao user id Supabase (recipient_id).
  * Respeita notification_preferences.channel = user_push (omitir push se disabled).
- * Respeita notification_preferences.channel = user_email (enviar email via OneSignal se enabled).
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const USER_PUSH_CHANNEL = "user_push";
-const USER_EMAIL_CHANNEL = "user_email";
 function authorizeNotificationsPush(req: Request): boolean {
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const shared = Deno.env.get("NOTIFICATIONS_PUSH_WEBHOOK_SECRET");
@@ -45,33 +43,6 @@ interface NotificationRow {
   description?: string | null;
   link?: string | null;
   category?: string | null;
-}
-
-function buildEmailBody(title: string, description: string, link: string | null): string {
-  const linkBtn = link
-    ? `<tr><td style="padding:24px 40px 0"><a href="${link}" style="display:inline-block;background:#4f46e5;color:#ffffff;font-family:sans-serif;font-size:14px;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:8px">Ver detalhes</a></td></tr>`
-    : "";
-
-  return `<!DOCTYPE html>
-<html lang="pt">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f4f6fb;font-family:sans-serif">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6fb;padding:40px 0">
-    <tr><td align="center">
-      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);max-width:560px;width:100%">
-        <tr><td style="background:#4f46e5;padding:28px 40px">
-          <p style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-.3px">${title}</p>
-        </td></tr>
-        ${description ? `<tr><td style="padding:28px 40px 0"><p style="margin:0;color:#374151;font-size:15px;line-height:1.6">${description}</p></td></tr>` : ""}
-        ${linkBtn}
-        <tr><td style="padding:32px 40px">
-          <p style="margin:0;color:#9ca3af;font-size:12px">Esta mensagem foi enviada automaticamente pela plataforma Edukamba. Por favor não responda a este email.</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
 }
 
 function extractRecord(body: unknown): NotificationRow | null {
@@ -143,30 +114,20 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-  let emailEnabled = true;
-  let admin: ReturnType<typeof createClient> | null = null;
-
   if (supabaseUrl && serviceRole) {
-    admin = createClient(supabaseUrl, serviceRole);
-
-    const { data: prefs, error: prefErr } = await admin
+    const admin = createClient(supabaseUrl, serviceRole);
+    const { data: pushPref, error: prefErr } = await admin
       .from("notification_preferences")
-      .select("channel, enabled")
+      .select("enabled")
       .eq("user_id", recipientId)
-      .in("channel", [USER_PUSH_CHANNEL, USER_EMAIL_CHANNEL]);
+      .eq("channel", USER_PUSH_CHANNEL)
+      .maybeSingle();
 
-    if (!prefErr && prefs) {
-      const byChannel = Object.fromEntries(prefs.map((r: { channel: string; enabled: boolean }) => [r.channel, r.enabled]));
-      if (byChannel[USER_PUSH_CHANNEL] === false) {
-        return new Response(JSON.stringify({ ok: true, skipped: "push_disabled" }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      if (byChannel[USER_EMAIL_CHANNEL] === false) {
-        emailEnabled = false;
-      }
+    if (!prefErr && pushPref?.enabled === false) {
+      return new Response(JSON.stringify({ ok: true, skipped: "push_disabled" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     }
   }
 
@@ -184,13 +145,7 @@ Deno.serve(async (req) => {
   const bodyText = description.length > 0 ? description : title;
   const link = record.link?.trim() || null;
 
-  const osHeaders = {
-    "Content-Type": "application/json",
-    Authorization: `Key ${restKey}`,
-  };
-
-  // --- Push notification ---
-  const pushPayload: Record<string, unknown> = {
+  const payload: Record<string, unknown> = {
     app_id: appId,
     include_aliases: { external_id: [recipientId] },
     target_channel: "push",
@@ -204,60 +159,29 @@ Deno.serve(async (req) => {
   };
 
   if (link && /^https?:\/\//i.test(link)) {
-    pushPayload.url = link;
+    payload.url = link;
   }
-
-  console.log("notifications-push: sending push to", recipientId, "title:", title);
 
   const osRes = await fetch("https://api.onesignal.com/notifications", {
     method: "POST",
-    headers: osHeaders,
-    body: JSON.stringify(pushPayload),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Key ${restKey}`,
+    },
+    body: JSON.stringify(payload),
   });
 
   const osText = await osRes.text();
   if (!osRes.ok) {
-    console.error("notifications-push: OneSignal push FAILED", osRes.status, osText);
+    console.error("notifications-push: OneSignal", osRes.status, osText);
     return new Response(
-      JSON.stringify({ error: "OneSignal recusou o envio push", status: osRes.status, detail: osText }),
+      JSON.stringify({ error: "OneSignal recusou o envio", status: osRes.status, detail: osText }),
       { status: 502, headers: { "Content-Type": "application/json" } },
     );
   }
-  console.log("notifications-push: OneSignal push OK", osRes.status, osText);
 
-  // --- Email notification (best-effort — falhas nunca afetam o push) ---
-  let emailResult: { status: number; body: string } | null = null;
-  if (emailEnabled) {
-    try {
-      const emailPayload: Record<string, unknown> = {
-        app_id: appId,
-        include_aliases: { external_id: [recipientId] },
-        target_channel: "email",
-        email_subject: title,
-        email_body: buildEmailBody(title, description, link),
-      };
-
-      const emailRes = await fetch("https://api.onesignal.com/notifications", {
-        method: "POST",
-        headers: osHeaders,
-        body: JSON.stringify(emailPayload),
-      });
-
-      const emailText = await emailRes.text();
-      emailResult = { status: emailRes.status, body: emailText };
-
-      if (!emailRes.ok) {
-        console.warn("notifications-push: OneSignal email FAILED", emailRes.status, emailText);
-      } else {
-        console.log("notifications-push: OneSignal email OK", emailRes.status, emailText);
-      }
-    } catch (emailErr) {
-      console.warn("notifications-push: email exception (ignorado)", String(emailErr));
-    }
-  }
-
-  return new Response(
-    JSON.stringify({ ok: true, email_sent: emailEnabled, email_result: emailResult }),
-    { status: 200, headers: { "Content-Type": "application/json" } },
-  );
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
 });

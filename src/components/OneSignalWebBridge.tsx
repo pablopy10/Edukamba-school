@@ -43,40 +43,38 @@ export function OneSignalWebBridge() {
       }
     };
 
-    const run = async (userId: string | undefined, userEmail: string | undefined) => {
+    const run = async (userId: string | undefined) => {
       if (userId === lastUserRef.current) return;
       lastUserRef.current = userId;
 
       if (shouldInitializeOneSignalWeb()) {
         await setOneSignalExternalUser(userId ?? null);
         if (userId) {
-          const { applyWebPushPreference, addOneSignalEmailAddress } = await import("@/lib/oneSignalWeb");
+          const { applyWebPushPreference } = await import("@/lib/oneSignalWeb");
           await applyWebPushPreference(true);
-          if (userEmail) await addOneSignalEmailAddress(userEmail);
         }
       }
       if (shouldInitializeOneSignalNative()) {
         await setOneSignalNativeExternalUser(userId ?? null);
         if (userId) {
-          const { applyNativePushPreference, addOneSignalNativeEmailAddress } = await import("@/lib/oneSignalNative");
+          const { applyNativePushPreference } = await import("@/lib/oneSignalNative");
           await applyNativePushPreference(true);
-          if (userEmail) await addOneSignalNativeEmailAddress(userEmail);
         }
       }
-
+      
       void attachListeners();
     };
 
     if (!shouldInitializeOneSignalWeb() && !shouldInitializeOneSignalNative()) return;
 
     void supabase.auth.getSession().then(({ data }) => {
-      void run(data.session?.user?.id, data.session?.user?.email ?? undefined);
+      void run(data.session?.user?.id);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_e, session) => {
-      void run(session?.user?.id ?? undefined, session?.user?.email ?? undefined);
+      void run(session?.user?.id ?? undefined);
     });
 
     return () => subscription.unsubscribe();

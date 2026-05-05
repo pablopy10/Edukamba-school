@@ -82,17 +82,3 @@ export async function applyWebPushPreference(wantPush: boolean): Promise<boolean
     return false;
   }
 }
-
-/** Regista o email do utilizador no OneSignal para o canal de email. */
-export async function addOneSignalEmailAddress(email: string): Promise<void> {
-  if (!shouldInitializeOneSignalWeb()) return;
-  if (!email?.trim()) return;
-
-  await initOneSignalWeb();
-  const OneSignal = (await import("react-onesignal")).default;
-  try {
-    await OneSignal.User.addEmail(email.trim());
-  } catch {
-    // Não bloquear a app se o canal de email não estiver configurado no dashboard
-  }
-}
