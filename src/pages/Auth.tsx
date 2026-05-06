@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { GraduationCap, Loader2, Mail, Lock, User } from "lucide-react";
+import { Loader2, Mail, Lock, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -196,18 +196,12 @@ const Auth = () => {
   const BrandMark = ({ interactive }: { interactive: boolean }) =>
     interactive ? (
       <Link to="/" className="mb-10 flex flex-col items-center gap-0">
-        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-pastel-blue shadow-[0_10px_24px_hsla(205,90%,55%,0.12)]">
-          <GraduationCap className="h-9 w-9 text-pastel-blue-foreground" strokeWidth={1.75} />
-        </div>
-        <h1 className="text-center text-3xl font-semibold tracking-tight text-foreground">Edukamba</h1>
+        <img src="/edukamba-logo.png" alt="Edukamba" className="mb-3 h-10 w-auto" />
         <p className="mt-2 text-center text-sm text-muted-foreground">Educação com propósito, em todo o lado</p>
       </Link>
     ) : (
       <div className="mb-10 flex flex-col items-center gap-0">
-        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-pastel-blue shadow-[0_10px_24px_hsla(205,90%,55%,0.12)]">
-          <GraduationCap className="h-9 w-9 text-pastel-blue-foreground" strokeWidth={1.75} />
-        </div>
-        <h1 className="text-center text-3xl font-semibold tracking-tight text-foreground">Edukamba</h1>
+        <img src="/edukamba-logo.png" alt="Edukamba" className="mb-3 h-10 w-auto" />
         <p className="mt-2 text-center text-sm text-muted-foreground">Educação com propósito, em todo o lado</p>
       </div>
     );

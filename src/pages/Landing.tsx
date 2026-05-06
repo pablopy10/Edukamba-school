@@ -126,11 +126,8 @@ const Landing = () => {
       {/* Navigation */}
       <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur">
         <div className="container flex h-16 items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-pastel-blue text-pastel-blue-foreground">
-              <GraduationCap className="h-5 w-5" />
-            </div>
-            <span className="text-lg font-semibold tracking-tight">Edukamba</span>
+          <Link to="/" className="flex items-center">
+            <img src="/edukamba-logo.png" alt="Edukamba" className="h-8 w-auto" />
           </Link>
           <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
             <a href="#funcionalidades" className="transition-colors hover:text-foreground">
