@@ -317,7 +317,7 @@ const Landing = () => {
                   </div>
                   {"annual" in plan && (
                     <span className="text-xs text-muted-foreground">
-                      ou {(plan as { annual: string }).annual} — poupe 2 meses
+                      ou {(plan as { annual: string }).annual}
                     </span>
                   )}
                 </div>
