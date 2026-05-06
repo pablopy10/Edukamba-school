@@ -268,8 +268,6 @@ Deno.serve(async (req) => {
     });
   }
 
-  // Diagnóstico: mostra prefixo da chave (nunca a chave completa)
-  console.log(`notifications-email: usando BREVO_API_KEY prefix="${brevoKey.slice(0, 12)}..." length=${brevoKey.length}`);
 
   const admin = createClient(supabaseUrl, serviceRole);
 
