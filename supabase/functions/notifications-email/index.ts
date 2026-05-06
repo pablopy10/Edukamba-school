@@ -221,7 +221,7 @@ Deno.serve(async (req) => {
 
   const recipientId = record.recipient_id?.trim();
   const title = record.title?.trim();
-  const description = (record.description ?? "").trim() || title ?? "";
+  const description = (record.description ?? "").trim() || (title ?? "");
   const category = record.category?.trim() ?? "GENERIC";
   const link = record.link?.trim() || null;
   const schoolId = record.school_id ?? null;
