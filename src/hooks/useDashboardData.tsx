@@ -132,7 +132,7 @@ export const useDashboardData = () => {
             .from("messages")
             .select("id, content, created_at, is_read, sender_id, receiver_id, profiles!messages_sender_id_fkey(full_name)")
             .order("created_at", { ascending: false })
-            .limit(5),
+            .limit(100),
         ]);
 
         if (cancelled) return;
@@ -219,27 +219,38 @@ export const useDashboardData = () => {
           (profs ?? []).forEach((p) => receiverNameMap.set(p.id, p.full_name ?? "Desconhecido"));
         }
 
-        setMessages(
-          msgs.map((m) => {
-            const isOutgoing = !!currentUserId && m.sender_id === currentUserId;
-            const contactId = isOutgoing ? m.receiver_id : m.sender_id;
-            const name = isOutgoing
-              ? (m.receiver_id ? receiverNameMap.get(m.receiver_id) ?? "Desconhecido" : "Desconhecido")
-              : (m.profiles?.full_name ?? "Desconhecido");
-            const d = new Date(m.created_at);
-            const time = d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
-            const isIncoming = !!currentUserId && m.receiver_id === currentUserId && m.sender_id !== currentUserId;
-            return {
-              id: m.id,
-              name,
-              initials: initials(name),
-              text: m.content,
-              time,
-              unread: isIncoming && !m.is_read,
-              contactId,
-            };
-          }),
-        );
+        // Group by contact — keep only the most recent message per conversation
+        const conversationMap = new Map<string, MessagePreview>();
+        for (const m of msgs) {
+          const isOutgoing = !!currentUserId && m.sender_id === currentUserId;
+          const contactId = isOutgoing ? m.receiver_id : m.sender_id;
+          if (!contactId) continue;
+          // Already have a (more recent) entry for this contact — skip
+          if (conversationMap.has(contactId)) continue;
+          const name = isOutgoing
+            ? (receiverNameMap.get(m.receiver_id!) ?? "Desconhecido")
+            : (m.profiles?.full_name ?? "Desconhecido");
+          const d = new Date(m.created_at);
+          const now = new Date();
+          const isToday =
+            d.getFullYear() === now.getFullYear() &&
+            d.getMonth() === now.getMonth() &&
+            d.getDate() === now.getDate();
+          const time = isToday
+            ? d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })
+            : d.toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit" });
+          const isIncoming = !!currentUserId && m.receiver_id === currentUserId && m.sender_id !== currentUserId;
+          conversationMap.set(contactId, {
+            id: m.id,
+            name,
+            initials: initials(name),
+            text: isOutgoing ? `Você: ${m.content}` : m.content,
+            time,
+            unread: isIncoming && !m.is_read,
+            contactId,
+          });
+        }
+        setMessages(Array.from(conversationMap.values()).slice(0, 5));
       } finally {
         if (!cancelled) setLoading(false);
       }
