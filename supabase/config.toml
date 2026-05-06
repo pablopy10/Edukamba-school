@@ -21,3 +21,9 @@ verify_jwt = true
 # a função valida apikey / Authorization com SUPABASE_SERVICE_ROLE_KEY.
 [functions.notifications-push]
 verify_jwt = false
+
+# Envia emails transacionais via Brevo quando uma notificação é inserida.
+# Acionada pelo mesmo Database Webhook que notifications-push.
+# Requer BREVO_API_KEY, BREVO_SENDER_EMAIL e BREVO_SENDER_NAME nos Secrets.
+[functions.notifications-email]
+verify_jwt = false
