@@ -1804,11 +1804,13 @@ const Definicoes = () => {
                 {[
                   {
                     name: "Essencial",
-                    price: "500 Kz",
-                    suffix: "/aluno · mês",
+                    price: "180.000 Kz",
+                    suffix: "/mês",
+                    annual: "2.000.000 Kz/ano",
                     tagline:
                       "Organização administrativa básica e digitalização da secretaria.",
                     features: [
+                      "Alunos ilimitados",
                       "Gestão Escolar Core: Alunos, Professores, Turmas e Disciplinas",
                       "Secretaria Digital: Matrículas e Encarregados de Educação",
                       "Controlo de Presenças: registo de faltas de alunos",
@@ -1823,11 +1825,13 @@ const Definicoes = () => {
                   },
                   {
                     name: "Pro",
-                    price: "1.000 Kz",
-                    suffix: "/aluno · mês",
+                    price: "350.000 Kz",
+                    suffix: "/mês",
+                    annual: "4.000.000 Kz/ano",
                     tagline:
                       "Para escolas que querem eliminar o papel e aproximar os pais.",
                     features: [
+                      "Alunos ilimitados",
                       "Tudo do plano Essencial",
                       "Mobile App completa para Pais, Alunos e Professores",
                       "Notificações Push de notas, faltas e avisos sem custos de SMS",
@@ -1841,11 +1845,13 @@ const Definicoes = () => {
                   },
                   {
                     name: "Enterprise",
-                    price: "1.300 Kz",
-                    suffix: "/aluno · mês",
+                    price: "520.000 Kz",
+                    suffix: "/mês",
+                    annual: "6.000.000 Kz/ano",
                     tagline:
                       "Gestão 360º com foco em logística, segurança e auditoria total.",
                     features: [
+                      "Alunos ilimitados",
                       "Tudo do plano Pro",
                       "Gestão de Transportes: rotas, passageiros e cobrança de giros",
                       "Stock & Pedidos de Material: inventário e pedidos aos pais",
@@ -1882,11 +1888,18 @@ const Definicoes = () => {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">{p.tagline}</p>
-                      <div className="flex items-baseline gap-1 border-y border-border/60 py-3">
-                        <span className="text-3xl font-bold tracking-tight text-foreground">
-                          {p.price}
-                        </span>
-                        <span className="text-xs text-muted-foreground">{p.suffix}</span>
+                      <div className="flex flex-col gap-1 border-y border-border/60 py-3">
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-3xl font-bold tracking-tight text-foreground">
+                            {p.price}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{p.suffix}</span>
+                        </div>
+                        {"annual" in p && (
+                          <span className="text-xs text-muted-foreground">
+                            ou {(p as { annual: string }).annual}
+                          </span>
+                        )}
                       </div>
                       <ul className="flex flex-1 flex-col gap-2 text-sm">
                         {p.features.map((f) => (
