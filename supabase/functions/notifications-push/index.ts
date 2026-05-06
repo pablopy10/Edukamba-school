@@ -172,17 +172,15 @@ Deno.serve(async (req) => {
   });
 
   const osText = await osRes.text();
-  console.log(`notifications-push: OneSignal response ${osRes.status} for recipient=${recipientId} → ${osText}`);
-
   if (!osRes.ok) {
-    console.error("notifications-push: OneSignal recusou o envio", osRes.status, osText);
+    console.error("notifications-push: OneSignal", osRes.status, osText);
     return new Response(
       JSON.stringify({ error: "OneSignal recusou o envio", status: osRes.status, detail: osText }),
       { status: 502, headers: { "Content-Type": "application/json" } },
     );
   }
 
-  return new Response(JSON.stringify({ ok: true, onesignal: JSON.parse(osText) }), {
+  return new Response(JSON.stringify({ ok: true }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
