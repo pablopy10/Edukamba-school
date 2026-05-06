@@ -285,15 +285,21 @@ Deno.serve(async (req) => {
     });
   }
 
-  // 2. Fetch recipient email + name
+  // 2. Fetch recipient email + name (profiles first, fallback to auth.users)
   const { data: profile } = await admin
     .from("profiles")
     .select("email, full_name")
     .eq("id", recipientId)
     .maybeSingle();
 
-  const recipientEmail = profile?.email?.trim();
   const recipientName = profile?.full_name?.trim() ?? "Utilizador";
+  let recipientEmail = profile?.email?.trim() || null;
+
+  if (!recipientEmail) {
+    // Fallback: buscar email em auth.users
+    const { data: authUser } = await admin.auth.admin.getUserById(recipientId);
+    recipientEmail = authUser?.user?.email?.trim() || null;
+  }
 
   if (!recipientEmail) {
     console.warn(`notifications-email: sem email para recipient_id=${recipientId}`);
@@ -336,10 +342,14 @@ Deno.serve(async (req) => {
 
   const brevoText = await brevoRes.text();
   if (!brevoRes.ok) {
-    console.error("notifications-email: Brevo erro", brevoRes.status, brevoText);
+    // Retornar 200 para o webhook não entrar em retry loop.
+    // O detalhe do erro fica nos logs do Edge Function (Supabase Dashboard → Edge Functions → Logs).
+    console.error(
+      `notifications-email: Brevo rejeitou [${brevoRes.status}] to=${recipientEmail} category=${category} detail=${brevoText}`,
+    );
     return new Response(
-      JSON.stringify({ error: "Brevo recusou o envio", status: brevoRes.status, detail: brevoText }),
-      { status: 502, headers: { "Content-Type": "application/json" } },
+      JSON.stringify({ ok: false, brevo_status: brevoRes.status, detail: brevoText }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
     );
   }
 
