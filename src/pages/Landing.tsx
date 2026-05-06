@@ -63,11 +63,13 @@ const stats = [
 const plans = [
   {
     name: "Essencial",
-    price: "500 Kz",
-    suffix: "/aluno · mês",
+    price: "180.000 Kz",
+    suffix: "/mês",
+    annual: "2.000.000 Kz/ano",
     description:
       "Focado na organização administrativa básica e digitalização da secretaria.",
     features: [
+      "Alunos ilimitados",
       "Gestão Escolar Core: Alunos, Professores, Turmas e Disciplinas",
       "Secretaria Digital: Matrículas e Encarregados de Educação",
       "Controlo de Presenças: registo de faltas de alunos",
@@ -83,11 +85,13 @@ const plans = [
   },
   {
     name: "Pro",
-    price: "1.000 Kz",
-    suffix: "/aluno · mês",
+    price: "350.000 Kz",
+    suffix: "/mês",
+    annual: "4.000.000 Kz/ano",
     description:
       "Ideal para escolas modernas que querem eliminar o papel e aproximar os pais.",
     features: [
+      "Alunos ilimitados",
       "Tudo do plano Essencial",
       "Mobile App completa para Pais, Alunos e Professores",
       "Notificações Push de notas, faltas e avisos sem custos de SMS",
@@ -102,11 +106,13 @@ const plans = [
   },
   {
     name: "Enterprise",
-    price: "1.300 Kz",
-    suffix: "/aluno · mês",
+    price: "520.000 Kz",
+    suffix: "/mês",
+    annual: "6.000.000 Kz/ano",
     description:
       "Gestão 360º com foco em logística, segurança de dados e auditoria total.",
     features: [
+      "Alunos ilimitados",
       "Tudo do plano Pro",
       "Gestão de Transportes: rotas, passageiros e cobrança de giros",
       "Stock & Pedidos de Material: inventário e pedidos aos pais",
@@ -279,7 +285,7 @@ const Landing = () => {
               Preços simples e transparentes
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Escolha o plano ideal para a dimensão da sua escola. Sem surpresas.
+              Preço fixo por escola, alunos ilimitados. Sem surpresas, sem custos por crescimento.
             </p>
           </div>
 
@@ -302,10 +308,17 @@ const Landing = () => {
                   <h3 className="text-lg font-semibold">{plan.name}</h3>
                   <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
                 </div>
-                <div className="flex items-baseline gap-1 border-y border-border/60 py-4">
-                  <span className="text-4xl font-bold tracking-tight">{plan.price}</span>
-                  {plan.suffix && (
-                    <span className="text-sm text-muted-foreground">{plan.suffix}</span>
+                <div className="flex flex-col gap-1 border-y border-border/60 py-4">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-4xl font-bold tracking-tight">{plan.price}</span>
+                    {plan.suffix && (
+                      <span className="text-sm text-muted-foreground">{plan.suffix}</span>
+                    )}
+                  </div>
+                  {"annual" in plan && (
+                    <span className="text-xs text-muted-foreground">
+                      ou {(plan as { annual: string }).annual} — poupe 2 meses
+                    </span>
                   )}
                 </div>
                 <ul className="flex flex-1 flex-col gap-3 text-sm">
