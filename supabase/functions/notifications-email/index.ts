@@ -30,18 +30,34 @@ const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 function authorize(req: Request): boolean {
-  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  // 1. Shared secret (header personalizado opcional)
   const shared = Deno.env.get("NOTIFICATIONS_EMAIL_WEBHOOK_SECRET");
-
   if (shared) {
     const h = req.headers.get("x-notification-email-secret")?.trim();
     if (h === shared) return true;
   }
-  if (serviceRole) {
-    const apikey = req.headers.get("apikey")?.trim();
-    const auth = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
-    if (apikey === serviceRole || auth === serviceRole) return true;
+
+  // 2. Comparação direta com SUPABASE_SERVICE_ROLE_KEY
+  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const rawApikey = req.headers.get("apikey")?.trim();
+  const rawAuth = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
+  if (serviceRole && (rawApikey === serviceRole || rawAuth === serviceRole)) return true;
+
+  // 3. Fallback: decodificar o JWT e verificar role=service_role
+  //    (o Database Webhook do Supabase envia o service_role JWT como Bearer token)
+  const token = rawAuth ?? rawApikey ?? "";
+  if (token) {
+    try {
+      const parts = token.split(".");
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1]));
+        if (payload.role === "service_role" && payload.iss === "supabase") return true;
+      }
+    } catch {
+      // token inválido — continua para return false
+    }
   }
+
   return false;
 }
 
