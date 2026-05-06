@@ -10,6 +10,18 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const USER_PUSH_CHANNEL = "user_push";
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const pad = parts[1].length % 4;
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/") + (pad ? "=".repeat(4 - pad) : "");
+    return JSON.parse(atob(b64));
+  } catch {
+    return null;
+  }
+}
+
 function authorizeNotificationsPush(req: Request): boolean {
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const shared = Deno.env.get("NOTIFICATIONS_PUSH_WEBHOOK_SECRET");
@@ -23,6 +35,14 @@ function authorizeNotificationsPush(req: Request): boolean {
     const apikey = req.headers.get("apikey")?.trim();
     const auth = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
     if (apikey === serviceRole || auth === serviceRole) return true;
+  }
+
+  // Aceita JWT assinado pelo Supabase (service_role ou anon — o webhook DB usa chave interna)
+  const authHeader = req.headers.get("authorization") ?? req.headers.get("apikey") ?? "";
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (token) {
+    const payload = decodeJwtPayload(token);
+    if (payload && payload["iss"] === "supabase") return true;
   }
 
   return false;
@@ -70,6 +90,7 @@ function extractRecord(body: unknown): NotificationRow | null {
 }
 
 Deno.serve(async (req) => {
+  try {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
@@ -78,6 +99,7 @@ Deno.serve(async (req) => {
   }
 
   if (!authorizeNotificationsPush(req)) {
+    console.error("notifications-push: autorização falhou");
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json" },
@@ -173,10 +195,11 @@ Deno.serve(async (req) => {
 
   const osText = await osRes.text();
   if (!osRes.ok) {
-    console.error("notifications-push: OneSignal", osRes.status, osText);
+    console.error("notifications-push: OneSignal rejeitou", osRes.status, osText);
+    // Retorna 200 para o webhook não retentar; o erro fica nos logs
     return new Response(
-      JSON.stringify({ error: "OneSignal recusou o envio", status: osRes.status, detail: osText }),
-      { status: 502, headers: { "Content-Type": "application/json" } },
+      JSON.stringify({ ok: false, warning: "OneSignal recusou", status: osRes.status, detail: osText }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
     );
   }
 
@@ -184,4 +207,11 @@ Deno.serve(async (req) => {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
+  } catch (err) {
+    console.error("notifications-push: erro inesperado", err);
+    return new Response(
+      JSON.stringify({ error: "Erro interno", detail: String(err) }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  }
 });
