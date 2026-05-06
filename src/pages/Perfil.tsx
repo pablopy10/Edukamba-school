@@ -86,7 +86,7 @@ type UserPrefsUi = {
 };
 
 const defaultPrefs: UserPrefsUi = { pushNotif: true, emailNotif: true, eventReminders: true };
-const defaultSecurity = { twoFactor: false, loginAlerts: true };
+const defaultSecurity = { loginAlerts: true };
 
 const Perfil = () => {
   const { user } = useAuth();
@@ -660,13 +660,6 @@ const Perfil = () => {
               <p className="mt-1 text-sm text-muted-foreground">Reforce a proteção do seu acesso.</p>
 
               <div className="mt-6 flex flex-col divide-y divide-border">
-                <div className="flex items-center justify-between py-4">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Autenticação de dois fatores (2FA)</p>
-                    <p className="text-xs text-muted-foreground">Receba um código adicional ao iniciar sessão.</p>
-                  </div>
-                  <Toggle checked={security.twoFactor} onChange={(v) => setSecurity({ ...security, twoFactor: v })} />
-                </div>
                 <div className="flex items-center justify-between py-4">
                   <div>
                     <p className="text-sm font-medium text-foreground">Alertas de início de sessão</p>
