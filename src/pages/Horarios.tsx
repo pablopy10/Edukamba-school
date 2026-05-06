@@ -218,6 +218,14 @@ const Horarios = () => {
     if (studentShift) setShiftView(studentShift);
   }, [isStudent, studentShift]);
 
+  // Sync turno filter with the selected classroom's period (Manhã/Tarde/Noite).
+  useEffect(() => {
+    if (isStudent) return;
+    const cls = classrooms.find((c) => c.id === classroomFilter);
+    const shift = periodLabelToShift(cls?.period ?? null);
+    if (shift) setShiftView(shift);
+  }, [classroomFilter, classrooms, isStudent]);
+
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s.name])), [subjects]);
   const teacherMap = useMemo(() => new Map(teachers.map((t) => [t.id, t.name])), [teachers]);
   const classroomMap = useMemo(() => new Map(classrooms.map((c) => [c.id, c.name])), [classrooms]);
