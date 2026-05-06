@@ -43,14 +43,18 @@ function authorize(req: Request): boolean {
   const rawAuth = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
   if (serviceRole && (rawApikey === serviceRole || rawAuth === serviceRole)) return true;
 
-  // 3. Fallback: decodificar o JWT e verificar role=service_role
+  // 3. Fallback: decodificar o JWT (base64url) e verificar role=service_role
   //    (o Database Webhook do Supabase envia o service_role JWT como Bearer token)
   const token = rawAuth ?? rawApikey ?? "";
   if (token) {
     try {
       const parts = token.split(".");
       if (parts.length === 3) {
-        const payload = JSON.parse(atob(parts[1]));
+        // JWT usa base64url: trocar - por + e _ por / antes de atob()
+        const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/").padEnd(
+          Math.ceil(parts[1].length / 4) * 4, "=",
+        );
+        const payload = JSON.parse(atob(b64));
         if (payload.role === "service_role" && payload.iss === "supabase") return true;
       }
     } catch {
@@ -203,6 +207,7 @@ function buildHtml(opts: {
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  try {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
@@ -343,4 +348,12 @@ Deno.serve(async (req) => {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
+
+  } catch (err) {
+    console.error("notifications-email: exceção não esperada", err);
+    return new Response(
+      JSON.stringify({ error: "Erro interno", detail: String(err) }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
 });
