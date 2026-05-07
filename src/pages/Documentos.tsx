@@ -875,15 +875,15 @@ export default function Documentos() {
 
       {/* Create / Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[90vh] max-w-lg flex-col gap-0 p-0">
+          <DialogHeader className="shrink-0 border-b border-border px-6 py-5">
             <DialogTitle>{editing ? "Editar documento" : "Novo documento"}</DialogTitle>
             <DialogDescription>
               {editing ? "Actualize os dados do documento." : "Crie um novo documento para partilhar com encarregados ou professores."}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
             <div className="space-y-1.5">
               <Label>Título *</Label>
               <Input
@@ -986,7 +986,7 @@ export default function Documentos() {
             </div>
           </div>
 
-          <DialogFooter className="gap-2">
+          <DialogFooter className="shrink-0 gap-2 border-t border-border px-6 py-4">
             <Button variant="ghost" onClick={() => setDialogOpen(false)} disabled={saving}>Cancelar</Button>
             <Button onClick={handleSave} disabled={saving}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
