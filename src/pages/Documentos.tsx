@@ -86,7 +86,7 @@ const CATEGORY_META: Record<DocCategory, { label: string; icon: typeof FileSigna
 };
 
 const TARGET_LABEL: Record<DocTarget, string> = {
-  PARENT: "Encarregados de educação",
+  PARENT: "Educadores",
   TEACHER: "Professores",
   ALL: "Todos",
 };
@@ -217,13 +217,41 @@ export default function Documentos() {
     setMyRequests((data ?? []) as DocumentRequest[]);
   }, [user?.id]);
 
-  const loadClassrooms = useCallback(async (sid: string) => {
-    const { data } = await supabase
-      .from("classrooms")
-      .select("id, name")
-      .eq("school_id", sid)
-      .order("name");
-    setClassrooms((data ?? []) as Classroom[]);
+  const loadClassrooms = useCallback(async (sid: string, yearId?: string | null) => {
+    if (yearId) {
+      // Get school's classroom IDs first
+      const { data: schoolCls } = await supabase
+        .from("classrooms")
+        .select("id")
+        .eq("school_id", sid);
+
+      const schoolClsIds = (schoolCls ?? []).map((c: any) => c.id as string);
+      if (schoolClsIds.length === 0) { setClassrooms([]); return; }
+
+      // Get distinct classroom_ids that have enrollments in the selected year
+      const { data: enr } = await supabase
+        .from("enrollments")
+        .select("classroom_id")
+        .eq("academic_year_id", yearId)
+        .in("classroom_id", schoolClsIds);
+
+      const distinctIds = [...new Set((enr ?? []).map((e: any) => e.classroom_id as string))];
+      if (distinctIds.length === 0) { setClassrooms([]); return; }
+
+      const { data: cls } = await supabase
+        .from("classrooms")
+        .select("id, name")
+        .in("id", distinctIds)
+        .order("name");
+      setClassrooms((cls ?? []) as Classroom[]);
+    } else {
+      const { data } = await supabase
+        .from("classrooms")
+        .select("id, name")
+        .eq("school_id", sid)
+        .order("name");
+      setClassrooms((data ?? []) as Classroom[]);
+    }
   }, []);
 
   const loadDocRequests = useCallback(async (docId: string) => {
@@ -244,7 +272,7 @@ export default function Documentos() {
     setSendDoc(doc);
     setSelectedClassroom("all");
     setSendDialogOpen(true);
-    if (schoolId) await loadClassrooms(schoolId);
+    if (schoolId) await loadClassrooms(schoolId, selectedYearId);
   };
 
   const handleSendRequests = async () => {
@@ -254,7 +282,7 @@ export default function Documentos() {
     // 1. Get students (with parent_id) from enrollments filtered by classroom + year
     let query = supabase
       .from("enrollments")
-      .select("student:student_id(id, parent_id, full_name)");
+      .select("classroom_id, student:student_id(id, parent_id, full_name)");
 
     if (selectedClassroom !== "all") {
       query = query.eq("classroom_id", selectedClassroom);
@@ -273,9 +301,9 @@ export default function Documentos() {
     }
 
     // 2. Collect unique parent_ids
-    const rows = (enrollments ?? []) as { student: { id: string; parent_id: string | null; full_name: string } | null }[];
+    const rows = (enrollments ?? []) as { classroom_id: string | null; student: { id: string; parent_id: string | null; full_name: string } | null }[];
     const seen = new Set<string>();
-    const requests: { document_id: string; recipient_profile_id: string; student_id: string; status: string }[] = [];
+    const requests: { document_id: string; recipient_profile_id: string; student_id: string; classroom_id: string | null; status: string }[] = [];
 
     for (const row of rows) {
       const student = row.student;
@@ -289,6 +317,7 @@ export default function Documentos() {
         document_id: sendDoc.id,
         recipient_profile_id: parentId,
         student_id: student.id,
+        classroom_id: row.classroom_id ?? null,
         status: "pending",
       });
     }
@@ -1006,15 +1035,10 @@ export default function Documentos() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Destinatários *</Label>
-                <Select value={form.target_role} onValueChange={(v) => setForm((f) => ({ ...f, target_role: v as DocTarget }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PARENT">Encarregados</SelectItem>
-                    <SelectItem value="TEACHER">Professores</SelectItem>
-                    <SelectItem value="ALL">Todos</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Destinatários</Label>
+                <div className="flex h-10 items-center rounded-xl border border-border bg-muted/40 px-3 text-sm text-muted-foreground">
+                  Educadores
+                </div>
               </div>
             </div>
 

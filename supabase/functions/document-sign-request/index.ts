@@ -32,11 +32,12 @@ function buildHtml(opts: {
   schoolName: string;
   documentTitle: string;
   documentCategory: string;
+  classroomName: string | null;
   studentName: string | null;
   signUrl: string;
   expiresAt: string | null;
 }): string {
-  const { recipientName, schoolName, documentTitle, documentCategory, studentName, signUrl, expiresAt } = opts;
+  const { recipientName, schoolName, documentTitle, documentCategory, classroomName, studentName, signUrl, expiresAt } = opts;
   const firstName = recipientName.split(" ")[0] || recipientName;
 
   const categoryLabel = documentCategory === "assinatura"
@@ -57,8 +58,12 @@ function buildHtml(opts: {
     ? `<p style="margin:8px 0 0;font-size:13px;color:#dc2626;font-weight:600;">⚠️ Prazo: ${new Date(expiresAt).toLocaleDateString("pt-PT", { day: "2-digit", month: "long", year: "numeric" })}</p>`
     : "";
 
+  const classroomLine = classroomName
+    ? `<p style="margin:0 0 6px;font-size:14px;color:#374151;">Turma: <strong>${classroomName}</strong></p>`
+    : "";
+
   const studentLine = studentName
-    ? `<p style="margin:0 0 12px;font-size:14px;color:#374151;">Aluno(a): <strong>${studentName}</strong></p>`
+    ? `<p style="margin:0 0 12px;font-size:14px;color:#374151;">Educando(a): <strong>${studentName}</strong></p>`
     : "";
 
   return `<!DOCTYPE html>
@@ -103,6 +108,7 @@ function buildHtml(opts: {
             <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#1e293b;line-height:1.3;">
               A escola enviou-lhe um documento
             </h1>
+            ${classroomLine}
             ${studentLine}
             <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:20px;">
               <p style="margin:0;font-size:15px;font-weight:600;color:#1e293b;">${documentTitle}</p>
@@ -188,14 +194,15 @@ Deno.serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceRole);
 
-    // Load all requests + their documents + recipient profiles + students
+    // Load all requests + their documents + recipient profiles + students + classroom
     const { data: requests, error: reqErr } = await admin
       .from("document_requests")
       .select(`
         id,
         document:document_id(title, category, expires_at, school_id),
         recipient:recipient_profile_id(id, full_name, email),
-        student:student_id(full_name)
+        student:student_id(full_name),
+        classroom:classroom_id(name)
       `)
       .in("id", document_request_ids);
 
@@ -232,10 +239,11 @@ Deno.serve(async (req) => {
       const signUrl = `${app_url.replace(/\/$/, "")}/documentos/assinar/${req_row.id}`;
 
       const html = buildHtml({
-        recipientName: recipient.full_name ?? "Encarregado(a)",
+        recipientName: recipient.full_name ?? "Educador(a)",
         schoolName,
         documentTitle: doc?.title ?? "Documento",
         documentCategory: doc?.category ?? "assinatura",
+        classroomName: req_row.classroom?.name ?? null,
         studentName: req_row.student?.full_name ?? null,
         signUrl,
         expiresAt: doc?.expires_at ?? null,
