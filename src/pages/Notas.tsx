@@ -173,6 +173,7 @@ const Notas = () => {
   const [publishOpen, setPublishOpen] = useState(false);
   const [years, setYears] = useState<YearOpt[]>([]);
   const [allYearRows, setAllYearRows] = useState<GradeDisplayRow[]>([]);
+  const [atRiskLoading, setAtRiskLoading] = useState(false);
 
   const resolvedSchoolId = useMemo(() => {
     if (isTeacher)
@@ -268,8 +269,10 @@ const Notas = () => {
   const loadAllYearGrades = useCallback(async () => {
     if (!isPrivileged || !resolvedSchoolId || !resolvedYearId) {
       setAllYearRows([]);
+      setAtRiskLoading(false);
       return;
     }
+    setAtRiskLoading(true);
     let query = supabase
       .from("grades")
       .select(`
@@ -296,7 +299,7 @@ const Notas = () => {
       query = query.eq("assessments.classroom_id", classroomFilter);
     }
     const { data, error } = await query;
-    if (error) { setAllYearRows([]); return; }
+    if (error) { setAllYearRows([]); setAtRiskLoading(false); return; }
     const raw = (data ?? []) as GradeRowRaw[];
     const mapped: GradeDisplayRow[] = raw
       .map((g) => {
@@ -316,6 +319,7 @@ const Notas = () => {
       })
       .filter(Boolean) as GradeDisplayRow[];
     setAllYearRows(mapped);
+    setAtRiskLoading(false);
   }, [isPrivileged, resolvedSchoolId, resolvedYearId, classroomFilter]);
 
   const atRiskStudents = useMemo((): AtRiskStudent[] => {
@@ -824,53 +828,71 @@ const Notas = () => {
         </div>
       )}
 
-      {resolvedYearId && isPrivileged && atRiskStudents.length > 0 && (
-        <div className="rounded-2xl border border-pastel-pink/60 bg-pastel-pink/10 p-4 shadow-soft sm:p-5">
+      {resolvedYearId && isPrivileged && (
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-soft sm:p-5">
           <div className="mb-3 flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 shrink-0 text-pastel-pink-foreground" strokeWidth={2} />
             <h2 className="text-sm font-semibold text-foreground">
               Alunos em risco de reprovar
-              <span className="ml-2 rounded-full bg-pastel-pink px-2 py-0.5 text-xs text-pastel-pink-foreground">
-                {atRiskStudents.length}
-              </span>
+              {!atRiskLoading && (
+                <span className={cn(
+                  "ml-2 rounded-full px-2 py-0.5 text-xs",
+                  atRiskStudents.length > 0
+                    ? "bg-pastel-pink text-pastel-pink-foreground"
+                    : "bg-muted text-muted-foreground"
+                )}>
+                  {atRiskStudents.length}
+                </span>
+              )}
             </h2>
           </div>
           <p className="mb-3 text-xs text-muted-foreground">
             Alunos com média global inferior a 10 ou com média negativa em 2 ou mais disciplinas (calculado com todas as notas do ano lectivo).
           </p>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-pastel-pink/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  <th className="py-2 pr-4">Aluno</th>
-                  <th className="py-2 pr-4">Turma</th>
-                  <th className="py-2 pr-4 text-right">Média global</th>
-                  <th className="py-2">Motivo</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-pastel-pink/20">
-                {atRiskStudents.map((s) => (
-                  <tr key={s.studentId}>
-                    <td className="py-2 pr-4 font-medium text-foreground">{s.studentName}</td>
-                    <td className="py-2 pr-4 text-muted-foreground">{s.classroomName}</td>
-                    <td className="py-2 pr-4 text-right font-semibold tabular-nums text-pastel-pink-foreground">
-                      {s.overallAvg.toFixed(1)}
-                      <span className="text-xs font-normal text-muted-foreground"> / 20</span>
-                    </td>
-                    <td className="py-2">
-                      <div className="flex flex-wrap gap-1">
-                        {s.reasons.map((r) => (
-                          <span key={r} className="rounded-full bg-pastel-pink/60 px-2 py-0.5 text-xs text-pastel-pink-foreground">
-                            {r}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
+          {atRiskLoading ? (
+            <div className="flex items-center gap-2 py-6 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">A calcular…</span>
+            </div>
+          ) : atRiskStudents.length === 0 ? (
+            <p className="py-4 text-sm text-muted-foreground">
+              Nenhum aluno em risco de reprovar com as notas actuais.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[480px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <th className="py-2 pr-4">Aluno</th>
+                    <th className="py-2 pr-4">Turma</th>
+                    <th className="py-2 pr-4 text-right">Média global</th>
+                    <th className="py-2">Motivo</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {atRiskStudents.map((s) => (
+                    <tr key={s.studentId}>
+                      <td className="py-2 pr-4 font-medium text-foreground">{s.studentName}</td>
+                      <td className="py-2 pr-4 text-muted-foreground">{s.classroomName}</td>
+                      <td className="py-2 pr-4 text-right font-semibold tabular-nums text-pastel-pink-foreground">
+                        {s.overallAvg.toFixed(1)}
+                        <span className="text-xs font-normal text-muted-foreground"> / 20</span>
+                      </td>
+                      <td className="py-2">
+                        <div className="flex flex-wrap gap-1">
+                          {s.reasons.map((r) => (
+                            <span key={r} className="rounded-full bg-pastel-pink/60 px-2 py-0.5 text-xs text-pastel-pink-foreground">
+                              {r}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
