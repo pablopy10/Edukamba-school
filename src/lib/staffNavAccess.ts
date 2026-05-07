@@ -31,6 +31,7 @@ const STAFF_NAV: Record<StaffOperationalRole, readonly string[]> = {
     "/financas",
     "/relatorios",
     "/timesheet",
+    "/documentos",
     "/chat",
     "/pesquisa",
     "/notificacoes",
@@ -50,6 +51,7 @@ const STAFF_NAV: Record<StaffOperationalRole, readonly string[]> = {
     "/notas",
     "/relatorios",
     "/extracurriculares",
+    "/documentos",
     "/chat",
     "/pesquisa",
     "/notificacoes",
@@ -160,6 +162,7 @@ const TEACHER_NAV_PREFIXES = [
   "/pedidos",
   "/eventos",
   "/educadores",
+  "/documentos",
 ] as const;
 
 const PARENT_NAV_PREFIXES = [
@@ -176,6 +179,7 @@ const PARENT_NAV_PREFIXES = [
   "/professores",
   "/extracurriculares",
   "/transportes",
+  "/documentos",
 ] as const;
 
 /** Aluno — alinhado à Sidebar. */

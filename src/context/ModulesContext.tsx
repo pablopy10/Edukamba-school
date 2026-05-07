@@ -22,7 +22,8 @@ export type ModuleKey =
   | "financas"
   | "relatorios"
   | "timesheet"
-  | "transportes";
+  | "transportes"
+  | "documentos";
 
 export const moduleMeta: Record<ModuleKey, { label: string; description: string; path: string }> = {
   professores: { label: "Professores", description: "Gestão dos professores e docentes da escola.", path: "/professores" },
@@ -45,6 +46,7 @@ export const moduleMeta: Record<ModuleKey, { label: string; description: string;
   relatorios: { label: "Relatórios", description: "Exportações e análises da escola.", path: "/relatorios" },
   timesheet: { label: "Timesheet", description: "Controlo de horas dos funcionários.", path: "/timesheet" },
   transportes: { label: "Transporte", description: "Giros escolares, paragens, inscrições e mensalidade do transporte.", path: "/transportes" },
+  documentos: { label: "Documentos", description: "Documentos escolares, pedidos de assinatura e formulários.", path: "/documentos" },
 };
 
 export type PlanType = "Essencial" | "Pro" | "Enterprise";
@@ -74,6 +76,7 @@ export const modulePlan: Record<ModuleKey, PlanType> = {
   // Enterprise
   material: "Enterprise",
   transportes: "Enterprise",
+  documentos: "Essencial",
 };
 
 const planRank: Record<PlanType, number> = { Essencial: 1, Pro: 2, Enterprise: 3 };

@@ -1,5 +1,5 @@
 import type { ElementType } from "react";
-import { GraduationCap, Home, Users, Receipt, BookOpen, Presentation, Contact, PersonStanding, UsersRound, CalendarDays, BookMarked, Table2, CalendarCheck, Smartphone, BookOpenCheck, BarChart3, Clock, UserCircle, Settings, Package, LogOut, ChevronRight, Sparkles, Wallet, TrendingUp, Bus } from "lucide-react";
+import { GraduationCap, Home, Users, Receipt, BookOpen, Presentation, Contact, PersonStanding, UsersRound, CalendarDays, BookMarked, Table2, CalendarCheck, Smartphone, BookOpenCheck, BarChart3, Clock, UserCircle, Settings, Package, LogOut, ChevronRight, Sparkles, Wallet, TrendingUp, Bus, FolderOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useModules, ModuleKey } from "@/context/ModulesContext";
@@ -39,6 +39,7 @@ const menu: NavItem[] = [
   { icon: TrendingUp, label: "Finanças", to: "/financas", moduleKey: "financas" },
   { icon: BarChart3, label: "Relatórios", to: "/relatorios", moduleKey: "relatorios" },
   { icon: Clock, label: "Timesheet", to: "/timesheet", moduleKey: "timesheet" },
+  { icon: FolderOpen, label: "Documentos", to: "/documentos", moduleKey: "documentos" },
 ];
 
 const other: NavItem[] = [
