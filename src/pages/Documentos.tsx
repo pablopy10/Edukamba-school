@@ -439,6 +439,49 @@ export default function Documentos() {
 
   const pendingRequests = useMemo(() => myRequests.filter((r) => r.status === "pending"), [myRequests]);
 
+  // Build a quick lookup: document_id → my request
+  const myRequestByDocId = useMemo(
+    () => Object.fromEntries(myRequests.map((r) => [r.document_id, r])),
+    [myRequests],
+  );
+
+  // Whether this document is addressed to the current user's role
+  const isDocForMe = useCallback((doc: Document) => {
+    if (doc.target_role === "ALL") return true;
+    if (doc.target_role === "PARENT" && role === "PARENT") return true;
+    if (doc.target_role === "TEACHER" && role === "TEACHER") return true;
+    return false;
+  }, [role]);
+
+  // Find or create a document_request for this user, then navigate to sign page
+  const handleSignOrCreate = useCallback(async (doc: Document) => {
+    if (!user?.id) return;
+    const existing = myRequestByDocId[doc.id];
+    if (existing) {
+      navigate(`/documentos/assinar/${existing.id}`);
+      return;
+    }
+    // Create a request on-the-fly
+    const { data, error } = await supabase
+      .from("document_requests")
+      .insert({ document_id: doc.id, recipient_profile_id: user.id, status: "pending" })
+      .select("id")
+      .single();
+    if (error || !data) {
+      toast({ title: "Erro ao abrir documento", description: error?.message, variant: "destructive" });
+      return;
+    }
+    navigate(`/documentos/assinar/${data.id}`);
+  }, [user?.id, myRequestByDocId, navigate]);
+
+  // Auto-switch to "Pendentes" once data loads for non-privileged users with pending items
+  useEffect(() => {
+    if (!isPrivileged && pendingRequests.length > 0 && activeTab === "todos") {
+      setActiveTab("pendentes");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRequests.length, isPrivileged]);
+
   const kpiCards = [
     { label: "Total", value: documents.length, color: "bg-pastel-blue/20 text-pastel-blue-foreground" },
     { label: "Activos", value: documents.filter((d) => d.status === "active").length, color: "bg-pastel-green/20 text-pastel-green-foreground" },
@@ -585,6 +628,11 @@ export default function Documentos() {
                   const catMeta = CATEGORY_META[doc.category];
                   const CatIcon = catMeta.icon;
                   const expired = isExpired(doc.expires_at);
+                  // Non-privileged: find this user's request for this document
+                  const myReq = !isPrivileged ? myRequestByDocId[doc.id] : undefined;
+                  const myReqStatus = myReq?.status as RequestStatus | undefined;
+                  const myReqMeta = myReqStatus ? REQUEST_STATUS_META[myReqStatus] : null;
+                  const MyReqIcon = myReqMeta?.icon;
                   return (
                     <div
                       key={doc.id}
@@ -650,6 +698,40 @@ export default function Documentos() {
 
                         {/* Actions */}
                         <div className="flex shrink-0 flex-wrap items-center gap-1">
+                          {/* ── Non-privileged: sign / status button ── */}
+                          {!isPrivileged && doc.status === "active" && !expired && isDocForMe(doc) && (
+                            myReqStatus && myReqStatus !== "pending" ? (
+                              // Already responded
+                              <span className={cn(
+                                "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold",
+                                myReqMeta?.color,
+                              )}>
+                                {MyReqIcon && <MyReqIcon className="h-3.5 w-3.5" />}
+                                {myReqMeta?.label}
+                              </span>
+                            ) : (
+                              // Pending or no request yet
+                              <button
+                                onClick={() => void handleSignOrCreate(doc)}
+                                className={cn(
+                                  "flex h-9 items-center gap-1.5 rounded-full px-4 text-xs font-semibold shadow-soft hover:opacity-90",
+                                  doc.category === "assinatura"
+                                    ? "bg-pastel-green text-pastel-green-foreground"
+                                    : doc.category === "formulario"
+                                      ? "bg-pastel-blue text-pastel-blue-foreground"
+                                      : "bg-pastel-green text-pastel-green-foreground",
+                                )}
+                              >
+                                <FileSignature className="h-3.5 w-3.5" />
+                                {doc.category === "assinatura"
+                                  ? "Assinar"
+                                  : doc.category === "formulario"
+                                    ? "Preencher"
+                                    : "Confirmar leitura"}
+                              </button>
+                            )
+                          )}
+
                           {doc.file_url && (
                             <a
                               href={doc.file_url}
