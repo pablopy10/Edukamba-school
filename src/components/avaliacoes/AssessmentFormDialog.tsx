@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,7 @@ export type AssessmentRecord = {
 };
 
 type Option = { id: string; name: string };
+type TeacherOption = { id: string; name: string; subject_id?: string | null };
 
 const TYPES = [
   { value: "teste", label: "Teste" },
@@ -49,7 +50,7 @@ type Props = {
   schoolId: string | null;
   classrooms: Option[];
   subjects: Option[];
-  teachers: Option[];
+  teachers: TeacherOption[];
   initial?: Partial<AssessmentRecord> | null;
   onSaved: () => void;
   /** When set, locks the teacher field to this profile id (used for TEACHER role). */
@@ -149,6 +150,55 @@ export const AssessmentFormDialog = ({
   const update = <K extends keyof AssessmentRecord>(key: K, value: AssessmentRecord[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  // Teacher selected → auto-fill subject (if teacher has one assigned)
+  const handleTeacherChange = (teacherId: string) => {
+    const teacher = teachers.find((t) => t.id === teacherId);
+    setForm((f) => ({
+      ...f,
+      teacher_id: teacherId,
+      subject_id: teacher?.subject_id ? teacher.subject_id : f.subject_id,
+    }));
+  };
+
+  // Subject selected → filter teachers to those who teach it; auto-select if only one
+  const handleSubjectChange = (subjectId: string) => {
+    const matchingTeachers = teachers.filter((t) => t.subject_id === subjectId);
+    setForm((f) => {
+      const currentTeacherStillValid = matchingTeachers.some((t) => t.id === f.teacher_id);
+      return {
+        ...f,
+        subject_id: subjectId,
+        teacher_id: currentTeacherStillValid
+          ? f.teacher_id
+          : matchingTeachers.length === 1
+            ? matchingTeachers[0].id
+            : null,
+      };
+    });
+  };
+
+  // Subjects available: if a teacher with a known subject is selected, show only that subject
+  const filteredSubjects = useMemo(() => {
+    if (lockSubjectId) return subjects;
+    const teacher = form.teacher_id ? teachers.find((t) => t.id === form.teacher_id) : null;
+    if (teacher?.subject_id) return subjects.filter((s) => s.id === teacher.subject_id);
+    return subjects;
+  }, [form.teacher_id, teachers, subjects, lockSubjectId]);
+
+  // Teachers available: if a subject is selected, show only teachers for that subject
+  const filteredTeachers = useMemo(() => {
+    if (lockTeacherId) return teachers;
+    if (!form.subject_id) return teachers;
+    return teachers.filter((t) => t.subject_id === form.subject_id);
+  }, [form.subject_id, teachers, lockTeacherId]);
+
+  // Detect teacher–subject mismatch (teacher has a subject set but it differs from selected)
+  const teacherSubjectMismatch = useMemo(() => {
+    if (!form.teacher_id || !form.subject_id || lockTeacherId || lockSubjectId) return false;
+    const teacher = teachers.find((t) => t.id === form.teacher_id);
+    return !!teacher?.subject_id && teacher.subject_id !== form.subject_id;
+  }, [form.teacher_id, form.subject_id, teachers, lockTeacherId, lockSubjectId]);
+
   // Check for conflicts (does NOT block save)
   useEffect(() => {
     if (!open || !schoolId || !form.date || !form.start_time || !form.end_time) {
@@ -219,6 +269,10 @@ export const AssessmentFormDialog = ({
     }
     if (form.start_time >= form.end_time) {
       toast({ title: "Hora inválida", description: "A hora de fim deve ser depois do início.", variant: "destructive" });
+      return;
+    }
+    if (teacherSubjectMismatch) {
+      toast({ title: "Combinação inválida", description: "O professor seleccionado não lecciona a disciplina escolhida.", variant: "destructive" });
       return;
     }
 
@@ -295,12 +349,14 @@ export const AssessmentFormDialog = ({
             <Label>Disciplina *</Label>
             <Select
               value={form.subject_id ?? ""}
-              onValueChange={(v) => update("subject_id", v)}
+              onValueChange={handleSubjectChange}
               disabled={!!lockSubjectId}
             >
-              <SelectTrigger><SelectValue placeholder="Escolher disciplina" /></SelectTrigger>
+              <SelectTrigger className={teacherSubjectMismatch ? "border-destructive" : ""}>
+                <SelectValue placeholder="Escolher disciplina" />
+              </SelectTrigger>
               <SelectContent>
-                {subjects.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                {filteredSubjects.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -309,12 +365,20 @@ export const AssessmentFormDialog = ({
             <Label>Professor *</Label>
             <Select
               value={form.teacher_id ?? ""}
-              onValueChange={(v) => update("teacher_id", v)}
+              onValueChange={handleTeacherChange}
               disabled={!!lockTeacherId}
             >
-              <SelectTrigger><SelectValue placeholder="Escolher professor" /></SelectTrigger>
+              <SelectTrigger className={teacherSubjectMismatch ? "border-destructive" : ""}>
+                <SelectValue placeholder="Escolher professor" />
+              </SelectTrigger>
               <SelectContent>
-                {teachers.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                {filteredTeachers.length > 0 ? (
+                  filteredTeachers.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)
+                ) : (
+                  <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                    Nenhum professor atribuído a esta disciplina.
+                  </div>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -388,6 +452,15 @@ export const AssessmentFormDialog = ({
             <Label>Descrição</Label>
             <Textarea value={form.description ?? ""} onChange={(e) => update("description", e.target.value)} rows={2} />
           </div>
+
+          {teacherSubjectMismatch && (
+            <div className="sm:col-span-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs">
+              <div className="flex items-center gap-2 font-semibold text-destructive">
+                <AlertTriangle className="h-4 w-4" />
+                O professor seleccionado não lecciona esta disciplina. Corrija antes de guardar.
+              </div>
+            </div>
+          )}
 
           {conflicts.length > 0 && (
             <div className="sm:col-span-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs">
