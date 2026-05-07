@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, Plus, Pencil, Trash2, Loader2, CheckCircle2, GraduationCap } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, Loader2, CheckCircle2 } from "lucide-react";
 import { cn, sortByName } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { EnrollmentFormDialog, EnrollmentRow } from "@/components/matriculas/EnrollmentFormDialog";
-import { PublishResultsDialog } from "@/components/matriculas/PublishResultsDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
@@ -56,7 +55,6 @@ const Matriculas = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<EnrollmentRow | null>(null);
   const [deleting, setDeleting] = useState<EnrollmentRow | null>(null);
-  const [publishOpen, setPublishOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -236,31 +234,11 @@ const Matriculas = () => {
               />
             </div>
             {!native && (
-            <>
-            <button
-              onClick={() => { setEditing(null); setFormOpen(true); }}
-              className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
-              <Plus className="h-4 w-4" strokeWidth={2.25} />
-              {isParent ? "Renovar Matrícula" : "Nova Matrícula"}
-            </button>
-            {!isParent && (
               <button
-                onClick={() => setPublishOpen(true)}
-                className="flex h-11 items-center gap-2 rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
-                <GraduationCap className="h-4 w-4" strokeWidth={2.25} />
-                Publicar resultados
-              </button>
-            )}
-            </>
-            )}
-            {native && !isParent && (
-              <button
-                type="button"
-                onClick={() => setPublishOpen(true)}
-                className="flex h-11 shrink-0 items-center gap-2 rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
-              >
-                <GraduationCap className="h-4 w-4" strokeWidth={2.25} />
-                Publicar resultados
+                onClick={() => { setEditing(null); setFormOpen(true); }}
+                className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
+                <Plus className="h-4 w-4" strokeWidth={2.25} />
+                {isParent ? "Renovar Matrícula" : "Nova Matrícula"}
               </button>
             )}
           </div>
@@ -503,16 +481,6 @@ const Matriculas = () => {
         classrooms={classrooms}
         years={years}
         enrollment={editing}
-        onSaved={load}
-      />
-
-      <PublishResultsDialog
-        open={publishOpen}
-        onOpenChange={setPublishOpen}
-        classrooms={classrooms}
-        years={years}
-        defaultYearId={selectedYearId ?? null}
-        defaultClassroomId={filterClassroom !== "all" ? filterClassroom : null}
         onSaved={load}
       />
 

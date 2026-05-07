@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useIsRestoring, useQuery } from "@tanstack/react-query";
-import { Search, Table2, Loader2 } from "lucide-react";
+import { Search, Table2, Loader2, AlertTriangle, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { showPageKpiCards } from "@/lib/nativeApp";
 import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 import { QUERY_DAY_MS } from "@/lib/queryClient";
+import { PublishResultsDialog } from "@/components/matriculas/PublishResultsDialog";
 import {
   academicTermsQueryKey,
   fetchAcademicTerms,
@@ -60,6 +61,17 @@ type GradeDisplayRow = {
   subjectName: string;
   assessmentTitle: string;
   date: string;
+};
+
+type YearOpt = { id: string; label: string; is_active: boolean | null };
+
+type AtRiskStudent = {
+  studentId: string;
+  studentName: string;
+  classroomName: string;
+  overallAvg: number;
+  negativeSubjects: string[];
+  reasons: string[];
 };
 
 const formatDatePt = (iso: string) =>
@@ -158,6 +170,10 @@ const Notas = () => {
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
 
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [years, setYears] = useState<YearOpt[]>([]);
+  const [allYearRows, setAllYearRows] = useState<GradeDisplayRow[]>([]);
+
   const resolvedSchoolId = useMemo(() => {
     if (isTeacher)
       return ctxSchoolId ?? persistedTeacherSession?.schoolId ?? profileSchoolId;
@@ -238,6 +254,108 @@ const Notas = () => {
     },
     [isTeacher],
   );
+
+  const loadYears = useCallback(async () => {
+    if (!resolvedSchoolId) return;
+    const { data } = await supabase
+      .from("academic_years")
+      .select("id, label, is_active")
+      .eq("school_id", resolvedSchoolId)
+      .order("start_date", { ascending: true });
+    setYears((data ?? []) as YearOpt[]);
+  }, [resolvedSchoolId]);
+
+  const loadAllYearGrades = useCallback(async () => {
+    if (!isPrivileged || !resolvedSchoolId || !resolvedYearId) {
+      setAllYearRows([]);
+      return;
+    }
+    let query = supabase
+      .from("grades")
+      .select(`
+        id,
+        score,
+        teacher_comment,
+        student_id,
+        assessments!inner (
+          id,
+          title,
+          date,
+          classroom_id,
+          subject_id,
+          term_id,
+          academic_year_id,
+          subjects (name),
+          classrooms (name)
+        ),
+        students (full_name, classroom_id)
+      `)
+      .eq("assessments.academic_year_id", resolvedYearId)
+      .eq("assessments.school_id", resolvedSchoolId);
+    if (classroomFilter !== "all") {
+      query = query.eq("assessments.classroom_id", classroomFilter);
+    }
+    const { data, error } = await query;
+    if (error) { setAllYearRows([]); return; }
+    const raw = (data ?? []) as GradeRowRaw[];
+    const mapped: GradeDisplayRow[] = raw
+      .map((g) => {
+        const ass = singleAssessment(g.assessments);
+        if (!ass) return null;
+        return {
+          id: g.id,
+          score: g.score,
+          teacher_comment: g.teacher_comment,
+          studentId: g.student_id,
+          studentName: g.students?.full_name ?? "—",
+          classroomName: ass.classrooms?.name ?? "—",
+          subjectName: ass.subjects?.name ?? "—",
+          assessmentTitle: ass.title,
+          date: ass.date,
+        };
+      })
+      .filter(Boolean) as GradeDisplayRow[];
+    setAllYearRows(mapped);
+  }, [isPrivileged, resolvedSchoolId, resolvedYearId, classroomFilter]);
+
+  const atRiskStudents = useMemo((): AtRiskStudent[] => {
+    if (!isPrivileged || allYearRows.length === 0) return [];
+    const byStudent = new Map<string, GradeDisplayRow[]>();
+    allYearRows.forEach((r) => {
+      if (!r.studentId) return;
+      const list = byStudent.get(r.studentId) ?? [];
+      list.push(r);
+      byStudent.set(r.studentId, list);
+    });
+    const result: AtRiskStudent[] = [];
+    byStudent.forEach((grades, studentId) => {
+      const overallAvg = grades.reduce((s, g) => s + g.score, 0) / grades.length;
+      const bySubject = new Map<string, number[]>();
+      grades.forEach((g) => {
+        const scores = bySubject.get(g.subjectName) ?? [];
+        scores.push(g.score);
+        bySubject.set(g.subjectName, scores);
+      });
+      const negativeSubjects = Array.from(bySubject.entries())
+        .map(([name, scores]) => ({ name, avg: scores.reduce((s, v) => s + v, 0) / scores.length }))
+        .filter((s) => s.avg < 10)
+        .map((s) => s.name);
+      const reasons: string[] = [];
+      if (overallAvg < 10) reasons.push(`média global de ${overallAvg.toFixed(1)} val.`);
+      if (negativeSubjects.length >= 2) reasons.push(`negativa em ${negativeSubjects.length} disciplinas`);
+      if (reasons.length > 0) {
+        result.push({
+          studentId,
+          studentName: grades[0].studentName,
+          classroomName: grades[0].classroomName,
+          overallAvg,
+          negativeSubjects,
+          reasons,
+        });
+      }
+    });
+    return result.sort((a, b) => a.studentName.localeCompare(b.studentName, "pt"));
+  }, [isPrivileged, allYearRows]);
 
   const termsKey = useMemo(() => terms.map((t) => t.id).join(","), [terms]);
 
@@ -470,6 +588,16 @@ const Notas = () => {
     setClassroomFilter("all");
   }, [isPrivileged, isTeacher]);
 
+  useEffect(() => {
+    if (!isPrivileged) return;
+    void loadYears();
+  }, [isPrivileged, loadYears]);
+
+  useEffect(() => {
+    if (!isPrivileged) return;
+    void loadAllYearGrades();
+  }, [isPrivileged, loadAllYearGrades]);
+
   const displayRows = isTeacher ? teacherRows : rows;
 
   const teacherNotasShowsBlockingSpinner =
@@ -519,18 +647,40 @@ const Notas = () => {
   return (
     <div className="flex flex-col gap-6 pb-24 lg:pb-8">
       {showPageKpiCards() && (
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Notas</h1>
-          <p className="text-sm text-muted-foreground">
-            Consulte as notas por trimestre, turma e disciplina, no ano letivo seleccionado.
-          </p>
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Notas</h1>
+            <p className="text-sm text-muted-foreground">
+              Consulte as notas por trimestre, turma e disciplina, no ano letivo seleccionado.
+            </p>
+          </div>
+          {isPrivileged && (
+            <button
+              onClick={() => setPublishOpen(true)}
+              className="flex h-11 w-fit shrink-0 items-center gap-2 rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
+            >
+              <GraduationCap className="h-4 w-4" strokeWidth={2.25} />
+              Publicar resultados
+            </button>
+          )}
         </div>
       )}
 
       {!showPageKpiCards() && (
-        <div className="flex items-center gap-2 pt-2">
-          <Table2 className="h-6 w-6 text-pastel-blue-foreground" strokeWidth={1.75} />
-          <h1 className="text-xl font-bold text-foreground">Notas</h1>
+        <div className="flex items-center justify-between gap-2 pt-2">
+          <div className="flex items-center gap-2">
+            <Table2 className="h-6 w-6 text-pastel-blue-foreground" strokeWidth={1.75} />
+            <h1 className="text-xl font-bold text-foreground">Notas</h1>
+          </div>
+          {isPrivileged && (
+            <button
+              onClick={() => setPublishOpen(true)}
+              className="flex h-9 items-center gap-1.5 rounded-full bg-pastel-green px-4 text-xs font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
+            >
+              <GraduationCap className="h-3.5 w-3.5" strokeWidth={2.25} />
+              Publicar resultados
+            </button>
+          )}
         </div>
       )}
 
@@ -674,6 +824,56 @@ const Notas = () => {
         </div>
       )}
 
+      {resolvedYearId && isPrivileged && atRiskStudents.length > 0 && (
+        <div className="rounded-2xl border border-pastel-pink/60 bg-pastel-pink/10 p-4 shadow-soft sm:p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-pastel-pink-foreground" strokeWidth={2} />
+            <h2 className="text-sm font-semibold text-foreground">
+              Alunos em risco de reprovar
+              <span className="ml-2 rounded-full bg-pastel-pink px-2 py-0.5 text-xs text-pastel-pink-foreground">
+                {atRiskStudents.length}
+              </span>
+            </h2>
+          </div>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Alunos com média global inferior a 10 ou com média negativa em 2 ou mais disciplinas (calculado com todas as notas do ano lectivo).
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-pastel-pink/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <th className="py-2 pr-4">Aluno</th>
+                  <th className="py-2 pr-4">Turma</th>
+                  <th className="py-2 pr-4 text-right">Média global</th>
+                  <th className="py-2">Motivo</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-pastel-pink/20">
+                {atRiskStudents.map((s) => (
+                  <tr key={s.studentId}>
+                    <td className="py-2 pr-4 font-medium text-foreground">{s.studentName}</td>
+                    <td className="py-2 pr-4 text-muted-foreground">{s.classroomName}</td>
+                    <td className="py-2 pr-4 text-right font-semibold tabular-nums text-pastel-pink-foreground">
+                      {s.overallAvg.toFixed(1)}
+                      <span className="text-xs font-normal text-muted-foreground"> / 20</span>
+                    </td>
+                    <td className="py-2">
+                      <div className="flex flex-wrap gap-1">
+                        {s.reasons.map((r) => (
+                          <span key={r} className="rounded-full bg-pastel-pink/60 px-2 py-0.5 text-xs text-pastel-pink-foreground">
+                            {r}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {resolvedYearId && (
         <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
           {tableLoading ? (
@@ -723,6 +923,17 @@ const Notas = () => {
             </div>
           )}
         </div>
+      )}
+      {isPrivileged && (
+        <PublishResultsDialog
+          open={publishOpen}
+          onOpenChange={setPublishOpen}
+          classrooms={[]}
+          years={years}
+          defaultYearId={resolvedYearId ?? null}
+          defaultClassroomId={classroomFilter !== "all" ? classroomFilter : null}
+          onSaved={() => void loadAllYearGrades()}
+        />
       )}
     </div>
   );
