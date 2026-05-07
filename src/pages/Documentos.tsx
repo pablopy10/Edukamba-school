@@ -3,8 +3,10 @@ import { useNavigate } from "react-router-dom";
 import {
   FolderOpen, Plus, Search, Loader2, FileSignature, FileText, Info,
   CheckCircle2, Clock, XCircle, Pencil, Trash2, AlertTriangle, ExternalLink,
-  Send, Users, Eye,
+  Send, Users, Eye, Settings2,
 } from "lucide-react";
+import { DocumentUpload } from "@/components/documents/DocumentUpload";
+import { PdfFieldEditor, type FieldDef } from "@/components/documents/PdfFieldEditor";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -39,6 +41,9 @@ type Document = {
   description: string | null;
   category: DocCategory;
   file_url: string | null;
+  pdf_template_url: string | null;
+  content_text: string | null;
+  signature_fields: FieldDef[] | null;
   created_by: string | null;
   target_role: DocTarget;
   required: boolean;
@@ -94,11 +99,14 @@ const REQUEST_STATUS_META: Record<RequestStatus, { label: string; icon: typeof C
 const emptyForm = {
   title: "",
   description: "",
+  content_text: "",
   category: "assinatura" as DocCategory,
   target_role: "PARENT" as DocTarget,
   required: false,
   expires_at: "",
-  file_url: "",
+  pdf_template_url: "",
+  pdf_template_name: "",
+  signature_fields: null as FieldDef[] | null,
 };
 
 const formatDate = (iso: string | null) => {
@@ -131,6 +139,9 @@ export default function Documentos() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteDoc, setDeleteDoc] = useState<Document | null>(null);
+
+  // PDF field editor
+  const [fieldEditorOpen, setFieldEditorOpen] = useState(false);
 
   // Send requests dialog
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
@@ -283,7 +294,10 @@ export default function Documentos() {
       return;
     }
 
-    const { error: insErr } = await supabase.from("document_requests").insert(requests);
+    const { data: inserted, error: insErr } = await supabase
+      .from("document_requests")
+      .insert(requests)
+      .select("id");
     setSendingRequests(false);
 
     if (insErr) {
@@ -291,9 +305,26 @@ export default function Documentos() {
       return;
     }
 
-    toast({ title: `${requests.length} pedido${requests.length > 1 ? "s" : ""} enviado${requests.length > 1 ? "s" : ""}!`, description: `Documento: ${sendDoc.title}` });
+    toast({ title: `${requests.length} pedido${requests.length > 1 ? "s" : ""} criado${requests.length > 1 ? "s" : ""}!`, description: `A enviar emails…` });
     setSendDialogOpen(false);
     if (schoolId) await loadDocuments(schoolId);
+
+    // Fire-and-forget: call email edge function
+    const insertedIds = (inserted ?? []).map((r: { id: string }) => r.id);
+    if (insertedIds.length > 0) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const appUrl = window.location.origin;
+      supabase.functions
+        .invoke("document-sign-request", {
+          body: { document_request_ids: insertedIds, app_url: appUrl },
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+        .then(({ error: fnErr }) => {
+          if (fnErr) console.warn("document-sign-request email error:", fnErr);
+          else toast({ title: `📧 Emails enviados com sucesso!` });
+        });
+    }
   };
 
   const load = useCallback(async () => {
@@ -321,11 +352,14 @@ export default function Documentos() {
     setForm({
       title: doc.title,
       description: doc.description ?? "",
+      content_text: doc.content_text ?? "",
       category: doc.category,
       target_role: doc.target_role,
       required: doc.required,
       expires_at: doc.expires_at ?? "",
-      file_url: doc.file_url ?? "",
+      pdf_template_url: doc.pdf_template_url ?? doc.file_url ?? "",
+      pdf_template_name: doc.pdf_template_url ? "Ficheiro existente" : "",
+      signature_fields: doc.signature_fields ?? null,
     });
     setDialogOpen(true);
   };
@@ -341,11 +375,14 @@ export default function Documentos() {
       school_id: schoolId,
       title: form.title.trim(),
       description: form.description.trim() || null,
+      content_text: form.content_text.trim() || null,
       category: form.category,
       target_role: form.target_role,
       required: form.required,
       expires_at: form.expires_at || null,
-      file_url: form.file_url.trim() || null,
+      pdf_template_url: form.pdf_template_url.trim() || null,
+      file_url: form.pdf_template_url.trim() || null, // keep file_url in sync
+      signature_fields: form.signature_fields ?? null,
       created_by: user?.id ?? null,
       status: "active" as const,
     };
@@ -914,14 +951,38 @@ export default function Documentos() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Link para o ficheiro</Label>
-              <Input
-                value={form.file_url}
-                onChange={(e) => setForm((f) => ({ ...f, file_url: e.target.value }))}
-                placeholder="https://…"
-                type="url"
+              <Label>Conteúdo de texto (opcional)</Label>
+              <Textarea
+                value={form.content_text}
+                onChange={(e) => setForm((f) => ({ ...f, content_text: e.target.value }))}
+                placeholder="Texto do contrato, comunicado ou formulário…"
+                rows={4}
               />
-              <p className="text-xs text-muted-foreground">URL de um PDF, formulário Google, etc.</p>
+              <p className="text-xs text-muted-foreground">Escreva aqui o conteúdo se não tiver PDF para carregar.</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Documento PDF</Label>
+              <DocumentUpload
+                schoolId={schoolId}
+                currentUrl={form.pdf_template_url || null}
+                currentFileName={form.pdf_template_name || null}
+                accept=".pdf"
+                onUpload={(url, name) => setForm((f) => ({ ...f, pdf_template_url: url, pdf_template_name: name }))}
+                onClear={() => setForm((f) => ({ ...f, pdf_template_url: "", pdf_template_name: "", signature_fields: null }))}
+              />
+              {form.pdf_template_url && (
+                <button
+                  type="button"
+                  onClick={() => setFieldEditorOpen(true)}
+                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-pastel-blue/60 bg-pastel-blue/10 py-2.5 text-sm font-semibold text-pastel-blue-foreground hover:bg-pastel-blue/20"
+                >
+                  <Settings2 className="h-4 w-4" />
+                  {form.signature_fields && form.signature_fields.length > 0
+                    ? `Configurar campos (${form.signature_fields.length} definido${form.signature_fields.length > 1 ? "s" : ""})`
+                    : "Configurar campos de assinatura / texto"}
+                </button>
+              )}
             </div>
           </div>
 
@@ -932,6 +993,29 @@ export default function Documentos() {
               {editing ? "Guardar alterações" : "Criar documento"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* PDF Field Editor dialog */}
+      <Dialog open={fieldEditorOpen} onOpenChange={setFieldEditorOpen}>
+        <DialogContent className="max-w-5xl p-0" style={{ height: "90vh", display: "flex", flexDirection: "column" }}>
+          <DialogHeader className="sr-only">
+            <DialogTitle>Configurar campos do documento</DialogTitle>
+          </DialogHeader>
+          {form.pdf_template_url && (
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <PdfFieldEditor
+                pdfUrl={form.pdf_template_url}
+                initialFields={form.signature_fields ?? []}
+                onSave={(fields) => {
+                  setForm((f) => ({ ...f, signature_fields: fields }));
+                  setFieldEditorOpen(false);
+                  toast({ title: `${fields.length} campo${fields.length !== 1 ? "s" : ""} guardado${fields.length !== 1 ? "s" : ""}` });
+                }}
+                onCancel={() => setFieldEditorOpen(false)}
+              />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
