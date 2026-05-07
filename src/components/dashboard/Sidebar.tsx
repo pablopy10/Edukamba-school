@@ -35,11 +35,11 @@ const menu: NavItem[] = [
   { icon: Bus, label: "Transporte", to: "/transportes", moduleKey: "transportes" },
   { icon: Smartphone, label: "Pedidos", to: "/pedidos", moduleKey: "pedidos" },
   { icon: BookOpenCheck, label: "Material", to: "/material", moduleKey: "material" },
+  { icon: FolderOpen, label: "Documentos", to: "/documentos", moduleKey: "documentos" },
   { icon: Wallet, label: "Pagamentos", to: "/pagamentos", moduleKey: "pagamentos" },
   { icon: TrendingUp, label: "Finanças", to: "/financas", moduleKey: "financas" },
   { icon: BarChart3, label: "Relatórios", to: "/relatorios", moduleKey: "relatorios" },
   { icon: Clock, label: "Timesheet", to: "/timesheet", moduleKey: "timesheet" },
-  { icon: FolderOpen, label: "Documentos", to: "/documentos", moduleKey: "documentos" },
 ];
 
 const other: NavItem[] = [
