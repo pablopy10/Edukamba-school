@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { CheckCircle2, FileSignature, AlertTriangle, Loader2, ArrowLeft, ExternalLink, FileText } from "lucide-react";
+import { CheckCircle2, FileSignature, AlertTriangle, Loader2, ArrowLeft, ExternalLink, FileText, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -9,8 +9,17 @@ import { SignatureCanvas } from "@/components/documents/SignatureCanvas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PDFDocument } from "pdf-lib";
 
 type DocCategory = "assinatura" | "formulario" | "informativo";
+
+type SignatureField = {
+  id: string;
+  type: "signature" | "text";
+  page: number;
+  x: number; y: number; w: number; h: number;
+  label: string;
+};
 
 type DocumentRow = {
   id: string;
@@ -20,9 +29,45 @@ type DocumentRow = {
   file_url: string | null;
   pdf_template_url: string | null;
   content_text: string | null;
+  signature_fields: SignatureField[] | null;
   required: boolean;
   expires_at: string | null;
 };
+
+// ── Embed drawn signature into the PDF at the field positions ─────────────────
+async function buildSignedPdf(
+  pdfUrl: string,
+  signatureDataUrl: string,
+  fields: SignatureField[],
+): Promise<Uint8Array> {
+  const res = await fetch(pdfUrl);
+  const pdfBytes = await res.arrayBuffer();
+  const pdfDoc = await PDFDocument.load(pdfBytes);
+
+  // Convert base64 PNG → bytes
+  const base64 = signatureDataUrl.replace(/^data:image\/png;base64,/, "");
+  const imgBytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const pngImage = await pdfDoc.embedPng(imgBytes);
+
+  const pages = pdfDoc.getPages();
+
+  for (const field of fields) {
+    if (field.type !== "signature") continue;
+    const page = pages[field.page - 1];
+    if (!page) continue;
+
+    const { width: pw, height: ph } = page.getSize();
+    // Our coords are % from top-left; PDF origin is bottom-left → flip Y
+    const x = (field.x / 100) * pw;
+    const y = ph - ((field.y + field.h) / 100) * ph;
+    const w = (field.w / 100) * pw;
+    const h = (field.h / 100) * ph;
+
+    page.drawImage(pngImage, { x, y, width: w, height: h });
+  }
+
+  return pdfDoc.save();
+}
 
 type RequestRow = {
   id: string;
@@ -57,14 +102,16 @@ export default function DocumentSign() {
   const [signerName, setSignerName] = useState("");
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitStep, setSubmitStep] = useState<string>("");
   const [submitted, setSubmitted] = useState(false);
+  const [signedPdfUrl, setSignedPdfUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!requestId) { setNotFound(true); setLoading(false); return; }
     (async () => {
       const { data, error } = await supabase
         .from("document_requests")
-        .select("*, document:document_id(*), student:student_id(full_name)")
+        .select("*, document:document_id(id,title,description,category,file_url,pdf_template_url,content_text,signature_fields,required,expires_at), student:student_id(full_name)")
         .eq("id", requestId)
         .maybeSingle();
 
@@ -103,11 +150,46 @@ export default function DocumentSign() {
     const newStatus = isSignature ? "signed" : isForm ? "submitted" : "signed";
     const now = new Date().toISOString();
 
+    // ── Embed signature into PDF (if template + fields are configured) ─────
+    let builtSignedPdfUrl: string | null = null;
+
+    if (signatureData && doc?.pdf_template_url && Array.isArray(doc.signature_fields) && doc.signature_fields.length > 0) {
+      try {
+        setSubmitStep("A incorporar assinatura no PDF…");
+        const pdfBytes = await buildSignedPdf(
+          doc.pdf_template_url,
+          signatureData,
+          doc.signature_fields,
+        );
+
+        setSubmitStep("A guardar PDF assinado…");
+        const blob = new Blob([pdfBytes], { type: "application/pdf" });
+        const storagePath = `signed/${request.id}.pdf`;
+
+        const { error: uploadErr } = await supabase.storage
+          .from("documents")
+          .upload(storagePath, blob, { contentType: "application/pdf", upsert: true });
+
+        if (!uploadErr) {
+          const { data: urlData } = supabase.storage.from("documents").getPublicUrl(storagePath);
+          builtSignedPdfUrl = urlData.publicUrl;
+          setSignedPdfUrl(builtSignedPdfUrl);
+        } else {
+          console.warn("Signed PDF upload error:", uploadErr.message);
+        }
+      } catch (e) {
+        console.warn("PDF signing failed (will still save signature image):", e);
+      }
+    }
+
+    setSubmitStep("A registar assinatura…");
+
     const { error } = await supabase
       .from("document_requests")
       .update({
         status: newStatus,
         signature_data: signatureData ?? null,
+        signed_pdf_url: builtSignedPdfUrl,
         signer_name: signerName.trim(),
         signed_at: now,
         responded_at: now,
@@ -115,6 +197,7 @@ export default function DocumentSign() {
       .eq("id", request.id);
 
     setSubmitting(false);
+    setSubmitStep("");
 
     if (error) {
       toast({ title: "Erro ao submeter", description: error.message, variant: "destructive" });
@@ -166,12 +249,27 @@ export default function DocumentSign() {
             </p>
           )}
         </div>
-        {request?.signature_data && (
+        {/* Signed PDF download */}
+        {signedPdfUrl && (
+          <a
+            href={signedPdfUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 rounded-xl border border-pastel-blue/40 bg-pastel-blue/10 px-4 py-3 text-sm font-semibold text-pastel-blue-foreground hover:bg-pastel-blue/20"
+          >
+            <Download className="h-4 w-4" />
+            Descarregar PDF assinado
+          </a>
+        )}
+
+        {/* Signature image preview (when no PDF or PDF signing failed) */}
+        {!signedPdfUrl && request?.signature_data && (
           <div className="w-full max-w-sm rounded-2xl border border-pastel-green/40 bg-pastel-green/10 p-3">
             <p className="mb-2 text-xs font-medium text-muted-foreground">Assinatura registada</p>
             <img src={request.signature_data} alt="Assinatura" className="mx-auto max-h-20 object-contain" />
           </div>
         )}
+
         <Button onClick={() => navigate("/documentos")} variant="outline">
           <ArrowLeft className="mr-2 h-4 w-4" /> Ir para Documentos
         </Button>
@@ -338,7 +436,7 @@ export default function DocumentSign() {
             onClick={handleSubmit}
           >
             {submitting ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> A processar…</>
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {submitStep || "A processar…"}</>
             ) : isSignature ? (
               <><CheckCircle2 className="mr-2 h-4 w-4" /> Assinar e enviar</>
             ) : isForm ? (

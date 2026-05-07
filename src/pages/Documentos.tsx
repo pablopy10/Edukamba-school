@@ -63,6 +63,8 @@ type DocumentRequest = {
   responded_at: string | null;
   signed_at: string | null;
   signer_name: string | null;
+  signature_data: string | null;
+  signed_pdf_url: string | null;
   created_at: string;
   document?: Document;
   student?: { full_name: string } | null;
@@ -155,6 +157,9 @@ export default function Documentos() {
   const [requestsDocId, setRequestsDocId] = useState<string | null>(null);
   const [requestsLoading, setRequestsLoading] = useState(false);
 
+  // Signed document viewer
+  const [viewerRequest, setViewerRequest] = useState<DocumentRequest | null>(null);
+
   // Load school_id from profile
   const loadSchool = useCallback(async () => {
     if (!user?.id) return null;
@@ -225,7 +230,7 @@ export default function Documentos() {
     setRequestsLoading(true);
     const { data, error } = await supabase
       .from("document_requests")
-      .select("*, student:student_id(full_name), recipient:recipient_profile_id(full_name)")
+      .select("*, student:student_id(full_name), recipient:recipient_profile_id(full_name), signature_data, signed_pdf_url, signed_at, signer_name")
       .eq("document_id", docId)
       .order("created_at", { ascending: false });
     if (error) {
@@ -834,9 +839,10 @@ export default function Documentos() {
                       {docRequests.map((req) => {
                         const statusMeta = REQUEST_STATUS_META[req.status as RequestStatus] ?? REQUEST_STATUS_META.pending;
                         const StatusIcon = statusMeta.icon;
+                        const hasSigned = req.status === "signed" || req.status === "submitted";
                         return (
                           <div key={req.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <p className="text-sm font-medium text-foreground">
                                 {req.recipient?.full_name ?? req.signer_name ?? "—"}
                               </p>
@@ -851,10 +857,22 @@ export default function Documentos() {
                                 </p>
                               )}
                             </div>
-                            <span className={cn("flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold", statusMeta.color)}>
-                              <StatusIcon className="h-3 w-3" />
-                              {statusMeta.label}
-                            </span>
+                            <div className="flex shrink-0 items-center gap-2">
+                              {hasSigned && (req.signed_pdf_url || req.signature_data) && (
+                                <button
+                                  onClick={() => setViewerRequest(req)}
+                                  className="flex h-8 items-center gap-1.5 rounded-full bg-pastel-blue/20 px-3 text-xs font-semibold text-pastel-blue-foreground hover:bg-pastel-blue/40"
+                                  title="Ver documento assinado"
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                  Ver assinatura
+                                </button>
+                              )}
+                              <span className={cn("flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold", statusMeta.color)}>
+                                <StatusIcon className="h-3 w-3" />
+                                {statusMeta.label}
+                              </span>
+                            </div>
                           </div>
                         );
                       })}
@@ -1075,6 +1093,77 @@ export default function Documentos() {
               {editing ? "Guardar alterações" : "Criar documento"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Signed document viewer dialog */}
+      <Dialog open={!!viewerRequest} onOpenChange={(o) => !o && setViewerRequest(null)}>
+        <DialogContent className="flex max-h-[92vh] max-w-3xl flex-col gap-0 p-0">
+          <DialogHeader className="shrink-0 border-b border-border px-6 py-4">
+            <DialogTitle className="flex items-center gap-2">
+              <FileSignature className="h-5 w-5 text-pastel-blue-foreground" />
+              Documento assinado
+            </DialogTitle>
+            <DialogDescription>
+              {viewerRequest?.recipient?.full_name ?? viewerRequest?.signer_name ?? "—"}
+              {viewerRequest?.signed_at && (
+                <span className="ml-2 text-xs">• {formatDate(viewerRequest.signed_at)}</span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6">
+            {/* Signed PDF — full inline viewer */}
+            {viewerRequest?.signed_pdf_url ? (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-foreground">PDF com assinatura incorporada</p>
+                  <a
+                    href={viewerRequest.signed_pdf_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 rounded-full bg-pastel-blue/20 px-3 py-1.5 text-xs font-semibold text-pastel-blue-foreground hover:bg-pastel-blue/40"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Abrir / Descarregar
+                  </a>
+                </div>
+                <div className="overflow-hidden rounded-xl border border-border" style={{ height: 500 }}>
+                  <iframe
+                    src={viewerRequest.signed_pdf_url}
+                    className="h-full w-full"
+                    title="PDF assinado"
+                  />
+                </div>
+              </div>
+            ) : viewerRequest?.signature_data ? (
+              /* No signed PDF — show the drawn signature image */
+              <div className="flex flex-col gap-3">
+                <p className="text-sm font-semibold text-foreground">Assinatura digital</p>
+                <div className="flex justify-center rounded-2xl border border-pastel-green/40 bg-pastel-green/10 p-6">
+                  <img
+                    src={viewerRequest.signature_data}
+                    alt="Assinatura"
+                    className="max-h-40 object-contain"
+                  />
+                </div>
+                <p className="text-center text-xs text-muted-foreground">
+                  O documento não tinha um PDF configurado — apenas a assinatura foi guardada.
+                </p>
+              </div>
+            ) : null}
+
+            {/* Signer info */}
+            {viewerRequest?.signer_name && (
+              <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+                <p className="text-xs text-muted-foreground">Assinado por</p>
+                <p className="mt-0.5 text-sm font-semibold text-foreground">{viewerRequest.signer_name}</p>
+                {viewerRequest.signed_at && (
+                  <p className="text-xs text-muted-foreground">{formatDate(viewerRequest.signed_at)}</p>
+                )}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
