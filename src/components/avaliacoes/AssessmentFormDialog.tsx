@@ -177,20 +177,9 @@ export const AssessmentFormDialog = ({
     });
   };
 
-  // Subjects available: if a teacher with a known subject is selected, show only that subject
-  const filteredSubjects = useMemo(() => {
-    if (lockSubjectId) return subjects;
-    const teacher = form.teacher_id ? teachers.find((t) => t.id === form.teacher_id) : null;
-    if (teacher?.subject_id) return subjects.filter((s) => s.id === teacher.subject_id);
-    return subjects;
-  }, [form.teacher_id, teachers, subjects, lockSubjectId]);
-
-  // Teachers available: if a subject is selected, show only teachers for that subject
-  const filteredTeachers = useMemo(() => {
-    if (lockTeacherId) return teachers;
-    if (!form.subject_id) return teachers;
-    return teachers.filter((t) => t.subject_id === form.subject_id);
-  }, [form.subject_id, teachers, lockTeacherId]);
+  // Always show all options — filtering is not applied, only auto-fill and mismatch warning
+  const filteredSubjects = subjects;
+  const filteredTeachers = teachers;
 
   // Detect teacher–subject mismatch (teacher has a subject set but it differs from selected)
   const teacherSubjectMismatch = useMemo(() => {
