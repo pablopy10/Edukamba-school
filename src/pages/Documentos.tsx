@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FolderOpen, Plus, Search, Loader2, FileSignature, FileText, Info,
   CheckCircle2, Clock, XCircle, Pencil, Trash2, AlertTriangle, ExternalLink,
+  Send, Users, Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -54,10 +56,15 @@ type DocumentRequest = {
   status: RequestStatus;
   notes: string | null;
   responded_at: string | null;
+  signed_at: string | null;
+  signer_name: string | null;
   created_at: string;
   document?: Document;
   student?: { full_name: string } | null;
+  recipient?: { full_name: string } | null;
 };
+
+type Classroom = { id: string; name: string };
 
 type DocWithStats = Document & {
   total: number;
@@ -107,8 +114,9 @@ const isExpired = (expires_at: string | null) => {
 export default function Documentos() {
   const { user } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
-  const { schoolId: ctxSchoolId } = useAcademicYear();
+  const { schoolId: ctxSchoolId, selectedYearId } = useAcademicYear();
   const isPrivileged = isSchoolManagementRole(role);
+  const navigate = useNavigate();
 
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<DocWithStats[]>([]);
@@ -116,13 +124,25 @@ export default function Documentos() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [activeTab, setActiveTab] = useState<"todos" | "pendentes">("todos");
+  const [activeTab, setActiveTab] = useState<"todos" | "pendentes" | "respostas">("todos");
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Document | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteDoc, setDeleteDoc] = useState<Document | null>(null);
+
+  // Send requests dialog
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [sendDoc, setSendDoc] = useState<Document | null>(null);
+  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
+  const [selectedClassroom, setSelectedClassroom] = useState<string>("all");
+  const [sendingRequests, setSendingRequests] = useState(false);
+
+  // Admin requests view
+  const [docRequests, setDocRequests] = useState<DocumentRequest[]>([]);
+  const [requestsDocId, setRequestsDocId] = useState<string | null>(null);
+  const [requestsLoading, setRequestsLoading] = useState(false);
 
   // Load school_id from profile
   const loadSchool = useCallback(async () => {
@@ -180,6 +200,101 @@ export default function Documentos() {
     }
     setMyRequests((data ?? []) as DocumentRequest[]);
   }, [user?.id]);
+
+  const loadClassrooms = useCallback(async (sid: string) => {
+    const { data } = await supabase
+      .from("classrooms")
+      .select("id, name")
+      .eq("school_id", sid)
+      .order("name");
+    setClassrooms((data ?? []) as Classroom[]);
+  }, []);
+
+  const loadDocRequests = useCallback(async (docId: string) => {
+    setRequestsLoading(true);
+    const { data, error } = await supabase
+      .from("document_requests")
+      .select("*, student:student_id(full_name), recipient:recipient_profile_id(full_name)")
+      .eq("document_id", docId)
+      .order("created_at", { ascending: false });
+    if (error) {
+      toast({ title: "Erro a carregar respostas", description: error.message, variant: "destructive" });
+    }
+    setDocRequests((data ?? []) as DocumentRequest[]);
+    setRequestsLoading(false);
+  }, []);
+
+  const handleOpenSendDialog = async (doc: Document) => {
+    setSendDoc(doc);
+    setSelectedClassroom("all");
+    setSendDialogOpen(true);
+    if (schoolId) await loadClassrooms(schoolId);
+  };
+
+  const handleSendRequests = async () => {
+    if (!sendDoc || !schoolId) return;
+    setSendingRequests(true);
+
+    // 1. Get students (with parent_id) from enrollments filtered by classroom + year
+    let query = supabase
+      .from("enrollments")
+      .select("student:student_id(id, parent_id, full_name)");
+
+    if (selectedClassroom !== "all") {
+      query = query.eq("classroom_id", selectedClassroom);
+    } else {
+      // Filter by school's classrooms
+      const classroomIds = classrooms.map((c) => c.id);
+      if (classroomIds.length > 0) query = query.in("classroom_id", classroomIds);
+    }
+    if (selectedYearId) query = query.eq("academic_year_id", selectedYearId);
+
+    const { data: enrollments, error: enrErr } = await query;
+    if (enrErr) {
+      toast({ title: "Erro a obter alunos", description: enrErr.message, variant: "destructive" });
+      setSendingRequests(false);
+      return;
+    }
+
+    // 2. Collect unique parent_ids
+    const rows = (enrollments ?? []) as { student: { id: string; parent_id: string | null; full_name: string } | null }[];
+    const seen = new Set<string>();
+    const requests: { document_id: string; recipient_profile_id: string; student_id: string; status: string }[] = [];
+
+    for (const row of rows) {
+      const student = row.student;
+      if (!student) continue;
+      const parentId = student.parent_id;
+      if (!parentId) continue;
+      const key = `${parentId}-${student.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      requests.push({
+        document_id: sendDoc.id,
+        recipient_profile_id: parentId,
+        student_id: student.id,
+        status: "pending",
+      });
+    }
+
+    if (requests.length === 0) {
+      toast({ title: "Nenhum encarregado encontrado", description: "Verifique se os alunos têm encarregado associado.", variant: "destructive" });
+      setSendingRequests(false);
+      return;
+    }
+
+    const { error: insErr } = await supabase.from("document_requests").insert(requests);
+    setSendingRequests(false);
+
+    if (insErr) {
+      toast({ title: "Erro ao enviar pedidos", description: insErr.message, variant: "destructive" });
+      return;
+    }
+
+    toast({ title: `${requests.length} pedido${requests.length > 1 ? "s" : ""} enviado${requests.length > 1 ? "s" : ""}!`, description: `Documento: ${sendDoc.title}` });
+    setSendDialogOpen(false);
+    if (schoolId) await loadDocuments(schoolId);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -353,9 +468,9 @@ export default function Documentos() {
       ) : (
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
           {/* Tab bar */}
-          {!isPrivileged && (
-            <TabsList className="mb-2">
-              <TabsTrigger value="todos">Todos</TabsTrigger>
+          <TabsList className="mb-2">
+            <TabsTrigger value="todos">Todos</TabsTrigger>
+            {!isPrivileged && (
               <TabsTrigger value="pendentes" className="gap-1.5">
                 Pendentes
                 {pendingRequests.length > 0 && (
@@ -364,8 +479,18 @@ export default function Documentos() {
                   </span>
                 )}
               </TabsTrigger>
-            </TabsList>
-          )}
+            )}
+            {isPrivileged && (
+              <TabsTrigger value="respostas" className="gap-1.5">
+                Respostas
+                {requestsDocId && docRequests.length > 0 && (
+                  <span className="rounded-full bg-pastel-blue/60 px-1.5 py-0.5 text-[10px] font-semibold text-pastel-blue-foreground">
+                    {docRequests.length}
+                  </span>
+                )}
+              </TabsTrigger>
+            )}
+          </TabsList>
 
           {/* ── Aba: Todos (admin) / Todos os docs (parent/teacher) ── */}
           <TabsContent value="todos" className="mt-0 flex flex-col gap-4">
@@ -487,7 +612,7 @@ export default function Documentos() {
                         </div>
 
                         {/* Actions */}
-                        <div className="flex shrink-0 items-center gap-1">
+                        <div className="flex shrink-0 flex-wrap items-center gap-1">
                           {doc.file_url && (
                             <a
                               href={doc.file_url}
@@ -501,6 +626,31 @@ export default function Documentos() {
                           )}
                           {isPrivileged && (
                             <>
+                              {/* View responses */}
+                              {doc.total > 0 && (
+                                <button
+                                  onClick={async () => {
+                                    setRequestsDocId(doc.id);
+                                    setActiveTab("respostas");
+                                    await loadDocRequests(doc.id);
+                                  }}
+                                  title="Ver respostas"
+                                  className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/30 hover:text-pastel-blue-foreground"
+                                >
+                                  <Eye className="h-4 w-4" strokeWidth={1.75} />
+                                </button>
+                              )}
+                              {/* Send requests to parents */}
+                              {doc.status === "active" && (
+                                <button
+                                  onClick={() => handleOpenSendDialog(doc)}
+                                  title="Enviar pedidos"
+                                  className="flex h-9 items-center gap-1.5 rounded-full bg-pastel-blue/20 px-3 text-xs font-semibold text-pastel-blue-foreground transition-colors hover:bg-pastel-blue/40"
+                                >
+                                  <Send className="h-3.5 w-3.5" strokeWidth={1.75} />
+                                  Enviar
+                                </button>
+                              )}
                               <button
                                 onClick={() => openEdit(doc)}
                                 title="Editar"
@@ -534,6 +684,67 @@ export default function Documentos() {
               </div>
             )}
           </TabsContent>
+
+          {/* ── Aba: Respostas (admin) ── */}
+          {isPrivileged && (
+            <TabsContent value="respostas" className="mt-0 flex flex-col gap-3">
+              {!requestsDocId ? (
+                <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-card py-16 text-center shadow-soft">
+                  <Eye className="h-10 w-10 text-muted-foreground/40" strokeWidth={1.25} />
+                  <p className="text-sm text-muted-foreground">Clique em "Ver respostas" num documento para ver as respostas aqui.</p>
+                </div>
+              ) : requestsLoading ? (
+                <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="text-sm">A carregar respostas…</span>
+                </div>
+              ) : docRequests.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-card py-16 text-center shadow-soft">
+                  <Users className="h-10 w-10 text-muted-foreground/40" strokeWidth={1.25} />
+                  <p className="text-sm text-muted-foreground">Ainda não há respostas para este documento.</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
+                    <div className="border-b border-border bg-muted/30 px-4 py-3">
+                      <p className="text-sm font-semibold text-foreground">
+                        {documents.find((d) => d.id === requestsDocId)?.title ?? "Respostas"}
+                      </p>
+                    </div>
+                    <div className="divide-y divide-border">
+                      {docRequests.map((req) => {
+                        const statusMeta = REQUEST_STATUS_META[req.status as RequestStatus] ?? REQUEST_STATUS_META.pending;
+                        const StatusIcon = statusMeta.icon;
+                        return (
+                          <div key={req.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-foreground">
+                                {req.recipient?.full_name ?? req.signer_name ?? "—"}
+                              </p>
+                              {req.student && (
+                                <p className="text-xs text-muted-foreground">
+                                  Aluno: {req.student.full_name}
+                                </p>
+                              )}
+                              {req.signed_at && (
+                                <p className="text-xs text-muted-foreground">
+                                  {formatDate(req.signed_at)}
+                                </p>
+                              )}
+                            </div>
+                            <span className={cn("flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold", statusMeta.color)}>
+                              <StatusIcon className="h-3 w-3" />
+                              {statusMeta.label}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+          )}
 
           {/* ── Aba: Pendentes (parent/teacher) ── */}
           {!isPrivileged && (
@@ -583,22 +794,19 @@ export default function Documentos() {
                           </div>
                         </div>
                         <div className="flex shrink-0 flex-wrap gap-2">
-                          {doc.category === "assinatura" && (
+                          {/* Navigate to full sign page for signature/formulario */}
+                          {(doc.category === "assinatura" || doc.category === "formulario") && (
                             <button
-                              onClick={() => handleRespond(req.id, "signed")}
-                              className="flex h-9 items-center gap-1.5 rounded-full bg-pastel-green px-4 text-xs font-semibold text-pastel-green-foreground shadow-soft hover:opacity-90"
+                              onClick={() => navigate(`/documentos/assinar/${req.id}`)}
+                              className={cn(
+                                "flex h-9 items-center gap-1.5 rounded-full px-4 text-xs font-semibold shadow-soft hover:opacity-90",
+                                doc.category === "assinatura"
+                                  ? "bg-pastel-green text-pastel-green-foreground"
+                                  : "bg-pastel-blue text-pastel-blue-foreground",
+                              )}
                             >
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              Assinar
-                            </button>
-                          )}
-                          {doc.category === "formulario" && (
-                            <button
-                              onClick={() => handleRespond(req.id, "submitted")}
-                              className="flex h-9 items-center gap-1.5 rounded-full bg-pastel-blue px-4 text-xs font-semibold text-pastel-blue-foreground shadow-soft hover:opacity-90"
-                            >
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              Submeter
+                              <FileSignature className="h-3.5 w-3.5" />
+                              {doc.category === "assinatura" ? "Assinar" : "Preencher"}
                             </button>
                           )}
                           {doc.category === "informativo" && (
@@ -722,6 +930,64 @@ export default function Documentos() {
             <Button onClick={handleSave} disabled={saving}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {editing ? "Guardar alterações" : "Criar documento"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send requests dialog */}
+      <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-4 w-4" />
+              Enviar pedidos de assinatura
+            </DialogTitle>
+            <DialogDescription>
+              Seleccione a turma destinatária. Será criado um pedido para cada encarregado de educação.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4">
+            <div className="rounded-xl border border-border bg-muted/30 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Documento</p>
+              <p className="mt-1 text-sm font-medium text-foreground">{sendDoc?.title}</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Turma</Label>
+              <Select value={selectedClassroom} onValueChange={setSelectedClassroom}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar turma" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    <span className="flex items-center gap-2">
+                      <Users className="h-3.5 w-3.5" />
+                      Todas as turmas
+                    </span>
+                  </SelectItem>
+                  {classrooms.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Apenas encarregados com aluno matriculado{selectedYearId ? " no ano lectivo seleccionado" : ""} receberão o pedido.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setSendDialogOpen(false)} disabled={sendingRequests}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSendRequests} disabled={sendingRequests}>
+              {sendingRequests ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> A enviar…</>
+              ) : (
+                <><Send className="mr-2 h-4 w-4" /> Enviar pedidos</>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

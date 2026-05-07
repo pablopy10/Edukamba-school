@@ -46,6 +46,7 @@ import Chat from "./pages/Chat.tsx";
 import Pesquisa from "./pages/Pesquisa.tsx";
 import Transportes from "./pages/Transportes.tsx";
 import Documentos from "./pages/Documentos.tsx";
+import DocumentSign from "./pages/DocumentSign.tsx";
 import { ModulesProvider } from "./context/ModulesContext";
 import { AcademicYearProvider } from "./context/AcademicYearContext";
 import { UserRoleProvider, useUserRole } from "./hooks/useUserRole";
@@ -139,6 +140,7 @@ const App = () => (
                         <Route path="/pesquisa" element={<Pesquisa />} />
                         <Route path="/transportes" element={<Transportes />} />
                         <Route path="/documentos" element={<Documentos />} />
+                        <Route path="/documentos/assinar/:requestId" element={<DocumentSign />} />
                         <Route path="*" element={<NotFound />} />
                       </Route>
                     </Route>
