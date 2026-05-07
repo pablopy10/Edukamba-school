@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { CheckCircle2, FileSignature, AlertTriangle, Loader2, ArrowLeft, ExternalLink, FileText, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -9,7 +9,7 @@ import { SignatureCanvas } from "@/components/documents/SignatureCanvas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 type DocCategory = "assinatura" | "formulario" | "informativo";
 
@@ -34,36 +34,54 @@ type DocumentRow = {
   expires_at: string | null;
 };
 
-// ── Embed drawn signature into the PDF at the field positions ─────────────────
+// ── Embed signature image + text field values into the PDF ────────────────────
 async function buildSignedPdf(
   pdfUrl: string,
-  signatureDataUrl: string,
+  signatureDataUrl: string | null,
   fields: SignatureField[],
+  textValues: Record<string, string>,
 ): Promise<Uint8Array> {
   const res = await fetch(pdfUrl);
   const pdfBytes = await res.arrayBuffer();
   const pdfDoc = await PDFDocument.load(pdfBytes);
+  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-  // Convert base64 PNG → bytes
-  const base64 = signatureDataUrl.replace(/^data:image\/png;base64,/, "");
-  const imgBytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-  const pngImage = await pdfDoc.embedPng(imgBytes);
+  let pngImage = null;
+  if (signatureDataUrl) {
+    const base64 = signatureDataUrl.replace(/^data:image\/png;base64,/, "");
+    const imgBytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    pngImage = await pdfDoc.embedPng(imgBytes);
+  }
 
   const pages = pdfDoc.getPages();
 
   for (const field of fields) {
-    if (field.type !== "signature") continue;
     const page = pages[field.page - 1];
     if (!page) continue;
 
     const { width: pw, height: ph } = page.getSize();
-    // Our coords are % from top-left; PDF origin is bottom-left → flip Y
+    // Coords are % from top-left; PDF origin is bottom-left → flip Y
     const x = (field.x / 100) * pw;
     const y = ph - ((field.y + field.h) / 100) * ph;
     const w = (field.w / 100) * pw;
     const h = (field.h / 100) * ph;
 
-    page.drawImage(pngImage, { x, y, width: w, height: h });
+    if (field.type === "signature" && pngImage) {
+      page.drawImage(pngImage, { x, y, width: w, height: h });
+    } else if (field.type === "text") {
+      const value = (textValues[field.id] ?? "").trim();
+      if (value) {
+        const fontSize = Math.max(8, Math.min(h * 0.55, 13));
+        page.drawText(value, {
+          x: x + 3,
+          y: y + 4,
+          size: fontSize,
+          font: helvetica,
+          color: rgb(0, 0, 0),
+          maxWidth: w - 6,
+        });
+      }
+    }
   }
 
   return pdfDoc.save();
@@ -101,6 +119,7 @@ export default function DocumentSign() {
   const [accepted, setAccepted] = useState(false);
   const [signerName, setSignerName] = useState("");
   const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [textFieldValues, setTextFieldValues] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitStep, setSubmitStep] = useState<string>("");
   const [submitted, setSubmitted] = useState(false);
@@ -138,10 +157,21 @@ export default function DocumentSign() {
   const isForm = doc?.category === "formulario";
   const isInfoOnly = doc?.category === "informativo";
 
+  // Text fields configured by the admin on this document
+  const textFields = useMemo(
+    () => (doc?.signature_fields ?? []).filter((f) => f.type === "text"),
+    [doc?.signature_fields],
+  );
+
+  const allTextFieldsFilled = textFields.every(
+    (f) => (textFieldValues[f.id] ?? "").trim().length > 0,
+  );
+
   const canSubmit =
     accepted &&
     signerName.trim().length > 0 &&
-    (!isSignature || signatureData !== null);
+    (!isSignature || signatureData !== null) &&
+    allTextFieldsFilled;
 
   const handleSubmit = async () => {
     if (!request || !canSubmit) return;
@@ -150,16 +180,23 @@ export default function DocumentSign() {
     const newStatus = isSignature ? "signed" : isForm ? "submitted" : "signed";
     const now = new Date().toISOString();
 
-    // ── Embed signature into PDF (if template + fields are configured) ─────
+    // ── Embed signature + text values into PDF (if template + fields configured) ─
     let builtSignedPdfUrl: string | null = null;
 
-    if (signatureData && doc?.pdf_template_url && Array.isArray(doc.signature_fields) && doc.signature_fields.length > 0) {
+    const hasTextValues = Object.values(textFieldValues).some((v) => v.trim());
+    if (
+      doc?.pdf_template_url &&
+      Array.isArray(doc.signature_fields) &&
+      doc.signature_fields.length > 0 &&
+      (signatureData || hasTextValues)
+    ) {
       try {
-        setSubmitStep("A incorporar assinatura no PDF…");
+        setSubmitStep("A incorporar dados no PDF…");
         const pdfBytes = await buildSignedPdf(
           doc.pdf_template_url,
           signatureData,
           doc.signature_fields,
+          textFieldValues,
         );
 
         setSubmitStep("A guardar PDF assinado…");
@@ -389,6 +426,27 @@ export default function DocumentSign() {
               placeholder="Escreva o seu nome completo"
             />
           </div>
+
+          {/* Text fields configured by the admin */}
+          {textFields.length > 0 && (
+            <div className="mb-4 flex flex-col gap-3 rounded-xl border border-pastel-yellow/40 bg-pastel-yellow/10 p-4">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Campos a preencher
+              </p>
+              {textFields.map((field) => (
+                <div key={field.id} className="space-y-1.5">
+                  <Label>{field.label} *</Label>
+                  <Input
+                    value={textFieldValues[field.id] ?? ""}
+                    onChange={(e) =>
+                      setTextFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))
+                    }
+                    placeholder={field.label}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Acceptance checkbox */}
           <label className="mb-5 flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-muted/30 p-3">

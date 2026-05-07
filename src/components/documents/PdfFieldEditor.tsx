@@ -249,6 +249,10 @@ export function PdfFieldEditor({ pdfUrl, initialFields, onSave, onCancel }: Prop
     setSelectedId((s) => (s === id ? null : s));
   }, []);
 
+  const updateFieldLabel = useCallback((id: string, label: string) => {
+    setFields((prev) => prev.map((f) => (f.id === id ? { ...f, label } : f)));
+  }, []);
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -317,6 +321,35 @@ export function PdfFieldEditor({ pdfUrl, initialFields, onSave, onCancel }: Prop
           </Button>
         </div>
       </div>
+
+      {/* Selected field properties — label editor */}
+      {selectedId && (() => {
+        const selectedField = fields.find((f) => f.id === selectedId);
+        if (!selectedField) return null;
+        const meta = TOOL_META[selectedField.type];
+        const Icon = meta.icon;
+        return (
+          <div className="shrink-0 flex flex-wrap items-center gap-3 border-b border-border bg-card px-4 py-2.5">
+            <div className={cn("flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold", meta.color, meta.border)}>
+              <Icon className="h-3 w-3" />
+              {meta.label}
+            </div>
+            <div className="flex flex-1 items-center gap-2 min-w-[200px]">
+              <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Etiqueta:</span>
+              <input
+                type="text"
+                value={selectedField.label}
+                onChange={(e) => updateFieldLabel(selectedField.id, e.target.value)}
+                placeholder="Ex: Nome, Morada, NIF…"
+                className="h-7 flex-1 rounded-lg border border-border bg-background px-2.5 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+              />
+            </div>
+            <p className="hidden text-xs text-muted-foreground sm:block">
+              A etiqueta aparece como título do campo quando o educador assina
+            </p>
+          </div>
+        );
+      })()}
 
       {/* Help hint */}
       {activeTool !== "select" && (
