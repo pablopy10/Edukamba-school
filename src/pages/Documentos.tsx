@@ -1051,17 +1051,6 @@ export default function Documentos() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Conteúdo de texto (opcional)</Label>
-              <Textarea
-                value={form.content_text}
-                onChange={(e) => setForm((f) => ({ ...f, content_text: e.target.value }))}
-                placeholder="Texto do contrato, comunicado ou formulário…"
-                rows={4}
-              />
-              <p className="text-xs text-muted-foreground">Escreva aqui o conteúdo se não tiver PDF para carregar.</p>
-            </div>
-
-            <div className="space-y-1.5">
               <Label>Documento PDF</Label>
               <DocumentUpload
                 schoolId={schoolId}
