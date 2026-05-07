@@ -103,15 +103,17 @@ interface CategoryMeta {
 }
 
 const CATEGORY_META: Record<string, CategoryMeta> = {
-  ENROLLMENT_APPROVED:  { color: "#22c55e", headerIcon: "✅", label: "Matrícula Aprovada" },
-  ATTENDANCE:           { color: "#f59e0b", headerIcon: "⚠️", label: "Registo de Assiduidade" },
-  ASSESSMENT_CREATED:   { color: "#3b82f6", headerIcon: "📝", label: "Nova Avaliação" },
-  ASSESSMENT_REMINDER:  { color: "#8b5cf6", headerIcon: "🔔", label: "Lembrete de Avaliação" },
-  RESULTS_PUBLISHED:    { color: "#06b6d4", headerIcon: "📊", label: "Resultados Publicados" },
-  PAYMENT:              { color: "#ef4444", headerIcon: "💳", label: "Cobrança" },
-  ABSENCE_REQUEST:      { color: "#64748b", headerIcon: "📋", label: "Pedido de Ausência" },
-  MATERIAL_REQUEST:     { color: "#f97316", headerIcon: "📦", label: "Pedido de Material" },
-  LOW_STOCK:            { color: "#dc2626", headerIcon: "⚡", label: "Alerta de Stock" },
+  ENROLLMENT_APPROVED:    { color: "#22c55e", headerIcon: "✅", label: "Matrícula Aprovada" },
+  ATTENDANCE:             { color: "#f59e0b", headerIcon: "⚠️", label: "Registo de Assiduidade" },
+  ASSESSMENT_CREATED:     { color: "#3b82f6", headerIcon: "📝", label: "Nova Avaliação" },
+  ASSESSMENT_REMINDER:    { color: "#8b5cf6", headerIcon: "🔔", label: "Lembrete de Avaliação" },
+  RESULTS_PUBLISHED:      { color: "#06b6d4", headerIcon: "📊", label: "Resultados Publicados" },
+  PAYMENT:                { color: "#ef4444", headerIcon: "💳", label: "Cobrança" },
+  ABSENCE_REQUEST:        { color: "#64748b", headerIcon: "📋", label: "Pedido de Ausência" },
+  MATERIAL_REQUEST:       { color: "#f97316", headerIcon: "📦", label: "Pedido de Material" },
+  LOW_STOCK:              { color: "#dc2626", headerIcon: "⚡", label: "Alerta de Stock" },
+  DOCUMENT_SIGN_REQUEST:  { color: "#3b82f6", headerIcon: "✍️", label: "Documento para Assinar" },
+  DOCUMENT_SIGNED:        { color: "#22c55e", headerIcon: "✅", label: "Documento Assinado" },
 };
 
 function buildHtml(opts: {
