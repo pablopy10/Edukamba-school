@@ -945,17 +945,24 @@ const Pagamentos = () => {
     }
     setRemindingFeeId(fee.id);
     const monthLabel = fee.month_index ? monthNames[fee.month_index - 1] : "";
+    const title = `Lembrete de propina ${monthLabel}`.trim();
+    const description = `A propina de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`;
     const { error } = await supabase.from("notifications").insert({
       recipient_id: parentId,
       school_id: schoolId,
-      title: `Lembrete de propina ${monthLabel}`.trim(),
-      description: `A propina de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      title,
+      description,
       category: "pagamento",
       link: "/financas",
     });
+    if (!error && (fee.student_id ?? fee.student?.id)) {
+      void supabase.functions.invoke("send-cobrar-email", {
+        body: { student_id: fee.student_id ?? fee.student?.id, title, description, link: "/pagamentos" },
+      });
+    }
     setRemindingFeeId(null);
     if (error) toast({ title: "Erro a enviar lembrete", description: error.message, variant: "destructive" });
-    else toast({ title: "Lembrete enviado ao encarregado" });
+    else toast({ title: "Lembrete enviado ao encarregado e ao aluno" });
   };
 
   const sendBulkReminders = async () => {
@@ -1063,17 +1070,24 @@ const Pagamentos = () => {
       return;
     }
     setRemindingActFeeId(fee.id);
+    const title = `Lembrete — ${fee.activity?.name ?? "Atividade"}`;
+    const description = `A cobrança da atividade ${fee.activity?.name ?? ""} de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`;
     const { error } = await supabase.from("notifications").insert({
       recipient_id: parentId,
       school_id: schoolId,
-      title: `Lembrete — ${fee.activity?.name ?? "Atividade"}`,
-      description: `A cobrança da atividade ${fee.activity?.name ?? ""} de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      title,
+      description,
       category: "pagamento",
       link: "/extracurriculares",
     });
+    if (!error) {
+      void supabase.functions.invoke("send-cobrar-email", {
+        body: { student_id: fee.student_id, title, description, link: "/pagamentos" },
+      });
+    }
     setRemindingActFeeId(null);
     if (error) toast({ title: "Erro a enviar lembrete", description: error.message, variant: "destructive" });
-    else toast({ title: "Lembrete enviado ao encarregado" });
+    else toast({ title: "Lembrete enviado ao encarregado e ao aluno" });
   };
 
   const sendActivityBulkReminders = async () => {
@@ -1181,17 +1195,24 @@ const Pagamentos = () => {
       return;
     }
     setRemindingTrFeeId(fee.id);
+    const title = `Lembrete — Transporte (${fee.route?.name ?? "rota"})`;
+    const description = `A cobrança do transporte de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`;
     const { error } = await supabase.from("notifications").insert({
       recipient_id: parentId,
       school_id: schoolId,
-      title: `Lembrete — Transporte (${fee.route?.name ?? "rota"})`,
-      description: `A cobrança do transporte de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      title,
+      description,
       category: "pagamento",
       link: "/transportes",
     });
+    if (!error) {
+      void supabase.functions.invoke("send-cobrar-email", {
+        body: { student_id: fee.student_id, title, description, link: "/pagamentos" },
+      });
+    }
     setRemindingTrFeeId(null);
     if (error) toast({ title: "Erro a enviar lembrete", description: error.message, variant: "destructive" });
-    else toast({ title: "Lembrete enviado ao encarregado" });
+    else toast({ title: "Lembrete enviado ao encarregado e ao aluno" });
   };
 
   const sendTransportBulkReminders = async () => {
@@ -1301,17 +1322,24 @@ const Pagamentos = () => {
     }
     setRemindingEnFeeId(fee.id);
     const label = fee.fee_type === "RENEWAL" ? "renovação de matrícula" : "matrícula";
+    const title = `Lembrete — ${label}`;
+    const description = `A ${label} de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} está por pagar (vencimento: ${new Date(fee.due_date).toLocaleDateString("pt-PT")}).`;
     const { error } = await supabase.from("notifications").insert({
       recipient_id: parentId,
       school_id: schoolId,
-      title: `Lembrete — ${label}`,
-      description: `A ${label} de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} está por pagar (vencimento: ${new Date(fee.due_date).toLocaleDateString("pt-PT")}).`,
+      title,
+      description,
       category: "pagamento",
       link: "/pagamentos",
     });
+    if (!error) {
+      void supabase.functions.invoke("send-cobrar-email", {
+        body: { student_id: fee.student_id, title, description, link: "/pagamentos" },
+      });
+    }
     setRemindingEnFeeId(null);
     if (error) toast({ title: "Erro a enviar lembrete", description: error.message, variant: "destructive" });
-    else toast({ title: "Lembrete enviado ao encarregado" });
+    else toast({ title: "Lembrete enviado ao encarregado e ao aluno" });
   };
 
   if (parentLoading) return <PageLoadingSkeleton />;
