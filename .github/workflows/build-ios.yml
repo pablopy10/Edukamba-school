@@ -1,0 +1,120 @@
+name: Build iOS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Node.js ─────────────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ── 3. Install dependencies ────────────────────────────────────────────
+      - name: Install npm dependencies
+        run: npm ci
+
+      # ── 4. Build web app ───────────────────────────────────────────────────
+      - name: Build Vite web app
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      # ── 5. Add iOS platform (if not already added) ────────────────────────
+      - name: Add iOS platform
+        run: npx cap add ios || echo "iOS platform already exists"
+
+      # ── 6. Sync Capacitor ──────────────────────────────────────────────────
+      - name: Sync Capacitor iOS
+        run: npx cap sync ios
+
+      # ── 7. Install CocoaPods ───────────────────────────────────────────────
+      - name: Install CocoaPods
+        run: |
+          cd ios/App
+          pod install --repo-update
+
+      # ── 8. Import Apple signing certificate ───────────────────────────────
+      - name: Import code signing certificate
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.IOS_DISTRIBUTION_CERT_P12_BASE64 }}
+          p12-password: ${{ secrets.IOS_DISTRIBUTION_CERT_PASSWORD }}
+
+      # ── 9. Install provisioning profile ───────────────────────────────────
+      - name: Install provisioning profile
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}" | base64 --decode \
+            > ~/Library/MobileDevice/Provisioning\ Profiles/edukamba.mobileprovision
+
+      # ── 10. Build .ipa ─────────────────────────────────────────────────────
+      - name: Build iOS archive
+        run: |
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -archivePath $RUNNER_TEMP/Edukamba.xcarchive \
+            archive \
+            CODE_SIGN_STYLE=Manual \
+            PROVISIONING_PROFILE_SPECIFIER="${{ secrets.IOS_PROVISIONING_PROFILE_NAME }}" \
+            CODE_SIGN_IDENTITY="iPhone Distribution"
+
+      # ── 11. Export .ipa ────────────────────────────────────────────────────
+      - name: Export .ipa
+        run: |
+          cat > $RUNNER_TEMP/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.edukamba.app</key>
+              <string>${{ secrets.IOS_PROVISIONING_PROFILE_NAME }}</string>
+            </dict>
+          </dict>
+          </plist>
+          EOF
+
+          xcodebuild \
+            -exportArchive \
+            -archivePath $RUNNER_TEMP/Edukamba.xcarchive \
+            -exportPath $RUNNER_TEMP/ipa \
+            -exportOptionsPlist $RUNNER_TEMP/ExportOptions.plist
+
+      # ── 12. Upload .ipa artifact ───────────────────────────────────────────
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Edukamba-iOS
+          path: ${{ runner.temp }}/ipa/*.ipa
+          retention-days: 30
+
+      # ── 13. (Opcional) Upload para App Store Connect ───────────────────────
+      # Descomenta se quiseres publicar automaticamente na App Store
+      # - name: Upload to App Store Connect
+      #   run: |
+      #     xcrun altool \
+      #       --upload-app \
+      #       --type ios \
+      #       --file "${{ runner.temp }}/ipa/Edukamba.ipa" \
+      #       --apiKey "${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}" \
+      #       --apiIssuer "${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}"
