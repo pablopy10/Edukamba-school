@@ -801,7 +801,18 @@ const Presencas = () => {
 
       return { previousSnapshot };
     },
-    onSuccess: () => {},
+    onSuccess: (_data, vars) => {
+      const { student, date, next } = vars;
+      if (next && ["ABSENT", "LATE", "DISCIPLINARY"].includes(next)) {
+        void supabase.functions.invoke("notify-attendance", {
+          body: {
+            student_id: student.id,
+            status: next,
+            date: fmtISO(date),
+          },
+        });
+      }
+    },
     onError: (e, _vars, ctx) => {
       if (ctx?.previousSnapshot !== undefined) {
         queryClient.setQueryData(attendanceQueryKeyResolved, ctx.previousSnapshot);

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { shouldInitializeOneSignalNative, setOneSignalNativeExternalUser } from "@/lib/oneSignalNative";
 import { setOneSignalExternalUser, shouldInitializeOneSignalWeb } from "@/lib/oneSignalWeb";
+import { initNativePush, isNativePlatform } from "@/lib/nativePush";
 
 /**
  * Liga o External ID OneSignal (= user id Supabase) à sessão (web react-onesignal e/ou Cordova nativo).
@@ -61,7 +62,12 @@ export function OneSignalWebBridge() {
           await applyNativePushPreference(true);
         }
       }
-      
+
+      // iOS/Android: pedir permissão de push nativo e registar token no OneSignal
+      if (userId && isNativePlatform()) {
+        void initNativePush();
+      }
+
       void attachListeners();
     };
 
