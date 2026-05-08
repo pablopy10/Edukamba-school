@@ -374,7 +374,7 @@ const Pagamentos = () => {
           title: `Pagamento registado — ${monthLabel}`.trim(),
           description: `A escola registou o pagamento da propina de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}). Pode consultar o comprovativo no portal.`,
           category: "pagamento",
-          link: "/financas",
+          link: "https://www.edukamba.com/pagamentos",
         });
       } else if (kind === "activity") {
         const f = fee as ActivityFeeRow;
@@ -384,7 +384,7 @@ const Pagamentos = () => {
           title: `Pagamento registado — ${f.activity?.name ?? "atividade"}`,
           description: `A escola registou o pagamento da atividade ${f.activity?.name ?? ""} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}). Pode consultar o comprovativo no portal.`,
           category: "pagamento",
-          link: "/extracurriculares",
+          link: "https://www.edukamba.com/pagamentos",
         });
       } else if (kind === "transport") {
         const f = fee as TransportFeeRow;
@@ -395,7 +395,7 @@ const Pagamentos = () => {
           title: `Pagamento de transporte registado — ${monthLabel}`.trim(),
           description: `A escola registou o pagamento do transporte (${f.route?.name ?? "rota"}) de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).`,
           category: "pagamento",
-          link: "/transportes",
+          link: "https://www.edukamba.com/pagamentos",
         });
       } else {
         const f = fee as EnrollmentFeeRow;
@@ -860,7 +860,7 @@ const Pagamentos = () => {
         title: `Pagamento validado — ${monthLabel}`.trim(),
         description: `O pagamento da propina de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
         category: "pagamento",
-        link: "/financas",
+        link: "https://www.edukamba.com/pagamentos",
       });
     }
     setValidatingId(null);
@@ -895,7 +895,7 @@ const Pagamentos = () => {
         title: `Pagamento rejeitado — ${monthLabel}`.trim(),
         description: `O comprovativo de pagamento de ${fee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}.` : ""} Por favor reenvie o comprovativo correto.`,
         category: "pagamento",
-        link: "/financas",
+        link: "https://www.edukamba.com/pagamentos",
       });
     }
     if (actFee?.student?.parent_id) {
@@ -905,7 +905,7 @@ const Pagamentos = () => {
         title: `Pagamento rejeitado — ${actFee.activity?.name ?? "atividade"}`,
         description: `O comprovativo de pagamento da atividade ${actFee.activity?.name ?? ""} de ${actFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}.` : ""} Por favor reenvie o comprovativo correto.`,
         category: "pagamento",
-        link: "/extracurriculares",
+        link: "https://www.edukamba.com/pagamentos",
       });
     }
     if (trFee?.student?.parent_id) {
@@ -915,7 +915,7 @@ const Pagamentos = () => {
         title: `Pagamento de transporte rejeitado`,
         description: `O comprovativo de pagamento do transporte (${trFee.route?.name ?? "rota"}) de ${trFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}.` : ""} Por favor reenvie o comprovativo correto.`,
         category: "pagamento",
-        link: "/transportes",
+        link: "https://www.edukamba.com/pagamentos",
       });
     }
     if (enFee?.student?.parent_id) {
@@ -953,7 +953,7 @@ const Pagamentos = () => {
       title,
       description,
       category: "pagamento",
-      link: "/financas",
+      link: "https://www.edukamba.com/pagamentos",
     });
     if (!error && (fee.student_id ?? fee.student?.id)) {
       void supabase.functions.invoke("send-cobrar-email", {
@@ -977,7 +977,7 @@ const Pagamentos = () => {
       title: `Lembrete de propina ${f.month_index ? monthNames[f.month_index - 1] : ""}`.trim(),
       description: `A propina de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
       category: "pagamento",
-      link: "/financas",
+      link: "https://www.edukamba.com/pagamentos",
     }));
     const { error } = await supabase.from("notifications").insert(rows);
     if (error) toast({ title: "Erro a enviar lembretes", description: error.message, variant: "destructive" });
@@ -1054,7 +1054,7 @@ const Pagamentos = () => {
         title: `Pagamento validado — ${fee.activity?.name ?? "atividade"}`,
         description: `O pagamento da atividade ${fee.activity?.name ?? ""} de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
         category: "pagamento",
-        link: "/extracurriculares",
+        link: "https://www.edukamba.com/pagamentos",
       });
     }
     setValidatingId(null);
@@ -1078,7 +1078,7 @@ const Pagamentos = () => {
       title,
       description,
       category: "pagamento",
-      link: "/extracurriculares",
+      link: "https://www.edukamba.com/pagamentos",
     });
     if (!error) {
       void supabase.functions.invoke("send-cobrar-email", {
@@ -1102,7 +1102,7 @@ const Pagamentos = () => {
       title: `Lembrete — ${f.activity?.name ?? "Atividade"}`,
       description: `A cobrança da atividade ${f.activity?.name ?? ""} de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
       category: "pagamento",
-      link: "/extracurriculares",
+      link: "https://www.edukamba.com/pagamentos",
     }));
     const { error } = await supabase.from("notifications").insert(rows);
     if (error) toast({ title: "Erro a enviar lembretes", description: error.message, variant: "destructive" });
@@ -1179,7 +1179,7 @@ const Pagamentos = () => {
         title: `Pagamento de transporte validado`,
         description: `O pagamento do transporte (${fee.route?.name ?? "rota"}) de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
         category: "pagamento",
-        link: "/transportes",
+        link: "https://www.edukamba.com/pagamentos",
       });
     }
     setValidatingId(null);
@@ -1203,7 +1203,7 @@ const Pagamentos = () => {
       title,
       description,
       category: "pagamento",
-      link: "/transportes",
+      link: "https://www.edukamba.com/pagamentos",
     });
     if (!error) {
       void supabase.functions.invoke("send-cobrar-email", {
@@ -1227,7 +1227,7 @@ const Pagamentos = () => {
       title: `Lembrete — Transporte (${f.route?.name ?? "rota"})`,
       description: `A cobrança do transporte de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
       category: "pagamento",
-      link: "/transportes",
+      link: "https://www.edukamba.com/pagamentos",
     }));
     const { error } = await supabase.from("notifications").insert(rows);
     if (error) toast({ title: "Erro a enviar lembretes", description: error.message, variant: "destructive" });
