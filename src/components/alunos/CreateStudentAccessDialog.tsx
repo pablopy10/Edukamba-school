@@ -4,9 +4,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, KeyRound, Mail } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 export const ELIGIBLE_GRADES = new Set([
   "Ensino Secundário",
@@ -24,14 +23,12 @@ interface Props {
 }
 
 export const CreateStudentAccessDialog = ({ open, onOpenChange, studentId, studentName, defaultEmail, onCreated }: Props) => {
-  const [mode, setMode] = useState<"invite" | "password">("invite");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setMode("invite");
       setEmail(defaultEmail ?? "");
       setPassword("");
     }
@@ -42,7 +39,7 @@ export const CreateStudentAccessDialog = ({ open, onOpenChange, studentId, stude
       toast({ title: "Email obrigatório", variant: "destructive" });
       return;
     }
-    if (mode === "password" && password.length < 6) {
+    if (password.length < 6) {
       toast({ title: "A password tem de ter pelo menos 6 caracteres", variant: "destructive" });
       return;
     }
@@ -52,16 +49,14 @@ export const CreateStudentAccessDialog = ({ open, onOpenChange, studentId, stude
         body: {
           student_id: studentId,
           email: email.trim(),
-          password: mode === "password" ? password : null,
+          password,
         },
       });
       if (error) throw error;
       if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
       toast({
-        title: mode === "password" ? "Conta criada" : "Convite enviado",
-        description: mode === "password"
-          ? `${studentName} já pode entrar com o email e a password definida.`
-          : `${studentName} vai receber um email para definir a sua password.`,
+        title: "Conta criada",
+        description: `Credenciais enviadas por email para ${email.trim()}.`,
       });
       onCreated?.();
       onOpenChange(false);
@@ -87,40 +82,18 @@ export const CreateStudentAccessDialog = ({ open, onOpenChange, studentId, stude
             <Label htmlFor="st-em">Email do aluno</Label>
             <Input id="st-em" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="aluno@escola.edu" />
           </div>
-
-          <div>
-            <Label className="mb-2 block">Como criar?</Label>
-            <RadioGroup value={mode} onValueChange={(v) => setMode(v as "invite" | "password")} className="grid gap-2">
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 hover:bg-muted/40">
-                <RadioGroupItem value="invite" id="m-invite" className="mt-1" />
-                <div>
-                  <p className="flex items-center gap-2 text-sm font-medium text-foreground"><Mail className="h-4 w-4" /> Enviar convite por email</p>
-                  <p className="text-xs text-muted-foreground">O aluno recebe um email para definir a sua própria password.</p>
-                </div>
-              </label>
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 hover:bg-muted/40">
-                <RadioGroupItem value="password" id="m-pass" className="mt-1" />
-                <div>
-                  <p className="flex items-center gap-2 text-sm font-medium text-foreground"><KeyRound className="h-4 w-4" /> Definir password agora</p>
-                  <p className="text-xs text-muted-foreground">A escola entrega ao aluno o email e a password inicial.</p>
-                </div>
-              </label>
-            </RadioGroup>
+          <div className="space-y-1.5">
+            <Label htmlFor="st-pw">Password inicial *</Label>
+            <Input id="st-pw" type="text" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+            <p className="text-xs text-muted-foreground">O aluno receberá um email com as credenciais de acesso.</p>
           </div>
-
-          {mode === "password" && (
-            <div>
-              <Label htmlFor="st-pw">Password inicial</Label>
-              <Input id="st-pw" type="text" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
-            </div>
-          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancelar</Button>
           <Button onClick={handleSubmit} disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {mode === "password" ? "Criar conta" : "Enviar convite"}
+            Criar conta
           </Button>
         </DialogFooter>
       </DialogContent>

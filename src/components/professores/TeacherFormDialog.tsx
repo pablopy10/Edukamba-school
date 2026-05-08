@@ -53,7 +53,6 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
   const [fieldOfStudy, setFieldOfStudy] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [avatarColor, setAvatarColor] = useState("blue");
-  const [mode, setMode] = useState<"invite" | "password">("invite");
   const [password, setPassword] = useState("");
 
   useEffect(() => {
@@ -73,7 +72,7 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
         setFullName(""); setEmail(""); setPhone(""); setSubjectId("");
         setEmployeeId(""); setHireDate(""); setAvatarColor("blue");
         setEducationInstitution(""); setAcademicDegree("__none__"); setFieldOfStudy(""); setBirthDate("");
-        setMode("invite"); setPassword("");
+        setPassword("");
       }
     }
   }, [open, teacher]);
@@ -111,7 +110,7 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
           toast({ title: "Email obrigatório", variant: "destructive" });
           setLoading(false); return;
         }
-        if (mode === "password" && password.length < 6) {
+        if (password.length < 6) {
           toast({ title: "Password deve ter pelo menos 6 caracteres", variant: "destructive" });
           setLoading(false); return;
         }
@@ -124,14 +123,14 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
             employee_id: employeeId || null,
             hire_date: hireDate || null,
             avatar_color: avatarColor,
-            password: mode === "password" ? password : null,
+            password,
           },
         });
         if (error) throw error;
         if ((data as any)?.error) throw new Error((data as any).error);
         toast({
-          title: mode === "password" ? "Professor criado" : "Convite enviado",
-          description: mode === "password" ? "Conta criada com sucesso." : `Email enviado para ${email}.`,
+          title: "Professor criado",
+          description: `Credenciais enviadas por email para ${email.trim()}.`,
         });
       }
       onSaved();
@@ -232,26 +231,10 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
           </div>
 
           {!isEdit && (
-            <div className="sm:col-span-2 rounded-lg border border-border p-3">
-              <Label>Como criar a conta?</Label>
-              <div className="mt-2 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setMode("invite")}
-                  className={`flex-1 rounded-md border px-3 py-2 text-sm transition ${mode === "invite" ? "border-primary bg-primary/10" : "border-border"}`}
-                >Enviar convite por email</button>
-                <button
-                  type="button"
-                  onClick={() => setMode("password")}
-                  className={`flex-1 rounded-md border px-3 py-2 text-sm transition ${mode === "password" ? "border-primary bg-primary/10" : "border-border"}`}
-                >Definir password</button>
-              </div>
-              {mode === "password" && (
-                <div className="mt-3">
-                  <Label htmlFor="pw">Password (mín. 6 caracteres)</Label>
-                  <Input id="pw" type="text" value={password} onChange={(e) => setPassword(e.target.value)} />
-                </div>
-              )}
+            <div className="sm:col-span-2 space-y-1.5">
+              <Label htmlFor="pw">Password inicial *</Label>
+              <Input id="pw" type="text" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+              <p className="text-xs text-muted-foreground">O professor receberá um email com as credenciais de acesso.</p>
             </div>
           )}
         </div>
@@ -260,7 +243,7 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancelar</Button>
           <Button onClick={handleSubmit} disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEdit ? "Guardar" : (mode === "invite" ? "Enviar convite" : "Criar professor")}
+            {isEdit ? "Guardar" : "Criar professor"}
           </Button>
         </DialogFooter>
       </DialogContent>

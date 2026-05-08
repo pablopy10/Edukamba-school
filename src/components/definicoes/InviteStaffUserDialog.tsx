@@ -48,7 +48,6 @@ export const InviteStaffUserDialog = ({ open, onOpenChange, onInvited }: Props) 
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState<InviteableStaffRole>("SECRETARY");
-  const [mode, setMode] = useState<"invite" | "password">("invite");
   const [password, setPassword] = useState("");
 
   useEffect(() => {
@@ -57,7 +56,6 @@ export const InviteStaffUserDialog = ({ open, onOpenChange, onInvited }: Props) 
     setEmail("");
     setPhone("");
     setRole("SECRETARY");
-    setMode("invite");
     setPassword("");
   }, [open]);
 
@@ -70,7 +68,7 @@ export const InviteStaffUserDialog = ({ open, onOpenChange, onInvited }: Props) 
       toast({ title: "Email obrigatório", variant: "destructive" });
       return;
     }
-    if (mode === "password" && password.length < 6) {
+    if (password.length < 6) {
       toast({ title: "Password (mín. 6 caracteres)", variant: "destructive" });
       return;
     }
@@ -82,17 +80,14 @@ export const InviteStaffUserDialog = ({ open, onOpenChange, onInvited }: Props) 
           email: email.trim(),
           phone: phone.trim() || null,
           role,
-          password: mode === "password" ? password : null,
+          password,
         },
       });
       if (error) throw error;
       if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
       toast({
-        title: mode === "password" ? "Utilizador criado" : "Convite enviado",
-        description:
-          mode === "password"
-            ? "A conta ficou disponível de imediato."
-            : `Correio enviado para ${email.trim()}.`,
+        title: "Utilizador criado",
+        description: `Credenciais enviadas por email para ${email.trim()}.`,
       });
       onInvited();
       onOpenChange(false);
@@ -144,30 +139,10 @@ export const InviteStaffUserDialog = ({ open, onOpenChange, onInvited }: Props) 
             </Select>
           </div>
 
-          <div className="sm:col-span-2 rounded-lg border border-border p-3">
-            <Label>Criação da conta</Label>
-            <div className="mt-2 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setMode("invite")}
-                className={`flex-1 rounded-md border px-3 py-2 text-sm transition ${mode === "invite" ? "border-primary bg-primary/10" : "border-border"}`}
-              >
-                Enviar convite por email
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("password")}
-                className={`flex-1 rounded-md border px-3 py-2 text-sm transition ${mode === "password" ? "border-primary bg-primary/10" : "border-border"}`}
-              >
-                Definir password
-              </button>
-            </div>
-            {mode === "password" && (
-              <div className="mt-3">
-                <Label htmlFor="is-pw">Password (mín. 6 caracteres)</Label>
-                <Input id="is-pw" type="text" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-              </div>
-            )}
+          <div className="sm:col-span-2 space-y-1.5">
+            <Label htmlFor="is-pw">Password inicial *</Label>
+            <Input id="is-pw" type="text" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+            <p className="text-xs text-muted-foreground">O utilizador receberá um email com as credenciais de acesso.</p>
           </div>
         </div>
 
@@ -177,7 +152,7 @@ export const InviteStaffUserDialog = ({ open, onOpenChange, onInvited }: Props) 
           </Button>
           <Button type="button" onClick={() => void submit()} disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {mode === "invite" ? "Enviar convite" : "Criar utilizador"}
+            Criar utilizador
           </Button>
         </DialogFooter>
       </DialogContent>

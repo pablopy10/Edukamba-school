@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { sendCredentialsEmail } from "../_shared/credentials-email.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -98,27 +99,19 @@ Deno.serve(async (req) => {
       role,
       school_id: schoolId,
     };
-    const redirectTo = `${req.headers.get("origin") ?? ""}/auth`;
 
-    let userId: string | null = null;
-
-    if (body.password && (body.password as string).length >= 6) {
-      const { data: created, error: createErr } = await admin.auth.admin.createUser({
-        email,
-        password: body.password as string,
-        email_confirm: true,
-        user_metadata: meta,
-      });
-      if (createErr) throw createErr;
-      userId = created.user?.id ?? null;
-    } else {
-      const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
-        data: meta,
-        redirectTo,
-      });
-      if (inviteErr) throw inviteErr;
-      userId = invited.user?.id ?? null;
+    if (!body.password || (body.password as string).length < 6) {
+      return corsJson({ error: "password obrigatória (mín. 6 caracteres)" }, 400);
     }
+
+    const { data: created, error: createErr } = await admin.auth.admin.createUser({
+      email,
+      password: body.password as string,
+      email_confirm: true,
+      user_metadata: meta,
+    });
+    if (createErr) throw createErr;
+    const userId = created.user?.id ?? null;
 
     if (!userId) throw new Error("Failed to create user");
 
@@ -131,6 +124,23 @@ Deno.serve(async (req) => {
       email,
       is_active: true,
     }, { onConflict: "id" });
+
+    // Send credentials email (fire-and-forget)
+    const brevoKey = Deno.env.get("BREVO_API_KEY");
+    if (brevoKey) {
+      const { data: school } = await admin.from("schools").select("name").eq("id", schoolId).maybeSingle();
+      const origin = req.headers.get("origin") ?? "https://app.edukamba.com";
+      void sendCredentialsEmail({
+        recipientName: fullName,
+        recipientEmail: email,
+        password: body.password as string,
+        loginUrl: `${origin}/auth`,
+        schoolName: school?.name ?? "Edukamba",
+        brevoKey,
+        senderEmail: Deno.env.get("BREVO_SENDER_EMAIL") ?? "noreply@edukamba.com",
+        senderName: Deno.env.get("BREVO_SENDER_NAME") ?? "Edukamba",
+      });
+    }
 
     return corsJson({ user_id: userId }, 200);
   } catch (e) {

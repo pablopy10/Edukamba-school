@@ -36,7 +36,6 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
   const [phone, setPhone] = useState("");
   const [studentIds, setStudentIds] = useState<string[]>([]);
   const [studentSearch, setStudentSearch] = useState("");
-  const [mode, setMode] = useState<"invite" | "password">("invite");
   const [password, setPassword] = useState("");
 
   useEffect(() => {
@@ -48,7 +47,7 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
       } else {
         setFullName(""); setEmail(""); setPhone("");
         setStudentIds([]);
-        setMode("invite"); setPassword("");
+        setPassword("");
       }
       setStudentSearch("");
     }
@@ -90,7 +89,7 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
           toast({ title: "Email obrigatório", variant: "destructive" });
           setLoading(false); return;
         }
-        if (mode === "password" && password.length < 6) {
+        if (password.length < 6) {
           toast({ title: "Password deve ter pelo menos 6 caracteres", variant: "destructive" });
           setLoading(false); return;
         }
@@ -100,14 +99,14 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
             email: email.trim(),
             phone: phone || null,
             student_ids: studentIds,
-            password: mode === "password" ? password : null,
+            password,
           },
         });
         if (error) throw error;
         if ((data as any)?.error) throw new Error((data as any).error);
         toast({
-          title: mode === "password" ? "Educador criado" : "Convite enviado",
-          description: mode === "password" ? "Conta criada com sucesso." : `Email enviado para ${email}.`,
+          title: "Educador criado",
+          description: `Credenciais enviadas por email para ${email.trim()}.`,
         });
       }
       onSaved();
@@ -181,26 +180,10 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
           </div>
 
           {!isEdit && (
-            <div className="sm:col-span-2 rounded-lg border border-border p-3">
-              <Label>Como criar a conta?</Label>
-              <div className="mt-2 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setMode("invite")}
-                  className={`flex-1 rounded-md border px-3 py-2 text-sm transition ${mode === "invite" ? "border-primary bg-primary/10" : "border-border"}`}
-                >Enviar convite por email</button>
-                <button
-                  type="button"
-                  onClick={() => setMode("password")}
-                  className={`flex-1 rounded-md border px-3 py-2 text-sm transition ${mode === "password" ? "border-primary bg-primary/10" : "border-border"}`}
-                >Definir password</button>
-              </div>
-              {mode === "password" && (
-                <div className="mt-3">
-                  <Label htmlFor="gpw">Password (mín. 6 caracteres)</Label>
-                  <Input id="gpw" type="text" value={password} onChange={(e) => setPassword(e.target.value)} />
-                </div>
-              )}
+            <div className="sm:col-span-2 space-y-1.5">
+              <Label htmlFor="gpw">Password inicial *</Label>
+              <Input id="gpw" type="text" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+              <p className="text-xs text-muted-foreground">O educador receberá um email com as credenciais de acesso.</p>
             </div>
           )}
         </div>
@@ -209,7 +192,7 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancelar</Button>
           <Button onClick={handleSubmit} disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEdit ? "Guardar" : (mode === "invite" ? "Enviar convite" : "Criar educador")}
+            {isEdit ? "Guardar" : "Criar educador"}
           </Button>
         </DialogFooter>
       </DialogContent>
