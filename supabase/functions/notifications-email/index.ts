@@ -334,9 +334,13 @@ Deno.serve(async (req) => {
 
   // 4. Resolve relative links to full URLs so Brevo tracking redirects work
   const appUrl = (Deno.env.get("APP_URL") ?? "https://www.edukamba.com").replace(/\/$/, "");
-  const resolvedLink = link
+  let resolvedLink = link
     ? link.startsWith("http") ? link : `${appUrl}${link}`
     : null;
+  // Rewrite any /financas link to /pagamentos (payment emails must land on the payments page)
+  if (resolvedLink && resolvedLink.includes("/financas")) {
+    resolvedLink = "https://www.edukamba.com/pagamentos";
+  }
 
   // 5. Build email
   const htmlContent = buildHtml({ title, description, category, link: resolvedLink, schoolName, recipientName });
