@@ -1,8 +1,37 @@
 diff --git a/node_modules/@capacitor/cli/dist/ios/update.js b/node_modules/@capacitor/cli/dist/ios/update.js
-index 4d87b7b..cad4623 100644
+index 4d87b7b..bec1dfb 100644
 --- a/node_modules/@capacitor/cli/dist/ios/update.js
 +++ b/node_modules/@capacitor/cli/dist/ios/update.js
-@@ -93,7 +93,9 @@ let package = Package(
+@@ -67,6 +67,14 @@ async function generateCordovaPackageFile(p, config) {
+         headersText = `,
+             publicHeadersPath: "."`;
+     }
++    // Add OneSignal iOS SDK via SPM for OnesignalCordovaPlugin
++    const isOneSignal = p.name === 'OnesignalCordovaPlugin';
++    const extraPkgDep = isOneSignal
++        ? `,\n        .package(url: "https://github.com/OneSignal/OneSignal-iOS-SDK.git", from: "5.0.0")`
++        : '';
++    const extraTargetDep = isOneSignal
++        ? `,\n                .product(name: "OneSignalFramework", package: "OneSignal-iOS-SDK")`
++        : '';
+     const content = `// swift-tools-version: 5.9
+ 
+ import PackageDescription
+@@ -81,19 +89,21 @@ let package = Package(
+         )
+     ],
+     dependencies: [
+-        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", from: "${iosPlatformVersion}")
++        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", from: "${iosPlatformVersion}")${extraPkgDep}
+     ],
+     targets: [
+         .target(
+             name: "${p.name}",
+             dependencies: [
+-                .product(name: "Cordova", package: "capacitor-swift-pm")
++                .product(name: "Cordova", package: "capacitor-swift-pm")${extraTargetDep}
+             ],
+             path: "."${headersText}
          )
      ]
  )`;
@@ -13,7 +42,7 @@ index 4d87b7b..cad4623 100644
  }
  async function installCocoaPodsPlugins(config, plugins, deployment) {
      await (0, common_1.runTask)(`Updating iOS native dependencies with ${colors_1.default.input(`${await config.ios.podPath} install`)}`, () => {
-@@ -360,10 +362,12 @@ async function copyPluginsNativeFiles(config, cordovaPlugins) {
+@@ -360,10 +370,12 @@ async function copyPluginsNativeFiles(config, cordovaPlugins) {
          const codeFiles = sourceFiles.concat(headerFiles);
          const frameworks = (0, plugin_1.getPlatformElement)(p, platform, 'framework');
          let sourcesFolderName = 'sources';
