@@ -111,7 +111,9 @@ export async function applyNativePushPreference(wantPush: boolean): Promise<bool
 
   try {
     if (wantPush) {
-      const granted = await OneSignal.Notifications.requestPermission(true);
+      // Timeout de 10s para evitar hang se o Cordova callback não responder (ex: plugin stubado).
+      const timeout = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 10_000));
+      const granted = await Promise.race([OneSignal.Notifications.requestPermission(true), timeout]);
       if (!granted) return false;
       OneSignal.User.pushSubscription.optIn();
       return true;

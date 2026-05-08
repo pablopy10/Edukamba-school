@@ -48,6 +48,12 @@ export function OneSignalWebBridge() {
       if (userId === lastUserRef.current) return;
       lastUserRef.current = userId;
 
+      // iOS/Android: pedir permissão de push nativo via @capacitor/push-notifications PRIMEIRO.
+      // Corre em background (void) para não bloquear o resto do fluxo.
+      if (userId && isNativePlatform()) {
+        void initNativePush();
+      }
+
       if (shouldInitializeOneSignalWeb()) {
         await setOneSignalExternalUser(userId ?? null);
         if (userId) {
@@ -55,23 +61,22 @@ export function OneSignalWebBridge() {
           await applyWebPushPreference(true);
         }
       }
+
+      // OneSignal Cordova plugin: inicializar e associar utilizador.
+      // applyNativePushPreference NÃO é awaited para evitar hang se o Cordova callback não responder.
       if (shouldInitializeOneSignalNative()) {
         await setOneSignalNativeExternalUser(userId ?? null);
         if (userId) {
           const { applyNativePushPreference } = await import("@/lib/oneSignalNative");
-          await applyNativePushPreference(true);
+          void applyNativePushPreference(true);
         }
-      }
-
-      // iOS/Android: pedir permissão de push nativo e registar token no OneSignal
-      if (userId && isNativePlatform()) {
-        void initNativePush();
       }
 
       void attachListeners();
     };
 
-    if (!shouldInitializeOneSignalWeb() && !shouldInitializeOneSignalNative()) return;
+    // Em plataformas nativas, o listener deve sempre ser configurado (independente de env vars).
+    if (!isNativePlatform() && !shouldInitializeOneSignalWeb() && !shouldInitializeOneSignalNative()) return;
 
     void supabase.auth.getSession().then(({ data }) => {
       void run(data.session?.user?.id);
