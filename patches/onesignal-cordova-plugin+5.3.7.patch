@@ -12,3 +12,37 @@ index 1d0a3e0..805381a 100644
  }
  
  gradle.afterProject { project ->
+diff --git a/node_modules/onesignal-cordova-plugin/ios/OnesignalCordovaPlugin/OnesignalCordovaPlugin.swift b/node_modules/onesignal-cordova-plugin/ios/OnesignalCordovaPlugin/OnesignalCordovaPlugin.swift
+new file mode 100644
+index 0000000..1231ec4
+--- /dev/null
++++ b/node_modules/onesignal-cordova-plugin/ios/OnesignalCordovaPlugin/OnesignalCordovaPlugin.swift
+@@ -0,0 +1,3 @@
++// OneSignal Cordova Plugin — SPM stub for Capacitor 8
++import Foundation
++public enum OnesignalCordovaPlugin {}
+diff --git a/node_modules/onesignal-cordova-plugin/ios/OnesignalCordovaPlugin/Package.swift b/node_modules/onesignal-cordova-plugin/ios/OnesignalCordovaPlugin/Package.swift
+new file mode 100644
+index 0000000..f2121cc
+--- /dev/null
++++ b/node_modules/onesignal-cordova-plugin/ios/OnesignalCordovaPlugin/Package.swift
+@@ -0,0 +1,19 @@
++// swift-tools-version: 5.9
++import PackageDescription
++
++let package = Package(
++    name: "OnesignalCordovaPlugin",
++    platforms: [.iOS(.v15)],
++    products: [
++        .library(
++            name: "OnesignalCordovaPlugin",
++            targets: ["OnesignalCordovaPlugin"]
++        )
++    ],
++    targets: [
++        .target(
++            name: "OnesignalCordovaPlugin",
++            path: "."
++        )
++    ]
++)
