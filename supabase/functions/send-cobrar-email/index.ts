@@ -160,8 +160,10 @@ Deno.serve(async (req) => {
     const schoolName = school?.name ?? "Edukamba";
     const senderEmail = Deno.env.get("BREVO_SENDER_EMAIL") ?? "noreply@edukamba.com";
     const senderName = Deno.env.get("BREVO_SENDER_NAME") ?? "Edukamba";
-    const origin = req.headers.get("origin") ?? "https://app.edukamba.com";
-    const loginUrl = `${origin}${body.link ?? "/pagamentos"}`;
+
+    // body.link is always a full URL sent from the frontend (window.location.origin + path)
+    const rawLink = body.link ?? "";
+    const loginUrl = rawLink.startsWith("http") ? rawLink : `https://app.edukamba.com/pagamentos`;
 
     const sends: Promise<void>[] = [];
 

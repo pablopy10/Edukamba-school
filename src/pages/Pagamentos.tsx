@@ -957,7 +957,7 @@ const Pagamentos = () => {
     });
     if (!error && (fee.student_id ?? fee.student?.id)) {
       void supabase.functions.invoke("send-cobrar-email", {
-        body: { student_id: fee.student_id ?? fee.student?.id, title, description, link: "/pagamentos" },
+        body: { student_id: fee.student_id ?? fee.student?.id, title, description, link: `${window.location.origin}/pagamentos` },
       });
     }
     setRemindingFeeId(null);
@@ -1082,7 +1082,7 @@ const Pagamentos = () => {
     });
     if (!error) {
       void supabase.functions.invoke("send-cobrar-email", {
-        body: { student_id: fee.student_id, title, description, link: "/pagamentos" },
+        body: { student_id: fee.student_id, title, description, link: `${window.location.origin}/pagamentos` },
       });
     }
     setRemindingActFeeId(null);
@@ -1207,7 +1207,7 @@ const Pagamentos = () => {
     });
     if (!error) {
       void supabase.functions.invoke("send-cobrar-email", {
-        body: { student_id: fee.student_id, title, description, link: "/pagamentos" },
+        body: { student_id: fee.student_id, title, description, link: `${window.location.origin}/pagamentos` },
       });
     }
     setRemindingTrFeeId(null);
@@ -1334,7 +1334,7 @@ const Pagamentos = () => {
     });
     if (!error) {
       void supabase.functions.invoke("send-cobrar-email", {
-        body: { student_id: fee.student_id, title, description, link: "/pagamentos" },
+        body: { student_id: fee.student_id, title, description, link: `${window.location.origin}/pagamentos` },
       });
     }
     setRemindingEnFeeId(null);
