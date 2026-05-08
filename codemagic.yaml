@@ -1,0 +1,69 @@
+workflows:
+  ios-app-store:
+    name: Edukamba iOS — App Store
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    integrations:
+      app_store_connect: App Store Connect API  # nome da integração no Codemagic
+
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.edukamba.app
+      vars:
+        BUNDLE_ID: com.edukamba.app
+        XCODE_WORKSPACE: ios/App/App.xcworkspace
+        XCODE_SCHEME: App
+      node: 20.x
+
+    scripts:
+      # ── 1. Instalar dependências npm ──────────────────────────────────────
+      - name: Install npm dependencies
+        script: npm ci
+
+      # ── 2. Build Vite ─────────────────────────────────────────────────────
+      - name: Build web app
+        script: npm run build
+        environment:
+          VITE_SUPABASE_URL: $VITE_SUPABASE_URL
+          VITE_SUPABASE_ANON_KEY: $VITE_SUPABASE_ANON_KEY
+
+      # ── 3. Sincronizar Capacitor iOS ──────────────────────────────────────
+      - name: Sync Capacitor iOS
+        script: npx cap sync ios
+
+      # ── 4. Instalar CocoaPods ─────────────────────────────────────────────
+      - name: Install CocoaPods
+        script: |
+          cd ios/App
+          pod install --repo-update
+
+      # ── 5. Configurar assinatura de código ────────────────────────────────
+      - name: Set up code signing
+        script: |
+          xcode-project use-profiles
+
+      # ── 6. Build e archive ────────────────────────────────────────────────
+      - name: Build iOS
+        script: |
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true   # muda para false se não quiseres publicar no TestFlight
+        submit_to_app_store: false   # muda para true para publicar na App Store
+
+      email:
+        recipients:
+          - paulo@edukamba.com       # altera para o teu email
+        notify:
+          success: true
+          failure: true
