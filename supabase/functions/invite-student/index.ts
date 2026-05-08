@@ -191,7 +191,7 @@ Deno.serve(async (req) => {
     const brevoKey = Deno.env.get("BREVO_API_KEY");
     if (brevoKey) {
       const { data: school } = await admin.from("schools").select("name").eq("id", callerProfile.school_id).maybeSingle();
-      const origin = req.headers.get("origin") ?? "https://app.edukamba.com";
+      const origin = req.headers.get("origin") ?? "https://www.edukamba.com";
       void sendCredentialsEmail({
         recipientName: student.full_name,
         recipientEmail: body.email,

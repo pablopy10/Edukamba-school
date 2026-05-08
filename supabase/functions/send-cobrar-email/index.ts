@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
 
     // body.link is always a full URL sent from the frontend (window.location.origin + path)
     const rawLink = body.link ?? "";
-    const loginUrl = rawLink.startsWith("http") ? rawLink : `https://app.edukamba.com/pagamentos`;
+    const loginUrl = rawLink.startsWith("http") ? rawLink : `https://www.edukamba.com/pagamentos`;
 
     const sends: Promise<void>[] = [];
 

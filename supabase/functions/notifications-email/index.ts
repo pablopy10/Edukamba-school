@@ -333,7 +333,7 @@ Deno.serve(async (req) => {
   }
 
   // 4. Resolve relative links to full URLs so Brevo tracking redirects work
-  const appUrl = (Deno.env.get("APP_URL") ?? "https://app.edukamba.com").replace(/\/$/, "");
+  const appUrl = (Deno.env.get("APP_URL") ?? "https://www.edukamba.com").replace(/\/$/, "");
   const resolvedLink = link
     ? link.startsWith("http") ? link : `${appUrl}${link}`
     : null;

@@ -406,7 +406,7 @@ const Pagamentos = () => {
           title: `Pagamento de ${label} registado`,
           description: `A escola registou o pagamento da ${label} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).`,
           category: "pagamento",
-          link: "/pagamentos",
+          link: "https://www.edukamba.com/pagamentos",
         });
       }
     }
@@ -926,7 +926,7 @@ const Pagamentos = () => {
         title: `Pagamento de ${lbl} rejeitado`,
         description: `O comprovativo do pagamento da ${lbl} de ${enFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}.` : ""} Por favor reenvie o comprovativo correto.`,
         category: "pagamento",
-        link: "/pagamentos",
+        link: "https://www.edukamba.com/pagamentos",
       });
     }
     setValidatingId(null);
@@ -957,7 +957,7 @@ const Pagamentos = () => {
     });
     if (!error && (fee.student_id ?? fee.student?.id)) {
       void supabase.functions.invoke("send-cobrar-email", {
-        body: { student_id: fee.student_id ?? fee.student?.id, title, description, link: `${window.location.origin}/pagamentos` },
+        body: { student_id: fee.student_id ?? fee.student?.id, title, description, link: `https://www.edukamba.com/pagamentos` },
       });
     }
     setRemindingFeeId(null);
@@ -1082,7 +1082,7 @@ const Pagamentos = () => {
     });
     if (!error) {
       void supabase.functions.invoke("send-cobrar-email", {
-        body: { student_id: fee.student_id, title, description, link: `${window.location.origin}/pagamentos` },
+        body: { student_id: fee.student_id, title, description, link: `https://www.edukamba.com/pagamentos` },
       });
     }
     setRemindingActFeeId(null);
@@ -1207,7 +1207,7 @@ const Pagamentos = () => {
     });
     if (!error) {
       void supabase.functions.invoke("send-cobrar-email", {
-        body: { student_id: fee.student_id, title, description, link: `${window.location.origin}/pagamentos` },
+        body: { student_id: fee.student_id, title, description, link: `https://www.edukamba.com/pagamentos` },
       });
     }
     setRemindingTrFeeId(null);
@@ -1305,7 +1305,7 @@ const Pagamentos = () => {
         title: `Pagamento de ${label} validado`,
         description: `O pagamento da ${label} de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
         category: "pagamento",
-        link: "/pagamentos",
+        link: "https://www.edukamba.com/pagamentos",
       });
     }
     setValidatingId(null);
@@ -1330,11 +1330,11 @@ const Pagamentos = () => {
       title,
       description,
       category: "pagamento",
-      link: "/pagamentos",
+      link: "https://www.edukamba.com/pagamentos",
     });
     if (!error) {
       void supabase.functions.invoke("send-cobrar-email", {
-        body: { student_id: fee.student_id, title, description, link: `${window.location.origin}/pagamentos` },
+        body: { student_id: fee.student_id, title, description, link: `https://www.edukamba.com/pagamentos` },
       });
     }
     setRemindingEnFeeId(null);
