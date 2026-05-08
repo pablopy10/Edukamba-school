@@ -332,10 +332,16 @@ Deno.serve(async (req) => {
     if (school?.name) schoolName = school.name;
   }
 
-  // 4. Build email
-  const htmlContent = buildHtml({ title, description, category, link, schoolName, recipientName });
+  // 4. Resolve relative links to full URLs so Brevo tracking redirects work
+  const appUrl = (Deno.env.get("APP_URL") ?? "https://app.edukamba.com").replace(/\/$/, "");
+  const resolvedLink = link
+    ? link.startsWith("http") ? link : `${appUrl}${link}`
+    : null;
 
-  // 5. Send via Brevo
+  // 5. Build email
+  const htmlContent = buildHtml({ title, description, category, link: resolvedLink, schoolName, recipientName });
+
+  // 6. Send via Brevo
   const brevoPayload = {
     sender: { name: senderName, email: senderEmail },
     to: [{ email: recipientEmail, name: recipientName }],
