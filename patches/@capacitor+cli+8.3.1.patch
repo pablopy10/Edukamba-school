@@ -1,5 +1,5 @@
 diff --git a/node_modules/@capacitor/cli/dist/ios/update.js b/node_modules/@capacitor/cli/dist/ios/update.js
-index 4d87b7b..b9794f8 100644
+index 4d87b7b..cad4623 100644
 --- a/node_modules/@capacitor/cli/dist/ios/update.js
 +++ b/node_modules/@capacitor/cli/dist/ios/update.js
 @@ -93,7 +93,9 @@ let package = Package(
@@ -13,3 +13,17 @@ index 4d87b7b..b9794f8 100644
  }
  async function installCocoaPodsPlugins(config, plugins, deployment) {
      await (0, common_1.runTask)(`Updating iOS native dependencies with ${colors_1.default.input(`${await config.ios.podPath} install`)}`, () => {
+@@ -360,10 +362,12 @@ async function copyPluginsNativeFiles(config, cordovaPlugins) {
+         const codeFiles = sourceFiles.concat(headerFiles);
+         const frameworks = (0, plugin_1.getPlatformElement)(p, platform, 'framework');
+         let sourcesFolderName = 'sources';
+-        if ((0, cordova_1.needsStaticPod)(p)) {
++        const isSPM = (await config.ios.packageManager) === 'SPM';
++        if (!isSPM && (0, cordova_1.needsStaticPod)(p)) {
+             sourcesFolderName += 'static';
+         }
+         const sourcesFolder = (0, path_1.join)(config.ios.cordovaPluginsDirAbs, sourcesFolderName, p.name);
++        await (0, fs_extra_1.ensureDir)(sourcesFolder);
+         for (const codeFile of codeFiles) {
+             let fileName = codeFile.$.src.split('/').pop();
+             const fileExt = codeFile.$.src.split('.').pop();

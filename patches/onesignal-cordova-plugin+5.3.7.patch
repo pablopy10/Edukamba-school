@@ -1,48 +1,1054 @@
-diff --git a/node_modules/onesignal-cordova-plugin/build-extras-onesignal.gradle b/node_modules/onesignal-cordova-plugin/build-extras-onesignal.gradle
-index 1d0a3e0..805381a 100644
---- a/node_modules/onesignal-cordova-plugin/build-extras-onesignal.gradle
-+++ b/node_modules/onesignal-cordova-plugin/build-extras-onesignal.gradle
-@@ -2,7 +2,8 @@ import java.nio.file.Files
+diff --git a/node_modules/onesignal-cordova-plugin/src/ios/OneSignalPush.h b/node_modules/onesignal-cordova-plugin/src/ios/OneSignalPush.h
+index e907318..71e3e5d 100644
+--- a/node_modules/onesignal-cordova-plugin/src/ios/OneSignalPush.h
++++ b/node_modules/onesignal-cordova-plugin/src/ios/OneSignalPush.h
+@@ -1,44 +1,11 @@
+-/**
+- * Modified MIT License
+- *
+- * Copyright 2021 OneSignal
+- *
+- * Permission is hereby granted, free of charge, to any person obtaining a copy
+- * of this software and associated documentation files (the "Software"), to deal
+- * in the Software without restriction, including without limitation the rights
+- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+- * copies of the Software, and to permit persons to whom the Software is
+- * furnished to do so, subject to the following conditions:
+- *
+- * 1. The above copyright notice and this permission notice shall be included in
+- * all copies or substantial portions of the Software.
+- *
+- * 2. All copies of substantial portions of the Software may only be used in
+- * connection with services provided by OneSignal.
+- *
+- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+- * THE SOFTWARE.
+- */
+-
++// OneSignal Cordova Plugin — iOS stub for Capacitor 8 SPM builds.
++// Push notifications are provided via web SDK and future native Capacitor plugin.
+ #import <Cordova/CDV.h>
+ #import <Cordova/CDVPlugin.h>
+ #import <Foundation/Foundation.h>
  
- // Required for Android Support Library 26.0.0+ and Google Play services 11.+
- repositories {
--  maven { url 'https://maven.google.com' }
-+  google()
-+  mavenCentral()
- }
+-#import <OneSignalFramework/OneSignalFramework.h>
+-
+-@interface OneSignalPush
+-    : CDVPlugin <OSNotificationPermissionObserver,
+-                 OSNotificationLifecycleListener, OSNotificationClickListener,
+-                 OSPushSubscriptionObserver, OSInAppMessageLifecycleListener,
+-                 OSInAppMessageClickListener, OSUserStateObserver>
+-
+-- (void)setProvidesNotificationSettingsView:
+-    (CDVInvokedUrlCommand *_Nonnull)command;
++@interface OneSignalPush : CDVPlugin
++- (void)setProvidesNotificationSettingsView:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)addForegroundLifecycleListener:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)onWillDisplayNotification:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)onClickNotification:(CDVInvokedUrlCommand *_Nonnull)command;
+@@ -47,96 +14,62 @@
+ - (void)displayNotification:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)addNotificationClickListener:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)init:(CDVInvokedUrlCommand *_Nonnull)command;
+-
+ - (void)setLogLevel:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)setAlertLevel:(CDVInvokedUrlCommand *_Nonnull)command;
+-
+ - (void)login:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)logout:(CDVInvokedUrlCommand *_Nonnull)command;
+-
+ - (void)addTags:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)removeTags:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)getTags:(CDVInvokedUrlCommand *_Nonnull)command;
+-
+ - (void)addUserStateObserver:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)getOnesignalId:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)getExternalId:(CDVInvokedUrlCommand *_Nonnull)command;
+-
+-// Push Subscription
+ - (void)addPushSubscriptionObserver:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)getPushSubscriptionId:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)getPushSubscriptionToken:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)getPushSubscriptionOptedIn:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)optInPushSubscription:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)optOutPushSubscription:(CDVInvokedUrlCommand *_Nonnull)command;
+-
+-// Notifications
+ - (void)addPermissionObserver:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)requestPermission:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)getPermissionInternal:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)permissionNative:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)canRequestPermission:(CDVInvokedUrlCommand *_Nonnull)command;
+-- (void)registerForProvisionalAuthorization:
+-    (CDVInvokedUrlCommand *_Nonnull)command;
++- (void)registerForProvisionalAuthorization:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)clearAllNotifications:(CDVInvokedUrlCommand *_Nonnull)command;
+-
+-// Android Only - Notifications
+ - (void)removeNotification:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)removeGroupedNotifications:(CDVInvokedUrlCommand *_Nonnull)command;
+-
+ - (void)setPrivacyConsentRequired:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)setPrivacyConsentGiven:(CDVInvokedUrlCommand *_Nonnull)command;
+-
+-// Aliases
+ - (void)addAliases:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)removeAliases:(CDVInvokedUrlCommand *_Nonnull)command;
+-
+-// Email
+ - (void)addEmail:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)removeEmail:(CDVInvokedUrlCommand *_Nonnull)command;
+-
+-// SMS
+ - (void)addSms:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)removeSms:(CDVInvokedUrlCommand *_Nonnull)command;
+-
+-// In-App Messages
+ - (void)setInAppMessageClickHandler:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)onClickInAppMessage:(CDVInvokedUrlCommand *_Nonnull)command;
+-- (void)setOnWillDisplayInAppMessageHandler:
+-    (CDVInvokedUrlCommand *_Nonnull)command;
+-- (void)setOnDidDisplayInAppMessageHandler:
+-    (CDVInvokedUrlCommand *_Nonnull)command;
+-- (void)setOnWillDismissInAppMessageHandler:
+-    (CDVInvokedUrlCommand *_Nonnull)command;
+-- (void)setOnDidDismissInAppMessageHandler:
+-    (CDVInvokedUrlCommand *_Nonnull)command;
++- (void)setOnWillDisplayInAppMessageHandler:(CDVInvokedUrlCommand *_Nonnull)command;
++- (void)setOnDidDisplayInAppMessageHandler:(CDVInvokedUrlCommand *_Nonnull)command;
++- (void)setOnWillDismissInAppMessageHandler:(CDVInvokedUrlCommand *_Nonnull)command;
++- (void)setOnDidDismissInAppMessageHandler:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)addTriggers:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)removeTriggers:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)clearTriggers:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)setPaused:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)isPaused:(CDVInvokedUrlCommand *_Nonnull)command;
+-
+-// Outcomes
+ - (void)addOutcome:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)addUniqueOutcome:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)addOutcomeWithValue:(CDVInvokedUrlCommand *_Nonnull)command;
+-
+-// Custom Events
+ - (void)trackEvent:(CDVInvokedUrlCommand *_Nonnull)command;
+-
+-// Location
+ - (void)requestLocationPermission:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)setLocationShared:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)isLocationShared:(CDVInvokedUrlCommand *_Nonnull)command;
+-
+ - (void)setLanguage:(CDVInvokedUrlCommand *_Nonnull)command;
+-
+-// Live Activity
+ - (void)enterLiveActivity:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)exitLiveActivity:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)setPushToStartToken:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)removePushToStartToken:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)setupDefaultLiveActivity:(CDVInvokedUrlCommand *_Nonnull)command;
+ - (void)startDefaultLiveActivity:(CDVInvokedUrlCommand *_Nonnull)command;
+-
+ @end
+diff --git a/node_modules/onesignal-cordova-plugin/src/ios/OneSignalPush.m b/node_modules/onesignal-cordova-plugin/src/ios/OneSignalPush.m
+index 2527531..1793054 100644
+--- a/node_modules/onesignal-cordova-plugin/src/ios/OneSignalPush.m
++++ b/node_modules/onesignal-cordova-plugin/src/ios/OneSignalPush.m
+@@ -1,825 +1,73 @@
+-/**
+- * Modified MIT License
+- *
+- * Copyright 2021 OneSignal
+- *
+- * Permission is hereby granted, free of charge, to any person obtaining a copy
+- * of this software and associated documentation files (the "Software"), to deal
+- * in the Software without restriction, including without limitation the rights
+- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+- * copies of the Software, and to permit persons to whom the Software is
+- * furnished to do so, subject to the following conditions:
+- *
+- * 1. The above copyright notice and this permission notice shall be included in
+- * all copies or substantial portions of the Software.
+- *
+- * 2. All copies of substantial portions of the Software may only be used in
+- * connection with services provided by OneSignal.
+- *
+- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+- * THE SOFTWARE.
+- */
+-
+-#import <UIKit/UIKit.h>
+-#import <objc/runtime.h>
+-
+-#import "OneSignalLiveActivities/OneSignalLiveActivities-Swift.h"
++// OneSignal Cordova Plugin — iOS stub for Capacitor 8 SPM builds.
++// All methods are intentional no-ops; push is handled by web SDK.
+ #import "OneSignalPush.h"
+-#import <OneSignalFramework/OneSignalFramework.h>
+-
+-NSString *notificationWillShowInForegoundCallbackId;
+-NSString *notificationClickedCallbackId;
+-NSString *permissionObserverCallbackId;
+-NSString *subscriptionObserverCallbackId;
+-NSString *requestPermissionCallbackId;
+-NSString *registerForProvisionalAuthorizationCallbackId;
+-NSString *enterLiveActivityCallbackId;
+-NSString *exitLiveActivityCallbackId;
+-
+-NSString *inAppMessageWillDisplayCallbackId;
+-NSString *inAppMessageDidDisplayCallbackId;
+-NSString *inAppMessageWillDismissCallbackId;
+-NSString *inAppMessageDidDismissCallbackId;
+-NSString *inAppMessageClickedCallbackId;
+-NSString *userObserverCallbackId;
+-
+-OSNotificationClickEvent *actionNotification;
+-OSNotification *notification;
+-
+-id<CDVCommandDelegate> pluginCommandDelegate;
+-
+-bool initDone = false;
+-
+-void successCallback(NSString *callbackId, NSDictionary *data) {
+-  CDVPluginResult *commandResult =
+-      [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
+-                    messageAsDictionary:data];
+-  commandResult.keepCallback = @1;
+-  [pluginCommandDelegate sendPluginResult:commandResult callbackId:callbackId];
+-}
+-
+-void successCallbackBoolean(NSString *callbackId, bool param) {
+-  CDVPluginResult *commandResult =
+-      [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
+-                          messageAsBool:param];
+-  commandResult.keepCallback = @1;
+-  [pluginCommandDelegate sendPluginResult:commandResult callbackId:callbackId];
+-}
+-
+-void successCallbackNSInteger(NSString *callbackId, int param) {
+-  CDVPluginResult *commandResult =
+-      [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
+-                     messageAsNSInteger:param];
+-  commandResult.keepCallback = @1;
+-  [pluginCommandDelegate sendPluginResult:commandResult callbackId:callbackId];
+-}
+-
+-void successCallbackString(NSString *callbackId, NSString *param) {
+-  CDVPluginResult *commandResult =
+-      [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
+-                        messageAsString:param];
+-  commandResult.keepCallback = @1;
+-  [pluginCommandDelegate sendPluginResult:commandResult callbackId:callbackId];
+-}
+-
+-void failureCallback(NSString *callbackId, NSDictionary *data) {
+-  CDVPluginResult *commandResult =
+-      [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR
+-                    messageAsDictionary:data];
+-  commandResult.keepCallback = @1;
+-  [pluginCommandDelegate sendPluginResult:commandResult callbackId:callbackId];
+-}
+-
+-void processForegroundLifecycleListener(
+-    OSNotificationWillDisplayEvent *_notif) {
+-  NSString *data = [_notif.notification stringify];
+-  NSError *jsonError;
+-  NSData *objectData = [data dataUsingEncoding:NSUTF8StringEncoding];
+-  NSDictionary *json =
+-      [NSJSONSerialization JSONObjectWithData:objectData
+-                                      options:NSJSONReadingMutableContainers
+-                                        error:&jsonError];
+-  if (!jsonError) {
+-    successCallback(notificationWillShowInForegoundCallbackId, json);
+-    notification = nil;
+-  }
+-}
+-
+-void processNotificationClicked(OSNotificationClickEvent *event) {
+-  if (notificationClickedCallbackId != nil) {
+-    successCallback(notificationClickedCallbackId, [event jsonRepresentation]);
+-    actionNotification = nil;
+-  }
+-}
+-
+-void initOneSignalObject(NSDictionary *launchOptions) {
+-  OneSignalWrapper.sdkType = @"cordova";
+-  OneSignalWrapper.sdkVersion = @"050307";
+-  [OneSignal initialize:nil withLaunchOptions:launchOptions];
+-}
+-
+-/** Helper method to return NSNull if string is empty or nil **/
+-NSString *getStringOrNSNull(NSString *string) {
+-  // length method can be used on nil and strings
+-  if (string.length > 0) {
+-    return string;
+-  } else {
+-    return [NSNull null];
+-  }
+-}
+-
+-@implementation UIApplication (OneSignalCordovaPush)
+-
+-static void injectSelectorCordova(Class newClass, SEL newSel, Class addToClass,
+-                                  SEL makeLikeSel) {
+-  Method newMeth = class_getInstanceMethod(newClass, newSel);
+-  IMP imp = method_getImplementation(newMeth);
+-  const char *methodTypeEncoding = method_getTypeEncoding(newMeth);
+-
+-  BOOL successful =
+-      class_addMethod(addToClass, makeLikeSel, imp, methodTypeEncoding);
+-  if (!successful) {
+-    class_addMethod(addToClass, newSel, imp, methodTypeEncoding);
+-    newMeth = class_getInstanceMethod(addToClass, newSel);
+-
+-    Method orgMeth = class_getInstanceMethod(addToClass, makeLikeSel);
+-
+-    method_exchangeImplementations(orgMeth, newMeth);
+-  }
+-}
+-
+-+ (void)load {
+-  method_exchangeImplementations(
+-      class_getInstanceMethod(self, @selector(setDelegate:)),
+-      class_getInstanceMethod(self, @selector(setOneSignalCordovaDelegate:)));
+-}
+-
+-static Class delegateClass = nil;
+-
+-- (void)setOneSignalCordovaDelegate:(id<UIApplicationDelegate>)delegate {
+-  if (delegateClass != nil)
+-    return;
+-  delegateClass = [delegate class];
+-
+-  injectSelectorCordova(
+-      self.class,
+-      @selector(oneSignalApplication:didFinishLaunchingWithOptions:),
+-      delegateClass, @selector(application:didFinishLaunchingWithOptions:));
+-  [self setOneSignalCordovaDelegate:delegate];
+-}
+-
+-- (BOOL)oneSignalApplication:(UIApplication *)application
+-    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+-  initOneSignalObject(launchOptions);
+-
+-  if ([self respondsToSelector:
+-                @selector(oneSignalApplication:didFinishLaunchingWithOptions:)])
+-    return [self oneSignalApplication:application
+-        didFinishLaunchingWithOptions:launchOptions];
+-  return YES;
+-}
+-
+-@end
+-
+-@interface OneSignalPush ()
+-
+-@property(strong, nonatomic) NSMutableDictionary *notificationWillDisplayCache;
+-@property(strong, nonatomic) NSMutableDictionary *preventDefaultCache;
+-
+-@end
  
- gradle.afterProject { project ->
-diff --git a/node_modules/onesignal-cordova-plugin/ios/OnesignalCordovaPlugin/OnesignalCordovaPlugin.swift b/node_modules/onesignal-cordova-plugin/ios/OnesignalCordovaPlugin/OnesignalCordovaPlugin.swift
-new file mode 100644
-index 0000000..1231ec4
---- /dev/null
-+++ b/node_modules/onesignal-cordova-plugin/ios/OnesignalCordovaPlugin/OnesignalCordovaPlugin.swift
-@@ -0,0 +1,3 @@
-+// OneSignal Cordova Plugin — SPM stub for Capacitor 8
-+import Foundation
-+public enum OnesignalCordovaPlugin {}
-diff --git a/node_modules/onesignal-cordova-plugin/ios/OnesignalCordovaPlugin/Package.swift b/node_modules/onesignal-cordova-plugin/ios/OnesignalCordovaPlugin/Package.swift
-new file mode 100644
-index 0000000..f2121cc
---- /dev/null
-+++ b/node_modules/onesignal-cordova-plugin/ios/OnesignalCordovaPlugin/Package.swift
-@@ -0,0 +1,19 @@
-+// swift-tools-version: 5.9
-+import PackageDescription
-+
-+let package = Package(
-+    name: "OnesignalCordovaPlugin",
-+    platforms: [.iOS(.v15)],
-+    products: [
-+        .library(
-+            name: "OnesignalCordovaPlugin",
-+            targets: ["OnesignalCordovaPlugin"]
-+        )
-+    ],
-+    targets: [
-+        .target(
-+            name: "OnesignalCordovaPlugin",
-+            path: "."
-+        )
-+    ]
-+)
+ @implementation OneSignalPush
+-
+-- (void)onNotificationPermissionDidChange:(BOOL)permission {
+-  successCallbackBoolean(permissionObserverCallbackId, permission);
+-}
+-
+-- (void)onPushSubscriptionDidChangeWithState:
+-    (OSPushSubscriptionChangedState *)state {
+-  NSMutableDictionary *result = [NSMutableDictionary new];
+-
+-  // Previous state
+-  NSMutableDictionary *previousObject = [NSMutableDictionary new];
+-  previousObject[@"token"] = getStringOrNSNull(state.previous.token);
+-  previousObject[@"id"] = getStringOrNSNull(state.previous.id);
+-  previousObject[@"optedIn"] = @(state.previous.optedIn);
+-  result[@"previous"] = previousObject;
+-
+-  // Current state
+-  NSMutableDictionary *currentObject = [NSMutableDictionary new];
+-  currentObject[@"token"] = getStringOrNSNull(state.current.token);
+-  currentObject[@"id"] = getStringOrNSNull(state.current.id);
+-  currentObject[@"optedIn"] = @(state.current.optedIn);
+-  result[@"current"] = currentObject;
+-
+-  successCallback(subscriptionObserverCallbackId, result);
+-}
+-
+-- (void)onUserStateDidChangeWithState:(OSUserChangedState *_Nonnull)state {
+-  NSString *onesignalId = state.current.onesignalId;
+-  NSString *externalId = state.current.externalId;
+-
+-  NSMutableDictionary *result = [NSMutableDictionary new];
+-
+-  NSMutableDictionary *currentObject = [NSMutableDictionary new];
+-
+-  currentObject[@"onesignalId"] = getStringOrNSNull(onesignalId);
+-  currentObject[@"externalId"] = getStringOrNSNull(externalId);
+-  result[@"current"] = currentObject;
+-
+-  successCallback(userObserverCallbackId, result);
+-}
+-
+-- (void)getOnesignalId:(CDVInvokedUrlCommand *)command {
+-  successCallbackString(command.callbackId, OneSignal.User.onesignalId);
+-}
+-
+-- (void)getExternalId:(CDVInvokedUrlCommand *)command {
+-  successCallbackString(command.callbackId, OneSignal.User.externalId);
+-}
+-
+-- (void)setProvidesNotificationSettingsView:(CDVInvokedUrlCommand *)command {
+-  BOOL providesView = command.arguments[0];
+-  [OneSignal setProvidesNotificationSettingsView:providesView];
+-}
+-
+-- (void)onWillDisplayNotification:(OSNotificationWillDisplayEvent *)event {
+-  self.notificationWillDisplayCache[event.notification.notificationId] = event;
+-  [event preventDefault];
+-  processForegroundLifecycleListener(event);
+-}
+-
+-- (void)preventDefault:(CDVInvokedUrlCommand *)command {
+-  NSString *notificationId = command.arguments[0];
+-  OSNotificationWillDisplayEvent *event =
+-      _notificationWillDisplayCache[notificationId];
+-  if (!event) {
+-    [OneSignalLog
+-        onesignalLog:ONE_S_LL_ERROR
+-             message:[NSString
+-                         stringWithFormat:
+-                             @"OneSignal (objc): could not find notification "
+-                             @"will display event for notification with id: %@",
+-                             notificationId]];
+-    return;
+-  }
+-  [event preventDefault];
+-  self.preventDefaultCache[event.notification.notificationId] = event;
+-}
+-
+-- (void)displayNotification:(CDVInvokedUrlCommand *)command {
+-  NSString *notificationId = command.arguments[0];
+-  OSNotificationWillDisplayEvent *event =
+-      _notificationWillDisplayCache[notificationId];
+-  if (!event) {
+-    [OneSignalLog
+-        onesignalLog:ONE_S_LL_ERROR
+-             message:[NSString
+-                         stringWithFormat:
+-                             @"OneSignal (objc): could not find notification "
+-                             @"will display event for notification with id: %@",
+-                             notificationId]];
+-    return;
+-  }
+-  [event.notification display];
+-}
+-
+-- (void)proceedWithWillDisplay:(CDVInvokedUrlCommand *)command {
+-  NSString *notificationId = command.arguments[0];
+-  OSNotificationWillDisplayEvent *event =
+-      self.notificationWillDisplayCache[notificationId];
+-  if (!event) {
+-    [OneSignalLog
+-        onesignalLog:ONE_S_LL_ERROR
+-             message:[NSString
+-                         stringWithFormat:
+-                             @"OneSignal (objc): could not find notification "
+-                             @"will display event for notification with id: %@",
+-                             notificationId]];
+-    return;
+-  }
+-  if (self.preventDefaultCache[notificationId]) {
+-    return;
+-  }
+-  [event.notification display];
+-}
+-
+-- (void)addForegroundLifecycleListener:(CDVInvokedUrlCommand *)command {
+-  bool handlerNotSet = notificationWillShowInForegoundCallbackId == nil;
+-  notificationWillShowInForegoundCallbackId = command.callbackId;
+-  if (handlerNotSet) {
+-    [OneSignal.Notifications addForegroundLifecycleListener:self];
+-  }
+-}
+-
+-- (void)onClickNotification:(OSNotificationClickEvent *_Nonnull)event {
+-  actionNotification = event;
+-  if (pluginCommandDelegate)
+-    processNotificationClicked(actionNotification);
+-}
+-
+-- (void)addNotificationClickListener:(CDVInvokedUrlCommand *)command {
+-  bool handlerNotSet = notificationClickedCallbackId == nil;
+-  notificationClickedCallbackId = command.callbackId;
+-  if (handlerNotSet) {
+-    [OneSignal.Notifications addClickListener:self];
+-  }
+-}
+-
+-/// Initializes OneSignal with the given appId; called by app developers.
+-- (void)init:(CDVInvokedUrlCommand *)command {
+-  if (initDone) {
+-    [OneSignalLog
+-        onesignalLog:ONE_S_LL_DEBUG
+-             message:[NSString
+-                         stringWithFormat:
+-                             @"Already initialized the OneSignal Cordova SDK"]];
+-    successCallbackBoolean(command.callbackId, true);
+-    return;
+-  }
+-  initDone = true;
+-  _notificationWillDisplayCache = [NSMutableDictionary new];
+-  _preventDefaultCache = [NSMutableDictionary new];
+-
+-  pluginCommandDelegate = self.commandDelegate;
+-
+-  NSString *appId = (NSString *)command.arguments[0];
+-  NSString *appIdStr =
+-      (appId ? [NSString stringWithUTF8String:[appId UTF8String]] : nil);
+-
+-  [OneSignal initialize:appIdStr withLaunchOptions:nil];
+-
+-  // Automatically add this listener as each lifecycle is registered by the
+-  // developer separately
+-  [OneSignal.InAppMessages addLifecycleListener:self];
+-
+-  if (actionNotification)
+-    processNotificationClicked(actionNotification);
+-
+-  successCallbackBoolean(command.callbackId, true);
+-}
+-
+-- (void)setLanguage:(CDVInvokedUrlCommand *)command {
+-  [OneSignal.User setLanguage:command.arguments[0]];
+-}
+-
+-- (void)addPermissionObserver:(CDVInvokedUrlCommand *)command {
+-  bool handlerNotSet = permissionObserverCallbackId == nil;
+-  permissionObserverCallbackId = command.callbackId;
+-  if (handlerNotSet) {
+-    [OneSignal.Notifications addPermissionObserver:self];
+-  }
+-}
+-
+-- (void)addPushSubscriptionObserver:(CDVInvokedUrlCommand *)command {
+-  bool handlerNotSet = subscriptionObserverCallbackId == nil;
+-  subscriptionObserverCallbackId = command.callbackId;
+-  if (handlerNotSet)
+-    [OneSignal.User.pushSubscription addObserver:self];
+-}
+-
+-- (void)addUserStateObserver:(CDVInvokedUrlCommand *)command {
+-  bool handlerNotSet = userObserverCallbackId == nil;
+-  userObserverCallbackId = command.callbackId;
+-  if (handlerNotSet) {
+-    [OneSignal.User addObserver:self];
+-  }
+-}
+-
+-- (void)getPushSubscriptionId:(CDVInvokedUrlCommand *)command {
+-  successCallbackString(command.callbackId, OneSignal.User.pushSubscription.id);
+-}
+-
+-- (void)getPushSubscriptionToken:(CDVInvokedUrlCommand *)command {
+-  successCallbackString(command.callbackId,
+-                        OneSignal.User.pushSubscription.token);
+-}
+-
+-- (void)getPushSubscriptionOptedIn:(CDVInvokedUrlCommand *)command {
+-  bool optedIn = OneSignal.User.pushSubscription.optedIn;
+-  successCallbackBoolean(command.callbackId, optedIn);
+-}
+-
+-- (void)optInPushSubscription:(CDVInvokedUrlCommand *)command {
+-  [OneSignal.User.pushSubscription optIn];
+-}
+-
+-- (void)optOutPushSubscription:(CDVInvokedUrlCommand *)command {
+-  [OneSignal.User.pushSubscription optOut];
+-}
+-
+-- (void)setLogLevel:(CDVInvokedUrlCommand *)command {
+-  [OneSignal.Debug setLogLevel:[command.arguments[0] intValue]];
+-}
+-
+-- (void)setAlertLevel:(CDVInvokedUrlCommand *)command {
+-  [OneSignal.Debug setAlertLevel:[command.arguments[0] intValue]];
+-}
+-
+-- (void)login:(CDVInvokedUrlCommand *)command {
+-  [OneSignal login:command.arguments[0]];
+-}
+-
+-- (void)logout:(CDVInvokedUrlCommand *)command {
+-  [OneSignal logout];
+-}
+-
+-- (void)addTags:(CDVInvokedUrlCommand *)command {
+-  [OneSignal.User addTags:command.arguments[0]];
+-}
+-
+-- (void)removeTags:(CDVInvokedUrlCommand *)command {
+-  [OneSignal.User removeTags:command.arguments];
+-}
+-
+-- (void)getTags:(CDVInvokedUrlCommand *)command {
+-  NSDictionary<NSString *, NSString *> *tags = [OneSignal.User getTags];
+-  successCallback(command.callbackId, tags);
+-}
+-
+-- (void)requestPermission:(CDVInvokedUrlCommand *)command {
+-  requestPermissionCallbackId = command.callbackId;
+-  [OneSignal.Notifications
+-       requestPermission:^(BOOL accepted) {
+-         successCallbackBoolean(requestPermissionCallbackId, accepted);
+-       }
+-      fallbackToSettings:[command.arguments[0] boolValue]];
+-}
+-
+-- (void)permissionNative:(CDVInvokedUrlCommand *)command {
+-  OSNotificationPermission permissionNative =
+-      [OneSignal.Notifications permissionNative];
+-  successCallbackNSInteger(command.callbackId, permissionNative);
+-}
+-
+-- (void)getPermissionInternal:(CDVInvokedUrlCommand *)command {
+-  bool isPermitted = [OneSignal.Notifications permission];
+-  successCallbackBoolean(command.callbackId, isPermitted);
+-}
+-
+-- (void)canRequestPermission:(CDVInvokedUrlCommand *)command {
+-  bool canRequest = [OneSignal.Notifications canRequestPermission];
+-  successCallbackBoolean(command.callbackId, canRequest);
+-}
+-
+-- (void)registerForProvisionalAuthorization:(CDVInvokedUrlCommand *)command {
+-  registerForProvisionalAuthorizationCallbackId = command.callbackId;
+-  [OneSignal.Notifications
+-      registerForProvisionalAuthorization:^(BOOL accepted) {
+-        successCallbackBoolean(registerForProvisionalAuthorizationCallbackId,
+-                               accepted);
+-      }];
+-}
+-
+-- (void)clearAllNotifications:(CDVInvokedUrlCommand *)command {
+-  [OneSignal.Notifications clearAll];
+-}
+-
+-// Start Android only
+-- (void)removeNotification:(CDVInvokedUrlCommand *)command {
+-}
+-
+-- (void)removeGroupedNotifications:(CDVInvokedUrlCommand *)command {
+-}
+-// Finish Android only
+-
+-- (void)setPrivacyConsentRequired:(CDVInvokedUrlCommand *)command {
+-  if (command.arguments.count >= 1)
+-    [OneSignal setConsentRequired:[command.arguments[0] boolValue]];
+-}
+-
+-- (void)setPrivacyConsentGiven:(CDVInvokedUrlCommand *)command {
+-  if (command.arguments.count >= 1)
+-    [OneSignal setConsentGiven:[command.arguments[0] boolValue]];
+-}
+-
+-- (void)addAliases:(CDVInvokedUrlCommand *)command {
+-  [OneSignal.User addAliases:command.arguments[0]];
+-}
+-
+-- (void)removeAliases:(CDVInvokedUrlCommand *)command {
+-  [OneSignal.User removeAliases:command.arguments];
+-}
+-
+-- (void)addEmail:(CDVInvokedUrlCommand *)command {
+-  NSString *email = command.arguments[0];
+-  [OneSignal.User addEmail:email];
+-}
+-
+-- (void)removeEmail:(CDVInvokedUrlCommand *)command {
+-  NSString *email = command.arguments[0];
+-  [OneSignal.User removeEmail:email];
+-}
+-
+-- (void)addSms:(CDVInvokedUrlCommand *)command {
+-  NSString *smsNumber = command.arguments[0];
+-  [OneSignal.User addSms:smsNumber];
+-}
+-
+-- (void)removeSms:(CDVInvokedUrlCommand *)command {
+-  NSString *smsNumber = command.arguments[0];
+-  [OneSignal.User removeSms:smsNumber];
+-}
+-
+-/**
+- * In-App Messages
+- */
+-
+-- (void)onClickInAppMessage:(OSInAppMessageClickEvent *_Nonnull)event {
+-  if (inAppMessageClickedCallbackId != nil) {
+-    NSInteger urlTargetInt = event.result.urlTarget;
+-    NSString *urlTarget;
+-    switch (urlTargetInt) {
+-    case 0:
+-      urlTarget = @"browser";
+-      break;
+-    case 1:
+-      urlTarget = @"webview";
+-      break;
+-    case 2:
+-      urlTarget = @"replacement";
+-      break;
+-    }
+-
+-    NSMutableDictionary *clickResultDict = [NSMutableDictionary new];
+-    clickResultDict[@"actionId"] = event.result.actionId;
+-    clickResultDict[@"urlTarget"] = urlTarget;
+-    clickResultDict[@"closingMessage"] = @(event.result.closingMessage);
+-    clickResultDict[@"url"] = event.result.url;
+-
+-    NSDictionary *json = @{
+-      @"message" : [event.message jsonRepresentation],
+-      @"result" : clickResultDict
+-    };
+-
+-    successCallback(inAppMessageClickedCallbackId, json);
+-  }
+-}
+-
+-- (void)setInAppMessageClickHandler:(CDVInvokedUrlCommand *)command {
+-  bool handlerNotSet = inAppMessageClickedCallbackId == nil;
+-  inAppMessageClickedCallbackId = command.callbackId;
+-  if (handlerNotSet) {
+-    [OneSignal.InAppMessages addClickListener:self];
+-  }
+-}
+-
+-- (void)setOnWillDisplayInAppMessageHandler:(CDVInvokedUrlCommand *)command {
+-  inAppMessageWillDisplayCallbackId = command.callbackId;
+-}
+-
+-- (void)setOnDidDisplayInAppMessageHandler:(CDVInvokedUrlCommand *)command {
+-  inAppMessageDidDisplayCallbackId = command.callbackId;
+-}
+-
+-- (void)setOnWillDismissInAppMessageHandler:(CDVInvokedUrlCommand *)command {
+-  inAppMessageWillDismissCallbackId = command.callbackId;
+-}
+-
+-- (void)setOnDidDismissInAppMessageHandler:(CDVInvokedUrlCommand *)command {
+-  inAppMessageDidDismissCallbackId = command.callbackId;
+-}
+-
+-- (void)onWillDisplayInAppMessage:
+-    (OSInAppMessageWillDisplayEvent *_Nonnull)event {
+-  if (inAppMessageWillDisplayCallbackId != nil) {
+-    successCallback(inAppMessageWillDisplayCallbackId,
+-                    [event jsonRepresentation]);
+-  }
+-}
+-
+-- (void)onDidDisplayInAppMessage:
+-    (OSInAppMessageDidDisplayEvent *_Nonnull)event {
+-  if (inAppMessageDidDisplayCallbackId != nil) {
+-    successCallback(inAppMessageDidDisplayCallbackId,
+-                    [event jsonRepresentation]);
+-  }
+-}
+-
+-- (void)onWillDismissInAppMessage:
+-    (OSInAppMessageWillDismissEvent *_Nonnull)event {
+-  if (inAppMessageWillDismissCallbackId != nil) {
+-    successCallback(inAppMessageWillDismissCallbackId,
+-                    [event jsonRepresentation]);
+-  }
+-}
+-
+-- (void)onDidDismissInAppMessage:
+-    (OSInAppMessageDidDismissEvent *_Nonnull)event {
+-  if (inAppMessageDidDismissCallbackId != nil) {
+-    successCallback(inAppMessageDidDismissCallbackId,
+-                    [event jsonRepresentation]);
+-  }
+-}
+-
+-- (void)addTriggers:(CDVInvokedUrlCommand *)command {
+-  [OneSignal.InAppMessages addTriggers:command.arguments[0]];
+-}
+-
+-- (void)removeTriggers:(CDVInvokedUrlCommand *)command {
+-  [OneSignal.InAppMessages removeTriggers:command.arguments[0]];
+-}
+-
+-- (void)clearTriggers:(CDVInvokedUrlCommand *)command {
+-  [OneSignal.InAppMessages clearTriggers];
+-}
+-
+-- (void)setPaused:(CDVInvokedUrlCommand *)command {
+-  bool pause = [command.arguments[0] boolValue];
+-
+-  [OneSignal.InAppMessages paused:pause];
+-}
+-
+-- (void)isPaused:(CDVInvokedUrlCommand *)command {
+-  bool paused = [OneSignal.InAppMessages paused];
+-  successCallbackBoolean(command.callbackId, paused);
+-}
+-
+-/**
+- * Outcomes
+- */
+-
+-- (void)addOutcome:(CDVInvokedUrlCommand *)command {
+-  NSString *name = command.arguments[0];
+-
+-  [OneSignal.Session addOutcome:name];
+-}
+-
+-- (void)addUniqueOutcome:(CDVInvokedUrlCommand *)command {
+-  NSString *name = command.arguments[0];
+-
+-  [OneSignal.Session addUniqueOutcome:name];
+-}
+-
+-- (void)addOutcomeWithValue:(CDVInvokedUrlCommand *)command {
+-  NSString *name = command.arguments[0];
+-  NSNumber *value = command.arguments[1];
+-
+-  [OneSignal.Session addOutcomeWithValue:name value:value];
+-}
+-
+-/**
+- * Location
+- */
+-
+-- (void)requestLocationPermission:(CDVInvokedUrlCommand *)command {
+-  [OneSignal.Location requestPermission];
+-}
+-
+-- (void)setLocationShared:(CDVInvokedUrlCommand *)command {
+-  [OneSignal.Location setShared:[command.arguments[0] boolValue]];
+-}
+-
+-- (void)isLocationShared:(CDVInvokedUrlCommand *)command {
+-  bool isShared = [OneSignal.Location isShared];
+-  successCallbackBoolean(command.callbackId, isShared);
+-}
+-
+-/**
+- * Live Activities
+- */
+-
+-- (void)enterLiveActivity:(CDVInvokedUrlCommand *)command {
+-  enterLiveActivityCallbackId = command.callbackId;
+-
+-  NSString *activityId = command.arguments[0];
+-  NSString *token = command.arguments[1];
+-
+-  [OneSignal.LiveActivities enter:activityId
+-      withToken:token
+-      withSuccess:^(NSDictionary *results) {
+-        successCallback(enterLiveActivityCallbackId, results);
+-      }
+-      withFailure:^(NSError *error) {
+-        failureCallback(enterLiveActivityCallbackId, error.userInfo);
+-      }];
+-}
+-
+-- (void)exitLiveActivity:(CDVInvokedUrlCommand *)command {
+-  exitLiveActivityCallbackId = command.callbackId;
+-
+-  NSString *activityId = command.arguments[0];
+-
+-  [OneSignal.LiveActivities exit:activityId
+-      withSuccess:^(NSDictionary *results) {
+-        successCallback(exitLiveActivityCallbackId, results);
+-      }
+-      withFailure:^(NSError *error) {
+-        failureCallback(exitLiveActivityCallbackId, error.userInfo);
+-      }];
+-}
+-
+-- (void)setPushToStartToken:(CDVInvokedUrlCommand *)command {
+-#if !TARGET_OS_MACCATALYST
+-  NSString *activityType = command.arguments[0];
+-  NSString *token = command.arguments[1];
+-  NSError *err = nil;
+-
+-  if (@available(iOS 17.2, *)) {
+-    [OneSignalLiveActivitiesManagerImpl setPushToStartToken:activityType
+-                                                  withToken:token
+-                                                      error:&err];
+-    if (err) {
+-      [OneSignalLog
+-          onesignalLog:ONE_S_LL_ERROR
+-               message:[NSString
+-                           stringWithFormat:@"activityType must be the name of "
+-                                            @"your ActivityAttributes struct"]];
+-    }
+-  } else {
+-    [OneSignalLog
+-        onesignalLog:ONE_S_LL_ERROR
+-             message:[NSString
+-                         stringWithFormat:
+-                             @"cannot setPushToStartToken on iOS < 17.2"]];
+-  }
+-#endif
+-}
+-
+-- (void)removePushToStartToken:(CDVInvokedUrlCommand *)command {
+-#if !TARGET_OS_MACCATALYST
+-  NSString *activityType = command.arguments[0];
+-  NSError *err = nil;
+-
+-  if (@available(iOS 17.2, *)) {
+-    [OneSignalLiveActivitiesManagerImpl removePushToStartToken:activityType
+-                                                         error:&err];
+-    if (err) {
+-      [OneSignalLog
+-          onesignalLog:ONE_S_LL_ERROR
+-               message:[NSString
+-                           stringWithFormat:@"activityType must be the name of "
+-                                            @"your ActivityAttributes struct"]];
+-    }
+-  } else {
+-    [OneSignalLog
+-        onesignalLog:ONE_S_LL_ERROR
+-             message:[NSString
+-                         stringWithFormat:
+-                             @"cannot removePushToStartToken on iOS < 17.2"]];
+-  }
+-#endif
+-}
+-
+-- (void)setupDefaultLiveActivity:(CDVInvokedUrlCommand *)command {
+-#if !TARGET_OS_MACCATALYST
+-  NSDictionary *options = command.arguments[0];
+-  LiveActivitySetupOptions *laOptions = nil;
+-
+-  if (options != [NSNull null]) {
+-    laOptions = [LiveActivitySetupOptions alloc];
+-    [laOptions setEnablePushToStart:[options[@"enablePushToStart"] boolValue]];
+-    [laOptions
+-        setEnablePushToUpdate:[options[@"enablePushToUpdate"] boolValue]];
+-  }
+-
+-  if (@available(iOS 16.1, *)) {
+-    [OneSignalLiveActivitiesManagerImpl setupDefaultWithOptions:laOptions];
+-  } else {
+-    [OneSignalLog
+-        onesignalLog:ONE_S_LL_ERROR
+-             message:[NSString stringWithFormat:
+-                                   @"cannot setupDefault on iOS < 16.1"]];
+-  }
+-#endif
+-}
+-
+-- (void)startDefaultLiveActivity:(CDVInvokedUrlCommand *)command {
+-#if !TARGET_OS_MACCATALYST
+-  NSString *activityId = command.arguments[0];
+-  NSDictionary *attributes = command.arguments[1];
+-  NSDictionary *content = command.arguments[2];
+-
+-  if (@available(iOS 16.1, *)) {
+-    [OneSignalLiveActivitiesManagerImpl startDefault:activityId
+-                                          attributes:attributes
+-                                             content:content];
+-  } else {
+-    [OneSignalLog
+-        onesignalLog:ONE_S_LL_ERROR
+-             message:[NSString stringWithFormat:
+-                                   @"cannot startDefault on iOS < 16.1"]];
+-  }
+-#endif
+-}
+-
+-/**
+- * Custom Events
+- */
+-
+-- (void)trackEvent:(CDVInvokedUrlCommand *)command {
+-  NSString *eventName = command.arguments[0];
+-  NSDictionary *properties = nil;
+-
+-  if (command.arguments.count > 1 && command.arguments[1] != [NSNull null]) {
+-    properties = command.arguments[1];
+-  }
+-
+-  [OneSignal.User trackEventWithName:eventName properties:properties];
+-}
++- (void)setProvidesNotificationSettingsView:(CDVInvokedUrlCommand *)command {}
++- (void)addForegroundLifecycleListener:(CDVInvokedUrlCommand *)command {}
++- (void)onWillDisplayNotification:(CDVInvokedUrlCommand *)command {}
++- (void)onClickNotification:(CDVInvokedUrlCommand *)command {}
++- (void)preventDefault:(CDVInvokedUrlCommand *)command {}
++- (void)proceedWithWillDisplay:(CDVInvokedUrlCommand *)command {}
++- (void)displayNotification:(CDVInvokedUrlCommand *)command {}
++- (void)addNotificationClickListener:(CDVInvokedUrlCommand *)command {}
++- (void)init:(CDVInvokedUrlCommand *)command {}
++- (void)setLogLevel:(CDVInvokedUrlCommand *)command {}
++- (void)setAlertLevel:(CDVInvokedUrlCommand *)command {}
++- (void)login:(CDVInvokedUrlCommand *)command {}
++- (void)logout:(CDVInvokedUrlCommand *)command {}
++- (void)addTags:(CDVInvokedUrlCommand *)command {}
++- (void)removeTags:(CDVInvokedUrlCommand *)command {}
++- (void)getTags:(CDVInvokedUrlCommand *)command {}
++- (void)addUserStateObserver:(CDVInvokedUrlCommand *)command {}
++- (void)getOnesignalId:(CDVInvokedUrlCommand *)command {}
++- (void)getExternalId:(CDVInvokedUrlCommand *)command {}
++- (void)addPushSubscriptionObserver:(CDVInvokedUrlCommand *)command {}
++- (void)getPushSubscriptionId:(CDVInvokedUrlCommand *)command {}
++- (void)getPushSubscriptionToken:(CDVInvokedUrlCommand *)command {}
++- (void)getPushSubscriptionOptedIn:(CDVInvokedUrlCommand *)command {}
++- (void)optInPushSubscription:(CDVInvokedUrlCommand *)command {}
++- (void)optOutPushSubscription:(CDVInvokedUrlCommand *)command {}
++- (void)addPermissionObserver:(CDVInvokedUrlCommand *)command {}
++- (void)requestPermission:(CDVInvokedUrlCommand *)command {}
++- (void)getPermissionInternal:(CDVInvokedUrlCommand *)command {}
++- (void)permissionNative:(CDVInvokedUrlCommand *)command {}
++- (void)canRequestPermission:(CDVInvokedUrlCommand *)command {}
++- (void)registerForProvisionalAuthorization:(CDVInvokedUrlCommand *)command {}
++- (void)clearAllNotifications:(CDVInvokedUrlCommand *)command {}
++- (void)removeNotification:(CDVInvokedUrlCommand *)command {}
++- (void)removeGroupedNotifications:(CDVInvokedUrlCommand *)command {}
++- (void)setPrivacyConsentRequired:(CDVInvokedUrlCommand *)command {}
++- (void)setPrivacyConsentGiven:(CDVInvokedUrlCommand *)command {}
++- (void)addAliases:(CDVInvokedUrlCommand *)command {}
++- (void)removeAliases:(CDVInvokedUrlCommand *)command {}
++- (void)addEmail:(CDVInvokedUrlCommand *)command {}
++- (void)removeEmail:(CDVInvokedUrlCommand *)command {}
++- (void)addSms:(CDVInvokedUrlCommand *)command {}
++- (void)removeSms:(CDVInvokedUrlCommand *)command {}
++- (void)setInAppMessageClickHandler:(CDVInvokedUrlCommand *)command {}
++- (void)onClickInAppMessage:(CDVInvokedUrlCommand *)command {}
++- (void)setOnWillDisplayInAppMessageHandler:(CDVInvokedUrlCommand *)command {}
++- (void)setOnDidDisplayInAppMessageHandler:(CDVInvokedUrlCommand *)command {}
++- (void)setOnWillDismissInAppMessageHandler:(CDVInvokedUrlCommand *)command {}
++- (void)setOnDidDismissInAppMessageHandler:(CDVInvokedUrlCommand *)command {}
++- (void)addTriggers:(CDVInvokedUrlCommand *)command {}
++- (void)removeTriggers:(CDVInvokedUrlCommand *)command {}
++- (void)clearTriggers:(CDVInvokedUrlCommand *)command {}
++- (void)setPaused:(CDVInvokedUrlCommand *)command {}
++- (void)isPaused:(CDVInvokedUrlCommand *)command {}
++- (void)addOutcome:(CDVInvokedUrlCommand *)command {}
++- (void)addUniqueOutcome:(CDVInvokedUrlCommand *)command {}
++- (void)addOutcomeWithValue:(CDVInvokedUrlCommand *)command {}
++- (void)trackEvent:(CDVInvokedUrlCommand *)command {}
++- (void)requestLocationPermission:(CDVInvokedUrlCommand *)command {}
++- (void)setLocationShared:(CDVInvokedUrlCommand *)command {}
++- (void)isLocationShared:(CDVInvokedUrlCommand *)command {}
++- (void)setLanguage:(CDVInvokedUrlCommand *)command {}
++- (void)enterLiveActivity:(CDVInvokedUrlCommand *)command {}
++- (void)exitLiveActivity:(CDVInvokedUrlCommand *)command {}
++- (void)setPushToStartToken:(CDVInvokedUrlCommand *)command {}
++- (void)removePushToStartToken:(CDVInvokedUrlCommand *)command {}
++- (void)setupDefaultLiveActivity:(CDVInvokedUrlCommand *)command {}
++- (void)startDefaultLiveActivity:(CDVInvokedUrlCommand *)command {}
+ @end
