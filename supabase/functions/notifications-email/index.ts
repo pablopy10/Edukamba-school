@@ -249,6 +249,15 @@ Deno.serve(async (req) => {
   const link = record.link?.trim() || null;
   const schoolId = record.school_id ?? null;
 
+  // DOCUMENT_SIGN_REQUEST already sends a dedicated rich email via the
+  // document-sign-request Edge Function — skip here to avoid duplicates.
+  if (category === "DOCUMENT_SIGN_REQUEST") {
+    return new Response(JSON.stringify({ ok: true, skipped: "handled_by_document_sign_request" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   if (!recipientId || !title) {
     return new Response(JSON.stringify({ error: "recipient_id e title obrigatórios" }), {
       status: 400,
