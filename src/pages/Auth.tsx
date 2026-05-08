@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, Mail, Lock, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,8 +26,15 @@ const iconWrapClass =
 
 const Auth = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const isNative = isNativeMobileApp();
+
+  // If the user was redirected here from a protected page, remember where to send them back
+  const fromLocation = (location.state as { from?: Location } | null)?.from;
+  const redirectAfterLogin = fromLocation
+    ? `${(fromLocation as any).pathname ?? ""}${(fromLocation as any).search ?? ""}${(fromLocation as any).hash ?? ""}`
+    : "/dashboard";
 
   const [tab, setTab] = useState<"login" | "signup">(() => {
     if (typeof window === "undefined") return "login";
@@ -49,8 +56,10 @@ const Auth = () => {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) navigate("/dashboard", { replace: true });
+      if (session) navigate(redirectAfterLogin, { replace: true });
     });
+  // redirectAfterLogin is derived from location.state on mount — stable
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
   useEffect(() => {
@@ -150,7 +159,7 @@ const Auth = () => {
       }
 
       toast({ title: "Bem-vindo!", description: "Sessão iniciada com sucesso." });
-      navigate("/dashboard", { replace: true });
+      navigate(redirectAfterLogin, { replace: true });
     } finally {
       setLoginLoading(false);
       setPreparingEnvironment(false);
