@@ -37,11 +37,17 @@ workflows:
       - name: Set up code signing
         script: xcode-project use-profiles
 
-      - name: Build iOS
+      - name: Set Xcode automatic signing OFF (use manual)
+        script: |
+          sed -i '' 's/DEVELOPMENT_TEAM = "";/DEVELOPMENT_TEAM = "C47548 65RX";/g' ios/App/App.xcodeproj/project.pbxproj || true
+          plutil -replace ITSAppUsesNonExemptEncryption -bool NO ios/App/App/Info.plist || true
+
+      - name: Build iOS IPA
         script: |
           xcode-project build-ipa \
             --workspace "$XCODE_WORKSPACE" \
-            --scheme "$XCODE_SCHEME"
+            --scheme "$XCODE_SCHEME" \
+            --config Release
 
     artifacts:
       - build/ios/ipa/*.ipa
