@@ -271,6 +271,7 @@ const Chat = () => {
     if (unreadIds.length === 0) return;
     supabase.from("messages").update({ is_read: true }).in("id", unreadIds).then(() => {
       setAllMessages((prev) => prev.map((m) => (unreadIds.includes(m.id) ? { ...m, is_read: true } : m)));
+      window.dispatchEvent(new Event("unread_messages_updated"));
     });
   }, [activeId, user?.id]);
 

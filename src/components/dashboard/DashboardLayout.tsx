@@ -3,14 +3,15 @@ import { TeacherSessionPrefetch } from "@/components/TeacherSessionPrefetch";
 import { OfflineSyncStatusBar } from "./OfflineSyncStatusBar";
 import { Sidebar, SidebarMobileDrawer } from "./Sidebar";
 import { Topbar } from "./Topbar";
-
 import { MobileBottomNav } from "./MobileBottomNav";
+import { PullToRefresh } from "@/components/PullToRefresh";
 
 export const DashboardLayout = ({ children }: { children: ReactNode }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen w-full bg-background font-sans text-foreground">
+      <PullToRefresh />
       <TeacherSessionPrefetch />
       <Sidebar />
       <SidebarMobileDrawer open={mobileMenuOpen} onOpenChange={setMobileMenuOpen} />

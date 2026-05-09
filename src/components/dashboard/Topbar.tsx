@@ -300,6 +300,10 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
 
     void fetchUnreadMessages();
 
+    // Also refetch immediately when Chat marks messages as read
+    const handleMessagesRead = () => { if (!cancelled) void fetchUnreadMessages(); };
+    window.addEventListener("unread_messages_updated", handleMessagesRead);
+
     const channel = supabase
       .channel(`msgs_topbar_${user.id}`)
       .on(
@@ -311,6 +315,7 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
 
     return () => {
       cancelled = true;
+      window.removeEventListener("unread_messages_updated", handleMessagesRead);
       void supabase.removeChannel(channel);
     };
   }, [user?.id]);
