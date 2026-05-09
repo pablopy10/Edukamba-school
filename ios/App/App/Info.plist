@@ -53,5 +53,16 @@
 	</array>
 	<key>NSUserNotificationUsageDescription</key>
 	<string>Receba notificações sobre presenças, pagamentos e avisos escolares.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>edukamba</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>com.edukamba.app</string>
+		</dict>
+	</array>
 </dict>
 </plist>

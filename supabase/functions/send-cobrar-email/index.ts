@@ -20,9 +20,10 @@ function buildPaymentHtml(opts: {
   title: string;
   description: string;
   loginUrl: string;
+  appUrl: string;
   schoolName: string;
 }): string {
-  const { recipientName, studentName, title, description, loginUrl, schoolName } = opts;
+  const { recipientName, studentName, title, description, loginUrl, appUrl, schoolName } = opts;
   const firstName = recipientName.split(" ")[0] || recipientName;
 
   return `<!DOCTYPE html><html lang="pt">
@@ -60,7 +61,11 @@ function buildPaymentHtml(opts: {
         💳 Ver pagamento
       </a>
     </div>
-    <p style="margin:20px 0 0;font-size:13px;color:#94a3b8;text-align:center;">
+    <p style="margin:16px 0 0;font-size:12px;color:#94a3b8;text-align:center;">
+      Tem a app Edukamba instalada?
+      <a href="${appUrl}" style="color:#f59e0b;font-weight:600;text-decoration:none;">Abrir na app</a>
+    </p>
+    <p style="margin:8px 0 0;font-size:13px;color:#94a3b8;text-align:center;">
       Se já efectuou o pagamento, por favor anexe o comprovativo na plataforma.
     </p>
   </td></tr>
@@ -84,6 +89,7 @@ async function sendEmail(opts: {
   title: string;
   description: string;
   loginUrl: string;
+  appUrl: string;
   schoolName: string;
   brevoKey: string;
   senderEmail: string;
@@ -164,53 +170,52 @@ Deno.serve(async (req) => {
     // body.link is always a full URL sent from the frontend (window.location.origin + path)
     const rawLink = body.link ?? "";
     const loginUrl = rawLink.startsWith("http") ? rawLink : `https://www.edukamba.com/pagamentos`;
+    // App deep link: usa custom URL scheme para abrir a app mobile diretamente
+    const appUrl = "edukamba://pagamentos";
 
-    const sends: Promise<void>[] = [];
+    // Enviar apenas 1 email: ao encarregado se existir, caso contrário ao aluno.
+    let recipientEmail: string | null = null;
+    let recipientName = "Encarregado";
 
-    // Email to parent/educator
     if (student.parent_id) {
       const { data: parentAuth } = await admin.auth.admin.getUserById(student.parent_id);
-      const parentEmail = parentAuth?.user?.email;
-      if (parentEmail) {
+      const parentEmailRaw = parentAuth?.user?.email;
+      if (parentEmailRaw) {
         const { data: parentProfile } = await admin
           .from("profiles")
           .select("full_name")
           .eq("id", student.parent_id)
           .maybeSingle();
-        sends.push(sendEmail({
-          recipientName: parentProfile?.full_name ?? "Encarregado",
-          recipientEmail: parentEmail,
-          studentName: student.full_name,
-          title: body.title,
-          description: body.description,
-          loginUrl,
-          schoolName,
-          brevoKey,
-          senderEmail,
-          senderName,
-        }));
+        recipientEmail = parentEmailRaw;
+        recipientName = parentProfile?.full_name ?? "Encarregado";
       }
     }
 
-    // Email to student (only if they have an email set)
-    if (student.email) {
-      sends.push(sendEmail({
-        recipientName: student.full_name,
-        recipientEmail: student.email,
+    // Fallback para o aluno se não houver encarregado com email
+    if (!recipientEmail && student.email) {
+      recipientEmail = student.email;
+      recipientName = student.full_name;
+    }
+
+    if (recipientEmail) {
+      await sendEmail({
+        recipientName,
+        recipientEmail,
         studentName: student.full_name,
         title: body.title,
         description: body.description,
         loginUrl,
+        appUrl,
         schoolName,
         brevoKey,
         senderEmail,
         senderName,
-      }));
+      });
     }
 
-    await Promise.allSettled(sends);
+    const sent = recipientEmail ? 1 : 0;
 
-    return corsJson({ ok: true, sent: sends.length });
+    return corsJson({ ok: true, sent });
   } catch (e) {
     console.error("send-cobrar-email error", e);
     return corsJson({ error: (e as Error).message }, 500);

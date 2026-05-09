@@ -1,0 +1,18 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["XXXXXXXXXX.com.edukamba.app"],
+        "components": [
+          {
+            "/": "/*",
+            "comment": "Todos os paths abrem a app Edukamba"
+          }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["XXXXXXXXXX.com.edukamba.app"]
+  }
+}

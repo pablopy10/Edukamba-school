@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { shouldInitializeOneSignalNative, setOneSignalNativeExternalUser } from "@/lib/oneSignalNative";
 import { setOneSignalExternalUser, shouldInitializeOneSignalWeb } from "@/lib/oneSignalWeb";
 import { initNativePush, isNativePlatform } from "@/lib/nativePush";
+import { initDeepLinkHandler } from "@/lib/deepLink";
 
 /**
  * Liga o External ID OneSignal (= user id Supabase) à sessão (web react-onesignal e/ou Cordova nativo).
@@ -15,6 +16,9 @@ export function OneSignalWebBridge() {
   const listenersAttached = useRef(false);
 
   useEffect(() => {
+    // Inicializar handler de deep links uma única vez (Universal Links + custom scheme)
+    void initDeepLinkHandler(navigate);
+
     const attachListeners = async () => {
       if (listenersAttached.current) return;
       listenersAttached.current = true;
