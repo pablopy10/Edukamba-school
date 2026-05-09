@@ -17,6 +17,7 @@ import { MaterialRequestFormDialog, type RequestRow } from "@/components/materia
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME, showPageKpiCards } from "@/lib/nativeApp";
 import { isSchoolManagementOrTeacher, isSchoolManagementRole } from "@/lib/schoolStaffRoles";
@@ -47,6 +48,7 @@ type Tab = "stock" | "pedidos";
 const Material = () => {
   const native = isNativeMobileApp();
   const { user } = useAuth();
+  const { selectedYearId } = useAcademicYear();
   const { isParent, childIds, classroomIds, selectedChild } = useParentChildren();
   const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
   const { isStudent, studentId, classroomId: studentClassroomId } = useStudentSelf();
@@ -113,10 +115,14 @@ const Material = () => {
     setUserRole(profile.role);
     setUserName(profile.full_name ?? "");
 
+    let classroomsQuery = supabase.from("classrooms").select("id, name").eq("school_id", profile.school_id);
+    if (selectedYearId) classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
+    classroomsQuery = classroomsQuery.order("name");
+
     const [m, r, c, s, d] = await Promise.all([
       supabase.from("materials").select("*").eq("school_id", profile.school_id).order("name"),
       supabase.from("material_requests").select("*").eq("school_id", profile.school_id).order("created_at", { ascending: false }),
-      supabase.from("classrooms").select("id, name").eq("school_id", profile.school_id).order("name"),
+      classroomsQuery,
       supabase.from("students").select("id, full_name, classroom_id").eq("school_id", profile.school_id).order("full_name"),
       supabase.from("material_request_deliveries").select("id, request_id, student_id, brought").eq("school_id", profile.school_id),
     ]);
@@ -128,7 +134,7 @@ const Material = () => {
     setLoading(false);
   };
 
-  useEffect(() => { loadAll(); /* eslint-disable-next-line */ }, [user?.id]);
+  useEffect(() => { loadAll(); /* eslint-disable-next-line */ }, [user?.id, selectedYearId]);
 
   // For teachers, restrict the classroom list and student list to the classes they teach.
   const visibleClassrooms = useMemo(() => {
