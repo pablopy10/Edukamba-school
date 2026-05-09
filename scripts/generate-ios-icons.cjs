@@ -76,22 +76,41 @@ async function generate() {
     return;
   }
 
-  // Generate each size
+  // Generate each size.
+  // Strategy: create a solid white RGB canvas (no alpha) then composite the
+  // logo centred with 10 % padding. This guarantees no alpha channel exists
+  // in any output file — Apple rejects the 1024×1024 icon if it has alpha.
   for (const { file, size } of ICONS) {
-    // Use "contain" so a non-square logo is never cropped; add 10 % padding
     const innerSize = Math.round(size * 0.9);
-    await sharp(SOURCE)
-      .resize(innerSize, innerSize, { fit: "contain", background: { r: 255, g: 255, b: 255, alpha: 0 } })
-      .flatten({ background: { r: 255, g: 255, b: 255 } })
-      .extend({
-        top:    Math.floor((size - innerSize) / 2),
-        bottom: Math.ceil((size - innerSize) / 2),
-        left:   Math.floor((size - innerSize) / 2),
-        right:  Math.ceil((size - innerSize) / 2),
-        background: { r: 255, g: 255, b: 255, alpha: 255 },
+    const padding = Math.floor((size - innerSize) / 2);
+
+    // Resize the logo to innerSize×innerSize (contain, white fill, no alpha)
+    const logoBuffer = await sharp(SOURCE)
+      .resize(innerSize, innerSize, {
+        fit: "contain",
+        background: { r: 255, g: 255, b: 255, alpha: 1 },
       })
+      .flatten({ background: { r: 255, g: 255, b: 255 } })
+      .removeAlpha()
+      .toBuffer();
+
+    // Composite onto a pure white RGB canvas — no alpha channel at all.
+    // `.flatten()` + `.removeAlpha()` at the end guarantees the output is
+    // RGB-only: Apple rejects the 1024×1024 icon if it has an alpha channel.
+    await sharp({
+      create: {
+        width: size,
+        height: size,
+        channels: 3,
+        background: { r: 255, g: 255, b: 255 },
+      },
+    })
+      .composite([{ input: logoBuffer, top: padding, left: padding }])
+      .flatten({ background: { r: 255, g: 255, b: 255 } })
+      .removeAlpha()
       .png()
       .toFile(path.join(ICONSET, file));
+
     console.log(`[ios-icons] ${file} (${size}×${size})`);
   }
 
