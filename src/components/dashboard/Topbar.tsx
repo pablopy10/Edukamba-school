@@ -244,6 +244,7 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
   );
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -279,6 +280,37 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
     return () => {
       cancelled = true;
       window.removeEventListener("notifications_updated", handleNotificationsUpdated);
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
+  // Unread chat messages count
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+
+    const fetchUnreadMessages = async () => {
+      const { count } = await supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .eq("receiver_id", user.id)
+        .eq("is_read", false);
+      if (!cancelled) setUnreadMessagesCount(count ?? 0);
+    };
+
+    void fetchUnreadMessages();
+
+    const channel = supabase
+      .channel(`msgs_topbar_${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "messages", filter: `receiver_id=eq.${user.id}` },
+        () => { if (!cancelled) void fetchUnreadMessages(); },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
       void supabase.removeChannel(channel);
     };
   }, [user?.id]);
@@ -368,8 +400,11 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
 
             <TopbarConnectivity variant="native" />
 
-            <Link to="/chat" aria-label="Chat" className={cn(nativeIconBtn)}>
+            <Link to="/chat" aria-label="Chat" className={cn(nativeIconBtn, "relative")}>
               <MessageSquare strokeWidth={1.75} />
+              {unreadMessagesCount > 0 && (
+                <span className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-card" />
+              )}
             </Link>
             <Link to="/notificacoes" aria-label="Notificações" className={cn(nativeIconBtn, "relative")}>
               <Bell strokeWidth={1.75} />
@@ -542,9 +577,12 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
           <Link
             to="/chat"
             aria-label="Chat"
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-card text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent"
+            className="relative flex h-11 w-11 items-center justify-center rounded-full bg-card text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent"
           >
             <MessageSquare className="h-5 w-5" strokeWidth={1.75} />
+            {unreadMessagesCount > 0 && (
+              <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-card" />
+            )}
           </Link>
           <Link
             to="/notificacoes"
