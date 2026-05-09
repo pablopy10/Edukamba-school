@@ -167,6 +167,10 @@ Deno.serve(async (req) => {
   const bodyText = description.length > 0 ? description : title;
   const link = record.link?.trim() || null;
 
+  // Logo URL: built from APP_URL secret (e.g. https://edukamba.app)
+  const appUrl = Deno.env.get("APP_URL")?.replace(/\/$/, "") ?? null;
+  const logoUrl = appUrl ? `${appUrl}/edukamba-logo.png` : null;
+
   const payload: Record<string, unknown> = {
     app_id: appId,
     include_aliases: { external_id: [recipientId] },
@@ -178,6 +182,10 @@ Deno.serve(async (req) => {
       ...(record.category ? { category: record.category } : {}),
       ...(link ? { link } : {}),
     },
+    // Android: large icon shown next to the notification text
+    ...(logoUrl ? { large_icon: logoUrl } : {}),
+    // iOS: rich notification attachment (visible when notification is expanded)
+    ...(logoUrl ? { ios_attachments: { logo: logoUrl } } : {}),
   };
 
   if (link && /^https?:\/\//i.test(link)) {
