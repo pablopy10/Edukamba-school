@@ -22,16 +22,14 @@ if (!fs.existsSync(PBXPROJ)) {
 
 let content = fs.readFileSync(PBXPROJ, "utf8");
 
-const match = content.match(/CURRENT_PROJECT_VERSION\s*=\s*(\d+);/);
-if (!match) {
-  console.warn("[bump-ios-version] CURRENT_PROJECT_VERSION not found in project.pbxproj — skipping.");
-  process.exit(0);
-}
-
-const current = parseInt(match[1], 10);
-const next = current + 100000;
+// Use a timestamp-based version that's always unique and always increasing.
+// Formula: Unix timestamp (seconds) + offset so result stays above the last
+// manually set value (1758400000). Offset = 12_000_000 puts the floor at
+// ~1758.9M today and grows ~86400 per day — guaranteed unique per second.
+const OFFSET = 12_000_000;
+const next = Math.floor(Date.now() / 1000) + OFFSET;
 
 content = content.replace(/CURRENT_PROJECT_VERSION\s*=\s*\d+;/g, `CURRENT_PROJECT_VERSION = ${next};`);
 fs.writeFileSync(PBXPROJ, content, "utf8");
 
-console.log(`[bump-ios-version] CFBundleVersion bumped: ${current} → ${next}`);
+console.log(`[bump-ios-version] CFBundleVersion set to ${next} (timestamp-based)`);
