@@ -182,7 +182,9 @@ Deno.serve(async (req) => {
       ...(record.category ? { category: record.category } : {}),
       ...(link ? { link } : {}),
     },
-    // Android: large icon shown next to the notification text
+    // Android: small status-bar icon (must match drawable resource name in the app)
+    small_icon: "ic_stat_onesignal_default",
+    // Android: large icon shown in the notification body
     ...(logoUrl ? { large_icon: logoUrl } : {}),
     // iOS: rich notification attachment (visible when notification is expanded)
     ...(logoUrl ? { ios_attachments: { logo: logoUrl } } : {}),

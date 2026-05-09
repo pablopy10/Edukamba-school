@@ -66,18 +66,17 @@ async function generateNotificationIcon() {
           const b = pixels[i + 2];
           const a = pixels[i + 3];
 
-          // Luminance: dark pixels on white background → we want them as the icon shape
-          // Since logo has dark shapes on white bg, invert: white bg becomes transparent, dark shapes become white
-          const luminance = (r * 0.299 + g * 0.587 + b * 0.114);
-          // If pixel is light (close to white background) and nearly opaque → make transparent
-          // If pixel is dark (the actual logo shape) → make white and opaque
-          const isDark = luminance < 200;
+          // Any pixel that is NOT near-pure-white AND has visible alpha → white on transparent.
+          // This preserves light blue (#bfdbfe → r=191) and dark elements alike,
+          // while making the white background transparent.
+          const isNearWhite = r > 230 && g > 230 && b > 230;
           const isVisible = a > 10;
+          const keep = !isNearWhite && isVisible;
 
           out[i]     = 255; // R = white
           out[i + 1] = 255; // G = white
           out[i + 2] = 255; // B = white
-          out[i + 3] = (isDark && isVisible) ? 255 : 0; // A = opaque only for dark pixels
+          out[i + 3] = keep ? 255 : 0;
         }
 
         await sharp(out, {
