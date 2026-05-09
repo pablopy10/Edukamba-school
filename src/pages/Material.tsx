@@ -471,7 +471,7 @@ const Material = () => {
         userId={user?.id ?? null}
         userName={userName}
         request={editingRequest}
-        classrooms={visibleClassrooms}
+        classrooms={classrooms}
         students={visibleStudents}
         onSaved={loadAll}
       />
