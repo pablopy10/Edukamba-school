@@ -125,8 +125,7 @@ function buildHtml(opts: {
               </a>
             </div>
             <p style="margin:20px 0 0;font-size:12px;color:#94a3b8;text-align:center;">
-              Se o botão não funcionar, copie e cole este link no seu browser:<br />
-              <a href="${signUrl}" style="color:#3b82f6;word-break:break-all;">${signUrl}</a>
+              Abre a app Edukamba se estiver instalada, ou o browser caso contrário.
             </p>
           </td>
         </tr>
@@ -236,7 +235,8 @@ Deno.serve(async (req) => {
 
       const doc = req_row.document;
       const schoolName = schoolMap[doc?.school_id] ?? "Edukamba";
-      const signUrl = `${app_url.replace(/\/$/, "")}/documentos/assinar/${req_row.id}`;
+      const rawSignPath = `/documentos/assinar/${req_row.id}`;
+      const signUrl = `https://www.edukamba.com/app-open?path=${encodeURIComponent(rawSignPath)}`;
 
       const html = buildHtml({
         recipientName: recipient.full_name ?? "Educador(a)",

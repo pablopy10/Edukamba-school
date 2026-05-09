@@ -93,10 +93,6 @@ function buildEmailHtml(opts: {
               Ver na aplicação →
             </a>
           </div>
-          <p style="margin:12px 0 0;font-size:12px;color:#94a3b8;text-align:center;">
-            Tem a app instalada?
-            <a href="${appLink}" style="color:${statusColor};font-weight:600;text-decoration:none;">Abrir na app</a>
-          </p>
           <p style="margin:16px 0 0;font-size:12px;color:#94a3b8;text-align:center;line-height:1.6;">
             Pode gerir as notificações nas preferências da aplicação Edukamba.
           </p>
@@ -229,8 +225,8 @@ Deno.serve(async (req) => {
 
   const notifTitle = `${statusEmoji} Registo de Presença — ${statusPt}`;
   const notifDescription = `A presença de ${studentName} (${classroomName}) no dia ${dateStr} foi registada como: ${statusPt}.`;
-  const link = "https://www.edukamba.com/presencas";
-  const appLink = "edukamba://presencas";
+  const link = "https://www.edukamba.com/app-open?path=%2Fpresencas";
+  const appLink = link; // /app-open já trata o redirect para a app ou web
 
   const results: Record<string, unknown> = {};
 

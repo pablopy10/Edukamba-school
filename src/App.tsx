@@ -15,6 +15,7 @@ import Privacidade from "./pages/Privacidade.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { DashboardShell } from "./components/dashboard/DashboardShell";
 import NotFound from "./pages/NotFound.tsx";
+import AppOpen from "./pages/AppOpen.tsx";
 import Alunos from "./pages/Alunos.tsx";
 import AlunoPerfil from "./pages/AlunoPerfil.tsx";
 import Professores from "./pages/Professores.tsx";
@@ -100,6 +101,7 @@ const App = () => (
                   <Routes>
                     <Route path="/" element={<NativeAppRoot />} />
                     <Route path="/auth" element={<Auth />} />
+                    <Route path="/app-open" element={<AppOpen />} />
                     <Route path="/termos" element={<Termos />} />
                     <Route path="/privacidade" element={<Privacidade />} />
 

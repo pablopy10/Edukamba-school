@@ -61,11 +61,7 @@ function buildPaymentHtml(opts: {
         💳 Ver pagamento
       </a>
     </div>
-    <p style="margin:16px 0 0;font-size:12px;color:#94a3b8;text-align:center;">
-      Tem a app Edukamba instalada?
-      <a href="${appUrl}" style="color:#f59e0b;font-weight:600;text-decoration:none;">Abrir na app</a>
-    </p>
-    <p style="margin:8px 0 0;font-size:13px;color:#94a3b8;text-align:center;">
+    <p style="margin:16px 0 0;font-size:13px;color:#94a3b8;text-align:center;">
       Se já efectuou o pagamento, por favor anexe o comprovativo na plataforma.
     </p>
   </td></tr>
@@ -167,11 +163,9 @@ Deno.serve(async (req) => {
     const senderEmail = Deno.env.get("BREVO_SENDER_EMAIL") ?? "noreply@edukamba.com";
     const senderName = Deno.env.get("BREVO_SENDER_NAME") ?? "Edukamba";
 
-    // body.link is always a full URL sent from the frontend (window.location.origin + path)
-    const rawLink = body.link ?? "";
-    const loginUrl = rawLink.startsWith("http") ? rawLink : `https://www.edukamba.com/pagamentos`;
-    // App deep link: usa custom URL scheme para abrir a app mobile diretamente
-    const appUrl = "edukamba://pagamentos";
+    // Todos os links vão por /app-open para abrir a app mobile se instalada
+    const loginUrl = "https://www.edukamba.com/app-open?path=%2Fpagamentos";
+    const appUrl = loginUrl; // /app-open já trata o redirect
 
     // Enviar apenas 1 email: ao encarregado se existir, caso contrário ao aluno.
     let recipientEmail: string | null = null;

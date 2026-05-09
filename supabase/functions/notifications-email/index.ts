@@ -341,6 +341,17 @@ Deno.serve(async (req) => {
   if (resolvedLink && resolvedLink.includes("/financas")) {
     resolvedLink = "https://www.edukamba.com/pagamentos";
   }
+  // Wrap link through /app-open so it tries to open the native app first
+  if (resolvedLink) {
+    let path: string;
+    try {
+      const u = new URL(resolvedLink);
+      path = u.pathname + (u.search ?? "");
+    } catch {
+      path = resolvedLink;
+    }
+    resolvedLink = `https://www.edukamba.com/app-open?path=${encodeURIComponent(path)}`;
+  }
 
   // 5. Build email
   const htmlContent = buildHtml({ title, description, category, link: resolvedLink, schoolName, recipientName });
