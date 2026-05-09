@@ -78,9 +78,18 @@ async function generate() {
 
   // Generate each size
   for (const { file, size } of ICONS) {
+    // Use "contain" so a non-square logo is never cropped; add 10 % padding
+    const innerSize = Math.round(size * 0.9);
     await sharp(SOURCE)
-      .resize(size, size, { fit: "cover", background: { r: 255, g: 255, b: 255, alpha: 1 } })
+      .resize(innerSize, innerSize, { fit: "contain", background: { r: 255, g: 255, b: 255, alpha: 0 } })
       .flatten({ background: { r: 255, g: 255, b: 255 } })
+      .extend({
+        top:    Math.floor((size - innerSize) / 2),
+        bottom: Math.ceil((size - innerSize) / 2),
+        left:   Math.floor((size - innerSize) / 2),
+        right:  Math.ceil((size - innerSize) / 2),
+        background: { r: 255, g: 255, b: 255, alpha: 255 },
+      })
       .png()
       .toFile(path.join(ICONSET, file));
     console.log(`[ios-icons] ${file} (${size}×${size})`);

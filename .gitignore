@@ -27,3 +27,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Apple private keys – NEVER commit these
+ios/AuthKey_*.p8
+*.p8
+
+# Windows filesystem artifact
+desktop.ini
+ios/desktop.ini

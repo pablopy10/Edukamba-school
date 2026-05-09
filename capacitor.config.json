@@ -1,5 +1,14 @@
 {
   "appId": "com.edukamba.app",
   "appName": "Edukamba",
-  "webDir": "dist"
+  "webDir": "dist",
+  "ios": {
+    "scheme": "edukamba",
+    "contentInset": "automatic"
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
 }
