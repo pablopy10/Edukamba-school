@@ -56,6 +56,7 @@ import { SelectedChildProvider } from "./context/SelectedChildContext";
 import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
 import { queryClient } from "@/lib/queryClient";
 import { OneSignalWebBridge } from "@/components/OneSignalWebBridge";
+import { OpenInAppBanner } from "@/components/OpenInAppBanner";
 
 function RouteSpinner() {
   return (
@@ -98,6 +99,7 @@ const App = () => (
                 <Sonner />
                 <BrowserRouter>
                   <OneSignalWebBridge />
+                  <OpenInAppBanner />
                   <Routes>
                     <Route path="/" element={<NativeAppRoot />} />
                     <Route path="/auth" element={<Auth />} />
