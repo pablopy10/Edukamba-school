@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Search, Send, Paperclip, Smile, MoreVertical, Check, CheckCheck, Loader2,
-  Plus, X, FileText, ImageIcon, Download, Ban,
+  Plus, X, FileText, ImageIcon, Download, Ban, ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import type { UserRole } from "@/hooks/useUserRole";
 import { ROLE_LABEL_INVITE } from "@/components/definicoes/InviteStaffUserDialog";
+import { isNativeMobileApp } from "@/lib/nativeApp";
 
 type Role = UserRole;
 
@@ -114,8 +115,21 @@ const Chat = () => {
   const [showNewChat, setShowNewChat] = useState(false);
   const [newChatSearch, setNewChatSearch] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const mobileScrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
+
+  // Mobile layout detection: native app OR screen width < md (768px)
+  const native = isNativeMobileApp();
+  const [windowWidth, setWindowWidth] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth : 1200,
+  );
+  useEffect(() => {
+    const handler = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  const isMobileLayout = native || windowWidth < 768;
 
   // Initial load
   const load = async () => {
@@ -245,6 +259,7 @@ const Chat = () => {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    mobileScrollRef.current?.scrollTo({ top: mobileScrollRef.current.scrollHeight, behavior: "smooth" });
   }, [activeId, thread.length]);
 
   // mark as read on open
@@ -381,7 +396,12 @@ const Chat = () => {
           <p className="text-sm text-muted-foreground">Mensagens entre administradores, professores e educadores.</p>
         </div>
 
-        <div className="grid h-[calc(100vh-12rem)] grid-cols-1 overflow-hidden rounded-2xl bg-card shadow-card md:grid-cols-[320px_1fr]">
+        <div className={cn(
+          "grid overflow-hidden rounded-2xl bg-card shadow-card",
+          isMobileLayout
+            ? "h-[calc(100vh-12rem)] grid-cols-1"
+            : "h-[calc(100vh-12rem)] grid-cols-1 md:grid-cols-[320px_1fr]",
+        )}>
           {/* Sidebar */}
           <aside className="flex flex-col border-r border-border">
             <div className="flex items-center justify-between gap-2 border-b border-border p-4">
@@ -417,7 +437,7 @@ const Chat = () => {
                   return (
                     <li key={c.contactId}>
                       <button
-                        onClick={() => setActiveId(c.contactId)}
+                        onClick={() => { setDraft(""); setActiveId(c.contactId); }}
                         className={cn(
                           "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors",
                           isActive ? "bg-pastel-blue/30" : "hover:bg-muted/60",
@@ -460,8 +480,8 @@ const Chat = () => {
             </div>
           </aside>
 
-          {/* Main panel */}
-          <section className="flex flex-col">
+          {/* Main panel — desktop only */}
+          <section className={cn("flex-col", isMobileLayout ? "hidden" : "flex")}>
             <header className="flex items-center justify-between gap-3 border-b border-border p-4">
               {active ? (
                 <>
@@ -642,6 +662,180 @@ const Chat = () => {
         </div>
       </div>
 
+      {/* Mobile: full-screen chat dialog */}
+      {isMobileLayout && (
+        <Dialog
+          open={!!activeId}
+          onOpenChange={(open) => { if (!open) { setActiveId(null); setShowEmoji(false); } }}
+        >
+          <DialogContent className="fixed inset-0 z-50 flex h-[100dvh] w-full max-w-none flex-col gap-0 rounded-none border-0 p-0 [transform:none]">
+            <DialogHeader className="sr-only">
+              <DialogTitle>{active?.full_name ?? "Conversa"}</DialogTitle>
+              <DialogDescription>Conversa com {active?.full_name ?? "utilizador"}</DialogDescription>
+            </DialogHeader>
+
+            {/* Header */}
+            <div className="flex shrink-0 items-center gap-3 border-b border-border bg-card p-4 [padding-top:max(1rem,env(safe-area-inset-top,0px))]">
+              <button
+                onClick={() => { setActiveId(null); setShowEmoji(false); }}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground hover:bg-accent"
+                aria-label="Voltar"
+              >
+                <ArrowLeft className="h-5 w-5" strokeWidth={1.75} />
+              </button>
+              {active && (
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold", colorFor(active.id))}>
+                    {initialsOf(active.full_name)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-foreground">{active.full_name}</p>
+                    <p className="text-xs text-muted-foreground">{roleLabel(active.role)}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Messages */}
+            <div ref={mobileScrollRef} className="sidebar-scroll flex-1 overflow-y-auto bg-muted/30 p-4">
+              <div className="mx-auto flex max-w-2xl flex-col gap-3">
+                {active && thread.map((m) => {
+                  const mine = m.sender_id === user?.id;
+                  return (
+                    <div key={m.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
+                      <div className={cn(
+                        "max-w-[80%] rounded-2xl px-3 py-2 shadow-soft",
+                        mine ? "bg-pastel-blue text-pastel-blue-foreground rounded-br-sm" : "bg-card text-foreground rounded-bl-sm",
+                      )}>
+                        {m.message_type === "image" && m.file_url && (
+                          <button onClick={() => downloadAttachment(m)} className="block overflow-hidden rounded-lg">
+                            {signedUrls[m.id] ? (
+                              <img src={signedUrls[m.id]} alt={m.file_name ?? "imagem"} className="max-h-64 w-full rounded-lg object-cover" />
+                            ) : (
+                              <div className="flex h-40 w-60 items-center justify-center rounded-lg bg-muted">
+                                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                              </div>
+                            )}
+                          </button>
+                        )}
+                        {m.message_type === "file" && (
+                          <button
+                            onClick={() => downloadAttachment(m)}
+                            className={cn(
+                              "flex items-center gap-3 rounded-lg p-2 text-left transition-colors",
+                              mine ? "bg-pastel-blue-foreground/10 hover:bg-pastel-blue-foreground/20" : "bg-muted hover:bg-muted/80",
+                            )}
+                          >
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-card">
+                              <FileText className="h-5 w-5 text-muted-foreground" strokeWidth={1.75} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">{m.file_name ?? "Ficheiro"}</p>
+                              <p className="text-[11px] opacity-70">{formatBytes(m.file_size)}</p>
+                            </div>
+                            <Download className="h-4 w-4 opacity-70" strokeWidth={1.75} />
+                          </button>
+                        )}
+                        {m.content && (
+                          <p className={cn("whitespace-pre-wrap text-sm leading-relaxed", (m.message_type === "image" || m.message_type === "file") && "mt-2")}>
+                            {m.content}
+                          </p>
+                        )}
+                        <div className={cn(
+                          "mt-1 flex items-center justify-end gap-1 text-[10px]",
+                          mine ? "text-pastel-blue-foreground/80" : "text-muted-foreground",
+                        )}>
+                          <span>{formatTime(m.created_at)}</span>
+                          {mine && <StatusIcon read={!!m.is_read} />}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {active && thread.length === 0 && (
+                  <div className="py-16 text-center text-sm text-muted-foreground">Sem mensagens ainda. Diga olá! 👋</div>
+                )}
+              </div>
+            </div>
+
+            {/* Composer */}
+            <div className="shrink-0 border-t border-border bg-card p-3 [padding-bottom:max(0.75rem,env(safe-area-inset-bottom,0px))]">
+              <div className="flex items-end gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      disabled={!active || uploading}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
+                      aria-label="Anexar"
+                    >
+                      {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" strokeWidth={1.75} />}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" side="top" className="w-44 p-1">
+                    <button
+                      onClick={() => imageRef.current?.click()}
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent"
+                    >
+                      <ImageIcon className="h-4 w-4" /> Imagem
+                    </button>
+                    <button
+                      onClick={() => fileRef.current?.click()}
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent"
+                    >
+                      <FileText className="h-4 w-4" /> Documento
+                    </button>
+                  </PopoverContent>
+                </Popover>
+
+                <Popover open={showEmoji} onOpenChange={setShowEmoji}>
+                  <PopoverTrigger asChild>
+                    <button
+                      disabled={!active}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
+                      aria-label="Emoji"
+                    >
+                      <Smile className="h-4 w-4" strokeWidth={1.75} />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" side="top" className="w-auto border-0 p-0">
+                    <EmojiPicker
+                      onEmojiClick={(e) => { setDraft((d) => d + e.emoji); }}
+                      emojiStyle={EmojiStyle.NATIVE}
+                      theme={Theme.AUTO}
+                      width={300}
+                      height={350}
+                      searchPlaceHolder="Pesquisar emoji..."
+                      previewConfig={{ showPreview: false }}
+                    />
+                  </PopoverContent>
+                </Popover>
+
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(); }
+                  }}
+                  rows={1}
+                  placeholder={active ? `Mensagem para ${active.full_name}...` : "Seleccione uma conversa..."}
+                  maxLength={2000}
+                  disabled={!active || sending}
+                  className="min-h-[40px] max-h-32 flex-1 resize-none rounded-2xl border border-border bg-card px-4 py-2.5 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                />
+                <button
+                  onClick={sendText}
+                  disabled={!draft.trim() || !active || sending}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pastel-blue-foreground text-card shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:opacity-40"
+                  aria-label="Enviar"
+                >
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" strokeWidth={2} />}
+                </button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* New chat dialog */}
       <Dialog open={showNewChat} onOpenChange={setShowNewChat}>
         <DialogContent className="max-w-md">
@@ -671,6 +865,7 @@ const Chat = () => {
               <li key={c.id}>
                 <button
                   onClick={() => {
+                    setDraft("");
                     setActiveId(c.id);
                     setShowNewChat(false);
                     setNewChatSearch("");
