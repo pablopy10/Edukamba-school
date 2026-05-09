@@ -258,6 +258,14 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Chat messages: only push notifications are sent, never email.
+  if (category === "mensagem") {
+    return new Response(JSON.stringify({ ok: true, skipped: "chat_message_push_only" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   if (!recipientId || !title) {
     return new Response(JSON.stringify({ error: "recipient_id e title obrigatórios" }), {
       status: 400,
