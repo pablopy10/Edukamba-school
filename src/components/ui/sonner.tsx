@@ -1,16 +1,19 @@
 import { useTheme } from "next-themes";
 import { Toaster as Sonner, toast } from "sonner";
+import { isNativeMobileApp } from "@/lib/nativeApp";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme();
+  const native = isNativeMobileApp();
 
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
       position="top-right"
       className="toaster group z-[200]"
+      style={native ? ({ "--offset": "calc(env(safe-area-inset-top, 0px) + 4.5rem)" } as React.CSSProperties) : undefined}
       toastOptions={{
         classNames: {
           toast:
