@@ -70,6 +70,7 @@ const Eventos = () => {
   const [view, setView] = useState<View>("calendario");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [search, setSearch] = useState("");
+  const [monthFilter, setMonthFilter] = useState<number>(() => new Date().getMonth());
   const [cursor, setCursor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
@@ -99,7 +100,7 @@ const Eventos = () => {
       .from("events")
       .select("*")
       .eq("school_id", schoolId)
-      .order("event_date", { ascending: true });
+      .order("event_date", { ascending: false });
     setLoading(false);
     if (error) {
       toast.error("Erro ao carregar eventos: " + error.message);
@@ -130,6 +131,10 @@ const Eventos = () => {
 
   const filtered = useMemo(() => {
     return events.filter((e) => {
+      if (native) {
+        const m = new Date(e.event_date + "T00:00:00").getMonth();
+        if (m !== monthFilter) return false;
+      }
       const matchesType = typeFilter === "all" || e.type === typeFilter;
       const q = search.trim().toLowerCase();
       const matchesSearch =
@@ -140,7 +145,7 @@ const Eventos = () => {
         (e.location ?? "").toLowerCase().includes(q);
       return matchesType && matchesSearch;
     });
-  }, [events, typeFilter, search]);
+  }, [events, typeFilter, search, native, monthFilter]);
 
   const stats = useMemo(() => ({
     total: filtered.length,
@@ -251,6 +256,24 @@ const Eventos = () => {
               className="h-10 w-full rounded-full border border-border bg-background pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-pastel-blue/40"
             />
           </div>
+          {native && (
+            <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
+              {monthNames.map((name, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setMonthFilter(idx)}
+                  className={cn(
+                    "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
+                    monthFilter === idx
+                      ? "bg-pastel-blue text-pastel-blue-foreground"
+                      : "bg-muted text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {name.slice(0, 3)}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <TypeChip active={typeFilter === "all"} onClick={() => setTypeFilter("all")} className="bg-muted text-foreground">
               Todos
@@ -375,7 +398,7 @@ const EventsCardsView = ({
   onEdit: (e: EventRow) => void;
   onDelete: (id: string) => void;
 }) => {
-  const sorted = [...items].sort((a, b) => a.event_date.localeCompare(b.event_date));
+  const sorted = [...items].sort((a, b) => b.event_date.localeCompare(a.event_date));
 
   return (
     <div className="overflow-hidden rounded-2xl bg-card shadow-card">
@@ -701,7 +724,7 @@ const ListView = ({
   onDelete: (id: string) => void;
   hideActionsColumn?: boolean;
 }) => {
-  const sorted = [...items].sort((a, b) => a.event_date.localeCompare(b.event_date));
+  const sorted = [...items].sort((a, b) => b.event_date.localeCompare(a.event_date));
 
   return (
     <div className="overflow-hidden rounded-2xl bg-card shadow-card">

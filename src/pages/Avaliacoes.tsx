@@ -303,7 +303,7 @@ const Avaliacoes = () => {
         "id,title,type,date,start_time,end_time,room,weight,description,classroom_id,subject_id,teacher_id,term_id,academic_year_id,created_by",
       )
       .eq("school_id", sid)
-      .order("date", { ascending: true });
+      .order("date", { ascending: false });
     if (yearId) {
       assessmentsQuery = assessmentsQuery.eq("academic_year_id", yearId);
     }
@@ -858,9 +858,9 @@ const AssessmentsCardsView = ({
   canMutateAssessment: (a: Assessment) => boolean;
 }) => {
   const sorted = [...evaluations].sort((a, b) => {
-    const d = a.date.localeCompare(b.date);
+    const d = b.date.localeCompare(a.date);
     if (d !== 0) return d;
-    return (a.start_time ?? "").localeCompare(b.start_time ?? "");
+    return (b.start_time ?? "").localeCompare(a.start_time ?? "");
   });
 
   return (
@@ -1179,7 +1179,7 @@ const ListView = ({
   onOpen: (id: string) => void;
   canMutateAssessment: (a: Assessment) => boolean;
 }) => {
-  const sorted = [...evaluations].sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = [...evaluations].sort((a, b) => b.date.localeCompare(a.date));
 
   return (
     <div className="overflow-hidden rounded-2xl bg-card shadow-card">

@@ -100,7 +100,7 @@ export async function fetchTeacherAvaliacoesPack(args: {
     )
     .eq("school_id", schoolId)
     .eq("academic_year_id", academicYearId)
-    .order("date", { ascending: true })
+    .order("date", { ascending: false })
     .in("classroom_id", classroomIds);
 
   const classroomsQuery = supabase
