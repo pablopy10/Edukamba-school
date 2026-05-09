@@ -668,7 +668,7 @@ const Chat = () => {
           open={!!activeId}
           onOpenChange={(open) => { if (!open) { setActiveId(null); setShowEmoji(false); } }}
         >
-          <DialogContent className="fixed inset-0 z-50 flex h-[100dvh] w-full max-w-none flex-col gap-0 rounded-none border-0 p-0 [transform:none]">
+          <DialogContent className="fixed inset-0 z-[150] flex h-[100dvh] w-full max-w-none flex-col gap-0 rounded-none border-0 p-0 [transform:none]">
             <DialogHeader className="sr-only">
               <DialogTitle>{active?.full_name ?? "Conversa"}</DialogTitle>
               <DialogDescription>Conversa com {active?.full_name ?? "utilizador"}</DialogDescription>
