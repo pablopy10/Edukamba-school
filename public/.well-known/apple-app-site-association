@@ -2,7 +2,7 @@
   "applinks": {
     "details": [
       {
-        "appIDs": ["XXXXXXXXXX.com.edukamba.app"],
+        "appIDs": ["C4754865RX.com.edukamba.app"],
         "components": [
           {
             "/": "/*",
@@ -13,6 +13,6 @@
     ]
   },
   "webcredentials": {
-    "apps": ["XXXXXXXXXX.com.edukamba.app"]
+    "apps": ["C4754865RX.com.edukamba.app"]
   }
 }
