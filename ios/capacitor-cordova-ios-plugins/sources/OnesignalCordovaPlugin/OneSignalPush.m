@@ -28,7 +28,6 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
-#import "OneSignalLiveActivities/OneSignalLiveActivities-Swift.h"
 #import "OneSignalPush.h"
 #import <OneSignalFramework/OneSignalFramework.h>
 
@@ -38,8 +37,6 @@ NSString *permissionObserverCallbackId;
 NSString *subscriptionObserverCallbackId;
 NSString *requestPermissionCallbackId;
 NSString *registerForProvisionalAuthorizationCallbackId;
-NSString *enterLiveActivityCallbackId;
-NSString *exitLiveActivityCallbackId;
 
 NSString *inAppMessageWillDisplayCallbackId;
 NSString *inAppMessageDidDisplayCallbackId;
@@ -125,7 +122,6 @@ void initOneSignalObject(NSDictionary *launchOptions) {
 
 /** Helper method to return NSNull if string is empty or nil **/
 NSString *getStringOrNSNull(NSString *string) {
-  // length method can be used on nil and strings
   if (string.length > 0) {
     return string;
   } else {
@@ -203,14 +199,12 @@ static Class delegateClass = nil;
     (OSPushSubscriptionChangedState *)state {
   NSMutableDictionary *result = [NSMutableDictionary new];
 
-  // Previous state
   NSMutableDictionary *previousObject = [NSMutableDictionary new];
   previousObject[@"token"] = getStringOrNSNull(state.previous.token);
   previousObject[@"id"] = getStringOrNSNull(state.previous.id);
   previousObject[@"optedIn"] = @(state.previous.optedIn);
   result[@"previous"] = previousObject;
 
-  // Current state
   NSMutableDictionary *currentObject = [NSMutableDictionary new];
   currentObject[@"token"] = getStringOrNSNull(state.current.token);
   currentObject[@"id"] = getStringOrNSNull(state.current.id);
@@ -225,9 +219,7 @@ static Class delegateClass = nil;
   NSString *externalId = state.current.externalId;
 
   NSMutableDictionary *result = [NSMutableDictionary new];
-
   NSMutableDictionary *currentObject = [NSMutableDictionary new];
-
   currentObject[@"onesignalId"] = getStringOrNSNull(onesignalId);
   currentObject[@"externalId"] = getStringOrNSNull(externalId);
   result[@"current"] = currentObject;
@@ -259,13 +251,6 @@ static Class delegateClass = nil;
   OSNotificationWillDisplayEvent *event =
       _notificationWillDisplayCache[notificationId];
   if (!event) {
-    [OneSignalLog
-        onesignalLog:ONE_S_LL_ERROR
-             message:[NSString
-                         stringWithFormat:
-                             @"OneSignal (objc): could not find notification "
-                             @"will display event for notification with id: %@",
-                             notificationId]];
     return;
   }
   [event preventDefault];
@@ -277,13 +262,6 @@ static Class delegateClass = nil;
   OSNotificationWillDisplayEvent *event =
       _notificationWillDisplayCache[notificationId];
   if (!event) {
-    [OneSignalLog
-        onesignalLog:ONE_S_LL_ERROR
-             message:[NSString
-                         stringWithFormat:
-                             @"OneSignal (objc): could not find notification "
-                             @"will display event for notification with id: %@",
-                             notificationId]];
     return;
   }
   [event.notification display];
@@ -294,13 +272,6 @@ static Class delegateClass = nil;
   OSNotificationWillDisplayEvent *event =
       self.notificationWillDisplayCache[notificationId];
   if (!event) {
-    [OneSignalLog
-        onesignalLog:ONE_S_LL_ERROR
-             message:[NSString
-                         stringWithFormat:
-                             @"OneSignal (objc): could not find notification "
-                             @"will display event for notification with id: %@",
-                             notificationId]];
     return;
   }
   if (self.preventDefaultCache[notificationId]) {
@@ -331,14 +302,8 @@ static Class delegateClass = nil;
   }
 }
 
-/// Initializes OneSignal with the given appId; called by app developers.
 - (void)init:(CDVInvokedUrlCommand *)command {
   if (initDone) {
-    [OneSignalLog
-        onesignalLog:ONE_S_LL_DEBUG
-             message:[NSString
-                         stringWithFormat:
-                             @"Already initialized the OneSignal Cordova SDK"]];
     successCallbackBoolean(command.callbackId, true);
     return;
   }
@@ -353,9 +318,6 @@ static Class delegateClass = nil;
       (appId ? [NSString stringWithUTF8String:[appId UTF8String]] : nil);
 
   [OneSignal initialize:appIdStr withLaunchOptions:nil];
-
-  // Automatically add this listener as each lifecycle is registered by the
-  // developer separately
   [OneSignal.InAppMessages addLifecycleListener:self];
 
   if (actionNotification)
@@ -480,13 +442,8 @@ static Class delegateClass = nil;
   [OneSignal.Notifications clearAll];
 }
 
-// Start Android only
-- (void)removeNotification:(CDVInvokedUrlCommand *)command {
-}
-
-- (void)removeGroupedNotifications:(CDVInvokedUrlCommand *)command {
-}
-// Finish Android only
+- (void)removeNotification:(CDVInvokedUrlCommand *)command {}
+- (void)removeGroupedNotifications:(CDVInvokedUrlCommand *)command {}
 
 - (void)setPrivacyConsentRequired:(CDVInvokedUrlCommand *)command {
   if (command.arguments.count >= 1)
@@ -507,56 +464,40 @@ static Class delegateClass = nil;
 }
 
 - (void)addEmail:(CDVInvokedUrlCommand *)command {
-  NSString *email = command.arguments[0];
-  [OneSignal.User addEmail:email];
+  [OneSignal.User addEmail:command.arguments[0]];
 }
 
 - (void)removeEmail:(CDVInvokedUrlCommand *)command {
-  NSString *email = command.arguments[0];
-  [OneSignal.User removeEmail:email];
+  [OneSignal.User removeEmail:command.arguments[0]];
 }
 
 - (void)addSms:(CDVInvokedUrlCommand *)command {
-  NSString *smsNumber = command.arguments[0];
-  [OneSignal.User addSms:smsNumber];
+  [OneSignal.User addSms:command.arguments[0]];
 }
 
 - (void)removeSms:(CDVInvokedUrlCommand *)command {
-  NSString *smsNumber = command.arguments[0];
-  [OneSignal.User removeSms:smsNumber];
+  [OneSignal.User removeSms:command.arguments[0]];
 }
-
-/**
- * In-App Messages
- */
 
 - (void)onClickInAppMessage:(OSInAppMessageClickEvent *_Nonnull)event {
   if (inAppMessageClickedCallbackId != nil) {
     NSInteger urlTargetInt = event.result.urlTarget;
     NSString *urlTarget;
     switch (urlTargetInt) {
-    case 0:
-      urlTarget = @"browser";
-      break;
-    case 1:
-      urlTarget = @"webview";
-      break;
-    case 2:
-      urlTarget = @"replacement";
-      break;
+    case 0: urlTarget = @"browser"; break;
+    case 1: urlTarget = @"webview"; break;
+    case 2: urlTarget = @"replacement"; break;
+    default: urlTarget = @"browser"; break;
     }
-
     NSMutableDictionary *clickResultDict = [NSMutableDictionary new];
     clickResultDict[@"actionId"] = event.result.actionId;
     clickResultDict[@"urlTarget"] = urlTarget;
     clickResultDict[@"closingMessage"] = @(event.result.closingMessage);
     clickResultDict[@"url"] = event.result.url;
-
     NSDictionary *json = @{
       @"message" : [event.message jsonRepresentation],
       @"result" : clickResultDict
     };
-
     successCallback(inAppMessageClickedCallbackId, json);
   }
 }
@@ -631,7 +572,6 @@ static Class delegateClass = nil;
 
 - (void)setPaused:(CDVInvokedUrlCommand *)command {
   bool pause = [command.arguments[0] boolValue];
-
   [OneSignal.InAppMessages paused:pause];
 }
 
@@ -640,32 +580,27 @@ static Class delegateClass = nil;
   successCallbackBoolean(command.callbackId, paused);
 }
 
-/**
- * Outcomes
- */
-
 - (void)addOutcome:(CDVInvokedUrlCommand *)command {
-  NSString *name = command.arguments[0];
-
-  [OneSignal.Session addOutcome:name];
+  [OneSignal.Session addOutcome:command.arguments[0]];
 }
 
 - (void)addUniqueOutcome:(CDVInvokedUrlCommand *)command {
-  NSString *name = command.arguments[0];
-
-  [OneSignal.Session addUniqueOutcome:name];
+  [OneSignal.Session addUniqueOutcome:command.arguments[0]];
 }
 
 - (void)addOutcomeWithValue:(CDVInvokedUrlCommand *)command {
-  NSString *name = command.arguments[0];
-  NSNumber *value = command.arguments[1];
-
-  [OneSignal.Session addOutcomeWithValue:name value:value];
+  [OneSignal.Session addOutcomeWithValue:command.arguments[0]
+                                   value:command.arguments[1]];
 }
 
-/**
- * Location
- */
+- (void)trackEvent:(CDVInvokedUrlCommand *)command {
+  NSString *eventName = command.arguments[0];
+  NSDictionary *properties = nil;
+  if (command.arguments.count > 1 && command.arguments[1] != [NSNull null]) {
+    properties = command.arguments[1];
+  }
+  [OneSignal.User trackEventWithName:eventName properties:properties];
+}
 
 - (void)requestLocationPermission:(CDVInvokedUrlCommand *)command {
   [OneSignal.Location requestPermission];
@@ -680,146 +615,12 @@ static Class delegateClass = nil;
   successCallbackBoolean(command.callbackId, isShared);
 }
 
-/**
- * Live Activities
- */
+// Live Activities — not available without OneSignalLiveActivities SPM package
+- (void)enterLiveActivity:(CDVInvokedUrlCommand *)command {}
+- (void)exitLiveActivity:(CDVInvokedUrlCommand *)command {}
+- (void)setPushToStartToken:(CDVInvokedUrlCommand *)command {}
+- (void)removePushToStartToken:(CDVInvokedUrlCommand *)command {}
+- (void)setupDefaultLiveActivity:(CDVInvokedUrlCommand *)command {}
+- (void)startDefaultLiveActivity:(CDVInvokedUrlCommand *)command {}
 
-- (void)enterLiveActivity:(CDVInvokedUrlCommand *)command {
-  enterLiveActivityCallbackId = command.callbackId;
-
-  NSString *activityId = command.arguments[0];
-  NSString *token = command.arguments[1];
-
-  [OneSignal.LiveActivities enter:activityId
-      withToken:token
-      withSuccess:^(NSDictionary *results) {
-        successCallback(enterLiveActivityCallbackId, results);
-      }
-      withFailure:^(NSError *error) {
-        failureCallback(enterLiveActivityCallbackId, error.userInfo);
-      }];
-}
-
-- (void)exitLiveActivity:(CDVInvokedUrlCommand *)command {
-  exitLiveActivityCallbackId = command.callbackId;
-
-  NSString *activityId = command.arguments[0];
-
-  [OneSignal.LiveActivities exit:activityId
-      withSuccess:^(NSDictionary *results) {
-        successCallback(exitLiveActivityCallbackId, results);
-      }
-      withFailure:^(NSError *error) {
-        failureCallback(exitLiveActivityCallbackId, error.userInfo);
-      }];
-}
-
-- (void)setPushToStartToken:(CDVInvokedUrlCommand *)command {
-#if !TARGET_OS_MACCATALYST
-  NSString *activityType = command.arguments[0];
-  NSString *token = command.arguments[1];
-  NSError *err = nil;
-
-  if (@available(iOS 17.2, *)) {
-    [OneSignalLiveActivitiesManagerImpl setPushToStartToken:activityType
-                                                  withToken:token
-                                                      error:&err];
-    if (err) {
-      [OneSignalLog
-          onesignalLog:ONE_S_LL_ERROR
-               message:[NSString
-                           stringWithFormat:@"activityType must be the name of "
-                                            @"your ActivityAttributes struct"]];
-    }
-  } else {
-    [OneSignalLog
-        onesignalLog:ONE_S_LL_ERROR
-             message:[NSString
-                         stringWithFormat:
-                             @"cannot setPushToStartToken on iOS < 17.2"]];
-  }
-#endif
-}
-
-- (void)removePushToStartToken:(CDVInvokedUrlCommand *)command {
-#if !TARGET_OS_MACCATALYST
-  NSString *activityType = command.arguments[0];
-  NSError *err = nil;
-
-  if (@available(iOS 17.2, *)) {
-    [OneSignalLiveActivitiesManagerImpl removePushToStartToken:activityType
-                                                         error:&err];
-    if (err) {
-      [OneSignalLog
-          onesignalLog:ONE_S_LL_ERROR
-               message:[NSString
-                           stringWithFormat:@"activityType must be the name of "
-                                            @"your ActivityAttributes struct"]];
-    }
-  } else {
-    [OneSignalLog
-        onesignalLog:ONE_S_LL_ERROR
-             message:[NSString
-                         stringWithFormat:
-                             @"cannot removePushToStartToken on iOS < 17.2"]];
-  }
-#endif
-}
-
-- (void)setupDefaultLiveActivity:(CDVInvokedUrlCommand *)command {
-#if !TARGET_OS_MACCATALYST
-  NSDictionary *options = command.arguments[0];
-  LiveActivitySetupOptions *laOptions = nil;
-
-  if (options != [NSNull null]) {
-    laOptions = [LiveActivitySetupOptions alloc];
-    [laOptions setEnablePushToStart:[options[@"enablePushToStart"] boolValue]];
-    [laOptions
-        setEnablePushToUpdate:[options[@"enablePushToUpdate"] boolValue]];
-  }
-
-  if (@available(iOS 16.1, *)) {
-    [OneSignalLiveActivitiesManagerImpl setupDefaultWithOptions:laOptions];
-  } else {
-    [OneSignalLog
-        onesignalLog:ONE_S_LL_ERROR
-             message:[NSString stringWithFormat:
-                                   @"cannot setupDefault on iOS < 16.1"]];
-  }
-#endif
-}
-
-- (void)startDefaultLiveActivity:(CDVInvokedUrlCommand *)command {
-#if !TARGET_OS_MACCATALYST
-  NSString *activityId = command.arguments[0];
-  NSDictionary *attributes = command.arguments[1];
-  NSDictionary *content = command.arguments[2];
-
-  if (@available(iOS 16.1, *)) {
-    [OneSignalLiveActivitiesManagerImpl startDefault:activityId
-                                          attributes:attributes
-                                             content:content];
-  } else {
-    [OneSignalLog
-        onesignalLog:ONE_S_LL_ERROR
-             message:[NSString stringWithFormat:
-                                   @"cannot startDefault on iOS < 16.1"]];
-  }
-#endif
-}
-
-/**
- * Custom Events
- */
-
-- (void)trackEvent:(CDVInvokedUrlCommand *)command {
-  NSString *eventName = command.arguments[0];
-  NSDictionary *properties = nil;
-
-  if (command.arguments.count > 1 && command.arguments[1] != [NSNull null]) {
-    properties = command.arguments[1];
-  }
-
-  [OneSignal.User trackEventWithName:eventName properties:properties];
-}
 @end
