@@ -57,6 +57,7 @@ import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
 import { queryClient } from "@/lib/queryClient";
 import { OneSignalWebBridge } from "@/components/OneSignalWebBridge";
 import { OpenInAppBanner } from "@/components/OpenInAppBanner";
+import { ScrollToTop } from "@/components/ScrollToTop";
 
 function RouteSpinner() {
   return (
@@ -98,6 +99,7 @@ const App = () => (
                 <Toaster />
                 <Sonner />
                 <BrowserRouter>
+                  <ScrollToTop />
                   <OneSignalWebBridge />
                   <OpenInAppBanner />
                   <Routes>
