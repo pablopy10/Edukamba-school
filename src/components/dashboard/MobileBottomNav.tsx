@@ -39,7 +39,7 @@ export const MobileBottomNav = () => {
       <nav
         aria-hidden="true"
         className="pointer-events-auto fixed bottom-0 left-0 right-0 z-[100] border-t border-border bg-card/95 backdrop-blur-md lg:hidden"
-        style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+        style={{ paddingBottom: "max(0.4rem, var(--sab-r))" }}
       >
         <div className="flex justify-around px-1 pb-2 pt-3">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -63,7 +63,7 @@ export const MobileBottomNav = () => {
   return (
     <nav
       className="pointer-events-auto fixed bottom-0 left-0 right-0 z-[100] border-t border-border bg-card/95 shadow-[0_-4px_24px_rgba(15,23,42,0.06)] backdrop-blur-md lg:hidden"
-      style={{ paddingBottom: "max(0.35rem, env(safe-area-inset-bottom))" }}
+      style={{ paddingBottom: "max(0.3rem, var(--sab-r))" }}
       aria-label="Navegação principal"
     >
       <div className="mx-auto flex max-w-[1600px] justify-evenly gap-0 px-0 pb-1 pt-1">

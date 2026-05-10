@@ -13,7 +13,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       theme={theme as ToasterProps["theme"]}
       position="top-right"
       className="toaster group z-[200]"
-      style={native ? ({ "--offset": "calc(env(safe-area-inset-top, 0px) + 4.5rem)" } as React.CSSProperties) : undefined}
+      style={native ? ({ "--offset": "calc(var(--sat-r) + 4.5rem)" } as React.CSSProperties) : undefined}
       toastOptions={{
         classNames: {
           toast:

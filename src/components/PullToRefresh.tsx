@@ -74,7 +74,7 @@ export const PullToRefresh = () => {
     <div
       className="pointer-events-none fixed left-0 right-0 top-0 z-[300] flex items-start justify-center"
       style={{
-        transform: `translateY(calc(env(safe-area-inset-top, 0px) + ${pullY}px - 48px))`,
+        transform: `translateY(calc(var(--sat-r) + ${pullY}px - 48px))`,
         transition: refreshing ? "none" : pullY === 0 ? "transform 0.25s ease" : "none",
       }}
     >

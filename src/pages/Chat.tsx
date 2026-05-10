@@ -676,7 +676,7 @@ const Chat = () => {
             </DialogHeader>
 
             {/* Header */}
-            <div className="flex shrink-0 items-center gap-3 border-b border-border bg-card p-4 [padding-top:max(1rem,env(safe-area-inset-top,0px))]">
+            <div className="flex shrink-0 items-center gap-3 border-b border-border bg-card p-4 [padding-top:max(0.75rem,var(--sat-r))]">
               <button
                 onClick={() => { setActiveId(null); setShowEmoji(false); }}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground hover:bg-accent"
@@ -760,7 +760,7 @@ const Chat = () => {
             </div>
 
             {/* Composer */}
-            <div className="shrink-0 border-t border-border bg-card p-3 [padding-bottom:max(0.75rem,env(safe-area-inset-bottom,0px))]">
+            <div className="shrink-0 border-t border-border bg-card p-3 [padding-bottom:max(0.65rem,var(--sab-r))]">
               <div className="flex items-end gap-2">
                 <Popover>
                   <PopoverTrigger asChild>

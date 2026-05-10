@@ -186,4 +186,7 @@ All colors MUST be HSL.
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
   --sar: env(safe-area-inset-right, 0px);
+  /* Slightly tighter variants used for layout padding (6 px / 4 px reduction) */
+  --sat-r: max(0px, calc(env(safe-area-inset-top, 0px) - 6px));
+  --sab-r: max(0px, calc(env(safe-area-inset-bottom, 0px) - 4px));
 }
