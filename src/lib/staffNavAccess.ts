@@ -1,5 +1,5 @@
 import type { UserRole } from "@/hooks/useUserRole";
-import { canValidateSchoolPaymentProofs } from "@/lib/schoolStaffRoles";
+import { canValidateSchoolPaymentProofs, isSchoolSettingsAdmin } from "@/lib/schoolStaffRoles";
 
 type StaffOperationalRole = Exclude<
   UserRole,
