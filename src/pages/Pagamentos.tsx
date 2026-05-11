@@ -26,7 +26,7 @@ import { useAcademicYear } from "@/context/AcademicYearContext";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useUserRole } from "@/hooks/useUserRole";
-import { isSchoolManagementRole, isSchoolSettingsAdmin } from "@/lib/schoolStaffRoles";
+import { canValidateSchoolPaymentProofs, isSchoolManagementRole, isSchoolSettingsAdmin } from "@/lib/schoolStaffRoles";
 import type { GuardianPaymentMode } from "@/lib/guardianPayment";
 import { encarregadosUsamAnexo, normalizeGuardianPaymentMode } from "@/lib/guardianPayment";
 
@@ -167,6 +167,7 @@ const Pagamentos = () => {
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const { role } = useUserRole();
   const canEditSchoolPaymentPrefs = isSchoolManagementRole(role) || isSchoolSettingsAdmin(role);
+  const canValidatePaymentProofs = canValidateSchoolPaymentProofs(role);
   const { isParent, childIds, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const { selectedYearId: globalAcademicYearId } = useAcademicYear();
   const [years, setYears] = useState<AcademicYear[]>([]);
@@ -975,6 +976,7 @@ const Pagamentos = () => {
   };
 
   const bulkValidateFees = async () => {
+    if (!canValidatePaymentProofs) return;
     const sel = pendingValidations.filter((x) => bulkSelectedTuitionFeeIds.has(x.fee.id));
     if (!sel.length) {
       toast({
@@ -1015,7 +1017,7 @@ const Pagamentos = () => {
   };
 
   const validatePayment = async (fee: FeeListRow, payment: PaymentListRow) => {
-    if (!schoolId) return;
+    if (!schoolId || !canValidatePaymentProofs) return;
     setValidatingId(payment.id);
     const { data: userRes } = await supabase.auth.getUser();
     const userId = userRes.user?.id ?? null;
@@ -1030,7 +1032,7 @@ const Pagamentos = () => {
   };
 
   const confirmReject = async () => {
-    if (!rejectDialog || !schoolId) return;
+    if (!rejectDialog || !schoolId || !canValidatePaymentProofs) return;
     const payment = rejectDialog;
     const fee = payment.student_fee_id ? allFees.find((f) => f.id === payment.student_fee_id) : null;
     const actFee = payment.activity_fee_id ? allActivityFees.find((f) => f.id === payment.activity_fee_id) : null;
@@ -1244,7 +1246,7 @@ const Pagamentos = () => {
   }, [allActivityFees, latestPaymentByActivityFee]);
 
   const validateActivityPayment = async (fee: ActivityFeeRow, payment: PaymentListRow) => {
-    if (!schoolId) return;
+    if (!schoolId || !canValidatePaymentProofs) return;
     setValidatingId(payment.id);
     const { data: userRes } = await supabase.auth.getUser();
     const userId = userRes.user?.id ?? null;
@@ -1259,6 +1261,7 @@ const Pagamentos = () => {
   };
 
   const bulkValidateActivityFeesList = async () => {
+    if (!canValidatePaymentProofs) return;
     const sel = pendingActivityValidations.filter((x) => bulkSelectedPayments.has(x.payment.id));
     if (!sel.length) {
       toast({ title: "Nada seleccionado", description: "Seleccione uma ou mais linhas na tabela.", variant: "destructive" });
@@ -1370,7 +1373,7 @@ const Pagamentos = () => {
   }, [allTransportFees, latestPaymentByTransportFee]);
 
   const validateTransportPayment = async (fee: TransportFeeRow, payment: PaymentListRow) => {
-    if (!schoolId) return;
+    if (!schoolId || !canValidatePaymentProofs) return;
     setValidatingId(payment.id);
     const { data: userRes } = await supabase.auth.getUser();
     const userId = userRes.user?.id ?? null;
@@ -1385,6 +1388,7 @@ const Pagamentos = () => {
   };
 
   const bulkValidateTransportFeesList = async () => {
+    if (!canValidatePaymentProofs) return;
     const sel = pendingTransportValidations.filter((x) => bulkSelectedPayments.has(x.payment.id));
     if (!sel.length) {
       toast({ title: "Nada seleccionado", description: "Seleccione uma ou mais linhas na tabela.", variant: "destructive" });
@@ -1496,7 +1500,7 @@ const Pagamentos = () => {
   }, [allEnrollmentFees, latestPaymentByEnrollmentFee]);
 
   const validateEnrollmentPayment = async (fee: EnrollmentFeeRow, payment: PaymentListRow) => {
-    if (!schoolId) return;
+    if (!schoolId || !canValidatePaymentProofs) return;
     setValidatingId(payment.id);
     const { data: userRes } = await supabase.auth.getUser();
     const userId = userRes.user?.id ?? null;
@@ -1511,6 +1515,7 @@ const Pagamentos = () => {
   };
 
   const bulkValidateEnrollmentFeesList = async () => {
+    if (!canValidatePaymentProofs) return;
     const sel = pendingEnrollmentValidations.filter((x) => bulkSelectedPayments.has(x.payment.id));
     if (!sel.length) {
       toast({ title: "Nada seleccionado", description: "Seleccione uma ou mais linhas na tabela.", variant: "destructive" });
@@ -1736,7 +1741,7 @@ const Pagamentos = () => {
             </div>
             )}
 
-            {!isParent && pendingValidations.length > 0 && (
+            {!isParent && canValidatePaymentProofs && pendingValidations.length > 0 && (
               <Card className="border-pastel-blue/60">
                 <CardHeader className="space-y-3">
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -1847,7 +1852,7 @@ const Pagamentos = () => {
                 </div>
                 {!isParent && (
                   <div className="flex flex-wrap items-center gap-2">
-                    {pendingValidations.length > 0 && (
+                    {canValidatePaymentProofs && pendingValidations.length > 0 && (
                       <Button
                         type="button"
                         size="sm"
@@ -2015,24 +2020,28 @@ const Pagamentos = () => {
                                           <Eye className="h-3.5 w-3.5" /> Ver
                                         </Button>
                                       )}
-                                      <Button
-                                        size="sm"
-                                        className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
-                                        disabled={bulkValidating || bulkRemindingTuition || validatingId === pay.id}
-                                        onClick={() => validatePayment(f, pay)}
-                                      >
-                                        {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                        Validar
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="gap-1 text-destructive"
-                                        disabled={bulkValidating || bulkRemindingTuition || validatingId === pay.id}
-                                        onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
-                                      >
-                                        <XCircle className="h-3.5 w-3.5" /> Rejeitar
-                                      </Button>
+                                      {canValidatePaymentProofs && (
+                                        <>
+                                          <Button
+                                            size="sm"
+                                            className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                                            disabled={bulkValidating || bulkRemindingTuition || validatingId === pay.id}
+                                            onClick={() => validatePayment(f, pay)}
+                                          >
+                                            {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                            Validar
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="gap-1 text-destructive"
+                                            disabled={bulkValidating || bulkRemindingTuition || validatingId === pay.id}
+                                            onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
+                                          >
+                                            <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                          </Button>
+                                        </>
+                                      )}
                                     </>
                                   )}
                                   {pendingValidation && pay && isParent && pay.proof_url && (
@@ -2095,7 +2104,7 @@ const Pagamentos = () => {
             </div>
             )}
 
-            {!isParent && pendingActivityValidations.length > 0 && (
+            {!isParent && canValidatePaymentProofs && pendingActivityValidations.length > 0 && (
               <Card className="border-pastel-blue/60">
                 <CardHeader className="space-y-3">
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -2206,7 +2215,7 @@ const Pagamentos = () => {
                 </div>
                 {!isParent && (
                   <div className="flex flex-wrap items-center gap-2">
-                    {pendingActivityValidations.length > 0 && (
+                    {canValidatePaymentProofs && pendingActivityValidations.length > 0 && (
                       <Button
                         type="button"
                         size="sm"
@@ -2267,7 +2276,7 @@ const Pagamentos = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
-                          {!isParent && pendingActivityValidations.length > 0 && (
+                          {!isParent && canValidatePaymentProofs && pendingActivityValidations.length > 0 && (
                             <th className="py-2 px-2 w-10 align-middle">
                               <Checkbox
                                 disabled={bulkValidating}
@@ -2314,7 +2323,7 @@ const Pagamentos = () => {
                           const rejected = !!pay && pay.status === "rejeitado";
                           return (
                             <tr key={f.id} className="border-b hover:bg-muted/30">
-                              {!isParent && pendingActivityValidations.length > 0 && (
+                              {!isParent && canValidatePaymentProofs && pendingActivityValidations.length > 0 && (
                                 <td className="py-2 px-2 align-middle w-10">
                                   {pendingValidation && pay ? (
                                     <Checkbox
@@ -2352,24 +2361,28 @@ const Pagamentos = () => {
                                           <Eye className="h-3.5 w-3.5" /> Ver
                                         </Button>
                                       )}
-                                      <Button
-                                        size="sm"
-                                        className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
-                                        disabled={bulkValidating || validatingId === pay.id}
-                                        onClick={() => validateActivityPayment(f, pay)}
-                                      >
-                                        {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                        Validar
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="gap-1 text-destructive"
-                                        disabled={bulkValidating || validatingId === pay.id}
-                                        onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
-                                      >
-                                        <XCircle className="h-3.5 w-3.5" /> Rejeitar
-                                      </Button>
+                                      {canValidatePaymentProofs && (
+                                        <>
+                                          <Button
+                                            size="sm"
+                                            className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                                            disabled={bulkValidating || validatingId === pay.id}
+                                            onClick={() => validateActivityPayment(f, pay)}
+                                          >
+                                            {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                            Validar
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="gap-1 text-destructive"
+                                            disabled={bulkValidating || validatingId === pay.id}
+                                            onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
+                                          >
+                                            <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                          </Button>
+                                        </>
+                                      )}
                                     </>
                                   )}
                                   {!f.is_paid && !pendingValidation && (
@@ -2427,7 +2440,7 @@ const Pagamentos = () => {
             </div>
             )}
 
-            {!isParent && pendingTransportValidations.length > 0 && (
+            {!isParent && canValidatePaymentProofs && pendingTransportValidations.length > 0 && (
               <Card className="border-pastel-blue/60">
                 <CardHeader className="space-y-3">
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -2538,7 +2551,7 @@ const Pagamentos = () => {
                 </div>
                 {!isParent && (
                   <div className="flex flex-wrap items-center gap-2">
-                    {pendingTransportValidations.length > 0 && (
+                    {canValidatePaymentProofs && pendingTransportValidations.length > 0 && (
                       <Button
                         type="button"
                         size="sm"
@@ -2599,7 +2612,7 @@ const Pagamentos = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
-                          {!isParent && pendingTransportValidations.length > 0 && (
+                          {!isParent && canValidatePaymentProofs && pendingTransportValidations.length > 0 && (
                             <th className="py-2 px-2 w-10 align-middle">
                               <Checkbox
                                 disabled={bulkValidating}
@@ -2646,7 +2659,7 @@ const Pagamentos = () => {
                           const rejected = !!pay && pay.status === "rejeitado";
                           return (
                             <tr key={f.id} className="border-b hover:bg-muted/30">
-                              {!isParent && pendingTransportValidations.length > 0 && (
+                              {!isParent && canValidatePaymentProofs && pendingTransportValidations.length > 0 && (
                                 <td className="py-2 px-2 align-middle w-10">
                                   {pendingValidation && pay ? (
                                     <Checkbox
@@ -2684,24 +2697,28 @@ const Pagamentos = () => {
                                           <Eye className="h-3.5 w-3.5" /> Ver
                                         </Button>
                                       )}
-                                      <Button
-                                        size="sm"
-                                        className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
-                                        disabled={bulkValidating || validatingId === pay.id}
-                                        onClick={() => validateTransportPayment(f, pay)}
-                                      >
-                                        {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                        Validar
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="gap-1 text-destructive"
-                                        disabled={bulkValidating || validatingId === pay.id}
-                                        onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
-                                      >
-                                        <XCircle className="h-3.5 w-3.5" /> Rejeitar
-                                      </Button>
+                                      {canValidatePaymentProofs && (
+                                        <>
+                                          <Button
+                                            size="sm"
+                                            className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                                            disabled={bulkValidating || validatingId === pay.id}
+                                            onClick={() => validateTransportPayment(f, pay)}
+                                          >
+                                            {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                            Validar
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="gap-1 text-destructive"
+                                            disabled={bulkValidating || validatingId === pay.id}
+                                            onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
+                                          >
+                                            <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                          </Button>
+                                        </>
+                                      )}
                                     </>
                                   )}
                                   {!f.is_paid && !pendingValidation && (
@@ -2759,7 +2776,7 @@ const Pagamentos = () => {
             </div>
             )}
 
-            {!isParent && pendingEnrollmentValidations.length > 0 && (
+            {!isParent && canValidatePaymentProofs && pendingEnrollmentValidations.length > 0 && (
               <Card className="border-pastel-blue/60">
                 <CardHeader className="space-y-3">
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -2868,7 +2885,7 @@ const Pagamentos = () => {
                   <CardTitle className="flex items-center gap-2"><GraduationCap className="h-4 w-4" /> Custos de matrícula e renovação</CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">Custos únicos cobrados ao matricular um aluno ou ao renovar a matrícula num novo ano letivo.</p>
                 </div>
-                {!isParent && pendingEnrollmentValidations.length > 0 && (
+                {!isParent && canValidatePaymentProofs && pendingEnrollmentValidations.length > 0 && (
                   <Button
                     type="button"
                     size="sm"
@@ -2925,7 +2942,7 @@ const Pagamentos = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
-                          {!isParent && pendingEnrollmentValidations.length > 0 && (
+                          {!isParent && canValidatePaymentProofs && pendingEnrollmentValidations.length > 0 && (
                             <th className="py-2 px-2 w-10 align-middle">
                               <Checkbox
                                 disabled={bulkValidating}
@@ -2972,7 +2989,7 @@ const Pagamentos = () => {
                           const rejected = !!pay && pay.status === "rejeitado";
                           return (
                             <tr key={f.id} className="border-b hover:bg-muted/30">
-                              {!isParent && pendingEnrollmentValidations.length > 0 && (
+                              {!isParent && canValidatePaymentProofs && pendingEnrollmentValidations.length > 0 && (
                                 <td className="py-2 px-2 align-middle w-10">
                                   {pendingValidation && pay ? (
                                     <Checkbox
@@ -3010,24 +3027,28 @@ const Pagamentos = () => {
                                           <Eye className="h-3.5 w-3.5" /> Ver
                                         </Button>
                                       )}
-                                      <Button
-                                        size="sm"
-                                        className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
-                                        disabled={bulkValidating || validatingId === pay.id}
-                                        onClick={() => validateEnrollmentPayment(f, pay)}
-                                      >
-                                        {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                        Validar
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="gap-1 text-destructive"
-                                        disabled={bulkValidating || validatingId === pay.id}
-                                        onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
-                                      >
-                                        <XCircle className="h-3.5 w-3.5" /> Rejeitar
-                                      </Button>
+                                      {canValidatePaymentProofs && (
+                                        <>
+                                          <Button
+                                            size="sm"
+                                            className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                                            disabled={bulkValidating || validatingId === pay.id}
+                                            onClick={() => validateEnrollmentPayment(f, pay)}
+                                          >
+                                            {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                            Validar
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="gap-1 text-destructive"
+                                            disabled={bulkValidating || validatingId === pay.id}
+                                            onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
+                                          >
+                                            <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                          </Button>
+                                        </>
+                                      )}
                                     </>
                                   )}
                                   {!f.is_paid && !pendingValidation && (

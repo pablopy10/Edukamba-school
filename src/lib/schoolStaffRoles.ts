@@ -27,6 +27,15 @@ export function isSchoolSettingsAdmin(role: string | null | undefined): role is 
   return role === "ADMIN" || role === "SUPER_ADMIN";
 }
 
+/**
+ * Quem pode validar/rejeitar comprovativos e usar «Validar seleccionados» na UI dos pagamentos.
+ * Exclui encarregados (PARENT) e alunos (STUDENT). Deve conjugar-se com `!isParent` na página quando aplicável.
+ * A política definitiva deve espelhar a RLS (`payments`/validação na base de dados).
+ */
+export function canValidateSchoolPaymentProofs(role: string | null | undefined): boolean {
+  return role != null && role !== "PARENT" && role !== "STUDENT";
+}
+
 /** Apenas estes perfis podem apagar registos de forma irreversível (RLS deve limitar igual). */
 export function canSchoolHardDeleteRole(role: string | null | undefined): boolean {
   return role === "ADMIN" || role === "SUPER_ADMIN" || role === "DIRECTOR";
