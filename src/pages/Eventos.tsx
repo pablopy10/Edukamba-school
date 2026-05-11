@@ -20,9 +20,11 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { EventFormDialog, type EventRow } from "@/components/eventos/EventFormDialog";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { showPageKpiCards, isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { isSchoolManagementOrTeacher, isSchoolManagementRole } from "@/lib/schoolStaffRoles";
+import { formatEventAudienceSummary } from "@/lib/eventAudience";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -63,6 +65,7 @@ const formatTime = (t: string | null) => (t ? t.slice(0, 5) : "");
 
 const Eventos = () => {
   const native = isNativeMobileApp();
+  const { selectedYearId } = useAcademicYear();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -80,6 +83,8 @@ const Eventos = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<EventRow | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const [audienceRoomNames, setAudienceRoomNames] = useState<Record<string, string>>({});
 
   const canCreateEvent = role === "SUPER_ADMIN" || isSchoolManagementOrTeacher(role);
 
@@ -129,6 +134,32 @@ const Eventos = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schoolId]);
 
+  useEffect(() => {
+    if (!schoolId || !selectedYearId) {
+      setAudienceRoomNames({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("classrooms")
+        .select("id,name")
+        .eq("school_id", schoolId)
+        .eq("academic_year_id", selectedYearId);
+      if (cancelled) return;
+      if (error) {
+        setAudienceRoomNames({});
+        return;
+      }
+      const map: Record<string, string> = {};
+      for (const row of data ?? []) map[row.id] = row.name;
+      setAudienceRoomNames(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [schoolId, selectedYearId]);
+
   const filtered = useMemo(() => {
     return events.filter((e) => {
       if (native) {
@@ -141,11 +172,12 @@ const Eventos = () => {
         !q ||
         e.title.toLowerCase().includes(q) ||
         (e.organizer ?? "").toLowerCase().includes(q) ||
+        formatEventAudienceSummary(e.audience, audienceRoomNames).toLowerCase().includes(q) ||
         (e.audience ?? "").toLowerCase().includes(q) ||
         (e.location ?? "").toLowerCase().includes(q);
       return matchesType && matchesSearch;
     });
-  }, [events, typeFilter, search, native, monthFilter]);
+  }, [events, typeFilter, search, native, monthFilter, audienceRoomNames]);
 
   const stats = useMemo(() => ({
     total: filtered.length,
@@ -298,6 +330,7 @@ const Eventos = () => {
         ) : native ? (
           <EventsCardsView
             events={filtered}
+            audienceRoomNames={audienceRoomNames}
             canMutateEvent={canMutateEvent}
             onEdit={handleEdit}
             onDelete={(id) => setDeleteId(id)}
@@ -307,6 +340,7 @@ const Eventos = () => {
             cursor={cursor}
             setCursor={setCursor}
             events={filtered}
+            audienceRoomNames={audienceRoomNames}
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
             canMutateEvent={canMutateEvent}
@@ -316,6 +350,7 @@ const Eventos = () => {
         ) : (
           <ListView
             events={filtered}
+            audienceRoomNames={audienceRoomNames}
             canMutateEvent={canMutateEvent}
             onEdit={handleEdit}
             onDelete={(id) => setDeleteId(id)}
@@ -389,11 +424,13 @@ const TypeChip = ({
 
 const EventsCardsView = ({
   events: items,
+  audienceRoomNames,
   canMutateEvent,
   onEdit,
   onDelete,
 }: {
   events: EventRow[];
+  audienceRoomNames: Record<string, string>;
   canMutateEvent: (e: EventRow) => boolean;
   onEdit: (e: EventRow) => void;
   onDelete: (id: string) => void;
@@ -446,11 +483,10 @@ const EventsCardsView = ({
                     </span>
                   )}
                 </div>
-                {e.audience && (
-                  <p className="mt-2 text-[11px] text-muted-foreground">
-                    Público: <span className="font-medium text-foreground">{e.audience}</span>
-                  </p>
-                )}
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Público:{" "}
+                  <span className="font-medium text-foreground">{formatEventAudienceSummary(e.audience, audienceRoomNames)}</span>
+                </p>
                 {canMutateEvent(e) && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
@@ -483,6 +519,7 @@ const CalendarView = ({
   cursor,
   setCursor,
   events: items,
+  audienceRoomNames,
   selectedDate,
   setSelectedDate,
   canMutateEvent,
@@ -492,6 +529,7 @@ const CalendarView = ({
   cursor: Date;
   setCursor: (d: Date) => void;
   events: EventRow[];
+  audienceRoomNames: Record<string, string>;
   selectedDate: string | null;
   setSelectedDate: (d: string | null) => void;
   canMutateEvent: (e: EventRow) => boolean;
@@ -680,11 +718,10 @@ const CalendarView = ({
                     </span>
                   )}
                 </div>
-                {e.audience && (
-                  <p className="mt-2 text-[11px] text-muted-foreground">
-                    Público: <span className="font-medium text-foreground">{e.audience}</span>
-                  </p>
-                )}
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Público:{" "}
+                  <span className="font-medium text-foreground">{formatEventAudienceSummary(e.audience, audienceRoomNames)}</span>
+                </p>
                 {canMutateEvent(e) && (
                   <div className="mt-3 flex gap-2">
                     <button
@@ -713,12 +750,14 @@ const CalendarView = ({
 /* ======================= List View ======================= */
 const ListView = ({
   events: items,
+  audienceRoomNames,
   canMutateEvent,
   onEdit,
   onDelete,
   hideActionsColumn = false,
 }: {
   events: EventRow[];
+  audienceRoomNames: Record<string, string>;
   canMutateEvent: (e: EventRow) => boolean;
   onEdit: (e: EventRow) => void;
   onDelete: (id: string) => void;
@@ -776,7 +815,7 @@ const ListView = ({
                   </td>
                   <td className="px-6 py-4 text-muted-foreground">{e.location ?? "—"}</td>
                   <td className="px-6 py-4 text-muted-foreground">{e.organizer ?? "—"}</td>
-                  <td className="px-6 py-4 text-muted-foreground">{e.audience ?? "—"}</td>
+                  <td className="px-6 py-4 text-muted-foreground">{formatEventAudienceSummary(e.audience, audienceRoomNames)}</td>
                   {!hideActionsColumn && (
                     <td className="px-6 py-4">
                       <div className="flex justify-end gap-1">
