@@ -62,6 +62,24 @@ const monthsPt = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "J
 const formatTime = (t: string | null) => (t ? t.slice(0, 5) : "");
 const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
+/** Compara apenas a parte da data (evita timestamptz tipo 2026-06-01T00:00:00+00 a quebrar < / > lexicográfico). */
+function toCalendarDateKey(s: string | null | undefined): string | null {
+  if (s == null || typeof s !== "string") return null;
+  const t = s.trim();
+  if (!t) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10);
+  return null;
+}
+
+function weekdayNumbers(raw: ActivityRow["weekdays"]): number[] {
+  if (raw == null || !Array.isArray(raw)) return [];
+  const out = raw.map((x) => {
+    const n = typeof x === "string" ? Number.parseInt(x, 10) : Number(x);
+    return Number.isFinite(n) ? n : NaN;
+  }).filter((n) => Number.isFinite(n) && n >= 0 && n <= 6);
+  return [...new Set(out)].sort((a, b) => a - b);
+}
+
 const Extracurriculares = () => {
   const native = isNativeMobileApp();
   const [schoolId, setSchoolId] = useState<string | null>(null);
@@ -207,12 +225,15 @@ const Extracurriculares = () => {
     const iso = isoDay(date);
     return filtered.filter((a) => {
       if (a.is_recurring) {
-        if (!a.weekdays?.includes(wd)) return false;
-        if (a.start_date && iso < a.start_date) return false;
-        if (a.end_date && iso > a.end_date) return false;
+        const wdays = weekdayNumbers(a.weekdays);
+        if (wdays.length > 0 && !wdays.includes(wd)) return false;
+        const sd = toCalendarDateKey(a.start_date);
+        const ed = toCalendarDateKey(a.end_date);
+        if (sd && iso < sd) return false;
+        if (ed && iso > ed) return false;
         return true;
       }
-      return a.single_date === iso;
+      return toCalendarDateKey(a.single_date) === iso;
     });
   };
 
