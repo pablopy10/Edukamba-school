@@ -1835,9 +1835,9 @@ const Pagamentos = () => {
                 Defina como os encarregados interagem com os pagamentos na plataforma. Com comprovativo, o IBAN da escola aparece nos emails de lembrete.
               </p>
             </CardHeader>
-            <CardContent className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div className="grid w-full gap-4 md:grid-cols-2">
-                <div className="grid gap-2">
+            <CardContent className="space-y-2">
+              <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-end md:gap-x-4 lg:gap-x-6">
+                <div className="flex min-w-[14rem] max-w-full flex-col gap-2 md:w-auto md:max-w-[20rem]">
                   <Label htmlFor="pay-mode">Modo de cobrança</Label>
                   <Select value={guardianPaymentMode} onValueChange={(v) => setGuardianPaymentMode(v as GuardianPaymentMode)}>
                     <SelectTrigger id="pay-mode"><SelectValue /></SelectTrigger>
@@ -1847,7 +1847,7 @@ const Pagamentos = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid gap-2">
+                <div className="flex min-w-0 flex-1 flex-col gap-2 md:min-w-[12rem]">
                   <Label htmlFor="school-iban">IBAN da escola</Label>
                   <Input
                     id="school-iban"
@@ -1856,19 +1856,21 @@ const Pagamentos = () => {
                     placeholder="Ex.: AO06 ..."
                     disabled={guardianPaymentMode !== "proof_attachment"}
                   />
-                  <p className="text-xs text-muted-foreground">Aparece no email quando está activo o modo com comprovativo. Opcional mas fortemente recomendado.</p>
                 </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-10 w-full shrink-0 md:w-auto"
+                  onClick={() => void saveSchoolPaymentPrefs()}
+                  disabled={savingPaymentPrefs || bulkValidating}
+                >
+                  {savingPaymentPrefs ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Guardar definições
+                </Button>
               </div>
-              <Button
-                type="button"
-                variant="secondary"
-                className="lg:shrink-0"
-                onClick={() => void saveSchoolPaymentPrefs()}
-                disabled={savingPaymentPrefs || bulkValidating}
-              >
-                {savingPaymentPrefs ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Guardar definições
-              </Button>
+              <p className="text-xs text-muted-foreground">
+                Aparece no email quando está activo o modo com comprovativo. Opcional mas fortemente recomendado.
+              </p>
             </CardContent>
           </Card>
         )}

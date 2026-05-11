@@ -32,6 +32,11 @@ dist-ssr
 ios/AuthKey_*.p8
 *.p8
 
+# Android Play signing artefacts (keys, PEPK tooling) — do not commit
+android/app/edukamba-key
+android/app/encryption_public_key.pem
+android/app/pepk.jar
+
 # Windows filesystem artifact
 desktop.ini
 ios/desktop.ini
