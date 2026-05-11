@@ -2343,6 +2343,35 @@ export type Database = {
           },
         ]
       }
+      school_payment_prefs: {
+        Row: {
+          bank_iban: string | null
+          guardian_payment_mode: string
+          school_id: string
+          updated_at: string
+        }
+        Insert: {
+          bank_iban?: string | null
+          guardian_payment_mode?: string
+          school_id: string
+          updated_at?: string
+        }
+        Update: {
+          bank_iban?: string | null
+          guardian_payment_mode?: string
+          school_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "school_payment_prefs_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: true
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       school_time_slots: {
         Row: {
           created_at: string

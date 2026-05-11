@@ -24,6 +24,11 @@ import { GRADE_LEVELS } from "@/lib/grade-levels";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useUserRole } from "@/hooks/useUserRole";
+import { isSchoolManagementRole, isSchoolSettingsAdmin } from "@/lib/schoolStaffRoles";
+import type { GuardianPaymentMode } from "@/lib/guardianPayment";
+import { encarregadosUsamAnexo, normalizeGuardianPaymentMode } from "@/lib/guardianPayment";
 
 type FeeRule = {
   id: string;
@@ -160,6 +165,8 @@ const monthNames = [
 
 const Pagamentos = () => {
   const [schoolId, setSchoolId] = useState<string | null>(null);
+  const { role } = useUserRole();
+  const canEditSchoolPaymentPrefs = isSchoolManagementRole(role) || isSchoolSettingsAdmin(role);
   const { isParent, childIds, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const { selectedYearId: globalAcademicYearId } = useAcademicYear();
   const [years, setYears] = useState<AcademicYear[]>([]);
@@ -211,8 +218,14 @@ const Pagamentos = () => {
   const [classrooms, setClassrooms] = useState<ClassroomLite[]>([]);
   const [payments, setPayments] = useState<PaymentListRow[]>([]);
   const [validatingId, setValidatingId] = useState<string | null>(null);
+  const [bulkValidating, setBulkValidating] = useState(false);
+  const [bulkSelectedPayments, setBulkSelectedPayments] = useState<Set<string>>(() => new Set());
+  const [guardianPaymentMode, setGuardianPaymentMode] = useState<GuardianPaymentMode>("proof_attachment");
+  const [bankIbanDraft, setBankIbanDraft] = useState("");
+  const [savingPaymentPrefs, setSavingPaymentPrefs] = useState(false);
   const [rejectDialog, setRejectDialog] = useState<PaymentListRow | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const usarAnexoEncarregado = encarregadosUsamAnexo(guardianPaymentMode);
 
   // Activity fees (extracurriculares)
   const [allActivityFees, setAllActivityFees] = useState<ActivityFeeRow[]>([]);
@@ -288,7 +301,8 @@ const Pagamentos = () => {
 
   const submitStaffPayment = async () => {
     if (!recordDialog || !schoolId) return;
-    if (!recordFile) {
+    const exigeAnexo = isParent ? usarAnexoEncarregado : guardianPaymentMode === "proof_attachment";
+    if (exigeAnexo && !recordFile) {
       toast({ title: "Selecione um ficheiro", description: "É necessário anexar o comprovativo.", variant: "destructive" });
       return;
     }
@@ -307,19 +321,23 @@ const Pagamentos = () => {
         ? (fee as TransportFeeRow).student_id
         : (fee as EnrollmentFeeRow).student_id;
     setRecordUploading(true);
-    const ext = recordFile.name.split(".").pop() || "bin";
-    const path = `${schoolId}/${studentId}/${fee.id}-${Date.now()}.${ext}`;
-    const { error: upErr } = await supabase.storage.from("payment-proofs").upload(path, recordFile, { upsert: false });
-    if (upErr) {
-      setRecordUploading(false);
-      toast({ title: "Erro a enviar ficheiro", description: upErr.message, variant: "destructive" });
-      return;
+    let proofPath: string | null = null;
+    if (recordFile) {
+      const ext = recordFile.name.split(".").pop() || "bin";
+      const path = `${schoolId}/${studentId}/${fee.id}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("payment-proofs").upload(path, recordFile, { upsert: false });
+      if (upErr) {
+        setRecordUploading(false);
+        toast({ title: "Erro a enviar ficheiro", description: upErr.message, variant: "destructive" });
+        return;
+      }
+      proofPath = path;
     }
     const amount = Number(recordAmount) || Number(fee.amount_due);
     const insertPayload = isParent ? {
       amount_paid: amount,
       method: recordMethod,
-      proof_url: path,
+      proof_url: proofPath,
       status: "pendente",
       submitted_by: userId,
       school_id: schoolId,
@@ -331,7 +349,7 @@ const Pagamentos = () => {
     } : {
       amount_paid: amount,
       method: recordMethod,
-      proof_url: path,
+      proof_url: proofPath,
       status: "validado",
       submitted_by: userId,
       validated_by: userId,
@@ -362,7 +380,7 @@ const Pagamentos = () => {
       toast({ title: "Pagamento registado mas falha a marcar como pago", description: feeErr.message, variant: "destructive" });
       return;
     }
-    // Notificar encarregado
+    const comprovativoMencao = proofPath ? " Pode consultar o comprovativo no portal." : "";
     const parentId = isParent ? null : (fee as FeeListRow | ActivityFeeRow | TransportFeeRow | EnrollmentFeeRow).student?.parent_id;
     if (parentId) {
       if (kind === "fee") {
@@ -372,7 +390,7 @@ const Pagamentos = () => {
           recipient_id: parentId,
           school_id: schoolId,
           title: `Pagamento registado — ${monthLabel}`.trim(),
-          description: `A escola registou o pagamento da propina de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}). Pode consultar o comprovativo no portal.`,
+          description: `A escola registou o pagamento da propina de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
           category: "pagamento",
           link: "https://www.edukamba.com/pagamentos",
         });
@@ -382,7 +400,7 @@ const Pagamentos = () => {
           recipient_id: parentId,
           school_id: schoolId,
           title: `Pagamento registado — ${f.activity?.name ?? "atividade"}`,
-          description: `A escola registou o pagamento da atividade ${f.activity?.name ?? ""} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}). Pode consultar o comprovativo no portal.`,
+          description: `A escola registou o pagamento da atividade ${f.activity?.name ?? ""} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
           category: "pagamento",
           link: "https://www.edukamba.com/pagamentos",
         });
@@ -393,7 +411,7 @@ const Pagamentos = () => {
           recipient_id: parentId,
           school_id: schoolId,
           title: `Pagamento de transporte registado — ${monthLabel}`.trim(),
-          description: `A escola registou o pagamento do transporte (${f.route?.name ?? "rota"}) de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).`,
+          description: `A escola registou o pagamento do transporte (${f.route?.name ?? "rota"}) de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
           category: "pagamento",
           link: "https://www.edukamba.com/pagamentos",
         });
@@ -404,7 +422,7 @@ const Pagamentos = () => {
           recipient_id: parentId,
           school_id: schoolId,
           title: `Pagamento de ${label} registado`,
-          description: `A escola registou o pagamento da ${label} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).`,
+          description: `A escola registou o pagamento da ${label} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
           category: "pagamento",
           link: "https://www.edukamba.com/pagamentos",
         });
@@ -450,6 +468,14 @@ const Pagamentos = () => {
     setDiscounts((dRes.data ?? []) as StudentDiscount[]);
     setStudents((sRes.data ?? []) as StudentLite[]);
     setClassrooms((cRes.data ?? []) as ClassroomLite[]);
+
+    const { data: payPrefsRow } = await supabase
+      .from("school_payment_prefs")
+      .select("guardian_payment_mode, bank_iban")
+      .eq("school_id", sId)
+      .maybeSingle();
+    setGuardianPaymentMode(normalizeGuardianPaymentMode(payPrefsRow?.guardian_payment_mode));
+    setBankIbanDraft(payPrefsRow?.bank_iban ?? "");
 
     // Carregar propinas com aluno e educador
     const studentIds = (sRes.data ?? []).map((s) => s.id);
@@ -817,6 +843,146 @@ const Pagamentos = () => {
       .filter((x) => x.payment && x.payment.status === "pendente") as Array<{ fee: FeeListRow; payment: PaymentListRow }>;
   }, [allFees, latestPaymentByFee]);
 
+  const saveSchoolPaymentPrefs = async () => {
+    if (!schoolId || !canEditSchoolPaymentPrefs) return;
+    setSavingPaymentPrefs(true);
+    const { error } = await supabase.from("school_payment_prefs").upsert(
+      {
+        school_id: schoolId,
+        guardian_payment_mode: guardianPaymentMode,
+        bank_iban: bankIbanDraft.trim() || null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "school_id" },
+    );
+    setSavingPaymentPrefs(false);
+    if (error) {
+      toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Preferências de cobrança guardadas" });
+  };
+
+  const finalizeStudentFeeValidation = async (fee: FeeListRow, payment: PaymentListRow, userId: string | null): Promise<string | null> => {
+    if (!schoolId) return "Sem escola";
+    const { error: payErr } = await supabase
+      .from("payments")
+      .update({ status: "validado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: null })
+      .eq("id", payment.id);
+    if (payErr) return payErr.message;
+    const { error: feeErr } = await supabase.from("student_fees").update({ is_paid: true }).eq("id", fee.id);
+    if (feeErr) return feeErr.message;
+    if (fee.student?.parent_id) {
+      const monthLabel = fee.month_index ? monthNames[fee.month_index - 1] : "";
+      await supabase.from("notifications").insert({
+        recipient_id: fee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento validado — ${monthLabel}`.trim(),
+        description: `O pagamento da propina de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
+        category: "pagamento",
+        link: "https://www.edukamba.com/pagamentos",
+      });
+    }
+    return null;
+  };
+
+  const finalizeActivityFeeValidation = async (fee: ActivityFeeRow, payment: PaymentListRow, userId: string | null): Promise<string | null> => {
+    if (!schoolId) return "Sem escola";
+    const { error: payErr } = await supabase
+      .from("payments")
+      .update({ status: "validado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: null })
+      .eq("id", payment.id);
+    if (payErr) return payErr.message;
+    const { error: feeErr } = await supabase.from("activity_fees").update({ is_paid: true }).eq("id", fee.id);
+    if (feeErr) return feeErr.message;
+    if (fee.student?.parent_id) {
+      await supabase.from("notifications").insert({
+        recipient_id: fee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento validado — ${fee.activity?.name ?? "atividade"}`,
+        description: `O pagamento da atividade ${fee.activity?.name ?? ""} de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
+        category: "pagamento",
+        link: "https://www.edukamba.com/pagamentos",
+      });
+    }
+    return null;
+  };
+
+  const finalizeTransportFeeValidation = async (fee: TransportFeeRow, payment: PaymentListRow, userId: string | null): Promise<string | null> => {
+    if (!schoolId) return "Sem escola";
+    const { error: payErr } = await supabase
+      .from("payments")
+      .update({ status: "validado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: null })
+      .eq("id", payment.id);
+    if (payErr) return payErr.message;
+    const { error: feeErr } = await supabase.from("transport_fees").update({ is_paid: true }).eq("id", fee.id);
+    if (feeErr) return feeErr.message;
+    if (fee.student?.parent_id) {
+      await supabase.from("notifications").insert({
+        recipient_id: fee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento de transporte validado`,
+        description: `O pagamento do transporte (${fee.route?.name ?? "rota"}) de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
+        category: "pagamento",
+        link: "https://www.edukamba.com/pagamentos",
+      });
+    }
+    return null;
+  };
+
+  const finalizeEnrollmentFeeValidation = async (fee: EnrollmentFeeRow, payment: PaymentListRow, userId: string | null): Promise<string | null> => {
+    if (!schoolId) return "Sem escola";
+    const { error: payErr } = await supabase
+      .from("payments")
+      .update({ status: "validado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: null })
+      .eq("id", payment.id);
+    if (payErr) return payErr.message;
+    const { error: feeErr } = await supabase.from("enrollment_fees").update({ is_paid: true }).eq("id", fee.id);
+    if (feeErr) return feeErr.message;
+    if (fee.student?.parent_id) {
+      const label = fee.fee_type === "RENEWAL" ? "renovação de matrícula" : "matrícula";
+      await supabase.from("notifications").insert({
+        recipient_id: fee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento de ${label} validado`,
+        description: `O pagamento da ${label} de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
+        category: "pagamento",
+        link: "https://www.edukamba.com/pagamentos",
+      });
+    }
+    return null;
+  };
+
+  const setBulkPaymentChecked = (paymentId: string, checked: boolean) => {
+    setBulkSelectedPayments((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(paymentId);
+      else next.delete(paymentId);
+      return next;
+    });
+  };
+
+  const bulkValidateFees = async () => {
+    const sel = pendingValidations.filter((x) => bulkSelectedPayments.has(x.payment.id));
+    if (!sel.length) {
+      toast({ title: "Nada seleccionado", description: "Seleccione uma ou mais linhas na tabela.", variant: "destructive" });
+      return;
+    }
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id ?? null;
+    setBulkValidating(true);
+    let failed = 0;
+    for (const { fee, payment } of sel) {
+      const err = await finalizeStudentFeeValidation(fee, payment, userId);
+      if (err) failed++;
+    }
+    setBulkValidating(false);
+    setBulkSelectedPayments(new Set());
+    if (failed) toast({ title: "Validação em lote concluída com erros", description: `${sel.length - failed} validado(s), ${failed} falha(s).`, variant: "destructive" });
+    else toast({ title: "Pagamentos validados", description: `${sel.length} comprovativo(s) validado(s).` });
+    await fetchAll();
+  };
+
   const viewProof = async (path: string) => {
     const { data, error } = await supabase.storage.from("payment-proofs").createSignedUrl(path, 3600);
     if (error || !data?.signedUrl) {
@@ -837,33 +1003,12 @@ const Pagamentos = () => {
     setValidatingId(payment.id);
     const { data: userRes } = await supabase.auth.getUser();
     const userId = userRes.user?.id ?? null;
-    const { error: payErr } = await supabase
-      .from("payments")
-      .update({ status: "validado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: null })
-      .eq("id", payment.id);
-    if (payErr) {
-      setValidatingId(null);
-      toast({ title: "Erro a validar", description: payErr.message, variant: "destructive" });
-      return;
-    }
-    const { error: feeErr } = await supabase.from("student_fees").update({ is_paid: true }).eq("id", fee.id);
-    if (feeErr) {
-      setValidatingId(null);
-      toast({ title: "Erro a marcar propina", description: feeErr.message, variant: "destructive" });
-      return;
-    }
-    if (fee.student?.parent_id) {
-      const monthLabel = fee.month_index ? monthNames[fee.month_index - 1] : "";
-      await supabase.from("notifications").insert({
-        recipient_id: fee.student.parent_id,
-        school_id: schoolId,
-        title: `Pagamento validado — ${monthLabel}`.trim(),
-        description: `O pagamento da propina de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
-        category: "pagamento",
-        link: "https://www.edukamba.com/pagamentos",
-      });
-    }
+    const errMsg = await finalizeStudentFeeValidation(fee, payment, userId);
     setValidatingId(null);
+    if (errMsg) {
+      toast({ title: "Erro a validar", description: errMsg, variant: "destructive" });
+      return;
+    }
     toast({ title: "Pagamento validado", description: "O encarregado foi notificado." });
     await fetchAll();
   };
@@ -889,42 +1034,48 @@ const Pagamentos = () => {
     }
     if (fee?.student?.parent_id) {
       const monthLabel = fee.month_index ? monthNames[fee.month_index - 1] : "";
+      const followUp = usarAnexoEncarregado
+        ? "Por favor reenvie o comprovativo correto."
+        : "Para regularizar o pagamento, dirija-se à escola.";
       await supabase.from("notifications").insert({
         recipient_id: fee.student.parent_id,
         school_id: schoolId,
         title: `Pagamento rejeitado — ${monthLabel}`.trim(),
-        description: `O comprovativo de pagamento de ${fee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}.` : ""} Por favor reenvie o comprovativo correto.`,
+        description: `O comprovativo de pagamento de ${fee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}. ` : ""}${followUp}`,
         category: "pagamento",
         link: "https://www.edukamba.com/pagamentos",
       });
     }
     if (actFee?.student?.parent_id) {
+      const followUp = usarAnexoEncarregado ? "Por favor reenvie o comprovativo correto." : "Para regularizar o pagamento, dirija-se à escola.";
       await supabase.from("notifications").insert({
         recipient_id: actFee.student.parent_id,
         school_id: schoolId,
         title: `Pagamento rejeitado — ${actFee.activity?.name ?? "atividade"}`,
-        description: `O comprovativo de pagamento da atividade ${actFee.activity?.name ?? ""} de ${actFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}.` : ""} Por favor reenvie o comprovativo correto.`,
+        description: `O comprovativo de pagamento da atividade ${actFee.activity?.name ?? ""} de ${actFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}. ` : ""}${followUp}`,
         category: "pagamento",
         link: "https://www.edukamba.com/pagamentos",
       });
     }
     if (trFee?.student?.parent_id) {
+      const followUp = usarAnexoEncarregado ? "Por favor reenvie o comprovativo correto." : "Para regularizar o pagamento, dirija-se à escola.";
       await supabase.from("notifications").insert({
         recipient_id: trFee.student.parent_id,
         school_id: schoolId,
         title: `Pagamento de transporte rejeitado`,
-        description: `O comprovativo de pagamento do transporte (${trFee.route?.name ?? "rota"}) de ${trFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}.` : ""} Por favor reenvie o comprovativo correto.`,
+        description: `O comprovativo de pagamento do transporte (${trFee.route?.name ?? "rota"}) de ${trFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}. ` : ""}${followUp}`,
         category: "pagamento",
         link: "https://www.edukamba.com/pagamentos",
       });
     }
     if (enFee?.student?.parent_id) {
       const lbl = enFee.fee_type === "RENEWAL" ? "renovação de matrícula" : "matrícula";
+      const followUp = usarAnexoEncarregado ? "Por favor reenvie o comprovativo correto." : "Para regularizar o pagamento, dirija-se à escola.";
       await supabase.from("notifications").insert({
         recipient_id: enFee.student.parent_id,
         school_id: schoolId,
         title: `Pagamento de ${lbl} rejeitado`,
-        description: `O comprovativo do pagamento da ${lbl} de ${enFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}.` : ""} Por favor reenvie o comprovativo correto.`,
+        description: `O comprovativo do pagamento da ${lbl} de ${enFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}. ` : ""}${followUp}`,
         category: "pagamento",
         link: "https://www.edukamba.com/pagamentos",
       });
@@ -1032,33 +1183,34 @@ const Pagamentos = () => {
     setValidatingId(payment.id);
     const { data: userRes } = await supabase.auth.getUser();
     const userId = userRes.user?.id ?? null;
-    const { error: payErr } = await supabase
-      .from("payments")
-      .update({ status: "validado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: null })
-      .eq("id", payment.id);
-    if (payErr) {
-      setValidatingId(null);
-      toast({ title: "Erro a validar", description: payErr.message, variant: "destructive" });
-      return;
-    }
-    const { error: feeErr } = await supabase.from("activity_fees").update({ is_paid: true }).eq("id", fee.id);
-    if (feeErr) {
-      setValidatingId(null);
-      toast({ title: "Erro a marcar cobrança", description: feeErr.message, variant: "destructive" });
-      return;
-    }
-    if (fee.student?.parent_id) {
-      await supabase.from("notifications").insert({
-        recipient_id: fee.student.parent_id,
-        school_id: schoolId,
-        title: `Pagamento validado — ${fee.activity?.name ?? "atividade"}`,
-        description: `O pagamento da atividade ${fee.activity?.name ?? ""} de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
-        category: "pagamento",
-        link: "https://www.edukamba.com/pagamentos",
-      });
-    }
+    const errMsg = await finalizeActivityFeeValidation(fee, payment, userId);
     setValidatingId(null);
+    if (errMsg) {
+      toast({ title: "Erro a validar", description: errMsg, variant: "destructive" });
+      return;
+    }
     toast({ title: "Pagamento validado", description: "O encarregado foi notificado." });
+    await fetchAll();
+  };
+
+  const bulkValidateActivityFeesList = async () => {
+    const sel = pendingActivityValidations.filter((x) => bulkSelectedPayments.has(x.payment.id));
+    if (!sel.length) {
+      toast({ title: "Nada seleccionado", description: "Seleccione uma ou mais linhas na tabela.", variant: "destructive" });
+      return;
+    }
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id ?? null;
+    setBulkValidating(true);
+    let failed = 0;
+    for (const { fee, payment } of sel) {
+      const err = await finalizeActivityFeeValidation(fee, payment, userId);
+      if (err) failed++;
+    }
+    setBulkValidating(false);
+    setBulkSelectedPayments(new Set());
+    if (failed) toast({ title: "Validação em lote concluída com erros", description: `${sel.length - failed} validado(s), ${failed} falha(s).`, variant: "destructive" });
+    else toast({ title: "Pagamentos validados", description: `${sel.length} comprovativo(s) validado(s).` });
     await fetchAll();
   };
 
@@ -1157,33 +1309,34 @@ const Pagamentos = () => {
     setValidatingId(payment.id);
     const { data: userRes } = await supabase.auth.getUser();
     const userId = userRes.user?.id ?? null;
-    const { error: payErr } = await supabase
-      .from("payments")
-      .update({ status: "validado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: null })
-      .eq("id", payment.id);
-    if (payErr) {
-      setValidatingId(null);
-      toast({ title: "Erro a validar", description: payErr.message, variant: "destructive" });
-      return;
-    }
-    const { error: feeErr } = await supabase.from("transport_fees").update({ is_paid: true }).eq("id", fee.id);
-    if (feeErr) {
-      setValidatingId(null);
-      toast({ title: "Erro a marcar cobrança", description: feeErr.message, variant: "destructive" });
-      return;
-    }
-    if (fee.student?.parent_id) {
-      await supabase.from("notifications").insert({
-        recipient_id: fee.student.parent_id,
-        school_id: schoolId,
-        title: `Pagamento de transporte validado`,
-        description: `O pagamento do transporte (${fee.route?.name ?? "rota"}) de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
-        category: "pagamento",
-        link: "https://www.edukamba.com/pagamentos",
-      });
-    }
+    const errMsg = await finalizeTransportFeeValidation(fee, payment, userId);
     setValidatingId(null);
+    if (errMsg) {
+      toast({ title: "Erro a validar", description: errMsg, variant: "destructive" });
+      return;
+    }
     toast({ title: "Pagamento validado", description: "O encarregado foi notificado." });
+    await fetchAll();
+  };
+
+  const bulkValidateTransportFeesList = async () => {
+    const sel = pendingTransportValidations.filter((x) => bulkSelectedPayments.has(x.payment.id));
+    if (!sel.length) {
+      toast({ title: "Nada seleccionado", description: "Seleccione uma ou mais linhas na tabela.", variant: "destructive" });
+      return;
+    }
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id ?? null;
+    setBulkValidating(true);
+    let failed = 0;
+    for (const { fee, payment } of sel) {
+      const err = await finalizeTransportFeeValidation(fee, payment, userId);
+      if (err) failed++;
+    }
+    setBulkValidating(false);
+    setBulkSelectedPayments(new Set());
+    if (failed) toast({ title: "Validação em lote concluída com erros", description: `${sel.length - failed} validado(s), ${failed} falha(s).`, variant: "destructive" });
+    else toast({ title: "Pagamentos validados", description: `${sel.length} comprovativo(s) validado(s).` });
     await fetchAll();
   };
 
@@ -1282,34 +1435,34 @@ const Pagamentos = () => {
     setValidatingId(payment.id);
     const { data: userRes } = await supabase.auth.getUser();
     const userId = userRes.user?.id ?? null;
-    const { error: payErr } = await supabase
-      .from("payments")
-      .update({ status: "validado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: null })
-      .eq("id", payment.id);
-    if (payErr) {
-      setValidatingId(null);
-      toast({ title: "Erro a validar", description: payErr.message, variant: "destructive" });
-      return;
-    }
-    const { error: feeErr } = await supabase.from("enrollment_fees").update({ is_paid: true }).eq("id", fee.id);
-    if (feeErr) {
-      setValidatingId(null);
-      toast({ title: "Erro a marcar cobrança", description: feeErr.message, variant: "destructive" });
-      return;
-    }
-    if (fee.student?.parent_id) {
-      const label = fee.fee_type === "RENEWAL" ? "renovação de matrícula" : "matrícula";
-      await supabase.from("notifications").insert({
-        recipient_id: fee.student.parent_id,
-        school_id: schoolId,
-        title: `Pagamento de ${label} validado`,
-        description: `O pagamento da ${label} de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
-        category: "pagamento",
-        link: "https://www.edukamba.com/pagamentos",
-      });
-    }
+    const errMsg = await finalizeEnrollmentFeeValidation(fee, payment, userId);
     setValidatingId(null);
+    if (errMsg) {
+      toast({ title: "Erro a validar", description: errMsg, variant: "destructive" });
+      return;
+    }
     toast({ title: "Pagamento validado", description: "O encarregado foi notificado." });
+    await fetchAll();
+  };
+
+  const bulkValidateEnrollmentFeesList = async () => {
+    const sel = pendingEnrollmentValidations.filter((x) => bulkSelectedPayments.has(x.payment.id));
+    if (!sel.length) {
+      toast({ title: "Nada seleccionado", description: "Seleccione uma ou mais linhas na tabela.", variant: "destructive" });
+      return;
+    }
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id ?? null;
+    setBulkValidating(true);
+    let failed = 0;
+    for (const { fee, payment } of sel) {
+      const err = await finalizeEnrollmentFeeValidation(fee, payment, userId);
+      if (err) failed++;
+    }
+    setBulkValidating(false);
+    setBulkSelectedPayments(new Set());
+    if (failed) toast({ title: "Validação em lote concluída com erros", description: `${sel.length - failed} validado(s), ${failed} falha(s).`, variant: "destructive" });
+    else toast({ title: "Pagamentos validados", description: `${sel.length} comprovativo(s) validado(s).` });
     await fetchAll();
   };
 
@@ -1342,6 +1495,8 @@ const Pagamentos = () => {
     else toast({ title: "Lembrete enviado ao encarregado e ao aluno" });
   };
 
+  const recordNeedsFile = isParent ? usarAnexoEncarregado : guardianPaymentMode === "proof_attachment";
+
   if (parentLoading) return <PageLoadingSkeleton />;
 
   return (
@@ -1350,7 +1505,13 @@ const Pagamentos = () => {
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Pagamentos</h1>
-            <p className="text-sm text-muted-foreground">{isParent ? "Consulte as cobranças do(s) seu(s) educando(s) e anexe os comprovativos." : "Gere as propinas, descontos e cobranças mensais."}</p>
+            <p className="text-sm text-muted-foreground">
+              {isParent
+                ? usarAnexoEncarregado
+                  ? "Consulte as cobranças do(s) seu(s) educando(s). Pode anexar comprovativos de transferência quando aplicável."
+                  : "Consulte as cobranças. O pagamento é efectuado presencialmente na escola conforme comunicado pela instituição."
+                : "Gere as propinas, descontos e cobranças mensais."}
+            </p>
           </div>
           {!isParent && (
             <Button onClick={() => setGenerateOpen(true)} className="gap-2">
@@ -1393,6 +1554,52 @@ const Pagamentos = () => {
           </Card>
         </div>)}
 
+        {!isParent && canEditSchoolPaymentPrefs && (
+          <Card className="border-muted">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Cobrança aos encarregados</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Defina como os encarregados interagem com os pagamentos na plataforma. Com comprovativo, o IBAN da escola aparece nos emails de lembrete.
+              </p>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="grid w-full gap-4 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="pay-mode">Modo de cobrança</Label>
+                  <Select value={guardianPaymentMode} onValueChange={(v) => setGuardianPaymentMode(v as GuardianPaymentMode)}>
+                    <SelectTrigger id="pay-mode"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="proof_attachment">Comprovativo na app / transferência (IBAN + validação pela escola)</SelectItem>
+                      <SelectItem value="in_person">Pagamento presencial na escola (sem envio de ficheiros pelos encarregados)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="school-iban">IBAN da escola</Label>
+                  <Input
+                    id="school-iban"
+                    value={bankIbanDraft}
+                    onChange={(e) => setBankIbanDraft(e.target.value)}
+                    placeholder="Ex.: AO06 ..."
+                    disabled={guardianPaymentMode !== "proof_attachment"}
+                  />
+                  <p className="text-xs text-muted-foreground">Aparece no email quando está activo o modo com comprovativo. Opcional mas fortemente recomendado.</p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                className="lg:shrink-0"
+                onClick={() => void saveSchoolPaymentPrefs()}
+                disabled={savingPaymentPrefs || bulkValidating}
+              >
+                {savingPaymentPrefs ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Guardar definições
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         <Tabs defaultValue={isParent ? "fees" : "rules"} className="w-full">
           <TabsList>
             {!isParent && <TabsTrigger value="rules">Regras de propina</TabsTrigger>}
@@ -1430,18 +1637,48 @@ const Pagamentos = () => {
 
             {!isParent && pendingValidations.length > 0 && (
               <Card className="border-pastel-blue/60">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <FileText className="h-4 w-4" /> Comprovativos a validar
-                    <Badge variant="secondary">{pendingValidations.length}</Badge>
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">Comprovativos enviados pelos educadores que aguardam validação.</p>
+                <CardHeader className="space-y-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                        <FileText className="h-4 w-4" /> Comprovativos a validar
+                        <Badge variant="secondary">{pendingValidations.length}</Badge>
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1">Pagamentos por transferência ou multicaixa enviados pelos encarregados para validação pela escola.</p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80 shrink-0"
+                      disabled={bulkValidating || pendingValidations.every((x) => !bulkSelectedPayments.has(x.payment.id))}
+                      onClick={() => void bulkValidateFees()}
+                    >
+                      {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                      Validar seleccionados
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
+                          <th className="py-2 px-2 w-10 align-middle">
+                            <Checkbox
+                              disabled={bulkValidating}
+                              checked={pendingValidations.length > 0 && pendingValidations.every(({ payment }) => bulkSelectedPayments.has(payment.id))}
+                              onCheckedChange={(v) => {
+                                const checked = v === true;
+                                setBulkSelectedPayments((prev) => {
+                                  const next = new Set(prev);
+                                  if (checked) pendingValidations.forEach(({ payment }) => next.add(payment.id));
+                                  else pendingValidations.forEach(({ payment }) => next.delete(payment.id));
+                                  return next;
+                                });
+                              }}
+                              aria-label="Seleccionar todos"
+                            />
+                          </th>
                           <th className="py-2 px-2">Aluno</th>
                           <th className="py-2 px-2">Mês</th>
                           <th className="py-2 px-2">Valor pago</th>
@@ -1453,6 +1690,13 @@ const Pagamentos = () => {
                       <tbody>
                         {pendingValidations.map(({ fee, payment }) => (
                           <tr key={payment.id} className="border-b hover:bg-muted/30">
+                            <td className="py-2 px-2 align-middle">
+                              <Checkbox
+                                disabled={bulkValidating || validatingId === payment.id}
+                                checked={bulkSelectedPayments.has(payment.id)}
+                                onCheckedChange={(v) => setBulkPaymentChecked(payment.id, v === true)}
+                              />
+                            </td>
                             <td className="py-2 px-2 font-medium">{fee.student?.full_name ?? "—"}</td>
                             <td className="py-2 px-2">{fee.month_index ? monthNames[fee.month_index - 1] : "—"}</td>
                             <td className="py-2 px-2 font-semibold">{fmtAOA(Number(payment.amount_paid))}</td>
@@ -1468,7 +1712,7 @@ const Pagamentos = () => {
                                 <Button
                                   size="sm"
                                   className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
-                                  disabled={validatingId === payment.id}
+                                  disabled={bulkValidating || validatingId === payment.id}
                                   onClick={() => validatePayment(fee, payment)}
                                 >
                                   {validatingId === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -1478,7 +1722,7 @@ const Pagamentos = () => {
                                   size="sm"
                                   variant="outline"
                                   className="gap-1 text-destructive"
-                                  disabled={validatingId === payment.id}
+                                  disabled={bulkValidating || validatingId === payment.id}
                                   onClick={() => { setRejectDialog(payment); setRejectReason(""); }}
                                 >
                                   <XCircle className="h-3.5 w-3.5" /> Rejeitar
@@ -1620,9 +1864,16 @@ const Pagamentos = () => {
                                   )}
                                   {!f.is_paid && !pendingValidation && (
                                     <>
-                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForFee(f)}>
-                                        <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
-                                      </Button>
+                                      {(!isParent || usarAnexoEncarregado) && (
+                                        <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForFee(f)}>
+                                          <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
+                                        </Button>
+                                      )}
+                                      {isParent && !usarAnexoEncarregado && (
+                                        <span className="rounded-md border border-muted bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
+                                          Pagamento presencial na escola
+                                        </span>
+                                      )}
                                       {!isParent && (
                                         <Button size="sm" variant="outline" className="gap-2" onClick={() => sendReminder(f)} disabled={remindingFeeId === f.id || !f.student?.parent_id}>
                                           {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
@@ -1668,18 +1919,48 @@ const Pagamentos = () => {
 
             {!isParent && pendingActivityValidations.length > 0 && (
               <Card className="border-pastel-blue/60">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <FileText className="h-4 w-4" /> Comprovativos a validar
-                    <Badge variant="secondary">{pendingActivityValidations.length}</Badge>
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">Comprovativos de atividades extracurriculares enviados pelos educadores.</p>
+                <CardHeader className="space-y-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                        <FileText className="h-4 w-4" /> Comprovativos a validar
+                        <Badge variant="secondary">{pendingActivityValidations.length}</Badge>
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1">Envios pelos encarregados relativos a atividades extracurriculares.</p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80 shrink-0"
+                      disabled={bulkValidating || pendingActivityValidations.every((x) => !bulkSelectedPayments.has(x.payment.id))}
+                      onClick={() => void bulkValidateActivityFeesList()}
+                    >
+                      {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                      Validar seleccionados
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
+                          <th className="py-2 px-2 w-10 align-middle">
+                            <Checkbox
+                              disabled={bulkValidating}
+                              checked={pendingActivityValidations.length > 0 && pendingActivityValidations.every(({ payment }) => bulkSelectedPayments.has(payment.id))}
+                              onCheckedChange={(v) => {
+                                const checked = v === true;
+                                setBulkSelectedPayments((prev) => {
+                                  const next = new Set(prev);
+                                  if (checked) pendingActivityValidations.forEach(({ payment }) => next.add(payment.id));
+                                  else pendingActivityValidations.forEach(({ payment }) => next.delete(payment.id));
+                                  return next;
+                                });
+                              }}
+                              aria-label="Seleccionar todos"
+                            />
+                          </th>
                           <th className="py-2 px-2">Aluno</th>
                           <th className="py-2 px-2">Atividade</th>
                           <th className="py-2 px-2">Valor pago</th>
@@ -1691,6 +1972,13 @@ const Pagamentos = () => {
                       <tbody>
                         {pendingActivityValidations.map(({ fee, payment }) => (
                           <tr key={payment.id} className="border-b hover:bg-muted/30">
+                            <td className="py-2 px-2 align-middle">
+                              <Checkbox
+                                disabled={bulkValidating || validatingId === payment.id}
+                                checked={bulkSelectedPayments.has(payment.id)}
+                                onCheckedChange={(v) => setBulkPaymentChecked(payment.id, v === true)}
+                              />
+                            </td>
                             <td className="py-2 px-2 font-medium">{fee.student?.full_name ?? "—"}</td>
                             <td className="py-2 px-2">{fee.activity?.name ?? "—"}</td>
                             <td className="py-2 px-2 font-semibold">{fmtAOA(Number(payment.amount_paid))}</td>
@@ -1706,7 +1994,7 @@ const Pagamentos = () => {
                                 <Button
                                   size="sm"
                                   className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
-                                  disabled={validatingId === payment.id}
+                                  disabled={bulkValidating || validatingId === payment.id}
                                   onClick={() => validateActivityPayment(fee, payment)}
                                 >
                                   {validatingId === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -1716,7 +2004,7 @@ const Pagamentos = () => {
                                   size="sm"
                                   variant="outline"
                                   className="gap-1 text-destructive"
-                                  disabled={validatingId === payment.id}
+                                  disabled={bulkValidating || validatingId === payment.id}
                                   onClick={() => { setRejectDialog(payment); setRejectReason(""); }}
                                 >
                                   <XCircle className="h-3.5 w-3.5" /> Rejeitar
@@ -1850,9 +2138,16 @@ const Pagamentos = () => {
                                   )}
                                   {!f.is_paid && !pendingValidation && (
                                     <>
-                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForActivity(f)}>
-                                        <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
-                                      </Button>
+                                      {(!isParent || usarAnexoEncarregado) && (
+                                        <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForActivity(f)}>
+                                          <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
+                                        </Button>
+                                      )}
+                                      {isParent && !usarAnexoEncarregado && (
+                                        <span className="rounded-md border border-muted bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
+                                          Pagamento presencial na escola
+                                        </span>
+                                      )}
                                       {!isParent && (
                                         <Button size="sm" variant="outline" className="gap-2" onClick={() => sendActivityReminder(f)} disabled={remindingActFeeId === f.id || !f.student?.parent_id}>
                                           {remindingActFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
@@ -1898,18 +2193,48 @@ const Pagamentos = () => {
 
             {!isParent && pendingTransportValidations.length > 0 && (
               <Card className="border-pastel-blue/60">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <FileText className="h-4 w-4" /> Comprovativos a validar
-                    <Badge variant="secondary">{pendingTransportValidations.length}</Badge>
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">Comprovativos de transporte escolar enviados pelos educadores.</p>
+                <CardHeader className="space-y-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                        <FileText className="h-4 w-4" /> Comprovativos a validar
+                        <Badge variant="secondary">{pendingTransportValidations.length}</Badge>
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1">Envios pelos encarregados relativos ao transporte escolar.</p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80 shrink-0"
+                      disabled={bulkValidating || pendingTransportValidations.every((x) => !bulkSelectedPayments.has(x.payment.id))}
+                      onClick={() => void bulkValidateTransportFeesList()}
+                    >
+                      {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                      Validar seleccionados
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
+                          <th className="py-2 px-2 w-10 align-middle">
+                            <Checkbox
+                              disabled={bulkValidating}
+                              checked={pendingTransportValidations.length > 0 && pendingTransportValidations.every(({ payment }) => bulkSelectedPayments.has(payment.id))}
+                              onCheckedChange={(v) => {
+                                const checked = v === true;
+                                setBulkSelectedPayments((prev) => {
+                                  const next = new Set(prev);
+                                  if (checked) pendingTransportValidations.forEach(({ payment }) => next.add(payment.id));
+                                  else pendingTransportValidations.forEach(({ payment }) => next.delete(payment.id));
+                                  return next;
+                                });
+                              }}
+                              aria-label="Seleccionar todos"
+                            />
+                          </th>
                           <th className="py-2 px-2">Aluno</th>
                           <th className="py-2 px-2">Rota</th>
                           <th className="py-2 px-2">Valor pago</th>
@@ -1921,6 +2246,13 @@ const Pagamentos = () => {
                       <tbody>
                         {pendingTransportValidations.map(({ fee, payment }) => (
                           <tr key={payment.id} className="border-b hover:bg-muted/30">
+                            <td className="py-2 px-2 align-middle">
+                              <Checkbox
+                                disabled={bulkValidating || validatingId === payment.id}
+                                checked={bulkSelectedPayments.has(payment.id)}
+                                onCheckedChange={(v) => setBulkPaymentChecked(payment.id, v === true)}
+                              />
+                            </td>
                             <td className="py-2 px-2 font-medium">{fee.student?.full_name ?? "—"}</td>
                             <td className="py-2 px-2">{fee.route?.name ?? "—"}</td>
                             <td className="py-2 px-2 font-semibold">{fmtAOA(Number(payment.amount_paid))}</td>
@@ -1936,7 +2268,7 @@ const Pagamentos = () => {
                                 <Button
                                   size="sm"
                                   className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
-                                  disabled={validatingId === payment.id}
+                                  disabled={bulkValidating || validatingId === payment.id}
                                   onClick={() => validateTransportPayment(fee, payment)}
                                 >
                                   {validatingId === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -1946,7 +2278,7 @@ const Pagamentos = () => {
                                   size="sm"
                                   variant="outline"
                                   className="gap-1 text-destructive"
-                                  disabled={validatingId === payment.id}
+                                  disabled={bulkValidating || validatingId === payment.id}
                                   onClick={() => { setRejectDialog(payment); setRejectReason(""); }}
                                 >
                                   <XCircle className="h-3.5 w-3.5" /> Rejeitar
@@ -2080,9 +2412,16 @@ const Pagamentos = () => {
                                   )}
                                   {!f.is_paid && !pendingValidation && (
                                     <>
-                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForTransport(f)}>
-                                        <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
-                                      </Button>
+                                      {(!isParent || usarAnexoEncarregado) && (
+                                        <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForTransport(f)}>
+                                          <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
+                                        </Button>
+                                      )}
+                                      {isParent && !usarAnexoEncarregado && (
+                                        <span className="rounded-md border border-muted bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
+                                          Pagamento presencial na escola
+                                        </span>
+                                      )}
                                       {!isParent && (
                                         <Button size="sm" variant="outline" className="gap-2" onClick={() => sendTransportReminder(f)} disabled={remindingTrFeeId === f.id || !f.student?.parent_id}>
                                           {remindingTrFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
@@ -2128,18 +2467,48 @@ const Pagamentos = () => {
 
             {!isParent && pendingEnrollmentValidations.length > 0 && (
               <Card className="border-pastel-blue/60">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <FileText className="h-4 w-4" /> Comprovativos a validar
-                    <Badge variant="secondary">{pendingEnrollmentValidations.length}</Badge>
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">Comprovativos de matrícula/renovação enviados pelos educadores.</p>
+                <CardHeader className="space-y-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                        <FileText className="h-4 w-4" /> Comprovativos a validar
+                        <Badge variant="secondary">{pendingEnrollmentValidations.length}</Badge>
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1">Envios pelos encarregados relativos à matrícula ou renovação.</p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80 shrink-0"
+                      disabled={bulkValidating || pendingEnrollmentValidations.every((x) => !bulkSelectedPayments.has(x.payment.id))}
+                      onClick={() => void bulkValidateEnrollmentFeesList()}
+                    >
+                      {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                      Validar seleccionados
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
+                          <th className="py-2 px-2 w-10 align-middle">
+                            <Checkbox
+                              disabled={bulkValidating}
+                              checked={pendingEnrollmentValidations.length > 0 && pendingEnrollmentValidations.every(({ payment }) => bulkSelectedPayments.has(payment.id))}
+                              onCheckedChange={(v) => {
+                                const checked = v === true;
+                                setBulkSelectedPayments((prev) => {
+                                  const next = new Set(prev);
+                                  if (checked) pendingEnrollmentValidations.forEach(({ payment }) => next.add(payment.id));
+                                  else pendingEnrollmentValidations.forEach(({ payment }) => next.delete(payment.id));
+                                  return next;
+                                });
+                              }}
+                              aria-label="Seleccionar todos"
+                            />
+                          </th>
                           <th className="py-2 px-2">Aluno</th>
                           <th className="py-2 px-2">Tipo</th>
                           <th className="py-2 px-2">Valor pago</th>
@@ -2151,6 +2520,13 @@ const Pagamentos = () => {
                       <tbody>
                         {pendingEnrollmentValidations.map(({ fee, payment }) => (
                           <tr key={payment.id} className="border-b hover:bg-muted/30">
+                            <td className="py-2 px-2 align-middle">
+                              <Checkbox
+                                disabled={bulkValidating || validatingId === payment.id}
+                                checked={bulkSelectedPayments.has(payment.id)}
+                                onCheckedChange={(v) => setBulkPaymentChecked(payment.id, v === true)}
+                              />
+                            </td>
                             <td className="py-2 px-2 font-medium">{fee.student?.full_name ?? "—"}</td>
                             <td className="py-2 px-2">{fee.fee_type === "RENEWAL" ? "Renovação" : "Matrícula"}</td>
                             <td className="py-2 px-2 font-semibold">{fmtAOA(Number(payment.amount_paid))}</td>
@@ -2166,7 +2542,7 @@ const Pagamentos = () => {
                                 <Button
                                   size="sm"
                                   className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
-                                  disabled={validatingId === payment.id}
+                                  disabled={bulkValidating || validatingId === payment.id}
                                   onClick={() => validateEnrollmentPayment(fee, payment)}
                                 >
                                   {validatingId === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -2176,7 +2552,7 @@ const Pagamentos = () => {
                                   size="sm"
                                   variant="outline"
                                   className="gap-1 text-destructive"
-                                  disabled={validatingId === payment.id}
+                                  disabled={bulkValidating || validatingId === payment.id}
                                   onClick={() => { setRejectDialog(payment); setRejectReason(""); }}
                                 >
                                   <XCircle className="h-3.5 w-3.5" /> Rejeitar
@@ -2304,9 +2680,16 @@ const Pagamentos = () => {
                                   )}
                                   {!f.is_paid && !pendingValidation && (
                                     <>
-                                      <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForEnrollment(f)}>
-                                        <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
-                                      </Button>
+                                      {(!isParent || usarAnexoEncarregado) && (
+                                        <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForEnrollment(f)}>
+                                          <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
+                                        </Button>
+                                      )}
+                                      {isParent && !usarAnexoEncarregado && (
+                                        <span className="rounded-md border border-muted bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
+                                          Pagamento presencial na escola
+                                        </span>
+                                      )}
                                       {!isParent && (
                                         <Button size="sm" variant="outline" className="gap-2" onClick={() => sendEnrollmentReminder(f)} disabled={remindingEnFeeId === f.id || !f.student?.parent_id}>
                                           {remindingEnFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
@@ -2673,7 +3056,9 @@ const Pagamentos = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Rejeitar comprovativo</DialogTitle>
-            <DialogDescription>Indique o motivo. O encarregado será notificado para reenviar.</DialogDescription>
+            <DialogDescription>
+              {usarAnexoEncarregado ? "Indique o motivo. O encarregado será orientado conforme o modo de cobrança da escola." : "Indique o motivo da rejeição. O encarregado será notificado."}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor="reject-reason">Motivo</Label>
@@ -2693,24 +3078,33 @@ const Pagamentos = () => {
       <Dialog open={!!recordDialog} onOpenChange={(o) => { if (!o && !recordUploading) setRecordDialog(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{isParent ? "Anexar comprovativo" : "Registar pagamento"}</DialogTitle>
+            <DialogTitle>{recordNeedsFile ? (isParent ? "Anexar comprovativo" : "Registar pagamento") : "Registar pagamento presencial"}</DialogTitle>
             <DialogDescription>
-              {recordDialog?.kind === "fee"
-                ? `Anexa o comprovativo da propina de ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Ficará à espera de validação pela escola." : "Será marcado como pago e validado, e o encarregado será notificado."}`
+              {!recordNeedsFile && !isParent
+                ? "Registe o valor recebido nas instalações da escola. Não é obrigatório anexar ficheiro; o valor ficará válido ao guardar."
+                : recordDialog?.kind === "fee"
+                ? `Propina — ${recordDialog.fee.student?.full_name ?? ""}. ${recordNeedsFile ? "Anexe o comprovativo quando o modo da escola o exija." : ""} ${isParent ? "Ficará pendente até a escola validar." : "Será marcado como pago e validado, e o encarregado pode ver na app."}`
                 : recordDialog?.kind === "activity"
-                ? `Anexa o comprovativo da atividade ${recordDialog.fee.activity?.name ?? ""} de ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Ficará à espera de validação pela escola." : "Será marcado como pago e validado."}`
+                ? `Atividade ${recordDialog.fee.activity?.name ?? ""} (${recordDialog.fee.student?.full_name ?? ""}). ${isParent ? "Fica à espera da validação." : recordNeedsFile ? "Comprovativo opcional apenas se anexado." : "Registo direto pela equipa financeira da escola."}`
                 : recordDialog?.kind === "transport"
-                ? `Anexa o comprovativo do transporte (${recordDialog.fee.route?.name ?? ""}) de ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Ficará à espera de validação pela escola." : "Será marcado como pago e validado."}`
+                ? `Transporte (${recordDialog.fee.route?.name ?? ""}) — ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Fica à espera da validação." : recordNeedsFile ? "Envie imagem apenas se disponível." : "Valor recebido presencialmente."}`
                 : recordDialog?.kind === "enrollment"
-                ? `Anexa o comprovativo da ${recordDialog.fee.fee_type === "RENEWAL" ? "renovação de matrícula" : "matrícula"} de ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Ficará à espera de validação pela escola." : "Será marcado como pago e validado."}`
+                ? `${recordDialog.fee.fee_type === "RENEWAL" ? "Renovação de matrícula" : "Matrícula"} — ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "À espera de validação pela escola." : recordNeedsFile ? "Associe um comprovativo digital se existir." : "Pagamento físico apenas."}`
                 : ""}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="record-file">Comprovativo (PDF ou imagem)</Label>
-              <Input id="record-file" type="file" accept="image/*,application/pdf" onChange={(e) => setRecordFile(e.target.files?.[0] ?? null)} />
-            </div>
+            {recordNeedsFile && (
+              <div className="grid gap-2">
+                <Label htmlFor="record-file">Comprovativo (PDF ou imagem)</Label>
+                <Input id="record-file" type="file" accept="image/*,application/pdf" onChange={(e) => setRecordFile(e.target.files?.[0] ?? null)} />
+              </div>
+            )}
+            {!recordNeedsFile && !isParent && (
+              <p className="rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                Esta escola permite registar valores recebidos presencialmente sem obrigar ao envio digital do comprovativo.
+              </p>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="record-amount">Valor pago (AOA)</Label>
               <Input id="record-amount" type="number" min="0" value={recordAmount} onChange={(e) => setRecordAmount(e.target.value)} />
@@ -2735,9 +3129,9 @@ const Pagamentos = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRecordDialog(null)} disabled={recordUploading}>Cancelar</Button>
-            <Button onClick={submitStaffPayment} disabled={recordUploading || !recordFile} className="gap-2">
+            <Button onClick={submitStaffPayment} disabled={recordUploading || (recordNeedsFile && !recordFile)} className="gap-2">
               {recordUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Registar e validar
+              {isParent ? "Submeter para validação" : "Registar"}
             </Button>
           </DialogFooter>
         </DialogContent>
