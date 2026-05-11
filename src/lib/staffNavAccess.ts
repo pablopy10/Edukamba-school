@@ -1,5 +1,5 @@
 import type { UserRole } from "@/hooks/useUserRole";
-import { isSchoolSettingsAdmin } from "@/lib/schoolStaffRoles";
+import { canValidateSchoolPaymentProofs } from "@/lib/schoolStaffRoles";
 
 type StaffOperationalRole = Exclude<
   UserRole,
@@ -206,5 +206,13 @@ export function isNavPathAllowedForRole(role: UserRole | null, rawPath: string):
   if (role === "PARENT") return pathMatchesAnyPrefix(path, PARENT_NAV_PREFIXES);
   if (role === "STUDENT") return pathMatchesAnyPrefix(path, STUDENT_NAV_PREFIXES);
   return false;
+}
+
+/** Acesso ao ecrã de pagamentos cobranças (escola); encarregados usam sempre a variante PARENT. Estudantes sem menu de pagamentos. */
+export function canOpenPagamentosPage(role: UserRole | null, isParent: boolean): boolean {
+  if (isParent) return true;
+  if (role == null) return false;
+  if (role === "STUDENT") return false;
+  return canValidateSchoolPaymentProofs(role);
 }
 

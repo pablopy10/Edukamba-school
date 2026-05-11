@@ -51,7 +51,8 @@ import DocumentSign from "./pages/DocumentSign.tsx";
 import { ModulesProvider } from "./context/ModulesContext";
 import { AcademicYearProvider } from "./context/AcademicYearContext";
 import { UserRoleProvider, useUserRole } from "./hooks/useUserRole";
-import { canOpenDefinicoesPage, canOpenModulosPage } from "@/lib/staffNavAccess";
+import { useParentChildren } from "./hooks/useParentChildren";
+import { canOpenDefinicoesPage, canOpenModulosPage, canOpenPagamentosPage } from "@/lib/staffNavAccess";
 import { SelectedChildProvider } from "./context/SelectedChildContext";
 import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
 import { queryClient } from "@/lib/queryClient";
@@ -80,6 +81,14 @@ function GatedDefinicoesRoute() {
   if (loading) return <RouteSpinner />;
   if (!canOpenDefinicoesPage(role)) return <Navigate to="/dashboard" replace />;
   return <Definicoes />;
+}
+
+function GatedPagamentosRoute() {
+  const { role, loading } = useUserRole();
+  const { isParent, loading: parentLoading } = useParentChildren();
+  if (loading || parentLoading) return <RouteSpinner />;
+  if (!canOpenPagamentosPage(role, isParent)) return <Navigate to="/dashboard" replace />;
+  return <Pagamentos />;
 }
 
 const App = () => (
@@ -134,7 +143,7 @@ const App = () => (
                         <Route path="/extracurriculares" element={<Extracurriculares />} />
                         <Route path="/pedidos" element={<Pedidos />} />
                         <Route path="/material" element={<Material />} />
-                        <Route path="/pagamentos" element={<Pagamentos />} />
+                        <Route path="/pagamentos" element={<GatedPagamentosRoute />} />
                         <Route path="/financas" element={<Financas />} />
                         <Route path="/relatorios" element={<Relatorios />} />
                         <Route path="/timesheet" element={<Timesheet />} />

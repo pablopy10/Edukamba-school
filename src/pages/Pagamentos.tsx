@@ -221,8 +221,10 @@ const Pagamentos = () => {
   const [validatingId, setValidatingId] = useState<string | null>(null);
   const [bulkValidating, setBulkValidating] = useState(false);
   const [bulkRemindingTuition, setBulkRemindingTuition] = useState(false);
-  const [bulkSelectedPayments, setBulkSelectedPayments] = useState<Set<string>>(() => new Set());
-  /** Propinas (student_fees): selecção na lista principal e em «Comprovativos a validar» (evita colidir com payment.id noutras tabs). */
+  const [bulkSelectedActivityFeeIds, setBulkSelectedActivityFeeIds] = useState<Set<string>>(() => new Set());
+  const [bulkSelectedTransportFeeIds, setBulkSelectedTransportFeeIds] = useState<Set<string>>(() => new Set());
+  const [bulkSelectedEnrollmentFeeIds, setBulkSelectedEnrollmentFeeIds] = useState<Set<string>>(() => new Set());
+  /** Propinas (student_fees): selecção na lista principal e em «Comprovativos a validar». */
   const [bulkSelectedTuitionFeeIds, setBulkSelectedTuitionFeeIds] = useState<Set<string>>(() => new Set());
   const [guardianPaymentMode, setGuardianPaymentMode] = useState<GuardianPaymentMode>("proof_attachment");
   const [bankIbanDraft, setBankIbanDraft] = useState("");
@@ -436,6 +438,93 @@ const Pagamentos = () => {
     setRecordDialog(null);
     toast({ title: isParent ? "Comprovativo enviado para validação" : "Pagamento registado e validado" });
     await fetchAll();
+  };
+
+  /**
+   * Regista na escola um pagamento já válido quando não há comprovativo pendente (ex.: validação em lote).
+   */
+  const insertStaffValidatedCharge = async (
+    kind: "fee" | "activity" | "transport" | "enrollment",
+    fee: FeeListRow | ActivityFeeRow | TransportFeeRow | EnrollmentFeeRow,
+    userId: string | null,
+  ): Promise<string | null> => {
+    if (!schoolId) return "Sem escola";
+    if (!userId) return "Sessão inválida";
+    const amount = Number((fee as { amount_due: number }).amount_due) || 0;
+    const { error: insErr } = await supabase.from("payments").insert({
+      amount_paid: amount,
+      method: "transferencia",
+      proof_url: null,
+      status: "validado",
+      submitted_by: userId,
+      validated_by: userId,
+      validated_at: new Date().toISOString(),
+      school_id: schoolId,
+      notes: "Validação em lote (sem comprovativo pendente)",
+      student_fee_id: kind === "fee" ? fee.id : null,
+      activity_fee_id: kind === "activity" ? fee.id : null,
+      transport_fee_id: kind === "transport" ? fee.id : null,
+      enrollment_fee_id: kind === "enrollment" ? fee.id : null,
+    });
+    if (insErr) return insErr.message;
+    const { error: feeErr } =
+      kind === "fee"
+        ? await supabase.from("student_fees").update({ is_paid: true }).eq("id", fee.id)
+        : kind === "activity"
+          ? await supabase.from("activity_fees").update({ is_paid: true }).eq("id", fee.id)
+          : kind === "transport"
+            ? await supabase.from("transport_fees").update({ is_paid: true }).eq("id", fee.id)
+            : await supabase.from("enrollment_fees").update({ is_paid: true }).eq("id", fee.id);
+    if (feeErr) return feeErr.message;
+    const parentId = fee.student?.parent_id ?? null;
+    const comprovativoMencao = "";
+    if (parentId) {
+      if (kind === "fee") {
+        const f = fee as FeeListRow;
+        const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
+        await supabase.from("notifications").insert({
+          recipient_id: parentId,
+          school_id: schoolId,
+          title: `Pagamento registado — ${monthLabel}`.trim(),
+          description: `A escola registou o pagamento da propina de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
+          category: "pagamento",
+          link: "https://www.edukamba.com/pagamentos",
+        });
+      } else if (kind === "activity") {
+        const f = fee as ActivityFeeRow;
+        await supabase.from("notifications").insert({
+          recipient_id: parentId,
+          school_id: schoolId,
+          title: `Pagamento registado — ${f.activity?.name ?? "atividade"}`,
+          description: `A escola registou o pagamento da atividade ${f.activity?.name ?? ""} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
+          category: "pagamento",
+          link: "https://www.edukamba.com/pagamentos",
+        });
+      } else if (kind === "transport") {
+        const f = fee as TransportFeeRow;
+        const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
+        await supabase.from("notifications").insert({
+          recipient_id: parentId,
+          school_id: schoolId,
+          title: `Pagamento de transporte registado — ${monthLabel}`.trim(),
+          description: `A escola registou o pagamento do transporte (${f.route?.name ?? "rota"}) de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
+          category: "pagamento",
+          link: "https://www.edukamba.com/pagamentos",
+        });
+      } else {
+        const f = fee as EnrollmentFeeRow;
+        const label = f.fee_type === "RENEWAL" ? "renovação de matrícula" : "matrícula";
+        await supabase.from("notifications").insert({
+          recipient_id: parentId,
+          school_id: schoolId,
+          title: `Pagamento de ${label} registado`,
+          description: `A escola registou o pagamento da ${label} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
+          category: "pagamento",
+          link: "https://www.edukamba.com/pagamentos",
+        });
+      }
+    }
+    return null;
   };
 
   const fetchAll = async () => {
@@ -957,11 +1046,29 @@ const Pagamentos = () => {
     return null;
   };
 
-  const setBulkPaymentChecked = (paymentId: string, checked: boolean) => {
-    setBulkSelectedPayments((prev) => {
+  const setBulkActivityFeeChecked = (feeId: string, checked: boolean) => {
+    setBulkSelectedActivityFeeIds((prev) => {
       const next = new Set(prev);
-      if (checked) next.add(paymentId);
-      else next.delete(paymentId);
+      if (checked) next.add(feeId);
+      else next.delete(feeId);
+      return next;
+    });
+  };
+
+  const setBulkTransportFeeChecked = (feeId: string, checked: boolean) => {
+    setBulkSelectedTransportFeeIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(feeId);
+      else next.delete(feeId);
+      return next;
+    });
+  };
+
+  const setBulkEnrollmentFeeChecked = (feeId: string, checked: boolean) => {
+    setBulkSelectedEnrollmentFeeIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(feeId);
+      else next.delete(feeId);
       return next;
     });
   };
@@ -977,11 +1084,13 @@ const Pagamentos = () => {
 
   const bulkValidateFees = async () => {
     if (!canValidatePaymentProofs) return;
-    const sel = pendingValidations.filter((x) => bulkSelectedTuitionFeeIds.has(x.fee.id));
-    if (!sel.length) {
+    const targets = [...bulkSelectedTuitionFeeIds]
+      .map((id) => allFees.find((f) => f.id === id))
+      .filter((f): f is FeeListRow => !!f && !f.is_paid);
+    if (!targets.length) {
       toast({
         title: "Nada a validar nas linhas seleccionadas",
-        description: "A validação em lote só se aplica a comprovativos submetidos (estado «A validar»).",
+        description: "Seleccione propinas não pagas para validação em lote (com ou sem comprovativo).",
         variant: "destructive",
       });
       return;
@@ -990,14 +1099,23 @@ const Pagamentos = () => {
     const userId = userRes.user?.id ?? null;
     setBulkValidating(true);
     let failed = 0;
-    for (const { fee, payment } of sel) {
-      const err = await finalizeStudentFeeValidation(fee, payment, userId);
+    for (const fee of targets) {
+      const pay = latestPaymentByFee.get(fee.id);
+      const err =
+        pay && pay.status === "pendente"
+          ? await finalizeStudentFeeValidation(fee, pay, userId)
+          : await insertStaffValidatedCharge("fee", fee, userId);
       if (err) failed++;
     }
     setBulkValidating(false);
     setBulkSelectedTuitionFeeIds(new Set());
-    if (failed) toast({ title: "Validação em lote concluída com erros", description: `${sel.length - failed} validado(s), ${failed} falha(s).`, variant: "destructive" });
-    else toast({ title: "Pagamentos validados", description: `${sel.length} comprovativo(s) validado(s).` });
+    if (failed)
+      toast({
+        title: "Validação em lote concluída com erros",
+        description: `${targets.length - failed} concluída(s), ${failed} falha(s).`,
+        variant: "destructive",
+      });
+    else toast({ title: "Pagamentos validados", description: `${targets.length} cobrança(s) concluída(s).` });
     await fetchAll();
   };
 
@@ -1262,23 +1380,38 @@ const Pagamentos = () => {
 
   const bulkValidateActivityFeesList = async () => {
     if (!canValidatePaymentProofs) return;
-    const sel = pendingActivityValidations.filter((x) => bulkSelectedPayments.has(x.payment.id));
-    if (!sel.length) {
-      toast({ title: "Nada seleccionado", description: "Seleccione uma ou mais linhas na tabela.", variant: "destructive" });
+    const targets = [...bulkSelectedActivityFeeIds]
+      .map((id) => allActivityFees.find((f) => f.id === id))
+      .filter((f): f is ActivityFeeRow => !!f && !f.is_paid);
+    if (!targets.length) {
+      toast({
+        title: "Nada a validar nas linhas seleccionadas",
+        description: "Seleccione cobranças extracurriculares não pagas (com ou sem comprovativo).",
+        variant: "destructive",
+      });
       return;
     }
     const { data: userRes } = await supabase.auth.getUser();
     const userId = userRes.user?.id ?? null;
     setBulkValidating(true);
     let failed = 0;
-    for (const { fee, payment } of sel) {
-      const err = await finalizeActivityFeeValidation(fee, payment, userId);
+    for (const fee of targets) {
+      const pay = latestPaymentByActivityFee.get(fee.id);
+      const err =
+        pay && pay.status === "pendente"
+          ? await finalizeActivityFeeValidation(fee, pay, userId)
+          : await insertStaffValidatedCharge("activity", fee, userId);
       if (err) failed++;
     }
     setBulkValidating(false);
-    setBulkSelectedPayments(new Set());
-    if (failed) toast({ title: "Validação em lote concluída com erros", description: `${sel.length - failed} validado(s), ${failed} falha(s).`, variant: "destructive" });
-    else toast({ title: "Pagamentos validados", description: `${sel.length} comprovativo(s) validado(s).` });
+    setBulkSelectedActivityFeeIds(new Set());
+    if (failed)
+      toast({
+        title: "Validação em lote concluída com erros",
+        description: `${targets.length - failed} concluída(s), ${failed} falha(s).`,
+        variant: "destructive",
+      });
+    else toast({ title: "Pagamentos validados", description: `${targets.length} cobrança(s) concluída(s).` });
     await fetchAll();
   };
 
@@ -1389,23 +1522,38 @@ const Pagamentos = () => {
 
   const bulkValidateTransportFeesList = async () => {
     if (!canValidatePaymentProofs) return;
-    const sel = pendingTransportValidations.filter((x) => bulkSelectedPayments.has(x.payment.id));
-    if (!sel.length) {
-      toast({ title: "Nada seleccionado", description: "Seleccione uma ou mais linhas na tabela.", variant: "destructive" });
+    const targets = [...bulkSelectedTransportFeeIds]
+      .map((id) => allTransportFees.find((f) => f.id === id))
+      .filter((f): f is TransportFeeRow => !!f && !f.is_paid);
+    if (!targets.length) {
+      toast({
+        title: "Nada a validar nas linhas seleccionadas",
+        description: "Seleccione mensalidades de transporte não pagas (com ou sem comprovativo).",
+        variant: "destructive",
+      });
       return;
     }
     const { data: userRes } = await supabase.auth.getUser();
     const userId = userRes.user?.id ?? null;
     setBulkValidating(true);
     let failed = 0;
-    for (const { fee, payment } of sel) {
-      const err = await finalizeTransportFeeValidation(fee, payment, userId);
+    for (const fee of targets) {
+      const pay = latestPaymentByTransportFee.get(fee.id);
+      const err =
+        pay && pay.status === "pendente"
+          ? await finalizeTransportFeeValidation(fee, pay, userId)
+          : await insertStaffValidatedCharge("transport", fee, userId);
       if (err) failed++;
     }
     setBulkValidating(false);
-    setBulkSelectedPayments(new Set());
-    if (failed) toast({ title: "Validação em lote concluída com erros", description: `${sel.length - failed} validado(s), ${failed} falha(s).`, variant: "destructive" });
-    else toast({ title: "Pagamentos validados", description: `${sel.length} comprovativo(s) validado(s).` });
+    setBulkSelectedTransportFeeIds(new Set());
+    if (failed)
+      toast({
+        title: "Validação em lote concluída com erros",
+        description: `${targets.length - failed} concluída(s), ${failed} falha(s).`,
+        variant: "destructive",
+      });
+    else toast({ title: "Pagamentos validados", description: `${targets.length} cobrança(s) concluída(s).` });
     await fetchAll();
   };
 
@@ -1516,23 +1664,38 @@ const Pagamentos = () => {
 
   const bulkValidateEnrollmentFeesList = async () => {
     if (!canValidatePaymentProofs) return;
-    const sel = pendingEnrollmentValidations.filter((x) => bulkSelectedPayments.has(x.payment.id));
-    if (!sel.length) {
-      toast({ title: "Nada seleccionado", description: "Seleccione uma ou mais linhas na tabela.", variant: "destructive" });
+    const targets = [...bulkSelectedEnrollmentFeeIds]
+      .map((id) => allEnrollmentFees.find((f) => f.id === id))
+      .filter((f): f is EnrollmentFeeRow => !!f && !f.is_paid);
+    if (!targets.length) {
+      toast({
+        title: "Nada a validar nas linhas seleccionadas",
+        description: "Seleccione cobranças de matrícula não pagas (com ou sem comprovativo).",
+        variant: "destructive",
+      });
       return;
     }
     const { data: userRes } = await supabase.auth.getUser();
     const userId = userRes.user?.id ?? null;
     setBulkValidating(true);
     let failed = 0;
-    for (const { fee, payment } of sel) {
-      const err = await finalizeEnrollmentFeeValidation(fee, payment, userId);
+    for (const fee of targets) {
+      const pay = latestPaymentByEnrollmentFee.get(fee.id);
+      const err =
+        pay && pay.status === "pendente"
+          ? await finalizeEnrollmentFeeValidation(fee, pay, userId)
+          : await insertStaffValidatedCharge("enrollment", fee, userId);
       if (err) failed++;
     }
     setBulkValidating(false);
-    setBulkSelectedPayments(new Set());
-    if (failed) toast({ title: "Validação em lote concluída com erros", description: `${sel.length - failed} validado(s), ${failed} falha(s).`, variant: "destructive" });
-    else toast({ title: "Pagamentos validados", description: `${sel.length} comprovativo(s) validado(s).` });
+    setBulkSelectedEnrollmentFeeIds(new Set());
+    if (failed)
+      toast({
+        title: "Validação em lote concluída com erros",
+        description: `${targets.length - failed} concluída(s), ${failed} falha(s).`,
+        variant: "destructive",
+      });
+    else toast({ title: "Pagamentos validados", description: `${targets.length} cobrança(s) concluída(s).` });
     await fetchAll();
   };
 
@@ -1545,32 +1708,36 @@ const Pagamentos = () => {
       .filter((f): f is FeeListRow => !!f && !f.is_paid && !!f.student?.parent_id);
   }, [bulkSelectedTuitionFeeIds, allFees]);
 
-  const filteredActivityFeesPendingForBulk = useMemo(() => {
-    return filteredActivityFees
-      .map((f) => {
-        const pay = latestPaymentByActivityFee.get(f.id);
-        return pay?.status === "pendente" ? { fee: f, payment: pay } : null;
-      })
-      .filter((x): x is { fee: ActivityFeeRow; payment: PaymentListRow } => x !== null);
-  }, [filteredActivityFees, latestPaymentByActivityFee]);
+  const filteredUnpaidActivityFeesForBulk = useMemo(() => filteredActivityFees.filter((f) => !f.is_paid), [filteredActivityFees]);
 
-  const filteredTransportFeesPendingForBulk = useMemo(() => {
-    return filteredTransportFees
-      .map((f) => {
-        const pay = latestPaymentByTransportFee.get(f.id);
-        return pay?.status === "pendente" ? { fee: f, payment: pay } : null;
-      })
-      .filter((x): x is { fee: TransportFeeRow; payment: PaymentListRow } => x !== null);
-  }, [filteredTransportFees, latestPaymentByTransportFee]);
+  const filteredUnpaidTransportFeesForBulk = useMemo(() => filteredTransportFees.filter((f) => !f.is_paid), [filteredTransportFees]);
 
-  const filteredEnrollmentFeesPendingForBulk = useMemo(() => {
-    return filteredEnrollmentFees
-      .map((f) => {
-        const pay = latestPaymentByEnrollmentFee.get(f.id);
-        return pay?.status === "pendente" ? { fee: f, payment: pay } : null;
-      })
-      .filter((x): x is { fee: EnrollmentFeeRow; payment: PaymentListRow } => x !== null);
-  }, [filteredEnrollmentFees, latestPaymentByEnrollmentFee]);
+  const filteredUnpaidEnrollmentFeesForBulk = useMemo(() => filteredEnrollmentFees.filter((f) => !f.is_paid), [filteredEnrollmentFees]);
+
+  /** Propinas seleccionadas e não pagas → elegíveis para validação em lote. */
+  const selectedTuitionFeesEligibleForBulkValidate = useMemo(() => {
+    return [...bulkSelectedTuitionFeeIds]
+      .map((id) => allFees.find((f) => f.id === id))
+      .filter((f): f is FeeListRow => !!f && !f.is_paid);
+  }, [bulkSelectedTuitionFeeIds, allFees]);
+
+  const selectedActivityFeesEligibleForBulkValidate = useMemo(() => {
+    return [...bulkSelectedActivityFeeIds]
+      .map((id) => allActivityFees.find((f) => f.id === id))
+      .filter((f): f is ActivityFeeRow => !!f && !f.is_paid);
+  }, [bulkSelectedActivityFeeIds, allActivityFees]);
+
+  const selectedTransportFeesEligibleForBulkValidate = useMemo(() => {
+    return [...bulkSelectedTransportFeeIds]
+      .map((id) => allTransportFees.find((f) => f.id === id))
+      .filter((f): f is TransportFeeRow => !!f && !f.is_paid);
+  }, [bulkSelectedTransportFeeIds, allTransportFees]);
+
+  const selectedEnrollmentFeesEligibleForBulkValidate = useMemo(() => {
+    return [...bulkSelectedEnrollmentFeeIds]
+      .map((id) => allEnrollmentFees.find((f) => f.id === id))
+      .filter((f): f is EnrollmentFeeRow => !!f && !f.is_paid);
+  }, [bulkSelectedEnrollmentFeeIds, allEnrollmentFees]);
 
   const sendEnrollmentReminder = async (fee: EnrollmentFeeRow) => {
     if (!schoolId) return;
@@ -1852,7 +2019,7 @@ const Pagamentos = () => {
                 </div>
                 {!isParent && (
                   <div className="flex flex-wrap items-center gap-2">
-                    {canValidatePaymentProofs && pendingValidations.length > 0 && (
+                    {canValidatePaymentProofs && filteredUnpaidFeesForBulk.length > 0 && (
                       <Button
                         type="button"
                         size="sm"
@@ -1860,7 +2027,7 @@ const Pagamentos = () => {
                         disabled={
                           bulkValidating ||
                           bulkRemindingTuition ||
-                          pendingValidations.every((x) => !bulkSelectedTuitionFeeIds.has(x.fee.id))
+                          selectedTuitionFeesEligibleForBulkValidate.length === 0
                         }
                         onClick={() => void bulkValidateFees()}
                       >
@@ -1988,7 +2155,7 @@ const Pagamentos = () => {
                                       disabled={bulkValidating || bulkRemindingTuition || (!!pay && validatingId === pay.id)}
                                       checked={bulkSelectedTuitionFeeIds.has(f.id)}
                                       onCheckedChange={(v) => setBulkTuitionFeeChecked(f.id, v === true)}
-                                      title="Validação em lote só aplica a linhas no estado «A validar»."
+                                      title="Incluída na validação em lote («Validar seleccionados») para cobranças não pagas."
                                     />
                                   ) : null}
                                 </td>
@@ -2119,7 +2286,7 @@ const Pagamentos = () => {
                       type="button"
                       size="sm"
                       className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80 shrink-0"
-                      disabled={bulkValidating || pendingActivityValidations.every((x) => !bulkSelectedPayments.has(x.payment.id))}
+                      disabled={bulkValidating || pendingActivityValidations.every((x) => !bulkSelectedActivityFeeIds.has(x.fee.id))}
                       onClick={() => void bulkValidateActivityFeesList()}
                     >
                       {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -2135,13 +2302,16 @@ const Pagamentos = () => {
                           <th className="py-2 px-2 w-10 align-middle">
                             <Checkbox
                               disabled={bulkValidating}
-                              checked={pendingActivityValidations.length > 0 && pendingActivityValidations.every(({ payment }) => bulkSelectedPayments.has(payment.id))}
+                              checked={
+                                pendingActivityValidations.length > 0 &&
+                                pendingActivityValidations.every(({ fee }) => bulkSelectedActivityFeeIds.has(fee.id))
+                              }
                               onCheckedChange={(v) => {
                                 const checked = v === true;
-                                setBulkSelectedPayments((prev) => {
+                                setBulkSelectedActivityFeeIds((prev) => {
                                   const next = new Set(prev);
-                                  if (checked) pendingActivityValidations.forEach(({ payment }) => next.add(payment.id));
-                                  else pendingActivityValidations.forEach(({ payment }) => next.delete(payment.id));
+                                  if (checked) pendingActivityValidations.forEach(({ fee }) => next.add(fee.id));
+                                  else pendingActivityValidations.forEach(({ fee }) => next.delete(fee.id));
                                   return next;
                                 });
                               }}
@@ -2162,8 +2332,8 @@ const Pagamentos = () => {
                             <td className="py-2 px-2 align-middle">
                               <Checkbox
                                 disabled={bulkValidating || validatingId === payment.id}
-                                checked={bulkSelectedPayments.has(payment.id)}
-                                onCheckedChange={(v) => setBulkPaymentChecked(payment.id, v === true)}
+                                checked={bulkSelectedActivityFeeIds.has(fee.id)}
+                                onCheckedChange={(v) => setBulkActivityFeeChecked(fee.id, v === true)}
                               />
                             </td>
                             <td className="py-2 px-2 font-medium">{fee.student?.full_name ?? "—"}</td>
@@ -2215,14 +2385,14 @@ const Pagamentos = () => {
                 </div>
                 {!isParent && (
                   <div className="flex flex-wrap items-center gap-2">
-                    {canValidatePaymentProofs && pendingActivityValidations.length > 0 && (
+                    {canValidatePaymentProofs && filteredUnpaidActivityFeesForBulk.length > 0 && (
                       <Button
                         type="button"
                         size="sm"
                         className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
                         disabled={
                           bulkValidating ||
-                          pendingActivityValidations.every((x) => !bulkSelectedPayments.has(x.payment.id))
+                          selectedActivityFeesEligibleForBulkValidate.length === 0
                         }
                         onClick={() => void bulkValidateActivityFeesList()}
                       >
@@ -2276,27 +2446,27 @@ const Pagamentos = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
-                          {!isParent && canValidatePaymentProofs && pendingActivityValidations.length > 0 && (
+                          {!isParent && canValidatePaymentProofs && filteredUnpaidActivityFeesForBulk.length > 0 && (
                             <th className="py-2 px-2 w-10 align-middle">
                               <Checkbox
                                 disabled={bulkValidating}
                                 checked={
-                                  filteredActivityFeesPendingForBulk.length > 0 &&
-                                  filteredActivityFeesPendingForBulk.every(({ payment }) =>
-                                    bulkSelectedPayments.has(payment.id),
+                                  filteredUnpaidActivityFeesForBulk.length > 0 &&
+                                  filteredUnpaidActivityFeesForBulk.every((row) =>
+                                    bulkSelectedActivityFeeIds.has(row.id),
                                   )
                                 }
                                 onCheckedChange={(v) => {
                                   const checked = v === true;
-                                  setBulkSelectedPayments((prev) => {
+                                  setBulkSelectedActivityFeeIds((prev) => {
                                     const next = new Set(prev);
                                     if (checked) {
-                                      filteredActivityFeesPendingForBulk.forEach(({ payment }) =>
-                                        next.add(payment.id),
+                                      filteredUnpaidActivityFeesForBulk.forEach((row) =>
+                                        next.add(row.id),
                                       );
                                     } else {
-                                      filteredActivityFeesPendingForBulk.forEach(({ payment }) =>
-                                        next.delete(payment.id),
+                                      filteredUnpaidActivityFeesForBulk.forEach((row) =>
+                                        next.delete(row.id),
                                       );
                                     }
                                     return next;
@@ -2323,13 +2493,14 @@ const Pagamentos = () => {
                           const rejected = !!pay && pay.status === "rejeitado";
                           return (
                             <tr key={f.id} className="border-b hover:bg-muted/30">
-                              {!isParent && canValidatePaymentProofs && pendingActivityValidations.length > 0 && (
+                              {!isParent && canValidatePaymentProofs && filteredUnpaidActivityFeesForBulk.length > 0 && (
                                 <td className="py-2 px-2 align-middle w-10">
-                                  {pendingValidation && pay ? (
+                                  {!f.is_paid ? (
                                     <Checkbox
-                                      disabled={bulkValidating || validatingId === pay.id}
-                                      checked={bulkSelectedPayments.has(pay.id)}
-                                      onCheckedChange={(v) => setBulkPaymentChecked(pay.id, v === true)}
+                                      disabled={bulkValidating || (!!pay && validatingId === pay.id)}
+                                      checked={bulkSelectedActivityFeeIds.has(f.id)}
+                                      onCheckedChange={(v) => setBulkActivityFeeChecked(f.id, v === true)}
+                                      title="Incluída na validação em lote («Validar seleccionados») para cobranças não pagas."
                                     />
                                   ) : null}
                                 </td>
@@ -2455,7 +2626,7 @@ const Pagamentos = () => {
                       type="button"
                       size="sm"
                       className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80 shrink-0"
-                      disabled={bulkValidating || pendingTransportValidations.every((x) => !bulkSelectedPayments.has(x.payment.id))}
+                      disabled={bulkValidating || pendingTransportValidations.every((x) => !bulkSelectedTransportFeeIds.has(x.fee.id))}
                       onClick={() => void bulkValidateTransportFeesList()}
                     >
                       {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -2471,13 +2642,16 @@ const Pagamentos = () => {
                           <th className="py-2 px-2 w-10 align-middle">
                             <Checkbox
                               disabled={bulkValidating}
-                              checked={pendingTransportValidations.length > 0 && pendingTransportValidations.every(({ payment }) => bulkSelectedPayments.has(payment.id))}
+                              checked={
+                                pendingTransportValidations.length > 0 &&
+                                pendingTransportValidations.every(({ fee }) => bulkSelectedTransportFeeIds.has(fee.id))
+                              }
                               onCheckedChange={(v) => {
                                 const checked = v === true;
-                                setBulkSelectedPayments((prev) => {
+                                setBulkSelectedTransportFeeIds((prev) => {
                                   const next = new Set(prev);
-                                  if (checked) pendingTransportValidations.forEach(({ payment }) => next.add(payment.id));
-                                  else pendingTransportValidations.forEach(({ payment }) => next.delete(payment.id));
+                                  if (checked) pendingTransportValidations.forEach(({ fee }) => next.add(fee.id));
+                                  else pendingTransportValidations.forEach(({ fee }) => next.delete(fee.id));
                                   return next;
                                 });
                               }}
@@ -2498,8 +2672,8 @@ const Pagamentos = () => {
                             <td className="py-2 px-2 align-middle">
                               <Checkbox
                                 disabled={bulkValidating || validatingId === payment.id}
-                                checked={bulkSelectedPayments.has(payment.id)}
-                                onCheckedChange={(v) => setBulkPaymentChecked(payment.id, v === true)}
+                                checked={bulkSelectedTransportFeeIds.has(fee.id)}
+                                onCheckedChange={(v) => setBulkTransportFeeChecked(fee.id, v === true)}
                               />
                             </td>
                             <td className="py-2 px-2 font-medium">{fee.student?.full_name ?? "—"}</td>
@@ -2551,14 +2725,14 @@ const Pagamentos = () => {
                 </div>
                 {!isParent && (
                   <div className="flex flex-wrap items-center gap-2">
-                    {canValidatePaymentProofs && pendingTransportValidations.length > 0 && (
+                    {canValidatePaymentProofs && filteredUnpaidTransportFeesForBulk.length > 0 && (
                       <Button
                         type="button"
                         size="sm"
                         className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
                         disabled={
                           bulkValidating ||
-                          pendingTransportValidations.every((x) => !bulkSelectedPayments.has(x.payment.id))
+                          selectedTransportFeesEligibleForBulkValidate.length === 0
                         }
                         onClick={() => void bulkValidateTransportFeesList()}
                       >
@@ -2612,27 +2786,27 @@ const Pagamentos = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
-                          {!isParent && canValidatePaymentProofs && pendingTransportValidations.length > 0 && (
+                          {!isParent && canValidatePaymentProofs && filteredUnpaidTransportFeesForBulk.length > 0 && (
                             <th className="py-2 px-2 w-10 align-middle">
                               <Checkbox
                                 disabled={bulkValidating}
                                 checked={
-                                  filteredTransportFeesPendingForBulk.length > 0 &&
-                                  filteredTransportFeesPendingForBulk.every(({ payment }) =>
-                                    bulkSelectedPayments.has(payment.id),
+                                  filteredUnpaidTransportFeesForBulk.length > 0 &&
+                                  filteredUnpaidTransportFeesForBulk.every((row) =>
+                                    bulkSelectedTransportFeeIds.has(row.id),
                                   )
                                 }
                                 onCheckedChange={(v) => {
                                   const checked = v === true;
-                                  setBulkSelectedPayments((prev) => {
+                                  setBulkSelectedTransportFeeIds((prev) => {
                                     const next = new Set(prev);
                                     if (checked) {
-                                      filteredTransportFeesPendingForBulk.forEach(({ payment }) =>
-                                        next.add(payment.id),
+                                      filteredUnpaidTransportFeesForBulk.forEach((row) =>
+                                        next.add(row.id),
                                       );
                                     } else {
-                                      filteredTransportFeesPendingForBulk.forEach(({ payment }) =>
-                                        next.delete(payment.id),
+                                      filteredUnpaidTransportFeesForBulk.forEach((row) =>
+                                        next.delete(row.id),
                                       );
                                     }
                                     return next;
@@ -2659,13 +2833,14 @@ const Pagamentos = () => {
                           const rejected = !!pay && pay.status === "rejeitado";
                           return (
                             <tr key={f.id} className="border-b hover:bg-muted/30">
-                              {!isParent && canValidatePaymentProofs && pendingTransportValidations.length > 0 && (
+                              {!isParent && canValidatePaymentProofs && filteredUnpaidTransportFeesForBulk.length > 0 && (
                                 <td className="py-2 px-2 align-middle w-10">
-                                  {pendingValidation && pay ? (
+                                  {!f.is_paid ? (
                                     <Checkbox
-                                      disabled={bulkValidating || validatingId === pay.id}
-                                      checked={bulkSelectedPayments.has(pay.id)}
-                                      onCheckedChange={(v) => setBulkPaymentChecked(pay.id, v === true)}
+                                      disabled={bulkValidating || (!!pay && validatingId === pay.id)}
+                                      checked={bulkSelectedTransportFeeIds.has(f.id)}
+                                      onCheckedChange={(v) => setBulkTransportFeeChecked(f.id, v === true)}
+                                      title="Incluída na validação em lote («Validar seleccionados») para cobranças não pagas."
                                     />
                                   ) : null}
                                 </td>
@@ -2791,7 +2966,7 @@ const Pagamentos = () => {
                       type="button"
                       size="sm"
                       className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80 shrink-0"
-                      disabled={bulkValidating || pendingEnrollmentValidations.every((x) => !bulkSelectedPayments.has(x.payment.id))}
+                      disabled={bulkValidating || pendingEnrollmentValidations.every((x) => !bulkSelectedEnrollmentFeeIds.has(x.fee.id))}
                       onClick={() => void bulkValidateEnrollmentFeesList()}
                     >
                       {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -2807,13 +2982,16 @@ const Pagamentos = () => {
                           <th className="py-2 px-2 w-10 align-middle">
                             <Checkbox
                               disabled={bulkValidating}
-                              checked={pendingEnrollmentValidations.length > 0 && pendingEnrollmentValidations.every(({ payment }) => bulkSelectedPayments.has(payment.id))}
+                              checked={
+                                pendingEnrollmentValidations.length > 0 &&
+                                pendingEnrollmentValidations.every(({ fee }) => bulkSelectedEnrollmentFeeIds.has(fee.id))
+                              }
                               onCheckedChange={(v) => {
                                 const checked = v === true;
-                                setBulkSelectedPayments((prev) => {
+                                setBulkSelectedEnrollmentFeeIds((prev) => {
                                   const next = new Set(prev);
-                                  if (checked) pendingEnrollmentValidations.forEach(({ payment }) => next.add(payment.id));
-                                  else pendingEnrollmentValidations.forEach(({ payment }) => next.delete(payment.id));
+                                  if (checked) pendingEnrollmentValidations.forEach(({ fee }) => next.add(fee.id));
+                                  else pendingEnrollmentValidations.forEach(({ fee }) => next.delete(fee.id));
                                   return next;
                                 });
                               }}
@@ -2834,8 +3012,8 @@ const Pagamentos = () => {
                             <td className="py-2 px-2 align-middle">
                               <Checkbox
                                 disabled={bulkValidating || validatingId === payment.id}
-                                checked={bulkSelectedPayments.has(payment.id)}
-                                onCheckedChange={(v) => setBulkPaymentChecked(payment.id, v === true)}
+                                checked={bulkSelectedEnrollmentFeeIds.has(fee.id)}
+                                onCheckedChange={(v) => setBulkEnrollmentFeeChecked(fee.id, v === true)}
                               />
                             </td>
                             <td className="py-2 px-2 font-medium">{fee.student?.full_name ?? "—"}</td>
@@ -2885,14 +3063,14 @@ const Pagamentos = () => {
                   <CardTitle className="flex items-center gap-2"><GraduationCap className="h-4 w-4" /> Custos de matrícula e renovação</CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">Custos únicos cobrados ao matricular um aluno ou ao renovar a matrícula num novo ano letivo.</p>
                 </div>
-                {!isParent && canValidatePaymentProofs && pendingEnrollmentValidations.length > 0 && (
+                {!isParent && canValidatePaymentProofs && filteredUnpaidEnrollmentFeesForBulk.length > 0 && (
                   <Button
                     type="button"
                     size="sm"
                     className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80 shrink-0"
                     disabled={
                       bulkValidating ||
-                      pendingEnrollmentValidations.every((x) => !bulkSelectedPayments.has(x.payment.id))
+                      selectedEnrollmentFeesEligibleForBulkValidate.length === 0
                     }
                     onClick={() => void bulkValidateEnrollmentFeesList()}
                   >
@@ -2942,27 +3120,27 @@ const Pagamentos = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
-                          {!isParent && canValidatePaymentProofs && pendingEnrollmentValidations.length > 0 && (
+                          {!isParent && canValidatePaymentProofs && filteredUnpaidEnrollmentFeesForBulk.length > 0 && (
                             <th className="py-2 px-2 w-10 align-middle">
                               <Checkbox
                                 disabled={bulkValidating}
                                 checked={
-                                  filteredEnrollmentFeesPendingForBulk.length > 0 &&
-                                  filteredEnrollmentFeesPendingForBulk.every(({ payment }) =>
-                                    bulkSelectedPayments.has(payment.id),
+                                  filteredUnpaidEnrollmentFeesForBulk.length > 0 &&
+                                  filteredUnpaidEnrollmentFeesForBulk.every((row) =>
+                                    bulkSelectedEnrollmentFeeIds.has(row.id),
                                   )
                                 }
                                 onCheckedChange={(v) => {
                                   const checked = v === true;
-                                  setBulkSelectedPayments((prev) => {
+                                  setBulkSelectedEnrollmentFeeIds((prev) => {
                                     const next = new Set(prev);
                                     if (checked) {
-                                      filteredEnrollmentFeesPendingForBulk.forEach(({ payment }) =>
-                                        next.add(payment.id),
+                                      filteredUnpaidEnrollmentFeesForBulk.forEach((row) =>
+                                        next.add(row.id),
                                       );
                                     } else {
-                                      filteredEnrollmentFeesPendingForBulk.forEach(({ payment }) =>
-                                        next.delete(payment.id),
+                                      filteredUnpaidEnrollmentFeesForBulk.forEach((row) =>
+                                        next.delete(row.id),
                                       );
                                     }
                                     return next;
@@ -2989,13 +3167,14 @@ const Pagamentos = () => {
                           const rejected = !!pay && pay.status === "rejeitado";
                           return (
                             <tr key={f.id} className="border-b hover:bg-muted/30">
-                              {!isParent && canValidatePaymentProofs && pendingEnrollmentValidations.length > 0 && (
+                              {!isParent && canValidatePaymentProofs && filteredUnpaidEnrollmentFeesForBulk.length > 0 && (
                                 <td className="py-2 px-2 align-middle w-10">
-                                  {pendingValidation && pay ? (
+                                  {!f.is_paid ? (
                                     <Checkbox
-                                      disabled={bulkValidating || validatingId === pay.id}
-                                      checked={bulkSelectedPayments.has(pay.id)}
-                                      onCheckedChange={(v) => setBulkPaymentChecked(pay.id, v === true)}
+                                      disabled={bulkValidating || (!!pay && validatingId === pay.id)}
+                                      checked={bulkSelectedEnrollmentFeeIds.has(f.id)}
+                                      onCheckedChange={(v) => setBulkEnrollmentFeeChecked(f.id, v === true)}
+                                      title="Incluída na validação em lote («Validar seleccionados») para cobranças não pagas."
                                     />
                                   ) : null}
                                 </td>
