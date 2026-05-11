@@ -219,7 +219,10 @@ const Pagamentos = () => {
   const [payments, setPayments] = useState<PaymentListRow[]>([]);
   const [validatingId, setValidatingId] = useState<string | null>(null);
   const [bulkValidating, setBulkValidating] = useState(false);
+  const [bulkRemindingTuition, setBulkRemindingTuition] = useState(false);
   const [bulkSelectedPayments, setBulkSelectedPayments] = useState<Set<string>>(() => new Set());
+  /** Propinas (student_fees): selecção na lista principal e em «Comprovativos a validar» (evita colidir com payment.id noutras tabs). */
+  const [bulkSelectedTuitionFeeIds, setBulkSelectedTuitionFeeIds] = useState<Set<string>>(() => new Set());
   const [guardianPaymentMode, setGuardianPaymentMode] = useState<GuardianPaymentMode>("proof_attachment");
   const [bankIbanDraft, setBankIbanDraft] = useState("");
   const [savingPaymentPrefs, setSavingPaymentPrefs] = useState(false);
@@ -962,10 +965,23 @@ const Pagamentos = () => {
     });
   };
 
+  const setBulkTuitionFeeChecked = (studentFeeId: string, checked: boolean) => {
+    setBulkSelectedTuitionFeeIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(studentFeeId);
+      else next.delete(studentFeeId);
+      return next;
+    });
+  };
+
   const bulkValidateFees = async () => {
-    const sel = pendingValidations.filter((x) => bulkSelectedPayments.has(x.payment.id));
+    const sel = pendingValidations.filter((x) => bulkSelectedTuitionFeeIds.has(x.fee.id));
     if (!sel.length) {
-      toast({ title: "Nada seleccionado", description: "Seleccione uma ou mais linhas na tabela.", variant: "destructive" });
+      toast({
+        title: "Nada a validar nas linhas seleccionadas",
+        description: "A validação em lote só se aplica a comprovativos submetidos (estado «A validar»).",
+        variant: "destructive",
+      });
       return;
     }
     const { data: userRes } = await supabase.auth.getUser();
@@ -977,7 +993,7 @@ const Pagamentos = () => {
       if (err) failed++;
     }
     setBulkValidating(false);
-    setBulkSelectedPayments(new Set());
+    setBulkSelectedTuitionFeeIds(new Set());
     if (failed) toast({ title: "Validação em lote concluída com erros", description: `${sel.length - failed} validado(s), ${failed} falha(s).`, variant: "destructive" });
     else toast({ title: "Pagamentos validados", description: `${sel.length} comprovativo(s) validado(s).` });
     await fetchAll();
@@ -1133,6 +1149,55 @@ const Pagamentos = () => {
     const { error } = await supabase.from("notifications").insert(rows);
     if (error) toast({ title: "Erro a enviar lembretes", description: error.message, variant: "destructive" });
     else toast({ title: `${rows.length} lembrete(s) enviado(s)` });
+  };
+
+  /** Cobrar (lembrete + email) só para as propinas actualmente seleccionadas na lista. */
+  const sendBulkRemindersForSelectedTuitionFees = async () => {
+    if (!schoolId) return;
+    const fees = [...bulkSelectedTuitionFeeIds]
+      .map((id) => allFees.find((f) => f.id === id))
+      .filter((f): f is FeeListRow => !!f && !f.is_paid && !!f.student?.parent_id);
+    if (fees.length === 0) {
+      toast({
+        title: "Sem destinatários",
+        description: "Seleccione propinas não pagas com encarregado associado.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setBulkRemindingTuition(true);
+    const rows = fees.map((f) => {
+      const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
+      const title = `Lembrete de propina ${monthLabel}`.trim();
+      const description = `A propina de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`;
+      return {
+        recipient_id: f.student!.parent_id!,
+        school_id: schoolId,
+        title,
+        description,
+        category: "pagamento",
+        link: "https://www.edukamba.com/pagamentos",
+      };
+    });
+    const { error } = await supabase.from("notifications").insert(rows);
+    if (!error) {
+      fees.forEach((f, i) => {
+        const studentId = f.student_id ?? f.student?.id;
+        if (studentId) {
+          void supabase.functions.invoke("send-cobrar-email", {
+            body: {
+              student_id: studentId,
+              title: rows[i].title,
+              description: rows[i].description,
+              link: "https://www.edukamba.com/pagamentos",
+            },
+          });
+        }
+      });
+    }
+    setBulkRemindingTuition(false);
+    if (error) toast({ title: "Erro a enviar lembretes", description: error.message, variant: "destructive" });
+    else toast({ title: `${fees.length} cobrança(s) enviada(s)`, description: "Lembrete no portal e email quando configurado." });
   };
 
   // ===== Activity fees logic =====
@@ -1466,15 +1531,14 @@ const Pagamentos = () => {
     await fetchAll();
   };
 
-  /** Linhas \"A validar\" visíveis com o filtro actual (lista principal por tab); usado nas checkboxes em lote. */
-  const filteredFeesPendingForBulk = useMemo(() => {
-    return filteredFees
-      .map((f) => {
-        const pay = latestPaymentByFee.get(f.id);
-        return pay?.status === "pendente" ? { fee: f, payment: pay } : null;
-      })
-      .filter((x): x is { fee: FeeListRow; payment: PaymentListRow } => x !== null);
-  }, [filteredFees, latestPaymentByFee]);
+  /** Propinas não pagas com o filtro actual (checkboxes na lista de propinas). */
+  const filteredUnpaidFeesForBulk = useMemo(() => filteredFees.filter((f) => !f.is_paid), [filteredFees]);
+
+  const selectedTuitionFeesEligibleForRemind = useMemo(() => {
+    return [...bulkSelectedTuitionFeeIds]
+      .map((id) => allFees.find((f) => f.id === id))
+      .filter((f): f is FeeListRow => !!f && !f.is_paid && !!f.student?.parent_id);
+  }, [bulkSelectedTuitionFeeIds, allFees]);
 
   const filteredActivityFeesPendingForBulk = useMemo(() => {
     return filteredActivityFees
@@ -1687,7 +1751,7 @@ const Pagamentos = () => {
                       type="button"
                       size="sm"
                       className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80 shrink-0"
-                      disabled={bulkValidating || pendingValidations.every((x) => !bulkSelectedPayments.has(x.payment.id))}
+                      disabled={bulkValidating || bulkRemindingTuition || pendingValidations.every((x) => !bulkSelectedTuitionFeeIds.has(x.fee.id))}
                       onClick={() => void bulkValidateFees()}
                     >
                       {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -1702,14 +1766,14 @@ const Pagamentos = () => {
                         <tr className="border-b text-left text-muted-foreground">
                           <th className="py-2 px-2 w-10 align-middle">
                             <Checkbox
-                              disabled={bulkValidating}
-                              checked={pendingValidations.length > 0 && pendingValidations.every(({ payment }) => bulkSelectedPayments.has(payment.id))}
+                              disabled={bulkValidating || bulkRemindingTuition}
+                              checked={pendingValidations.length > 0 && pendingValidations.every(({ fee }) => bulkSelectedTuitionFeeIds.has(fee.id))}
                               onCheckedChange={(v) => {
                                 const checked = v === true;
-                                setBulkSelectedPayments((prev) => {
+                                setBulkSelectedTuitionFeeIds((prev) => {
                                   const next = new Set(prev);
-                                  if (checked) pendingValidations.forEach(({ payment }) => next.add(payment.id));
-                                  else pendingValidations.forEach(({ payment }) => next.delete(payment.id));
+                                  if (checked) pendingValidations.forEach(({ fee }) => next.add(fee.id));
+                                  else pendingValidations.forEach(({ fee }) => next.delete(fee.id));
                                   return next;
                                 });
                               }}
@@ -1729,9 +1793,9 @@ const Pagamentos = () => {
                           <tr key={payment.id} className="border-b hover:bg-muted/30">
                             <td className="py-2 px-2 align-middle">
                               <Checkbox
-                                disabled={bulkValidating || validatingId === payment.id}
-                                checked={bulkSelectedPayments.has(payment.id)}
-                                onCheckedChange={(v) => setBulkPaymentChecked(payment.id, v === true)}
+                                disabled={bulkValidating || bulkRemindingTuition || validatingId === payment.id}
+                                checked={bulkSelectedTuitionFeeIds.has(fee.id)}
+                                onCheckedChange={(v) => setBulkTuitionFeeChecked(fee.id, v === true)}
                               />
                             </td>
                             <td className="py-2 px-2 font-medium">{fee.student?.full_name ?? "—"}</td>
@@ -1749,7 +1813,7 @@ const Pagamentos = () => {
                                 <Button
                                   size="sm"
                                   className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
-                                  disabled={bulkValidating || validatingId === payment.id}
+                                  disabled={bulkValidating || bulkRemindingTuition || validatingId === payment.id}
                                   onClick={() => validatePayment(fee, payment)}
                                 >
                                   {validatingId === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -1759,7 +1823,7 @@ const Pagamentos = () => {
                                   size="sm"
                                   variant="outline"
                                   className="gap-1 text-destructive"
-                                  disabled={bulkValidating || validatingId === payment.id}
+                                  disabled={bulkValidating || bulkRemindingTuition || validatingId === payment.id}
                                   onClick={() => { setRejectDialog(payment); setRejectReason(""); }}
                                 >
                                   <XCircle className="h-3.5 w-3.5" /> Rejeitar
@@ -1790,7 +1854,8 @@ const Pagamentos = () => {
                         className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
                         disabled={
                           bulkValidating ||
-                          pendingValidations.every((x) => !bulkSelectedPayments.has(x.payment.id))
+                          bulkRemindingTuition ||
+                          pendingValidations.every((x) => !bulkSelectedTuitionFeeIds.has(x.fee.id))
                         }
                         onClick={() => void bulkValidateFees()}
                       >
@@ -1798,7 +1863,30 @@ const Pagamentos = () => {
                         Validar seleccionados
                       </Button>
                     )}
-                    <Button onClick={sendBulkReminders} size="sm" variant="outline" className="gap-2">
+                    {filteredFees.some((f) => !f.is_paid) && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="gap-2"
+                        disabled={
+                          bulkRemindingTuition ||
+                          bulkValidating ||
+                          selectedTuitionFeesEligibleForRemind.length === 0
+                        }
+                        onClick={() => void sendBulkRemindersForSelectedTuitionFees()}
+                      >
+                        {bulkRemindingTuition ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-4 w-4" />}
+                        Cobrar seleccionados
+                      </Button>
+                    )}
+                    <Button
+                      onClick={sendBulkReminders}
+                      size="sm"
+                      variant="outline"
+                      className="gap-2"
+                      disabled={bulkRemindingTuition || bulkValidating}
+                    >
                       <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
                     </Button>
                   </div>
@@ -1847,29 +1935,27 @@ const Pagamentos = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
-                          {!isParent && pendingValidations.length > 0 && (
+                          {!isParent && filteredFees.some((x) => !x.is_paid) && (
                             <th className="py-2 px-2 w-10 align-middle">
                               <Checkbox
-                                disabled={bulkValidating}
+                                disabled={bulkValidating || bulkRemindingTuition}
                                 checked={
-                                  filteredFeesPendingForBulk.length > 0 &&
-                                  filteredFeesPendingForBulk.every(({ payment }) =>
-                                    bulkSelectedPayments.has(payment.id),
-                                  )
+                                  filteredUnpaidFeesForBulk.length > 0 &&
+                                  filteredUnpaidFeesForBulk.every((f) => bulkSelectedTuitionFeeIds.has(f.id))
                                 }
                                 onCheckedChange={(v) => {
                                   const checked = v === true;
-                                  setBulkSelectedPayments((prev) => {
+                                  setBulkSelectedTuitionFeeIds((prev) => {
                                     const next = new Set(prev);
                                     if (checked) {
-                                      filteredFeesPendingForBulk.forEach(({ payment }) => next.add(payment.id));
+                                      filteredUnpaidFeesForBulk.forEach((f) => next.add(f.id));
                                     } else {
-                                      filteredFeesPendingForBulk.forEach(({ payment }) => next.delete(payment.id));
+                                      filteredUnpaidFeesForBulk.forEach((f) => next.delete(f.id));
                                     }
                                     return next;
                                   });
                                 }}
-                                aria-label="Seleccionar todos (filtro atual)"
+                                aria-label="Seleccionar todas as linhas não pagas (filtro atual)"
                               />
                             </th>
                           )}
@@ -1890,13 +1976,14 @@ const Pagamentos = () => {
                           const rejected = !!pay && pay.status === "rejeitado";
                           return (
                             <tr key={f.id} className="border-b hover:bg-muted/30">
-                              {!isParent && pendingValidations.length > 0 && (
+                              {!isParent && filteredFees.some((x) => !x.is_paid) && (
                                 <td className="py-2 px-2 align-middle w-10">
-                                  {pendingValidation && pay ? (
+                                  {!f.is_paid ? (
                                     <Checkbox
-                                      disabled={bulkValidating || validatingId === pay.id}
-                                      checked={bulkSelectedPayments.has(pay.id)}
-                                      onCheckedChange={(v) => setBulkPaymentChecked(pay.id, v === true)}
+                                      disabled={bulkValidating || bulkRemindingTuition || (!!pay && validatingId === pay.id)}
+                                      checked={bulkSelectedTuitionFeeIds.has(f.id)}
+                                      onCheckedChange={(v) => setBulkTuitionFeeChecked(f.id, v === true)}
+                                      title="Validação em lote só aplica a linhas no estado «A validar»."
                                     />
                                   ) : null}
                                 </td>
@@ -1931,7 +2018,7 @@ const Pagamentos = () => {
                                       <Button
                                         size="sm"
                                         className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
-                                        disabled={bulkValidating || validatingId === pay.id}
+                                        disabled={bulkValidating || bulkRemindingTuition || validatingId === pay.id}
                                         onClick={() => validatePayment(f, pay)}
                                       >
                                         {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -1941,7 +2028,7 @@ const Pagamentos = () => {
                                         size="sm"
                                         variant="outline"
                                         className="gap-1 text-destructive"
-                                        disabled={bulkValidating || validatingId === pay.id}
+                                        disabled={bulkValidating || bulkRemindingTuition || validatingId === pay.id}
                                         onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
                                       >
                                         <XCircle className="h-3.5 w-3.5" /> Rejeitar
@@ -1966,7 +2053,7 @@ const Pagamentos = () => {
                                         </span>
                                       )}
                                       {!isParent && (
-                                        <Button size="sm" variant="outline" className="gap-2" onClick={() => sendReminder(f)} disabled={remindingFeeId === f.id || !f.student?.parent_id}>
+                                        <Button size="sm" variant="outline" className="gap-2" onClick={() => sendReminder(f)} disabled={remindingFeeId === f.id || !f.student?.parent_id || bulkRemindingTuition}>
                                           {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
                                           Cobrar
                                         </Button>
