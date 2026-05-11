@@ -1466,6 +1466,43 @@ const Pagamentos = () => {
     await fetchAll();
   };
 
+  /** Linhas \"A validar\" visíveis com o filtro actual (lista principal por tab); usado nas checkboxes em lote. */
+  const filteredFeesPendingForBulk = useMemo(() => {
+    return filteredFees
+      .map((f) => {
+        const pay = latestPaymentByFee.get(f.id);
+        return pay?.status === "pendente" ? { fee: f, payment: pay } : null;
+      })
+      .filter((x): x is { fee: FeeListRow; payment: PaymentListRow } => x !== null);
+  }, [filteredFees, latestPaymentByFee]);
+
+  const filteredActivityFeesPendingForBulk = useMemo(() => {
+    return filteredActivityFees
+      .map((f) => {
+        const pay = latestPaymentByActivityFee.get(f.id);
+        return pay?.status === "pendente" ? { fee: f, payment: pay } : null;
+      })
+      .filter((x): x is { fee: ActivityFeeRow; payment: PaymentListRow } => x !== null);
+  }, [filteredActivityFees, latestPaymentByActivityFee]);
+
+  const filteredTransportFeesPendingForBulk = useMemo(() => {
+    return filteredTransportFees
+      .map((f) => {
+        const pay = latestPaymentByTransportFee.get(f.id);
+        return pay?.status === "pendente" ? { fee: f, payment: pay } : null;
+      })
+      .filter((x): x is { fee: TransportFeeRow; payment: PaymentListRow } => x !== null);
+  }, [filteredTransportFees, latestPaymentByTransportFee]);
+
+  const filteredEnrollmentFeesPendingForBulk = useMemo(() => {
+    return filteredEnrollmentFees
+      .map((f) => {
+        const pay = latestPaymentByEnrollmentFee.get(f.id);
+        return pay?.status === "pendente" ? { fee: f, payment: pay } : null;
+      })
+      .filter((x): x is { fee: EnrollmentFeeRow; payment: PaymentListRow } => x !== null);
+  }, [filteredEnrollmentFees, latestPaymentByEnrollmentFee]);
+
   const sendEnrollmentReminder = async (fee: EnrollmentFeeRow) => {
     if (!schoolId) return;
     const parentId = fee.student?.parent_id;
@@ -1600,7 +1637,7 @@ const Pagamentos = () => {
           </Card>
         )}
 
-        <Tabs defaultValue={isParent ? "fees" : "rules"} className="w-full">
+        <Tabs defaultValue="fees" className="w-full">
           <TabsList>
             {!isParent && <TabsTrigger value="rules">Regras de propina</TabsTrigger>}
             <TabsTrigger value="fees">Propinas</TabsTrigger>
@@ -1745,9 +1782,26 @@ const Pagamentos = () => {
                   <p className="text-sm text-muted-foreground mt-1">Controla o estado das propinas e envia lembretes aos encarregados.</p>
                 </div>
                 {!isParent && (
-                  <Button onClick={sendBulkReminders} size="sm" variant="outline" className="gap-2">
-                    <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {pendingValidations.length > 0 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                        disabled={
+                          bulkValidating ||
+                          pendingValidations.every((x) => !bulkSelectedPayments.has(x.payment.id))
+                        }
+                        onClick={() => void bulkValidateFees()}
+                      >
+                        {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                        Validar seleccionados
+                      </Button>
+                    )}
+                    <Button onClick={sendBulkReminders} size="sm" variant="outline" className="gap-2">
+                      <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                    </Button>
+                  </div>
                 )}
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1793,6 +1847,32 @@ const Pagamentos = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
+                          {!isParent && pendingValidations.length > 0 && (
+                            <th className="py-2 px-2 w-10 align-middle">
+                              <Checkbox
+                                disabled={bulkValidating}
+                                checked={
+                                  filteredFeesPendingForBulk.length > 0 &&
+                                  filteredFeesPendingForBulk.every(({ payment }) =>
+                                    bulkSelectedPayments.has(payment.id),
+                                  )
+                                }
+                                onCheckedChange={(v) => {
+                                  const checked = v === true;
+                                  setBulkSelectedPayments((prev) => {
+                                    const next = new Set(prev);
+                                    if (checked) {
+                                      filteredFeesPendingForBulk.forEach(({ payment }) => next.add(payment.id));
+                                    } else {
+                                      filteredFeesPendingForBulk.forEach(({ payment }) => next.delete(payment.id));
+                                    }
+                                    return next;
+                                  });
+                                }}
+                                aria-label="Seleccionar todos (filtro atual)"
+                              />
+                            </th>
+                          )}
                           <th className="py-2 px-2">Aluno</th>
                           <th className="py-2 px-2">Turma</th>
                           <th className="py-2 px-2">Mês</th>
@@ -1810,6 +1890,17 @@ const Pagamentos = () => {
                           const rejected = !!pay && pay.status === "rejeitado";
                           return (
                             <tr key={f.id} className="border-b hover:bg-muted/30">
+                              {!isParent && pendingValidations.length > 0 && (
+                                <td className="py-2 px-2 align-middle w-10">
+                                  {pendingValidation && pay ? (
+                                    <Checkbox
+                                      disabled={bulkValidating || validatingId === pay.id}
+                                      checked={bulkSelectedPayments.has(pay.id)}
+                                      onCheckedChange={(v) => setBulkPaymentChecked(pay.id, v === true)}
+                                    />
+                                  ) : null}
+                                </td>
+                              )}
                               <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{f.student?.classroom?.name ?? "—"}</td>
                               <td className="py-2 px-2">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
@@ -1840,7 +1931,7 @@ const Pagamentos = () => {
                                       <Button
                                         size="sm"
                                         className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
-                                        disabled={validatingId === pay.id}
+                                        disabled={bulkValidating || validatingId === pay.id}
                                         onClick={() => validatePayment(f, pay)}
                                       >
                                         {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -1850,7 +1941,7 @@ const Pagamentos = () => {
                                         size="sm"
                                         variant="outline"
                                         className="gap-1 text-destructive"
-                                        disabled={validatingId === pay.id}
+                                        disabled={bulkValidating || validatingId === pay.id}
                                         onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
                                       >
                                         <XCircle className="h-3.5 w-3.5" /> Rejeitar
@@ -2027,9 +2118,26 @@ const Pagamentos = () => {
                   <p className="text-sm text-muted-foreground mt-1">Controla o estado das cobranças e envia lembretes aos encarregados.</p>
                 </div>
                 {!isParent && (
-                  <Button onClick={sendActivityBulkReminders} size="sm" variant="outline" className="gap-2">
-                    <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {pendingActivityValidations.length > 0 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                        disabled={
+                          bulkValidating ||
+                          pendingActivityValidations.every((x) => !bulkSelectedPayments.has(x.payment.id))
+                        }
+                        onClick={() => void bulkValidateActivityFeesList()}
+                      >
+                        {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                        Validar seleccionados
+                      </Button>
+                    )}
+                    <Button onClick={sendActivityBulkReminders} size="sm" variant="outline" className="gap-2">
+                      <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                    </Button>
+                  </div>
                 )}
               </CardHeader>
               <CardContent className="space-y-4">
@@ -2072,6 +2180,36 @@ const Pagamentos = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
+                          {!isParent && pendingActivityValidations.length > 0 && (
+                            <th className="py-2 px-2 w-10 align-middle">
+                              <Checkbox
+                                disabled={bulkValidating}
+                                checked={
+                                  filteredActivityFeesPendingForBulk.length > 0 &&
+                                  filteredActivityFeesPendingForBulk.every(({ payment }) =>
+                                    bulkSelectedPayments.has(payment.id),
+                                  )
+                                }
+                                onCheckedChange={(v) => {
+                                  const checked = v === true;
+                                  setBulkSelectedPayments((prev) => {
+                                    const next = new Set(prev);
+                                    if (checked) {
+                                      filteredActivityFeesPendingForBulk.forEach(({ payment }) =>
+                                        next.add(payment.id),
+                                      );
+                                    } else {
+                                      filteredActivityFeesPendingForBulk.forEach(({ payment }) =>
+                                        next.delete(payment.id),
+                                      );
+                                    }
+                                    return next;
+                                  });
+                                }}
+                                aria-label="Seleccionar todos (filtro atual)"
+                              />
+                            </th>
+                          )}
                           <th className="py-2 px-2">Aluno</th>
                           <th className="py-2 px-2">Atividade</th>
                           <th className="py-2 px-2">Mês</th>
@@ -2089,6 +2227,17 @@ const Pagamentos = () => {
                           const rejected = !!pay && pay.status === "rejeitado";
                           return (
                             <tr key={f.id} className="border-b hover:bg-muted/30">
+                              {!isParent && pendingActivityValidations.length > 0 && (
+                                <td className="py-2 px-2 align-middle w-10">
+                                  {pendingValidation && pay ? (
+                                    <Checkbox
+                                      disabled={bulkValidating || validatingId === pay.id}
+                                      checked={bulkSelectedPayments.has(pay.id)}
+                                      onCheckedChange={(v) => setBulkPaymentChecked(pay.id, v === true)}
+                                    />
+                                  ) : null}
+                                </td>
+                              )}
                               <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
                               <td className="py-2 px-2">{f.activity?.name ?? "—"}</td>
                               <td className="py-2 px-2">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
@@ -2119,7 +2268,7 @@ const Pagamentos = () => {
                                       <Button
                                         size="sm"
                                         className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
-                                        disabled={validatingId === pay.id}
+                                        disabled={bulkValidating || validatingId === pay.id}
                                         onClick={() => validateActivityPayment(f, pay)}
                                       >
                                         {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -2129,7 +2278,7 @@ const Pagamentos = () => {
                                         size="sm"
                                         variant="outline"
                                         className="gap-1 text-destructive"
-                                        disabled={validatingId === pay.id}
+                                        disabled={bulkValidating || validatingId === pay.id}
                                         onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
                                       >
                                         <XCircle className="h-3.5 w-3.5" /> Rejeitar
@@ -2301,9 +2450,26 @@ const Pagamentos = () => {
                   <p className="text-sm text-muted-foreground mt-1">Controla as mensalidades de transporte e envia lembretes aos encarregados.</p>
                 </div>
                 {!isParent && (
-                  <Button onClick={sendTransportBulkReminders} size="sm" variant="outline" className="gap-2">
-                    <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {pendingTransportValidations.length > 0 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                        disabled={
+                          bulkValidating ||
+                          pendingTransportValidations.every((x) => !bulkSelectedPayments.has(x.payment.id))
+                        }
+                        onClick={() => void bulkValidateTransportFeesList()}
+                      >
+                        {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                        Validar seleccionados
+                      </Button>
+                    )}
+                    <Button onClick={sendTransportBulkReminders} size="sm" variant="outline" className="gap-2">
+                      <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                    </Button>
+                  </div>
                 )}
               </CardHeader>
               <CardContent className="space-y-4">
@@ -2346,6 +2512,36 @@ const Pagamentos = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
+                          {!isParent && pendingTransportValidations.length > 0 && (
+                            <th className="py-2 px-2 w-10 align-middle">
+                              <Checkbox
+                                disabled={bulkValidating}
+                                checked={
+                                  filteredTransportFeesPendingForBulk.length > 0 &&
+                                  filteredTransportFeesPendingForBulk.every(({ payment }) =>
+                                    bulkSelectedPayments.has(payment.id),
+                                  )
+                                }
+                                onCheckedChange={(v) => {
+                                  const checked = v === true;
+                                  setBulkSelectedPayments((prev) => {
+                                    const next = new Set(prev);
+                                    if (checked) {
+                                      filteredTransportFeesPendingForBulk.forEach(({ payment }) =>
+                                        next.add(payment.id),
+                                      );
+                                    } else {
+                                      filteredTransportFeesPendingForBulk.forEach(({ payment }) =>
+                                        next.delete(payment.id),
+                                      );
+                                    }
+                                    return next;
+                                  });
+                                }}
+                                aria-label="Seleccionar todos (filtro atual)"
+                              />
+                            </th>
+                          )}
                           <th className="py-2 px-2">Aluno</th>
                           <th className="py-2 px-2">Rota</th>
                           <th className="py-2 px-2">Mês</th>
@@ -2363,6 +2559,17 @@ const Pagamentos = () => {
                           const rejected = !!pay && pay.status === "rejeitado";
                           return (
                             <tr key={f.id} className="border-b hover:bg-muted/30">
+                              {!isParent && pendingTransportValidations.length > 0 && (
+                                <td className="py-2 px-2 align-middle w-10">
+                                  {pendingValidation && pay ? (
+                                    <Checkbox
+                                      disabled={bulkValidating || validatingId === pay.id}
+                                      checked={bulkSelectedPayments.has(pay.id)}
+                                      onCheckedChange={(v) => setBulkPaymentChecked(pay.id, v === true)}
+                                    />
+                                  ) : null}
+                                </td>
+                              )}
                               <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
                               <td className="py-2 px-2">{f.route?.name ?? "—"}</td>
                               <td className="py-2 px-2">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
@@ -2393,7 +2600,7 @@ const Pagamentos = () => {
                                       <Button
                                         size="sm"
                                         className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
-                                        disabled={validatingId === pay.id}
+                                        disabled={bulkValidating || validatingId === pay.id}
                                         onClick={() => validateTransportPayment(f, pay)}
                                       >
                                         {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -2403,7 +2610,7 @@ const Pagamentos = () => {
                                         size="sm"
                                         variant="outline"
                                         className="gap-1 text-destructive"
-                                        disabled={validatingId === pay.id}
+                                        disabled={bulkValidating || validatingId === pay.id}
                                         onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
                                       >
                                         <XCircle className="h-3.5 w-3.5" /> Rejeitar
@@ -2569,9 +2776,26 @@ const Pagamentos = () => {
             )}
 
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2"><GraduationCap className="h-4 w-4" /> Custos de matrícula e renovação</CardTitle>
-                <p className="text-sm text-muted-foreground mt-1">Custos únicos cobrados ao matricular um aluno ou ao renovar a matrícula num novo ano letivo.</p>
+              <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2"><GraduationCap className="h-4 w-4" /> Custos de matrícula e renovação</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">Custos únicos cobrados ao matricular um aluno ou ao renovar a matrícula num novo ano letivo.</p>
+                </div>
+                {!isParent && pendingEnrollmentValidations.length > 0 && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80 shrink-0"
+                    disabled={
+                      bulkValidating ||
+                      pendingEnrollmentValidations.every((x) => !bulkSelectedPayments.has(x.payment.id))
+                    }
+                    onClick={() => void bulkValidateEnrollmentFeesList()}
+                  >
+                    {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                    Validar seleccionados
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
@@ -2614,6 +2838,36 @@ const Pagamentos = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
+                          {!isParent && pendingEnrollmentValidations.length > 0 && (
+                            <th className="py-2 px-2 w-10 align-middle">
+                              <Checkbox
+                                disabled={bulkValidating}
+                                checked={
+                                  filteredEnrollmentFeesPendingForBulk.length > 0 &&
+                                  filteredEnrollmentFeesPendingForBulk.every(({ payment }) =>
+                                    bulkSelectedPayments.has(payment.id),
+                                  )
+                                }
+                                onCheckedChange={(v) => {
+                                  const checked = v === true;
+                                  setBulkSelectedPayments((prev) => {
+                                    const next = new Set(prev);
+                                    if (checked) {
+                                      filteredEnrollmentFeesPendingForBulk.forEach(({ payment }) =>
+                                        next.add(payment.id),
+                                      );
+                                    } else {
+                                      filteredEnrollmentFeesPendingForBulk.forEach(({ payment }) =>
+                                        next.delete(payment.id),
+                                      );
+                                    }
+                                    return next;
+                                  });
+                                }}
+                                aria-label="Seleccionar todos (filtro atual)"
+                              />
+                            </th>
+                          )}
                           <th className="py-2 px-2">Aluno</th>
                           <th className="py-2 px-2">Tipo</th>
                           <th className="py-2 px-2">Ano letivo</th>
@@ -2631,6 +2885,17 @@ const Pagamentos = () => {
                           const rejected = !!pay && pay.status === "rejeitado";
                           return (
                             <tr key={f.id} className="border-b hover:bg-muted/30">
+                              {!isParent && pendingEnrollmentValidations.length > 0 && (
+                                <td className="py-2 px-2 align-middle w-10">
+                                  {pendingValidation && pay ? (
+                                    <Checkbox
+                                      disabled={bulkValidating || validatingId === pay.id}
+                                      checked={bulkSelectedPayments.has(pay.id)}
+                                      onCheckedChange={(v) => setBulkPaymentChecked(pay.id, v === true)}
+                                    />
+                                  ) : null}
+                                </td>
+                              )}
                               <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
                               <td className="py-2 px-2">{f.fee_type === "RENEWAL" ? "Renovação" : "Matrícula"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{f.academic_year?.label ?? "—"}</td>
@@ -2661,7 +2926,7 @@ const Pagamentos = () => {
                                       <Button
                                         size="sm"
                                         className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
-                                        disabled={validatingId === pay.id}
+                                        disabled={bulkValidating || validatingId === pay.id}
                                         onClick={() => validateEnrollmentPayment(f, pay)}
                                       >
                                         {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -2671,7 +2936,7 @@ const Pagamentos = () => {
                                         size="sm"
                                         variant="outline"
                                         className="gap-1 text-destructive"
-                                        disabled={validatingId === pay.id}
+                                        disabled={bulkValidating || validatingId === pay.id}
                                         onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
                                       >
                                         <XCircle className="h-3.5 w-3.5" /> Rejeitar
