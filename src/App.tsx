@@ -92,6 +92,15 @@ function GatedPagamentosRoute() {
   return <Pagamentos />;
 }
 
+function GatedHistoricoPagamentosRoute() {
+  const { role, loading } = useUserRole();
+  const { isParent, loading: parentLoading } = useParentChildren();
+  if (loading || parentLoading) return <RouteSpinner />;
+  if (!canOpenPagamentosPage(role, isParent)) return <Navigate to="/dashboard" replace />;
+  if (!isParent) return <Navigate to="/pagamentos" replace />;
+  return <HistoricoPagamentosEncarregado />;
+}
+
 const App = () => (
   <PersistQueryClientProvider
     client={queryClient}
