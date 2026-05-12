@@ -17,6 +17,7 @@
  *   ASSESSMENT_REMINDER    → Lembrete de avaliação
  *   RESULTS_PUBLISHED      → Publicação de resultados
  *   PAYMENT                → Cobrança (propina, matrícula, extracurricular, transporte)
+ *   SAFT_EXPORT            → Lembrete mensal de exportação SAF-T (AGT)
  *   ABSENCE_REQUEST        → Pedido de ausência
  *   MATERIAL_REQUEST       → Pedido de material
  *   LOW_STOCK              → Alerta de stock baixo
@@ -109,6 +110,7 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
   ASSESSMENT_REMINDER:    { color: "#8b5cf6", headerIcon: "🔔", label: "Lembrete de Avaliação" },
   RESULTS_PUBLISHED:      { color: "#06b6d4", headerIcon: "📊", label: "Resultados Publicados" },
   PAYMENT:                { color: "#ef4444", headerIcon: "💳", label: "Cobrança" },
+  SAFT_EXPORT:            { color: "#0f766e", headerIcon: "📄", label: "Exportação SAF-T" },
   ABSENCE_REQUEST:        { color: "#64748b", headerIcon: "📋", label: "Pedido de Ausência" },
   MATERIAL_REQUEST:       { color: "#f97316", headerIcon: "📦", label: "Pedido de Material" },
   LOW_STOCK:              { color: "#dc2626", headerIcon: "⚡", label: "Alerta de Stock" },

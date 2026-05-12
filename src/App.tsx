@@ -36,6 +36,7 @@ import Extracurriculares from "./pages/Extracurriculares.tsx";
 import Pedidos from "./pages/Pedidos.tsx";
 import Material from "./pages/Material.tsx";
 import Pagamentos from "./pages/Pagamentos.tsx";
+import HistoricoPagamentosEncarregado from "./pages/HistoricoPagamentosEncarregado.tsx";
 import Financas from "./pages/Financas.tsx";
 import Relatorios from "./pages/Relatorios.tsx";
 import Timesheet from "./pages/Timesheet.tsx";
@@ -143,6 +144,7 @@ const App = () => (
                         <Route path="/extracurriculares" element={<Extracurriculares />} />
                         <Route path="/pedidos" element={<Pedidos />} />
                         <Route path="/material" element={<Material />} />
+                        <Route path="/pagamentos/historico" element={<GatedHistoricoPagamentosRoute />} />
                         <Route path="/pagamentos" element={<GatedPagamentosRoute />} />
                         <Route path="/financas" element={<Financas />} />
                         <Route path="/relatorios" element={<Relatorios />} />

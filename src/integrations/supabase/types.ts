@@ -455,6 +455,145 @@ export type Database = {
           },
         ]
       }
+      billing_config: {
+        Row: {
+          created_at: string
+          last_sequence: number
+          school_id: string
+          series: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          last_sequence?: number
+          school_id: string
+          series?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          last_sequence?: number
+          school_id?: string
+          series?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_config_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: true
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          agt_signing_plaintext: string | null
+          cliente_nif: string
+          cliente_nome: string
+          created_at: string
+          currency: string
+          digital_signature_sha1_b64: string | null
+          doc_number: number
+          document_hash: string | null
+          document_number: string
+          exemption_code: string
+          exemption_reason: string
+          gross_total: number
+          hash_control: string | null
+          id: string
+          invoice_date: string
+          invoice_issued_at: string
+          line_description: string
+          parent_profile_id: string | null
+          payment_id: string | null
+          previous_document_hash: string | null
+          school_id: string
+          series: string
+          student_id: string | null
+        }
+        Insert: {
+          agt_signing_plaintext?: string | null
+          cliente_nif: string
+          cliente_nome: string
+          created_at?: string
+          currency?: string
+          digital_signature_sha1_b64?: string | null
+          doc_number: number
+          document_hash?: string | null
+          document_number: string
+          exemption_code?: string
+          exemption_reason?: string
+          gross_total: number
+          hash_control?: string | null
+          id?: string
+          invoice_date: string
+          invoice_issued_at?: string
+          line_description?: string
+          parent_profile_id?: string | null
+          payment_id?: string | null
+          previous_document_hash?: string | null
+          school_id: string
+          series?: string
+          student_id?: string | null
+        }
+        Update: {
+          agt_signing_plaintext?: string | null
+          cliente_nif?: string
+          cliente_nome?: string
+          created_at?: string
+          currency?: string
+          digital_signature_sha1_b64?: string | null
+          doc_number?: number
+          document_hash?: string | null
+          document_number?: string
+          exemption_code?: string
+          exemption_reason?: string
+          gross_total?: number
+          hash_control?: string | null
+          id?: string
+          invoice_date?: string
+          invoice_issued_at?: string
+          line_description?: string
+          parent_profile_id?: string | null
+          payment_id?: string | null
+          previous_document_hash?: string | null
+          school_id?: string
+          series?: string
+          student_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_parent_profile_id_fkey"
+            columns: ["parent_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
@@ -1948,6 +2087,7 @@ export type Database = {
           phone: string | null
           role: Database["public"]["Enums"]["user_role"] | null
           school_id: string | null
+          tax_id: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -1960,6 +2100,7 @@ export type Database = {
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"] | null
           school_id?: string | null
+          tax_id?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -1972,6 +2113,7 @@ export type Database = {
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"] | null
           school_id?: string | null
+          tax_id?: string | null
         }
         Relationships: [
           {
@@ -3244,6 +3386,10 @@ export type Database = {
     Functions: {
       _ensure_audit_trigger: { Args: { p_table: string }; Returns: undefined }
       apply_monthly_late_fees: { Args: never; Returns: Json }
+      billing_reserve_next_invoice: {
+        Args: { _school_id: string }
+        Returns: { serie: string; seq: number }[]
+      }
       cleanup_old_audit_logs: { Args: never; Returns: undefined }
       clone_academic_year: {
         Args: {

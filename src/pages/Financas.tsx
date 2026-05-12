@@ -16,7 +16,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet, AlertCircle, RefreshCw, Repeat, Power, FileSpreadsheet } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet, AlertCircle, RefreshCw, Repeat, Power, FileSpreadsheet, FileText } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -26,7 +26,8 @@ import {
   LineChart, Line,
 } from "recharts";
 import { useUserRole } from "@/hooks/useUserRole";
-import { isSchoolManagementOrTeacher } from "@/lib/schoolStaffRoles";
+import { canValidateSchoolPaymentProofs, isSchoolManagementOrTeacher } from "@/lib/schoolStaffRoles";
+import { SaftExportCard } from "@/components/fiscal/SaftExportCard";
 import {
   enrichErpPaymentsWithStudentNames,
   fetchValidatedPaymentsForErpYear,
@@ -122,6 +123,8 @@ const Financas = () => {
 
   const { role } = useUserRole();
   const staffCanExportErp = isSchoolManagementOrTeacher(role);
+  const staffCanExportSaft =
+    !!(role && canValidateSchoolPaymentProofs(role)) && schoolId !== null && !native;
 
   type ErpPaymentLine = ErpPaymentExportRow & { studentName: string };
 
@@ -570,6 +573,11 @@ const Financas = () => {
                 <FileSpreadsheet className="h-3.5 w-3.5" /> Pagamentos ERP
               </TabsTrigger>
             )}
+            {staffCanExportSaft && (
+              <TabsTrigger value="saft" className="gap-1.5">
+                <FileText className="h-3.5 w-3.5" /> SAF-T (AGT)
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="expenses" className="space-y-4">
@@ -832,6 +840,11 @@ const Financas = () => {
                   )}
                 </CardContent>
               </Card>
+            </TabsContent>
+          )}
+          {staffCanExportSaft && schoolId && (
+            <TabsContent value="saft" className="space-y-4">
+              <SaftExportCard schoolId={schoolId} />
             </TabsContent>
           )}
         </Tabs>

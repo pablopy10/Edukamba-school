@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -1789,6 +1790,13 @@ const Pagamentos = () => {
           {!isParent && (
             <Button onClick={() => setGenerateOpen(true)} className="gap-2">
               <PlayCircle className="h-4 w-4" /> Gerar propinas do ano
+            </Button>
+          )}
+          {isParent && (
+            <Button variant="outline" size="sm" className="gap-2" asChild>
+              <Link to="/pagamentos/historico">
+                <FileText className="h-4 w-4" /> Histórico e faturas
+              </Link>
             </Button>
           )}
         </div>
