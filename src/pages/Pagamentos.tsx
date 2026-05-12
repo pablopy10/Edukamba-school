@@ -30,6 +30,9 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { canValidateSchoolPaymentProofs, isSchoolManagementRole, isSchoolSettingsAdmin } from "@/lib/schoolStaffRoles";
 import type { GuardianPaymentMode } from "@/lib/guardianPayment";
 import { encarregadosUsamAnexo, normalizeGuardianPaymentMode } from "@/lib/guardianPayment";
+import { invokeEmitFiscalInvoices } from "@/lib/fiscal/invokeEmitFiscalInvoices";
+
+type StaffValidatedInsertResult = { error: string | null; paymentId?: string };
 
 type FeeRule = {
   id: string;
@@ -368,7 +371,7 @@ const Pagamentos = () => {
       transport_fee_id: kind === "transport" ? fee.id : null,
       enrollment_fee_id: kind === "enrollment" ? fee.id : null,
     };
-    const { error: insErr } = await supabase.from("payments").insert(insertPayload);
+    const { data: payRow, error: insErr } = await supabase.from("payments").insert(insertPayload).select("id").single();
     if (insErr) {
       setRecordUploading(false);
       toast({ title: "Erro a registar pagamento", description: insErr.message, variant: "destructive" });
@@ -438,6 +441,7 @@ const Pagamentos = () => {
     setRecordUploading(false);
     setRecordDialog(null);
     toast({ title: isParent ? "Comprovativo enviado para validação" : "Pagamento registado e validado" });
+    if (!isParent && payRow?.id) await emitFtAfterValidation([payRow.id]);
     await fetchAll();
   };
 
@@ -448,11 +452,11 @@ const Pagamentos = () => {
     kind: "fee" | "activity" | "transport" | "enrollment",
     fee: FeeListRow | ActivityFeeRow | TransportFeeRow | EnrollmentFeeRow,
     userId: string | null,
-  ): Promise<string | null> => {
-    if (!schoolId) return "Sem escola";
-    if (!userId) return "Sessão inválida";
+  ): Promise<StaffValidatedInsertResult> => {
+    if (!schoolId) return { error: "Sem escola" };
+    if (!userId) return { error: "Sessão inválida" };
     const amount = Number((fee as { amount_due: number }).amount_due) || 0;
-    const { error: insErr } = await supabase.from("payments").insert({
+    const { data: payRow, error: insErr } = await supabase.from("payments").insert({
       amount_paid: amount,
       method: "transferencia",
       proof_url: null,
@@ -466,8 +470,9 @@ const Pagamentos = () => {
       activity_fee_id: kind === "activity" ? fee.id : null,
       transport_fee_id: kind === "transport" ? fee.id : null,
       enrollment_fee_id: kind === "enrollment" ? fee.id : null,
-    });
-    if (insErr) return insErr.message;
+    }).select("id").single();
+    if (insErr) return { error: insErr.message };
+    if (!payRow?.id) return { error: "Pagamento não criado." };
     const { error: feeErr } =
       kind === "fee"
         ? await supabase.from("student_fees").update({ is_paid: true }).eq("id", fee.id)
@@ -476,7 +481,7 @@ const Pagamentos = () => {
           : kind === "transport"
             ? await supabase.from("transport_fees").update({ is_paid: true }).eq("id", fee.id)
             : await supabase.from("enrollment_fees").update({ is_paid: true }).eq("id", fee.id);
-    if (feeErr) return feeErr.message;
+    if (feeErr) return { error: feeErr.message };
     const parentId = fee.student?.parent_id ?? null;
     const comprovativoMencao = "";
     if (parentId) {
@@ -525,7 +530,7 @@ const Pagamentos = () => {
         });
       }
     }
-    return null;
+    return { error: null, paymentId: payRow.id };
   };
 
   const fetchAll = async () => {
@@ -957,6 +962,24 @@ const Pagamentos = () => {
     toast({ title: "Preferências de cobrança guardadas" });
   };
 
+  /** Gera FT (AGT) após validação; falhas não revertem o pagamento. */
+  const emitFtAfterValidation = async (paymentIds: string[]) => {
+    const ids = [...new Set(paymentIds.filter(Boolean))];
+    if (!ids.length) return;
+    const fx = await invokeEmitFiscalInvoices(ids);
+    if (!fx.ok) {
+      const errs =
+        fx.results?.filter((r) => r.status === "error").map((r) => r.detail ?? r.payment_id).slice(0, 3) ?? [];
+      toast({
+        title: "Fatura fiscal (AGT)",
+        description:
+          fx.message ??
+          (errs.length ? errs.join(" · ") : "Não foi possível gerar a FT automaticamente."),
+        variant: "destructive",
+      });
+    }
+  };
+
   const finalizeStudentFeeValidation = async (fee: FeeListRow, payment: PaymentListRow, userId: string | null): Promise<string | null> => {
     if (!schoolId) return "Sem escola";
     const { error: payErr } = await supabase
@@ -1100,13 +1123,18 @@ const Pagamentos = () => {
     const userId = userRes.user?.id ?? null;
     setBulkValidating(true);
     let failed = 0;
+    const emitIds: string[] = [];
     for (const fee of targets) {
       const pay = latestPaymentByFee.get(fee.id);
-      const err =
-        pay && pay.status === "pendente"
-          ? await finalizeStudentFeeValidation(fee, pay, userId)
-          : await insertStaffValidatedCharge("fee", fee, userId);
-      if (err) failed++;
+      if (pay && pay.status === "pendente") {
+        const errMsg = await finalizeStudentFeeValidation(fee, pay, userId);
+        if (errMsg) failed++;
+        else emitIds.push(pay.id);
+      } else {
+        const ins = await insertStaffValidatedCharge("fee", fee, userId);
+        if (ins.error) failed++;
+        else if (ins.paymentId) emitIds.push(ins.paymentId);
+      }
     }
     setBulkValidating(false);
     setBulkSelectedTuitionFeeIds(new Set());
@@ -1117,6 +1145,7 @@ const Pagamentos = () => {
         variant: "destructive",
       });
     else toast({ title: "Pagamentos validados", description: `${targets.length} cobrança(s) concluída(s).` });
+    await emitFtAfterValidation(emitIds);
     await fetchAll();
   };
 
@@ -1147,6 +1176,7 @@ const Pagamentos = () => {
       return;
     }
     toast({ title: "Pagamento validado", description: "O encarregado foi notificado." });
+    await emitFtAfterValidation([payment.id]);
     await fetchAll();
   };
 
@@ -1376,6 +1406,7 @@ const Pagamentos = () => {
       return;
     }
     toast({ title: "Pagamento validado", description: "O encarregado foi notificado." });
+    await emitFtAfterValidation([payment.id]);
     await fetchAll();
   };
 
@@ -1396,13 +1427,18 @@ const Pagamentos = () => {
     const userId = userRes.user?.id ?? null;
     setBulkValidating(true);
     let failed = 0;
+    const emitIds: string[] = [];
     for (const fee of targets) {
       const pay = latestPaymentByActivityFee.get(fee.id);
-      const err =
-        pay && pay.status === "pendente"
-          ? await finalizeActivityFeeValidation(fee, pay, userId)
-          : await insertStaffValidatedCharge("activity", fee, userId);
-      if (err) failed++;
+      if (pay && pay.status === "pendente") {
+        const errMsg = await finalizeActivityFeeValidation(fee, pay, userId);
+        if (errMsg) failed++;
+        else emitIds.push(pay.id);
+      } else {
+        const ins = await insertStaffValidatedCharge("activity", fee, userId);
+        if (ins.error) failed++;
+        else if (ins.paymentId) emitIds.push(ins.paymentId);
+      }
     }
     setBulkValidating(false);
     setBulkSelectedActivityFeeIds(new Set());
@@ -1413,6 +1449,7 @@ const Pagamentos = () => {
         variant: "destructive",
       });
     else toast({ title: "Pagamentos validados", description: `${targets.length} cobrança(s) concluída(s).` });
+    await emitFtAfterValidation(emitIds);
     await fetchAll();
   };
 
@@ -1518,6 +1555,7 @@ const Pagamentos = () => {
       return;
     }
     toast({ title: "Pagamento validado", description: "O encarregado foi notificado." });
+    await emitFtAfterValidation([payment.id]);
     await fetchAll();
   };
 
@@ -1538,13 +1576,18 @@ const Pagamentos = () => {
     const userId = userRes.user?.id ?? null;
     setBulkValidating(true);
     let failed = 0;
+    const emitIds: string[] = [];
     for (const fee of targets) {
       const pay = latestPaymentByTransportFee.get(fee.id);
-      const err =
-        pay && pay.status === "pendente"
-          ? await finalizeTransportFeeValidation(fee, pay, userId)
-          : await insertStaffValidatedCharge("transport", fee, userId);
-      if (err) failed++;
+      if (pay && pay.status === "pendente") {
+        const errMsg = await finalizeTransportFeeValidation(fee, pay, userId);
+        if (errMsg) failed++;
+        else emitIds.push(pay.id);
+      } else {
+        const ins = await insertStaffValidatedCharge("transport", fee, userId);
+        if (ins.error) failed++;
+        else if (ins.paymentId) emitIds.push(ins.paymentId);
+      }
     }
     setBulkValidating(false);
     setBulkSelectedTransportFeeIds(new Set());
@@ -1555,6 +1598,7 @@ const Pagamentos = () => {
         variant: "destructive",
       });
     else toast({ title: "Pagamentos validados", description: `${targets.length} cobrança(s) concluída(s).` });
+    await emitFtAfterValidation(emitIds);
     await fetchAll();
   };
 
@@ -1660,6 +1704,7 @@ const Pagamentos = () => {
       return;
     }
     toast({ title: "Pagamento validado", description: "O encarregado foi notificado." });
+    await emitFtAfterValidation([payment.id]);
     await fetchAll();
   };
 
@@ -1680,13 +1725,18 @@ const Pagamentos = () => {
     const userId = userRes.user?.id ?? null;
     setBulkValidating(true);
     let failed = 0;
+    const emitIds: string[] = [];
     for (const fee of targets) {
       const pay = latestPaymentByEnrollmentFee.get(fee.id);
-      const err =
-        pay && pay.status === "pendente"
-          ? await finalizeEnrollmentFeeValidation(fee, pay, userId)
-          : await insertStaffValidatedCharge("enrollment", fee, userId);
-      if (err) failed++;
+      if (pay && pay.status === "pendente") {
+        const errMsg = await finalizeEnrollmentFeeValidation(fee, pay, userId);
+        if (errMsg) failed++;
+        else emitIds.push(pay.id);
+      } else {
+        const ins = await insertStaffValidatedCharge("enrollment", fee, userId);
+        if (ins.error) failed++;
+        else if (ins.paymentId) emitIds.push(ins.paymentId);
+      }
     }
     setBulkValidating(false);
     setBulkSelectedEnrollmentFeeIds(new Set());
@@ -1697,6 +1747,7 @@ const Pagamentos = () => {
         variant: "destructive",
       });
     else toast({ title: "Pagamentos validados", description: `${targets.length} cobrança(s) concluída(s).` });
+    await emitFtAfterValidation(emitIds);
     await fetchAll();
   };
 

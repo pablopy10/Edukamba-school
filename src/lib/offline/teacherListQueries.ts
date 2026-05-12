@@ -40,7 +40,7 @@ export async function fetchTeacherAlunosQuery(args: {
   const studentsQuery = supabase
     .from("students")
     .select(
-      "id, full_name, email, phone, birth_date, gender, enrollment_number, classroom_id, avatar_color, school_id, classrooms(id, name, homeroom_teacher:profiles!classrooms_homeroom_teacher_id_fkey(full_name))",
+      "id, full_name, email, phone, birth_date, gender, enrollment_number, classroom_id, avatar_color, school_id, user_id, classrooms(id, name, homeroom_teacher:profiles!classrooms_homeroom_teacher_id_fkey(full_name))",
     )
     .order("created_at", { ascending: false })
     .in("classroom_id", classroomIds);

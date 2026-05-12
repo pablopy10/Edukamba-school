@@ -69,7 +69,7 @@ async function fetchParentScopedTeachers(classroomIds: string[]): Promise<{
   if (profileIds.length > 0) {
     const { data: tData, error: tErr } = await supabase
       .from("teachers")
-      .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, education_institution, academic_degree, field_of_study, birth_date, profiles(full_name, phone)")
+      .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, education_institution, academic_degree, field_of_study, birth_date, profiles(full_name, phone, email)")
       .in("profile_id", profileIds)
       .order("created_at", { ascending: false });
 
@@ -90,7 +90,7 @@ async function fetchParentScopedTeachers(classroomIds: string[]): Promise<{
       byProfile.set(pid, { ...r, isHomeroomDirector: true });
       continue;
     }
-    const { data: prof } = await supabase.from("profiles").select("full_name, phone").eq("id", pid).maybeSingle();
+    const { data: prof } = await supabase.from("profiles").select("full_name, phone, email").eq("id", pid).maybeSingle();
     synthetic.push({
       id: `synthetic-${pid}`,
       profile_id: pid,
@@ -102,7 +102,7 @@ async function fetchParentScopedTeachers(classroomIds: string[]): Promise<{
       academic_degree: null,
       field_of_study: null,
       birth_date: null,
-      profiles: prof ? { full_name: prof.full_name, phone: prof.phone } : null,
+      profiles: prof ? { full_name: prof.full_name, phone: prof.phone, email: prof.email } : null,
       isHomeroomDirector: true,
       isSyntheticParentRow: true,
     });
@@ -144,7 +144,7 @@ const Professores = () => {
     const [{ data: tData, error: tErr }, { data: sData }] = await Promise.all([
       supabase
         .from("teachers")
-        .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, education_institution, academic_degree, field_of_study, birth_date, profiles(full_name, phone)")
+        .select("id, profile_id, subject_id, hire_date, employee_id, avatar_color, education_institution, academic_degree, field_of_study, birth_date, profiles(full_name, phone, email)")
         .order("created_at", { ascending: false }),
       supabase.from("subjects").select("id, name").order("name"),
     ]);

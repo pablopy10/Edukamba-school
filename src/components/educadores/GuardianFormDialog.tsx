@@ -7,12 +7,15 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { invokeAdminUpdateUserEmail } from "@/lib/admin/invokeAdminUpdateUserEmail";
 // (no extra imports needed)
 
 export type GuardianRow = {
   profile_id: string;
   full_name: string;
   phone: string | null;
+  /** Email da conta Auth / perfil (login). */
+  email: string | null;
   student_ids: string[];
   student_names: string[];
   classroom_ids: string[];
@@ -42,6 +45,7 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
     if (open) {
       if (guardian) {
         setFullName(guardian.full_name ?? "");
+        setEmail(guardian.email ?? "");
         setPhone(guardian.phone ?? "");
         setStudentIds(guardian.student_ids ?? []);
       } else {
@@ -64,6 +68,21 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
     setLoading(true);
     try {
       if (isEdit && guardian) {
+        const nextEmail = email.trim().toLowerCase();
+        const prevEmail = (guardian.email ?? "").trim().toLowerCase();
+        if (nextEmail.length === 0) {
+          toast({ title: "Email obrigatório", variant: "destructive" });
+          setLoading(false);
+          return;
+        }
+        if (nextEmail !== prevEmail) {
+          const fx = await invokeAdminUpdateUserEmail(guardian.profile_id, nextEmail);
+          if (!fx.ok) {
+            toast({ title: "Erro ao actualizar email de login", description: fx.message, variant: "destructive" });
+            setLoading(false);
+            return;
+          }
+        }
         const { error: pErr } = await supabase.from("profiles").update({
           full_name: fullName.trim(),
           phone: phone || null,
@@ -141,12 +160,15 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
             <Label htmlFor="gn">Nome completo</Label>
             <Input id="gn" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Ex.: Maria Silva" />
           </div>
-          {!isEdit && (
-            <div className="sm:col-span-2">
-              <Label htmlFor="ge">Email</Label>
-              <Input id="ge" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="educador@email.com" />
-            </div>
-          )}
+          <div className="sm:col-span-2">
+            <Label htmlFor="ge">Email {isEdit ? "(início de sessão)" : ""}</Label>
+            <Input id="ge" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@email.com" />
+            {isEdit && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Ao alterar o email também actualiza as credenciais de acesso ao Edukamba.
+              </p>
+            )}
+          </div>
           <div>
             <Label htmlFor="gp">Telefone</Label>
             <Input id="gp" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(244) 925 ..." />

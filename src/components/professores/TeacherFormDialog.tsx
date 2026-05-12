@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { ACADEMIC_DEGREE_OPTIONS } from "@/lib/teacherAcademic";
+import { invokeAdminUpdateUserEmail } from "@/lib/admin/invokeAdminUpdateUserEmail";
 
 export type TeacherRow = {
   id: string;
@@ -20,7 +21,7 @@ export type TeacherRow = {
   academic_degree: string | null;
   field_of_study: string | null;
   birth_date: string | null;
-  profiles: { full_name: string; phone: string | null } | null;
+  profiles: { full_name: string; phone: string | null; email?: string | null } | null;
   /** Só modo educador: professor é diretor de turma do(s) turma(s) do educando. */
   isHomeroomDirector?: boolean;
   /** Diretor só em perfil (sem linha teachers), lista sintética. */
@@ -59,6 +60,7 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
     if (open) {
       if (teacher) {
         setFullName(teacher.profiles?.full_name ?? "");
+        setEmail(teacher.profiles?.email ?? "");
         setPhone(teacher.profiles?.phone ?? "");
         setSubjectId(teacher.subject_id ?? "");
         setEmployeeId(teacher.employee_id ?? "");
@@ -82,20 +84,41 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
       toast({ title: "Nome obrigatório", variant: "destructive" });
       return;
     }
+    if (isEdit && teacher?.profile_id) {
+      const em = email.trim().toLowerCase();
+      if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+        toast({ title: "Email inválido", description: "Indique um email válido — é também o utilizador de login.", variant: "destructive" });
+        return;
+      }
+    }
     setLoading(true);
     try {
       if (isEdit && teacher) {
-        const { error: tErr } = await supabase.from("teachers").update({
-          subject_id: subjectId || null,
-          employee_id: employeeId || null,
-          hire_date: hireDate || null,
-          avatar_color: avatarColor,
-          education_institution: educationInstitution.trim() || null,
-          academic_degree: academicDegree === "__none__" ? null : academicDegree,
-          field_of_study: fieldOfStudy.trim() || null,
-          birth_date: birthDate || null,
-        }).eq("id", teacher.id);
-        if (tErr) throw tErr;
+        const synth = !!(teacher.isSyntheticParentRow || teacher.id.startsWith("synthetic-"));
+        const prevMail = (teacher.profiles?.email ?? "").trim().toLowerCase();
+        const nextMail = email.trim().toLowerCase();
+        if (teacher.profile_id && nextMail.length > 0 && nextMail !== prevMail) {
+          const fx = await invokeAdminUpdateUserEmail(teacher.profile_id, nextMail);
+          if (!fx.ok) {
+            toast({ title: "Erro ao actualizar email de login", description: fx.message, variant: "destructive" });
+            setLoading(false);
+            return;
+          }
+        }
+
+        if (!synth) {
+          const { error: tErr } = await supabase.from("teachers").update({
+            subject_id: subjectId || null,
+            employee_id: employeeId || null,
+            hire_date: hireDate || null,
+            avatar_color: avatarColor,
+            education_institution: educationInstitution.trim() || null,
+            academic_degree: academicDegree === "__none__" ? null : academicDegree,
+            field_of_study: fieldOfStudy.trim() || null,
+            birth_date: birthDate || null,
+          }).eq("id", teacher.id);
+          if (tErr) throw tErr;
+        }
 
         if (teacher.profile_id) {
           const { error: pErr } = await supabase.from("profiles").update({
@@ -161,6 +184,22 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
             <div className="sm:col-span-2">
               <Label htmlFor="em">Email</Label>
               <Input id="em" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="professor@escola.edu" />
+            </div>
+          )}
+          {isEdit && !!teacher?.profile_id && (
+            <div className="sm:col-span-2">
+              <Label htmlFor="pem">Email (início de sessão)</Label>
+              <Input
+                id="pem"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="professor@escola.edu"
+                autoComplete="off"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Alterar também actualiza o email utilizado para entrar na Edukamba.
+              </p>
             </div>
           )}
           <div>

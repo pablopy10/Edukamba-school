@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { sortByName } from "@/lib/utils";
+import { invokeAdminUpdateUserEmail } from "@/lib/admin/invokeAdminUpdateUserEmail";
 
 export type StudentRow = {
   id: string;
@@ -20,6 +21,8 @@ export type StudentRow = {
   classroom_id: string | null;
   avatar_color: string | null;
   school_id: string | null;
+  /** Conta Edukamba do aluno (Auth), quando existe. */
+  user_id?: string | null;
   classrooms?: {
     id: string;
     name: string;
@@ -77,6 +80,23 @@ export const StudentFormDialog = ({ open, onOpenChange, classrooms, student, onS
     setLoading(true);
     try {
       if (isEdit && student) {
+        const nextMailTrim = email.trim().toLowerCase();
+        const prevMail = (student.email ?? "").trim().toLowerCase();
+        if (student.user_id) {
+          if (!nextMailTrim) {
+            toast({ title: "Email obrigatório", description: "Alunos com conta na plataforma precisam de email para iniciar sessão.", variant: "destructive" });
+            setLoading(false);
+            return;
+          }
+          if (nextMailTrim !== prevMail) {
+            const fx = await invokeAdminUpdateUserEmail(student.user_id, nextMailTrim);
+            if (!fx.ok) {
+              toast({ title: "Erro ao actualizar email de login", description: fx.message, variant: "destructive" });
+              setLoading(false);
+              return;
+            }
+          }
+        }
         const { error } = await supabase.from("students").update({
           full_name: fullName.trim(),
           email: email || null,
@@ -136,7 +156,7 @@ export const StudentFormDialog = ({ open, onOpenChange, classrooms, student, onS
             <Input id="fn" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Ex.: Sara Miller" />
           </div>
           <div>
-            <Label htmlFor="em">Email</Label>
+            <Label htmlFor="em">Email {student?.user_id ? "(início de sessão quando tem conta)" : ""}</Label>
             <Input id="em" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="aluno@escola.edu" />
           </div>
           <div>

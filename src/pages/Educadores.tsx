@@ -13,6 +13,9 @@ import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { isNativeMobileApp, showPageKpiCards, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { invokeAdminUpdateUserEmail } from "@/lib/admin/invokeAdminUpdateUserEmail";
 
 type ClassroomOpt = { id: string; name: string };
 type StudentOpt = { id: string; full_name: string; classroom_id: string | null; parent_id: string | null };
@@ -47,6 +50,12 @@ const Educadores = () => {
   const [editing, setEditing] = useState<GuardianRow | null>(null);
   const [deleting, setDeleting] = useState<GuardianRow | null>(null);
   const [viewing, setViewing] = useState<GuardianRow | null>(null);
+  const [viewEmailDraft, setViewEmailDraft] = useState("");
+  const [savingViewEmail, setSavingViewEmail] = useState(false);
+
+  useEffect(() => {
+    setViewEmailDraft(viewing?.email?.trim() ?? "");
+  }, [viewing]);
 
   const load = async () => {
     setLoading(true);
@@ -65,7 +74,7 @@ const Educadores = () => {
     const [{ data: profs, error: pErr }, { data: stus }, { data: clas }] = await Promise.all([
       supabase
         .from("profiles")
-        .select("id, full_name, phone")
+        .select("id, full_name, phone, email")
         .eq("role", "PARENT")
         .order("full_name", { ascending: true }),
       supabase.from("students").select("id, full_name, classroom_id, parent_id"),
@@ -80,12 +89,13 @@ const Educadores = () => {
       const allowed = new Set(teacherClassroomIds);
       studentsArr = studentsArr.filter((s) => s.classroom_id && allowed.has(s.classroom_id));
     }
-    let rows: GuardianRow[] = (profs ?? []).map((p: any) => {
+    let rows: GuardianRow[] = (profs ?? []).map((p: { id: string; full_name: string; phone: string | null; email: string | null }) => {
       const linked = studentsArr.filter((st) => st.parent_id === p.id);
       return {
         profile_id: p.id,
         full_name: p.full_name,
         phone: p.phone,
+        email: p.email ?? null,
         student_ids: linked.map((s) => s.id),
         student_names: linked.map((s) => s.full_name),
         classroom_ids: linked.map((s) => s.classroom_id).filter((x): x is string => !!x),
@@ -153,6 +163,27 @@ const Educadores = () => {
 
   const openChat = (profileId: string) => {
     navigate(`/chat?to=${profileId}`);
+  };
+
+  const saveEducadorViewEmail = async () => {
+    if (!viewing || isTeacher) return;
+    const trimmed = viewEmailDraft.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      toast({ title: "Email inválido", description: "Indique um endereço de email válido.", variant: "destructive" });
+      return;
+    }
+    const prev = (viewing.email ?? "").trim().toLowerCase();
+    if (trimmed === prev) return;
+    setSavingViewEmail(true);
+    const fx = await invokeAdminUpdateUserEmail(viewing.profile_id, trimmed);
+    setSavingViewEmail(false);
+    if (!fx.ok) {
+      toast({ title: "Erro ao actualizar email", description: fx.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Email actualizado", description: "Este email serve para iniciar sessão na Edukamba." });
+    await load();
+    setViewing((v) => (v?.profile_id === viewing.profile_id ? { ...v, email: trimmed } : v));
   };
 
   const stats = useMemo(() => ({
@@ -550,6 +581,43 @@ const Educadores = () => {
                     <Phone className="h-3.5 w-3.5" />
                     {viewing.phone ?? "—"}
                   </p>
+                </div>
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Email</p>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <Mail className="mt-2.5 h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+                    <div className="flex-1 space-y-1.5">
+                      <Label htmlFor="viw-email" className="sr-only">
+                        Email
+                      </Label>
+                      <Input
+                        id="viw-email"
+                        type="email"
+                        autoComplete="off"
+                        value={viewEmailDraft}
+                        onChange={(e) => setViewEmailDraft(e.target.value)}
+                        disabled={isTeacher}
+                        placeholder="email@dominio.com"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        O mesmo utilizado para <strong className="font-medium text-foreground">início de sessão</strong> na Edukamba.
+                      </p>
+                    </div>
+                  </div>
+                  {!isTeacher && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="ml-9 rounded-full"
+                      disabled={savingViewEmail}
+                      onClick={() => void saveEducadorViewEmail()}
+                    >
+                      {savingViewEmail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Guardar email
+                    </Button>
+                  )}
                 </div>
               </div>
               <div>

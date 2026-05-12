@@ -35,6 +35,7 @@ import { AuditLogsPanel } from "@/components/definicoes/AuditLogsPanel";
 import { InviteStaffUserDialog } from "@/components/definicoes/InviteStaffUserDialog";
 import { isSchoolSettingsAdmin } from "@/lib/schoolStaffRoles";
 import { isDefinicoesTabAllowed } from "@/lib/staffNavAccess";
+import { invokeAdminUpdateUserEmail } from "@/lib/admin/invokeAdminUpdateUserEmail";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -869,14 +870,32 @@ const Definicoes = () => {
 
   const saveEditUser = async () => {
     if (!editUser) return;
+    const prevMail = users.find((u) => u.id === editUser.id)?.email?.trim().toLowerCase() ?? "";
+    const nextMail = (editUser.email ?? "").trim().toLowerCase();
+    if (!nextMail) {
+      return showToast("error", "O email é obrigatório (serve para iniciar sessão na Edukamba).");
+    }
     setSaving(true);
+    if (nextMail !== prevMail) {
+      const fx = await invokeAdminUpdateUserEmail(editUser.id, nextMail);
+      if (!fx.ok) {
+        setSaving(false);
+        return showToast("error", fx.message ?? "Não foi possível actualizar o email de login.");
+      }
+    }
     const { error } = await supabase
       .from("profiles")
-      .update({ full_name: editUser.full_name, phone: editUser.phone })
+      .update({
+        full_name: editUser.full_name,
+        phone: editUser.phone,
+        email: nextMail,
+      })
       .eq("id", editUser.id);
     setSaving(false);
     if (error) return showToast("error", error.message);
-    setUsers((prev) => prev.map((u) => (u.id === editUser.id ? { ...u, ...editUser } : u)));
+    setUsers((prev) =>
+      prev.map((u) => (u.id === editUser.id ? { ...editUser, email: nextMail } : u)),
+    );
     setEditUser(null);
     showToast("success", "Utilizador atualizado.");
   };
@@ -2108,6 +2127,18 @@ const Definicoes = () => {
                     value={editUser.full_name}
                     onChange={(e) => setEditUser({ ...editUser, full_name: e.target.value })}
                   />
+                </Field>
+                <Field label="Email (início de sessão)" icon={Mail}>
+                  <input
+                    className={inputCls(false)}
+                    type="email"
+                    autoComplete="off"
+                    value={editUser.email ?? ""}
+                    onChange={(e) => setEditUser({ ...editUser, email: e.target.value })}
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Ao alterar, este passa a ser o email utilizado para iniciar sessão em todo o Edukamba.
+                  </p>
                 </Field>
                 <Field label="Telefone" icon={Phone}>
                   <input
