@@ -37,6 +37,7 @@ import Pedidos from "./pages/Pedidos.tsx";
 import Material from "./pages/Material.tsx";
 import Pagamentos from "./pages/Pagamentos.tsx";
 import HistoricoPagamentosEncarregado from "./pages/HistoricoPagamentosEncarregado.tsx";
+import FiscalInvoice from "./pages/FiscalInvoice.tsx";
 import Financas from "./pages/Financas.tsx";
 import Relatorios from "./pages/Relatorios.tsx";
 import Timesheet from "./pages/Timesheet.tsx";
@@ -155,6 +156,7 @@ const App = () => (
                         <Route path="/material" element={<Material />} />
                         <Route path="/pagamentos/historico" element={<GatedHistoricoPagamentosRoute />} />
                         <Route path="/pagamentos" element={<GatedPagamentosRoute />} />
+                        <Route path="/fatura/:invoiceId" element={<FiscalInvoice />} />
                         <Route path="/financas" element={<Financas />} />
                         <Route path="/relatorios" element={<Relatorios />} />
                         <Route path="/timesheet" element={<Timesheet />} />

@@ -45,7 +45,7 @@ export function SaftExportCard({ schoolId }: Props) {
       const { data: rows, error: iErr } = await supabase
         .from("invoices")
         .select(
-          "invoice_date, document_number, document_hash, hash_control, invoice_issued_at, cliente_nome, cliente_nif, gross_total, currency, exemption_code, exemption_reason, line_description",
+          "invoice_date, document_number, document_hash, digital_signature_sha1_b64, hash_control, invoice_issued_at, cliente_nome, cliente_nif, gross_total, currency, exemption_code, exemption_reason, line_description",
         )
         .eq("school_id", schoolId)
         .order("invoice_date", { ascending: true });
@@ -55,6 +55,9 @@ export function SaftExportCard({ schoolId }: Props) {
         invoice_date: String(r.invoice_date ?? ""),
         document_number: String(r.document_number ?? ""),
         document_hash: r.document_hash ? String(r.document_hash) : null,
+        digital_signature_sha1_b64: r.digital_signature_sha1_b64
+          ? String(r.digital_signature_sha1_b64)
+          : null,
         hash_control: r.hash_control ? String(r.hash_control) : null,
         invoice_issued_at: r.invoice_issued_at ? String(r.invoice_issued_at) : null,
         customer_name: String(r.cliente_nome ?? ""),

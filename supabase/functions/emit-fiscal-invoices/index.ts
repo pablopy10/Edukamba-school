@@ -15,6 +15,10 @@ type EmitResult = {
   payment_id: string;
   status: "emitted" | "skipped" | "error";
   detail?: string;
+  /** UUID da FT na tabela invoices (novo ou já existente no caso ignorado por duplicado). */
+  invoice_id?: string;
+  /** Ex.: FT EDK/42 — apenas quando invoice_id existe. */
+  document_number?: string;
 };
 
 type PaymentRow = {
@@ -245,10 +249,18 @@ async function emitOne(
       return { payment_id, status: "skipped", detail: `Estado não é validado (${payment.status}).` };
     }
 
-    const { data: existing, error: exErr } = await sb.from("invoices").select("id").eq("payment_id", payment_id)
+    const { data: existing, error: exErr } = await sb.from("invoices").select("id, document_number").eq("payment_id", payment_id)
       .maybeSingle();
     if (exErr) return { payment_id, status: "error", detail: exErr.message };
-    if (existing?.id) return { payment_id, status: "skipped", detail: "Já existe fatura para este pagamento." };
+    if (existing?.id) {
+      return {
+        payment_id,
+        status: "skipped",
+        detail: "Já existe fatura para este pagamento.",
+        invoice_id: String(existing.id),
+        document_number: existing.document_number ?? undefined,
+      };
+    }
 
     const ctx = await resolveFiscalContext(sb, payment);
     const gross = Number(payment.amount_paid);
@@ -318,7 +330,7 @@ async function emitOne(
     const signatureBase64 = await signPlaintextRSA_SHA1_PKCS1(plaintext, pem);
     const hash_control = (((Math.max(seq, 1) - 1) % 10) + 1).toString();
 
-    const { error: insErr } = await sb.from("invoices").insert({
+    const { data: inserted, error: insErr } = await sb.from("invoices").insert({
       school_id: payment.school_id,
       payment_id: payment.id,
       student_id: ctx.student_id,
@@ -337,7 +349,7 @@ async function emitOne(
       hash_control,
       cliente_nome: ctx.cliente_nome,
       cliente_nif,
-    });
+    }).select("id, document_number").single();
 
     if (insErr) {
       if (insErr.code === "23505") {
@@ -346,7 +358,12 @@ async function emitOne(
       return { payment_id, status: "error", detail: insErr.message };
     }
 
-    return { payment_id, status: "emitted" };
+    return {
+      payment_id,
+      status: "emitted",
+      invoice_id: inserted?.id ? String(inserted.id) : undefined,
+      document_number: inserted?.document_number ?? documentNumberFull,
+    };
   } catch (e) {
     return { payment_id, status: "error", detail: String(e) };
   }

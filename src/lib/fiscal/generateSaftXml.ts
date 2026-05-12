@@ -1,7 +1,7 @@
 /**
  * SAF-T AO 1.01_01 — alinhamento estrutural com o XSD público (ex.: github.com/assoft-portugal/SAF-T-AO).
  * Exemplos resumidos (Invoice ao nível raiz com poucos elementos) omitam blocos obrigatórios do schema;
- * aqui segue a sequência completa esperada pela validação (DocumentStatus, SpecialRegimes, dois SourceID…).
+ * aqui segue a sequência completa esperada pela validação (DocumentStatus, SpecialRegimes, dois SourceID, MasterFiles com Product/TaxTable…).
  * Software certificado, validação oficial e calendário de entrega continuam política AGT/contabilidade.
  */
 
@@ -15,8 +15,10 @@ export type SaftSchoolInfo = {
 export type SaftInvoiceRow = {
   invoice_date: string;
   document_number: string;
-  /** Hash da fatura (AGT); obrigatório no XML — sem isto deve ser recusado antes da exportação */
+  /** Hash/document key no SAF-T AO: até 172 caracteres (XSD). Pode ser assinatura RSA-SHA1 em Base64 (≈≤172 com chave compatível). */
   document_hash?: string | null;
+  /** Assinatura digital SHA-1 + RSA PKCS#1 v1.5 em Base64 (valor da DB). Preferido para `<Hash>` quando length ≤172. */
+  digital_signature_sha1_b64?: string | null;
   hash_control?: string | null;
   /** Opcional ISO — data/hora de registo para SystemEntryDate / InvoiceStatusDate */
   invoice_issued_at?: string | null;
@@ -65,13 +67,21 @@ function billingAddressXml(customerLine: string, cityFallback: string): string {
     </BillingAddress>`;
 }
 
+/** Data/hora em UTC sem sufixo de timezone (compatível com padrões AGT XSD: …Thh:mm:ss). */
+function formatUtcPlain(d: Date): string {
+  const pad = (n: number, w = 2) => String(n).padStart(w, "0");
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(
+    d.getUTCMinutes(),
+  )}:${pad(d.getUTCSeconds())}`;
+}
+
 function toDateTimeUtc(isoOrDate: string | null | undefined, dateYYYYMMDD: string): string {
   if (isoOrDate?.trim()) {
     const d = new Date(isoOrDate.trim());
-    if (!Number.isNaN(d.getTime())) return d.toISOString().replace(/\.\d{3}Z$/, "Z");
+    if (!Number.isNaN(d.getTime())) return formatUtcPlain(d);
   }
   const d = dateYYYYMMDD.trim().slice(0, 10);
-  return `${d}T12:00:00Z`;
+  return `${d}T12:00:00`;
 }
 
 function sumMoney(arr: readonly number[]): string {
@@ -121,6 +131,52 @@ function safeInvoiceNoFromDb(documentNumber: string, idxFallback: number): strin
     else n = `FT GERAL/${idxFallback}`;
   }
   return n;
+}
+
+const EDUC_PRODUCT_CODE = "SERV-EDUC-01";
+
+/** XSD `Hash`: max 172 — RSA-SHA1 em Base64 (chave menor) quando couber; senão uso de `document_hash` (ex. SHA1 em hex ≤172). */
+function resolveSaftHashField(inv: SaftInvoiceRow, invoiceLabel: string): string {
+  const sig = inv.digital_signature_sha1_b64?.trim();
+  const h = inv.document_hash?.trim();
+  if (sig && sig.length <= 172) return sig;
+  if (h && h.length <= 172) return h;
+  if (sig && sig.length > 172) {
+    throw new Error(
+      `Fatura ${invoiceLabel}: assinatura Base64 com ${sig.length} caracteres (máximo 172 no XSD SAF-T AO). ` +
+        "Tem de existir um `document_hash` alternativo válido até 172 caracteres, ou use chave/certificação alinhadas com a AGT.",
+    );
+  }
+  throw new Error(
+    `Fatura ${invoiceLabel} sem Hash válido — preencha document_hash ou assinatura RSA Base64 até 172 caracteres.`,
+  );
+}
+
+/** Produto/serviço em MasterFiles; linhas devem usar o mesmo `ProductCode`. */
+function educationProductMasterXml(): string {
+  const desc = esc("Propina / serviços educativos");
+  return `
+    <Product>
+      <ProductType>S</ProductType>
+      <ProductCode>${EDUC_PRODUCT_CODE}</ProductCode>
+      <ProductGroup>${esc("Educação")}</ProductGroup>
+      <ProductDescription>${desc}</ProductDescription>
+      <ProductNumberCode>${esc(EDUC_PRODUCT_CODE.slice(0, 60))}</ProductNumberCode>
+    </Product>`;
+}
+
+/** Tabela de impostos para IVA isento usado nas linhas (TaxType/TaxCountryRegion/TaxCode alinhados com `<Tax>` nas Lines). */
+function educationTaxTableXml(): string {
+  return `
+    <TaxTable>
+      <TaxTableEntry>
+        <TaxType>IVA</TaxType>
+        <TaxCountryRegion>AO</TaxCountryRegion>
+        <TaxCode>ISE</TaxCode>
+        <Description>${esc("Isenção no domínio da educação")}</Description>
+        <TaxPercentage>0.00</TaxPercentage>
+      </TaxTableEntry>
+    </TaxTable>`;
 }
 
 /** Corpo FiscalYear: ano civil do período reportado ou da primeira fatura. */
@@ -183,15 +239,9 @@ export function generateSaftXml(input: {
     return d >= periodStart && d <= periodEnd;
   });
 
-  for (let i = 0; i < fis.length; i++) {
-    const h = fis[i]?.document_hash?.trim();
-    if (!h) {
-      throw new Error(
-        `Fatura ${safeInvoiceNoFromDb(String(fis[i]?.document_number ?? ""), i + 1)} sem document_hash registado — ` +
-          "complete os dados AGT antes de exportar SAF-T.",
-      );
-    }
-  }
+  const hashesForInvoices = fis.map((inv, i) =>
+    resolveSaftHashField(inv, safeInvoiceNoFromDb(String(inv.document_number ?? ""), i + 1)),
+  );
 
   const dateCreatedIso = input.dateCreated?.trim()?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
 
@@ -245,8 +295,8 @@ export function generateSaftXml(input: {
 
       const exCode = esc(taxExemptionSaftCode(inv.exemption_code));
       const exReason = esc(taxExemptionReasonText(inv.exemption_reason ?? "Isenção no domínio da educação"));
-      const lineDesc = esc(inv.line_description ?? "Propinas / mensalidades");
-      const productDesc = esc(inv.line_description ?? "Propinas / mensalidades");
+      const lineDesc = esc(inv.line_description ?? "Propina / serviços educativos");
+      const productDesc = esc(inv.line_description ?? "Propina / serviços educativos");
       const invNoEsc = esc(safeInvoiceNoFromDb(inv.document_number.trim(), idx + 1));
 
       const entryDtEsc = esc(toDateTimeUtc(inv.invoice_issued_at, inv.invoice_date));
@@ -255,7 +305,7 @@ export function generateSaftXml(input: {
       const custKey = inv.customer_nif.trim();
       const custIdx = Math.max(0, cidKeys.indexOf(custKey)) + 1;
       const customerIdEsc = esc(`C_${custIdx}`);
-      const hashVal = esc((inv.document_hash ?? "").trim().slice(0, 172));
+      const hashVal = esc(hashesForInvoices[idx] ?? "");
       const hc = esc((inv.hash_control ?? "1").trim().slice(0, 70));
 
       const sourceId = esc("Edukamba".slice(0, 30));
@@ -289,7 +339,7 @@ export function generateSaftXml(input: {
       <CustomerID>${customerIdEsc}</CustomerID>
       <Line>
         <LineNumber>1</LineNumber>
-        <ProductCode>SERV-EDUC-01</ProductCode>
+        <ProductCode>${EDUC_PRODUCT_CODE}</ProductCode>
         <ProductDescription>${productDesc}</ProductDescription>
         <Quantity>1</Quantity>
         <UnitOfMeasure>UN</UnitOfMeasure>
@@ -343,7 +393,7 @@ export function generateSaftXml(input: {
 <AuditFile xmlns="urn:OECD:StandardAuditFile-Tax:AO_1.01_01">
   <Header>${headerInner}
   </Header>
-  <MasterFiles>${customerBlocks}
+  <MasterFiles>${customerBlocks}${educationProductMasterXml()}${educationTaxTableXml()}
   </MasterFiles>
   <SourceDocuments>
     <SalesInvoices>

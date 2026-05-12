@@ -4,6 +4,8 @@ export type EmitFiscalInvoicesResult = {
   payment_id: string;
   status: "emitted" | "skipped" | "error";
   detail?: string;
+  invoice_id?: string;
+  document_number?: string;
 };
 
 type EdgeBody = {

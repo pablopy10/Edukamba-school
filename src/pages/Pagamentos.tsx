@@ -30,7 +30,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { canValidateSchoolPaymentProofs, isSchoolManagementRole, isSchoolSettingsAdmin } from "@/lib/schoolStaffRoles";
 import type { GuardianPaymentMode } from "@/lib/guardianPayment";
 import { encarregadosUsamAnexo, normalizeGuardianPaymentMode } from "@/lib/guardianPayment";
-import { invokeEmitFiscalInvoices } from "@/lib/fiscal/invokeEmitFiscalInvoices";
+import { invokeEmitFiscalInvoices, type EmitFiscalInvoicesResult } from "@/lib/fiscal/invokeEmitFiscalInvoices";
 
 type StaffValidatedInsertResult = { error: string | null; paymentId?: string };
 
@@ -962,10 +962,12 @@ const Pagamentos = () => {
     toast({ title: "Preferências de cobrança guardadas" });
   };
 
-  /** Gera FT (AGT) após validação; falhas não revertem o pagamento. */
-  const emitFtAfterValidation = async (paymentIds: string[]) => {
+  /** Gera FT (AGT) após validação; falhas não revertem o pagamento. Devolve resultado da Edge (invoice_id novo quando emitido). */
+  const emitFtAfterValidation = async (
+    paymentIds: string[],
+  ): Promise<{ ok: boolean; results?: EmitFiscalInvoicesResult[]; message?: string }> => {
     const ids = [...new Set(paymentIds.filter(Boolean))];
-    if (!ids.length) return;
+    if (!ids.length) return { ok: true, results: [] };
     const fx = await invokeEmitFiscalInvoices(ids);
     if (!fx.ok) {
       const errs =
@@ -977,7 +979,32 @@ const Pagamentos = () => {
           (errs.length ? errs.join(" · ") : "Não foi possível gerar a FT automaticamente."),
         variant: "destructive",
       });
+      return fx;
     }
+    const emitted = fx.results?.filter((r) => r.status === "emitted" && r.invoice_id?.trim()) ?? [];
+    if (emitted.length > 0) {
+      toast({
+        title: emitted.length > 1 ? "Faturas emitidas" : "Fatura emitida",
+        description: (
+          <div className="flex flex-col gap-2 pt-0.5">
+            <p className="text-sm text-muted-foreground">Consulte ou transfira o PDF (FACTURA‑RECIBO).</p>
+            <ul className="list-none space-y-1.5 text-sm">
+              {emitted.map((r) => (
+                <li key={`${r.invoice_id}_${r.payment_id}`}>
+                  <Link
+                    to={`/fatura/${r.invoice_id}`}
+                    className="font-medium text-primary underline underline-offset-2 hover:no-underline"
+                  >
+                    {r.document_number?.trim() || "Ver fatura"} — abrir página e PDF
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ),
+      });
+    }
+    return fx;
   };
 
   const finalizeStudentFeeValidation = async (fee: FeeListRow, payment: PaymentListRow, userId: string | null): Promise<string | null> => {

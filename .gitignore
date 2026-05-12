@@ -32,6 +32,10 @@ dist-ssr
 ios/AuthKey_*.p8
 *.p8
 
+# Local AGT / OpenSSL PEM keys (repo root or elsewhere)
+private_key.pem
+public_key.pem
+
 # Android Play signing artefacts (keys, PEPK tooling) — do not commit
 android/app/edukamba-key
 android/app/encryption_public_key.pem

@@ -291,17 +291,27 @@ const HistoricoPagamentosEncarregado = () => {
                         <td className="py-3 pr-2">{p.studentLabel || "—"}</td>
                         <td className="py-3 pr-2 text-right font-semibold">{fmtAOA(Number(p.amount_paid))}</td>
                         <td className="py-3 text-right">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="gap-1"
-                            onClick={() => void handlePdf(p)}
-                            disabled={!hasInv}
-                          >
-                            <FileText className="h-3.5 w-3.5" />
-                            Ver fatura
-                          </Button>
+                          <div className="flex flex-col items-end gap-2 sm:flex-row sm:justify-end sm:gap-3">
+                            {hasInv ? (
+                              <Link
+                                to={`/fatura/${invoiceByPayment.get(p.id)!.id}`}
+                                className="text-sm font-medium text-primary underline underline-offset-2 hover:no-underline"
+                              >
+                                Ver página
+                              </Link>
+                            ) : null}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="gap-1"
+                              onClick={() => void handlePdf(p)}
+                              disabled={!hasInv}
+                            >
+                              <FileText className="h-3.5 w-3.5" />
+                              Transferir PDF
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );

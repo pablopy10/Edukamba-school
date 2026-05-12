@@ -193,9 +193,27 @@ const STUDENT_NAV_PREFIXES = [
   "/material",
 ] as const;
 
+/** Quem pode abrir /fatura/... no UI (alinhar com RLS em public.invoices — sem professores nem alunos). */
+export function roleCanAccessFaturaPage(role: UserRole | null): boolean {
+  if (role == null) return false;
+  if (role === "PARENT") return true;
+  if (
+    role === "ADMIN" ||
+    role === "SUPER_ADMIN" ||
+    role === "DIRECTOR" ||
+    role === "SECRETARY" ||
+    role === "TREASURER"
+  )
+    return true;
+  return false;
+}
+
 export function isNavPathAllowedForRole(role: UserRole | null, rawPath: string): boolean {
   if (role == null) return false;
   const path = normalizeNavPath(rawPath);
+  if (pathMatchesNavPrefix(path, "/fatura")) {
+    return roleCanAccessFaturaPage(role);
+  }
   if (role === "ADMIN" || role === "SUPER_ADMIN") return true;
   if (pathMatchesNavPrefix(path, "/perfil")) return true;
   const list = staffRoutes(role);
