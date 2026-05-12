@@ -38,7 +38,10 @@ export function initOneSignalWeb(): Promise<void> {
         ? { safari_web_id: import.meta.env.VITE_ONESIGNAL_SAFARI_WEB_ID as string }
         : {}),
     });
-  })();
+  })().catch((err) => {
+    initPromise = null;
+    throw err;
+  });
 
   initPromise = p;
   return p;
@@ -48,7 +51,12 @@ export function initOneSignalWeb(): Promise<void> {
 export async function setOneSignalExternalUser(authUserId: string | null): Promise<void> {
   if (!shouldInitializeOneSignalWeb()) return;
 
-  await initOneSignalWeb();
+  try {
+    await initOneSignalWeb();
+  } catch {
+    return;
+  }
+
   const OneSignal = (await import("react-onesignal")).default;
   try {
     if (authUserId) {
@@ -65,7 +73,13 @@ export async function setOneSignalExternalUser(authUserId: string | null): Promi
 export async function applyWebPushPreference(wantPush: boolean): Promise<boolean> {
   if (!shouldInitializeOneSignalWeb()) return true;
 
-  await initOneSignalWeb();
+  try {
+    await initOneSignalWeb();
+  } catch {
+    /* Ex.: "App not configured for web push" se o init falhar no dashboard/domínio */
+    return false;
+  }
+
   const OneSignal = (await import("react-onesignal")).default;
   try {
     if (!OneSignal.Notifications.isPushSupported()) return !wantPush;

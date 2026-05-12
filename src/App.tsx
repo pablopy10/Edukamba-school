@@ -116,9 +116,10 @@ const App = () => (
           <UserRoleProvider>
             <SelectedChildProvider>
               <TooltipProvider>
-                <Toaster />
-                <Sonner />
                 <BrowserRouter>
+                  {/* Toasters dentro do Router: descrições com <Link> não quebram (basename context). */}
+                  <Toaster />
+                  <Sonner />
                   <ScrollToTop />
                   <OneSignalWebBridge />
                   <OpenInAppBanner />
