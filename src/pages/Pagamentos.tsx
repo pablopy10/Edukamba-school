@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -168,6 +168,7 @@ const monthNames = [
 ];
 
 const Pagamentos = () => {
+  const navigate = useNavigate();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const { role } = useUserRole();
   const canEditSchoolPaymentPrefs = isSchoolManagementRole(role) || isSchoolSettingsAdmin(role);
@@ -991,12 +992,13 @@ const Pagamentos = () => {
             <ul className="list-none space-y-1.5 text-sm">
               {emitted.map((r) => (
                 <li key={`${r.invoice_id}_${r.payment_id}`}>
-                  <Link
-                    to={`/fatura/${r.invoice_id}`}
-                    className="font-medium text-primary underline underline-offset-2 hover:no-underline"
+                  <button
+                    type="button"
+                    className="block w-fit text-left font-medium text-primary underline underline-offset-2 hover:no-underline"
+                    onClick={() => navigate(`/fatura/${r.invoice_id}`)}
                   >
                     {r.document_number?.trim() || "Ver fatura"} — abrir página e PDF
-                  </Link>
+                  </button>
                 </li>
               ))}
             </ul>
