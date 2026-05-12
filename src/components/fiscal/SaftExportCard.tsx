@@ -45,7 +45,7 @@ export function SaftExportCard({ schoolId }: Props) {
       const { data: rows, error: iErr } = await supabase
         .from("invoices")
         .select(
-          "invoice_date, document_number, cliente_nome, cliente_nif, gross_total, currency, exemption_code, exemption_reason, line_description",
+          "invoice_date, document_number, document_hash, hash_control, invoice_issued_at, cliente_nome, cliente_nif, gross_total, currency, exemption_code, exemption_reason, line_description",
         )
         .eq("school_id", schoolId)
         .order("invoice_date", { ascending: true });
@@ -54,6 +54,9 @@ export function SaftExportCard({ schoolId }: Props) {
       const inv: SaftInvoiceRow[] = (rows ?? []).map((r: Record<string, unknown>) => ({
         invoice_date: String(r.invoice_date ?? ""),
         document_number: String(r.document_number ?? ""),
+        document_hash: r.document_hash ? String(r.document_hash) : null,
+        hash_control: r.hash_control ? String(r.hash_control) : null,
+        invoice_issued_at: r.invoice_issued_at ? String(r.invoice_issued_at) : null,
         customer_name: String(r.cliente_nome ?? ""),
         customer_nif: String(r.cliente_nif ?? ""),
         gross_total: Number(r.gross_total ?? 0),
@@ -63,6 +66,8 @@ export function SaftExportCard({ schoolId }: Props) {
         line_description: r.line_description ? String(r.line_description) : undefined,
       }));
 
+      const prodTax = import.meta.env.VITE_SAFT_PRODUCT_COMPANY_TAX_ID?.trim();
+
       const xml = generateSaftXml({
         year,
         month,
@@ -71,6 +76,7 @@ export function SaftExportCard({ schoolId }: Props) {
           taxRegistrationNumber: school?.nif ?? null,
           address: school?.address ?? null,
         },
+        productCompanyTaxId: prodTax?.length ? prodTax : undefined,
         invoices: inv,
       });
 
@@ -90,7 +96,10 @@ export function SaftExportCard({ schoolId }: Props) {
       <CardHeader>
         <CardTitle className="text-base">Exportar SAF-T (AGT Angola)</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Gera XML mínimo 1.01 com isenção M10 para o mês seleccionado. Valide sempre com o contabilista antes de submeter à AGT.
+          XSD oficial 1.01_01 (estruturas completas como DocumentStatus/SpecialRegimes/two SourceID, não só exemplos resumidos). Header: NIF emitente ≠ NIF produtor —
+          pode definir <code className="text-xs font-mono">VITE_SAFT_PRODUCT_COMPANY_TAX_ID</code> para{' '}
+          <code className="text-xs font-mono">ProductCompanyTaxID</code>. SAF-T habitualmente obriga software certificado; entrega mensal até ~dia 5 e validação antes do envio ficam ao cargo da AGT/contabilidade.
+          Facturas no ficheiro necessitam de hash/control já registados na base.
         </p>
       </CardHeader>
       <CardContent className="flex flex-wrap items-end gap-3">
