@@ -19,6 +19,7 @@ export type ModuleKey =
   | "pedidos"
   | "material"
   | "pagamentos"
+  | "propinas"
   | "financas"
   | "relatorios"
   | "timesheet"
@@ -41,7 +42,8 @@ export const moduleMeta: Record<ModuleKey, { label: string; description: string;
   extracurriculares: { label: "Extracurriculares", description: "Atividades fora do plano curricular.", path: "/extracurriculares" },
   pedidos: { label: "Pedidos", description: "Pedidos de ausência e aprovações.", path: "/pedidos" },
   material: { label: "Material", description: "Stock e pedidos de material escolar.", path: "/material" },
-  pagamentos: { label: "Pagamentos", description: "Regras de cobranças, descontos e mensalidades.", path: "/pagamentos" },
+  pagamentos: { label: "Pagamentos", description: "Outras cobranças: matrículas, extracurriculares, transporte e descontos.", path: "/pagamentos" },
+  propinas: { label: "Propinas", description: "Regras de cobrança, lista de propinas, validação e lembretes.", path: "/propinas" },
   financas: { label: "Finanças", description: "Despesas, receitas e gráficos de lucro.", path: "/financas" },
   relatorios: { label: "Relatórios", description: "Exportações e análises da escola.", path: "/relatorios" },
   timesheet: { label: "Timesheet", description: "Controlo de horas dos funcionários.", path: "/timesheet" },
@@ -67,6 +69,7 @@ export const modulePlan: Record<ModuleKey, PlanType> = {
   notas: "Essencial",
   eventos: "Essencial",
   pagamentos: "Essencial",
+  propinas: "Essencial",
   financas: "Essencial",
   relatorios: "Essencial",
   // Pro

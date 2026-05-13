@@ -31,7 +31,7 @@ const menu: NavItem[] = [
   { icon: BookMarked, label: "Avaliações", to: "/avaliacoes", moduleKey: "avaliacoes" },
   { icon: Table2, label: "Notas", to: "/notas", moduleKey: "notas" },
   { icon: CalendarCheck, label: "Eventos", to: "/eventos", moduleKey: "eventos" },
-  { icon: Landmark, label: "Propinas", to: "/propinas", moduleKey: "pagamentos" },
+  { icon: Landmark, label: "Propinas", to: "/propinas", moduleKey: "propinas" },
   { icon: Sparkles, label: "Extracurriculares", to: "/extracurriculares", moduleKey: "extracurriculares" },
   { icon: Bus, label: "Transporte", to: "/transportes", moduleKey: "transportes" },
   { icon: Smartphone, label: "Pedidos", to: "/pedidos", moduleKey: "pedidos" },
