@@ -16,7 +16,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap, FileSpreadsheet } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap, FileSpreadsheet, Receipt } from "lucide-react";
 import { ErpArticleCodesCard } from "@/components/pagamentos/ErpArticleCodesCard";
 import { ErpExportMappingSection } from "@/components/pagamentos/ErpExportMappingSection";
 import { ErpExportPaymentsSection } from "@/components/pagamentos/ErpExportPaymentsSection";
@@ -167,6 +167,14 @@ const monthNames = [
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 
+/** Particiona lista de IDs para consultas `.in(...)` dentro dos limites do PostgREST. */
+function chunkBySize<T>(items: readonly T[], size: number): T[][] {
+  if (size <= 0) return [items.slice()];
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 const Pagamentos = () => {
   const navigate = useNavigate();
   const [schoolId, setSchoolId] = useState<string | null>(null);
@@ -266,6 +274,11 @@ const Pagamentos = () => {
   const [enTypeFilter, setEnTypeFilter] = useState<"all" | "NEW" | "RENEWAL">("all");
   const [enSearch, setEnSearch] = useState("");
   const [remindingEnFeeId, setRemindingEnFeeId] = useState<string | null>(null);
+
+  /** Fatura fiscal (FACTURA‑RECIBO) por id de pagamento — para ícone/link na lista. */
+  const [invoiceByPaymentId, setInvoiceByPaymentId] = useState<
+    Record<string, { invoiceId: string; documentNumber: string }>
+  >({});
 
   // Staff "registar pagamento" dialog (works for both tuition and activity fees)
   const [recordDialog, setRecordDialog] = useState<
@@ -936,6 +949,65 @@ const Pagamentos = () => {
     });
     return map;
   }, [payments]);
+
+  const validatedPaymentIdsForInvoiceFetch = useMemo(() => {
+    const ids = new Set<string>();
+    for (const p of payments) if (p.status === "validado") ids.add(p.id);
+    for (const p of activityPayments) if (p.status === "validado") ids.add(p.id);
+    for (const p of transportPayments) if (p.status === "validado") ids.add(p.id);
+    for (const p of enrollmentPayments) if (p.status === "validado") ids.add(p.id);
+    return [...ids].sort();
+  }, [payments, activityPayments, transportPayments, enrollmentPayments]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadInvoicesForPayments() {
+      if (!schoolId) {
+        if (!cancelled) setInvoiceByPaymentId({});
+        return;
+      }
+      const pidList = validatedPaymentIdsForInvoiceFetch;
+      if (pidList.length === 0) {
+        if (!cancelled) setInvoiceByPaymentId({});
+        return;
+      }
+
+      const next: Record<string, { invoiceId: string; documentNumber: string }> = {};
+      for (const slice of chunkBySize(pidList, 200)) {
+        const { data, error } = await supabase
+          .from("invoices")
+          .select("id, payment_id, document_number")
+          .eq("school_id", schoolId)
+          .in("payment_id", slice);
+
+        if (error) {
+          if (!cancelled)
+            toast({
+              title: "Erro ao carregar faturas",
+              description: error.message,
+              variant: "destructive",
+            });
+          return;
+        }
+        for (const row of data ?? []) {
+          const payId = row.payment_id as string | null;
+          if (!payId?.trim()) continue;
+          next[payId] = {
+            invoiceId: row.id as string,
+            documentNumber: String(row.document_number ?? "").trim(),
+          };
+        }
+      }
+
+      if (!cancelled) setInvoiceByPaymentId(next);
+    }
+
+    void loadInvoicesForPayments();
+    return () => {
+      cancelled = true;
+    };
+  }, [schoolId, validatedPaymentIdsForInvoiceFetch]);
 
   const pendingValidations = useMemo(() => {
     return allFees
@@ -1851,6 +1923,25 @@ const Pagamentos = () => {
 
   const recordNeedsFile = isParent ? usarAnexoEncarregado : guardianPaymentMode === "proof_attachment";
 
+  /** Ícone na lista quando a cobrança está paga, o pagamento validado e existir FT. */
+  const invoiceIconForValidatedPayment = (feeMarkedPaid: boolean, pay?: PaymentListRow) => {
+    if (!feeMarkedPaid || !pay || pay.status !== "validado" || !pay.id?.trim()) return null;
+    const inv = invoiceByPaymentId[pay.id];
+    if (!inv?.invoiceId) return null;
+    return (
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        className="h-8 w-8 shrink-0 text-primary"
+        title={inv.documentNumber ? `Factura-recibo ${inv.documentNumber}` : "Ver fatura"}
+        onClick={() => navigate(`/fatura/${inv.invoiceId}`)}
+      >
+        <Receipt className="h-4 w-4" />
+      </Button>
+    );
+  };
+
   if (parentLoading) return <PageLoadingSkeleton />;
 
   return (
@@ -2227,6 +2318,9 @@ const Pagamentos = () => {
                           <th className="py-2 px-2">Vencimento</th>
                           <th className="py-2 px-2">Valor</th>
                           <th className="py-2 px-2">Estado</th>
+                          <th className="py-2 px-2 text-center w-12" title="Factura-recibo fiscal (FACTURA‑RECIBO AGT)">
+                            FT
+                          </th>
                           <th className="py-2 px-2 text-right">Ação</th>
                         </tr>
                       </thead>
@@ -2268,6 +2362,7 @@ const Pagamentos = () => {
                                   <Badge variant="secondary">Pendente</Badge>
                                 )}
                               </td>
+                              <td className="py-2 px-2 align-middle text-center">{invoiceIconForValidatedPayment(!!f.is_paid, pay)}</td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
                                   {pendingValidation && pay && !isParent && (
@@ -2572,6 +2667,9 @@ const Pagamentos = () => {
                           <th className="py-2 px-2">Vencimento</th>
                           <th className="py-2 px-2">Valor</th>
                           <th className="py-2 px-2">Estado</th>
+                          <th className="py-2 px-2 text-center w-12" title="Factura-recibo fiscal (FACTURA‑RECIBO AGT)">
+                            FT
+                          </th>
                           <th className="py-2 px-2 text-right">Ação</th>
                         </tr>
                       </thead>
@@ -2613,6 +2711,7 @@ const Pagamentos = () => {
                                   <Badge variant="secondary">Pendente</Badge>
                                 )}
                               </td>
+                              <td className="py-2 px-2 align-middle text-center">{invoiceIconForValidatedPayment(!!f.is_paid, pay)}</td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
                                   {pendingValidation && pay && !isParent && (
@@ -2912,6 +3011,9 @@ const Pagamentos = () => {
                           <th className="py-2 px-2">Vencimento</th>
                           <th className="py-2 px-2">Valor</th>
                           <th className="py-2 px-2">Estado</th>
+                          <th className="py-2 px-2 text-center w-12" title="Factura-recibo fiscal (FACTURA‑RECIBO AGT)">
+                            FT
+                          </th>
                           <th className="py-2 px-2 text-right">Ação</th>
                         </tr>
                       </thead>
@@ -2953,6 +3055,7 @@ const Pagamentos = () => {
                                   <Badge variant="secondary">Pendente</Badge>
                                 )}
                               </td>
+                              <td className="py-2 px-2 align-middle text-center">{invoiceIconForValidatedPayment(!!f.is_paid, pay)}</td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
                                   {pendingValidation && pay && !isParent && (
@@ -3246,6 +3349,9 @@ const Pagamentos = () => {
                           <th className="py-2 px-2">Vencimento</th>
                           <th className="py-2 px-2">Valor</th>
                           <th className="py-2 px-2">Estado</th>
+                          <th className="py-2 px-2 text-center w-12" title="Factura-recibo fiscal (FACTURA‑RECIBO AGT)">
+                            FT
+                          </th>
                           <th className="py-2 px-2 text-right">Ação</th>
                         </tr>
                       </thead>
@@ -3287,6 +3393,7 @@ const Pagamentos = () => {
                                   <Badge variant="secondary">Pendente</Badge>
                                 )}
                               </td>
+                              <td className="py-2 px-2 align-middle text-center">{invoiceIconForValidatedPayment(!!f.is_paid, pay)}</td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
                                   {pendingValidation && pay && !isParent && (
