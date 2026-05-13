@@ -3935,7 +3935,7 @@ const Pagamentos = () => {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="grid gap-2">
                 <Label>Dia vencimento</Label>
                 <Input
@@ -3969,19 +3969,22 @@ const Pagamentos = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="col-span-2 flex flex-col justify-end gap-2 rounded-lg border border-dashed border-border px-3 py-2 sm:col-span-1">
-                <div className="flex items-center justify-between gap-2">
-                  <Label htmlFor="gen-all" className="text-sm font-normal leading-tight">
-                    Gerar todos os pagamentos de uma vez
-                  </Label>
-                  <Switch
-                    id="gen-all"
-                    checked={ruleForm.generate_all_upfront}
-                    onCheckedChange={(v) => setRuleForm((f) => ({ ...f, generate_all_upfront: v }))}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">Desligado: cria só períodos em dia ou em atraso (recomendado).</p>
+            </div>
+
+            <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="gen-all" className="text-sm font-normal leading-tight">
+                  Gerar todos os pagamentos de uma vez
+                </Label>
+                <Switch
+                  id="gen-all"
+                  checked={ruleForm.generate_all_upfront}
+                  onCheckedChange={(v) => setRuleForm((f) => ({ ...f, generate_all_upfront: v }))}
+                />
               </div>
+              <p className="text-xs text-muted-foreground">
+                Desligado: cria só períodos em dia ou em atraso (recomendado).
+              </p>
             </div>
 
             <div className="grid gap-2">
