@@ -33,6 +33,8 @@ type Props = {
   schoolId: string;
   routes: Route[];
   initial?: TransportEnrollment | null;
+  /** Pré-selecção da rota ao criar nova inscrição (ex.: vista da rota). */
+  defaultRouteId?: string | null;
   onSaved: () => void;
   isParent?: boolean;
   childIds?: string[];

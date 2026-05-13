@@ -58,6 +58,7 @@ import {
   readPresencasWideRangeAnchorIso,
   attendancePackMonth,
   attendancePackRangeFromDates,
+  type AttendanceStatus,
   type PresencasAttendanceMap,
   type PresencasAttendanceKeyInput,
   type PresencasStudentsKeyInput,
@@ -65,7 +66,7 @@ import {
 import { supabaseRestTable } from "@/lib/supabaseRestUrls";
 import { isNativeMobileApp, showPageKpiCards } from "@/lib/nativeApp";
 
-type Status = "PRESENT" | "ABSENT" | "LATE" | "JUSTIFIED" | "DISCIPLINARY";
+type Status = AttendanceStatus;
 
 interface Student {
   id: string;

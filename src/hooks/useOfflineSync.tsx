@@ -120,7 +120,7 @@ async function runFlushOnce(): Promise<RunFlushOnceResult> {
     return { succeeded: 0, stopReason: "no_session" };
   }
 
-  const apikey = supabase.supabaseKey;
+  const apikey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
 
   /**
    * Cada ciclo trabalha apenas a primeira entrada (ordem garantida pela fila ordenada por `createdAt`).

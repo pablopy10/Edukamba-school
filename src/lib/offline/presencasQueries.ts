@@ -7,11 +7,19 @@ export type PresencasStudentRow = {
   enrollment_number?: string | null;
 };
 
+/** Valores alinhados com `attendance.status` na API. */
+export type AttendanceStatus =
+  | "PRESENT"
+  | "ABSENT"
+  | "LATE"
+  | "JUSTIFIED"
+  | "DISCIPLINARY";
+
 export type PresencasAttendanceRow = {
   id: string;
   student_id: string;
   date: string;
-  status: string;
+  status: AttendanceStatus;
   notes: string | null;
 };
 
@@ -201,7 +209,10 @@ export function presencasAttendanceQueryKey(input: PresencasAttendanceKeyInput) 
 function rowsToAttendanceMap(rows: unknown[] | null): PresencasAttendanceMap {
   const map: PresencasAttendanceMap = {};
   (rows ?? []).forEach((row: any) => {
-    map[`${row.student_id}__${row.date}`] = row as PresencasAttendanceRow;
+    map[`${row.student_id}__${row.date}`] = {
+      ...row,
+      status: row.status as AttendanceStatus,
+    };
   });
   return map;
 }

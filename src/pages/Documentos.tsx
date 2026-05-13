@@ -9,6 +9,7 @@ import { DocumentUpload } from "@/components/documents/DocumentUpload";
 import { PdfFieldEditor, type FieldDef } from "@/components/documents/PdfFieldEditor";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { toast } from "@/hooks/use-toast";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -214,7 +215,7 @@ export default function Documentos() {
       setMyRequests([]);
       return;
     }
-    setMyRequests((data ?? []) as DocumentRequest[]);
+    setMyRequests((data ?? []) as unknown as DocumentRequest[]);
   }, [user?.id]);
 
   const loadClassrooms = useCallback(async (sid: string, yearId?: string | null) => {
@@ -264,7 +265,7 @@ export default function Documentos() {
     if (error) {
       toast({ title: "Erro a carregar respostas", description: error.message, variant: "destructive" });
     }
-    setDocRequests((data ?? []) as DocumentRequest[]);
+    setDocRequests((data ?? []) as unknown as DocumentRequest[]);
     setRequestsLoading(false);
   }, []);
 
@@ -416,7 +417,7 @@ export default function Documentos() {
       expires_at: form.expires_at || null,
       pdf_template_url: form.pdf_template_url.trim() || null,
       file_url: form.pdf_template_url.trim() || null, // keep file_url in sync
-      signature_fields: form.signature_fields ?? null,
+      signature_fields: (form.signature_fields ?? null) as unknown as Json,
       created_by: user?.id ?? null,
       status: "active" as const,
     };

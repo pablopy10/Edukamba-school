@@ -26,6 +26,8 @@ import { useParentChildren } from "@/hooks/useParentChildren";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useUserRole } from "@/hooks/useUserRole";
 import { canValidateSchoolPaymentProofs, isSchoolManagementRole, isSchoolSettingsAdmin } from "@/lib/schoolStaffRoles";
 import type { GuardianPaymentMode } from "@/lib/guardianPayment";
@@ -35,17 +37,63 @@ import { downloadFiscalInvoicePdfById } from "@/lib/fiscal/downloadFiscalInvoice
 
 type StaffValidatedInsertResult = { error: string | null; paymentId?: string };
 
+type FeeTargetScope = "grade_level" | "classrooms" | "students";
+type FeeRecurrence = "monthly" | "quarterly" | "semester" | "yearly";
+
+const RECURRENCE_LABELS: Record<FeeRecurrence, string> = {
+  monthly: "Mensal",
+  quarterly: "Trimestral",
+  semester: "Semestral",
+  yearly: "Anual",
+};
+
+function recurrenceStepMonths(r: FeeRecurrence): number {
+  if (r === "quarterly") return 3;
+  if (r === "semester") return 6;
+  if (r === "yearly") return 12;
+  return 1;
+}
+
+/** Número de períodos de cobrança entre mês início e mês fim (inclusive), conforme a recorrência. */
+function countBillingPeriods(startMonth: number, endMonth: number, recurrence: FeeRecurrence): number {
+  const step = recurrenceStepMonths(recurrence);
+  let m = startMonth;
+  for (let c = 1; c < 48; c++) {
+    if (m === endMonth) return c;
+    m = ((m - 1 + step) % 12) + 1;
+  }
+  return 1;
+}
+
 type FeeRule = {
   id: string;
   school_id: string;
   academic_year_id: string | null;
-  grade_level: string;
+  grade_level: string | null;
   monthly_amount: number;
   due_day: number;
   months_count: number;
   start_month: number;
+  end_month: number | null;
   notes: string | null;
+  target_scope: string;
+  recurrence: string;
+  generate_all_upfront: boolean;
+  fee_rule_classrooms?: { classroom_id: string }[] | null;
+  fee_rule_students?: { student_id: string }[] | null;
 };
+
+function formatFeeRuleTarget(r: FeeRule): string {
+  const ts = r.target_scope || "grade_level";
+  if (ts === "students") return `${r.fee_rule_students?.length ?? 0} aluno(s)`;
+  if (ts === "classrooms") return `${r.fee_rule_classrooms?.length ?? 0} turma(s)`;
+  return r.grade_level ?? "—";
+}
+
+function formatRecurrenceLabel(r: string | undefined): string {
+  const k = (r as FeeRecurrence) || "monthly";
+  return RECURRENCE_LABELS[k] ?? String(r ?? "");
+}
 
 type FamilyRule = {
   id: string;
@@ -66,7 +114,7 @@ type StudentDiscount = {
 
 type AcademicYear = { id: string; label: string; is_active: boolean | null };
 type StudentLite = { id: string; full_name: string };
-type ClassroomLite = { id: string; name: string };
+type ClassroomLite = { id: string; name: string; academic_year_id?: string | null };
 
 type FeeListRow = {
   id: string;
@@ -194,12 +242,17 @@ const Pagamentos = () => {
   const [ruleDialog, setRuleDialog] = useState(false);
   const [editingRule, setEditingRule] = useState<FeeRule | null>(null);
   const [ruleForm, setRuleForm] = useState({
+    target_scope: "grade_level" as FeeTargetScope,
     grade_level: "",
+    classroom_ids: [] as string[],
+    student_ids: [] as string[],
     monthly_amount: "0",
+    recurrence: "monthly" as FeeRecurrence,
     due_day: "10",
-    months_count: "10",
     start_month: "9",
+    end_month: "6",
     notes: "",
+    generate_all_upfront: false,
   });
 
   const [familyDialog, setFamilyDialog] = useState(false);
@@ -561,11 +614,11 @@ const Pagamentos = () => {
 
     const [yRes, rRes, fRes, dRes, sRes, cRes] = await Promise.all([
       supabase.from("academic_years").select("id, label, is_active").eq("school_id", sId).order("start_date", { ascending: true }),
-      supabase.from("fee_rules").select("*").eq("school_id", sId).order("grade_level"),
+      supabase.from("fee_rules").select("*, fee_rule_classrooms(classroom_id), fee_rule_students(student_id)").eq("school_id", sId).order("created_at", { ascending: false }),
       supabase.from("family_discount_rules").select("*").eq("school_id", sId).order("sibling_position"),
       supabase.from("student_discounts").select("*, student:students(full_name)").eq("school_id", sId).order("created_at", { ascending: false }),
       supabase.from("students").select("id, full_name").eq("school_id", sId).order("full_name"),
-      supabase.from("classrooms").select("id, name").eq("school_id", sId).order("name"),
+      supabase.from("classrooms").select("id, name, academic_year_id").eq("school_id", sId).order("name"),
     ]);
 
     if (yRes.error) toast({ title: "Erro a carregar anos letivos", description: yRes.error.message, variant: "destructive" });
@@ -748,41 +801,112 @@ const Pagamentos = () => {
   // Fee rules
   const openNewRule = () => {
     setEditingRule(null);
-    setRuleForm({ grade_level: "", monthly_amount: "0", due_day: "10", months_count: "10", start_month: "9", notes: "" });
+    setRuleForm({
+      target_scope: "grade_level",
+      grade_level: "",
+      classroom_ids: [],
+      student_ids: [],
+      monthly_amount: "0",
+      recurrence: "monthly",
+      due_day: "10",
+      start_month: "9",
+      end_month: "6",
+      notes: "",
+      generate_all_upfront: false,
+    });
     setRuleDialog(true);
   };
   const openEditRule = (r: FeeRule) => {
     setEditingRule(r);
+    const ts = (r.target_scope as FeeTargetScope) || "grade_level";
     setRuleForm({
-      grade_level: r.grade_level,
+      target_scope: ts,
+      grade_level: r.grade_level ?? "",
+      classroom_ids: (r.fee_rule_classrooms ?? []).map((x) => x.classroom_id),
+      student_ids: (r.fee_rule_students ?? []).map((x) => x.student_id),
       monthly_amount: String(r.monthly_amount),
+      recurrence: (r.recurrence as FeeRecurrence) || "monthly",
       due_day: String(r.due_day),
-      months_count: String(r.months_count),
       start_month: String(r.start_month),
+      end_month: String(r.end_month ?? r.start_month),
       notes: r.notes ?? "",
+      generate_all_upfront: !!r.generate_all_upfront,
     });
     setRuleDialog(true);
   };
   const saveRule = async () => {
     if (!schoolId) return;
-    if (!ruleForm.grade_level.trim()) {
-      toast({ title: "Indica o nível de ensino", variant: "destructive" }); return;
+    const startMonth = Math.max(1, Math.min(12, Number(ruleForm.start_month) || 9));
+    const endMonth = Math.max(1, Math.min(12, Number(ruleForm.end_month) || startMonth));
+    const periods = countBillingPeriods(startMonth, endMonth, ruleForm.recurrence);
+    if (ruleForm.target_scope === "grade_level" && !ruleForm.grade_level.trim()) {
+      toast({ title: "Indica o nível de ensino", variant: "destructive" });
+      return;
+    }
+    if (ruleForm.target_scope === "classrooms" && ruleForm.classroom_ids.length === 0) {
+      toast({ title: "Seleccione pelo menos uma turma", variant: "destructive" });
+      return;
+    }
+    if (ruleForm.target_scope === "students" && ruleForm.student_ids.length === 0) {
+      toast({ title: "Seleccione pelo menos um aluno", variant: "destructive" });
+      return;
     }
     const payload = {
       school_id: schoolId,
       academic_year_id: activeYearId,
-      grade_level: ruleForm.grade_level.trim(),
+      target_scope: ruleForm.target_scope,
+      grade_level:
+        ruleForm.target_scope === "grade_level" ? ruleForm.grade_level.trim() : null,
       monthly_amount: Number(ruleForm.monthly_amount) || 0,
       due_day: Math.max(1, Math.min(28, Number(ruleForm.due_day) || 10)),
-      months_count: Math.max(1, Math.min(12, Number(ruleForm.months_count) || 10)),
-      start_month: Math.max(1, Math.min(12, Number(ruleForm.start_month) || 9)),
+      months_count: Math.max(1, Math.min(36, periods)),
+      start_month: startMonth,
+      end_month: endMonth,
+      recurrence: ruleForm.recurrence,
+      generate_all_upfront: ruleForm.generate_all_upfront,
       notes: ruleForm.notes.trim() || null,
     };
-    const { error } = editingRule
-      ? await supabase.from("fee_rules").update(payload).eq("id", editingRule.id)
-      : await supabase.from("fee_rules").insert(payload);
-    if (error) { toast({ title: "Erro a guardar", description: error.message, variant: "destructive" }); return; }
-    toast({ title: editingRule ? "Regra atualizada" : "Regra criada" });
+    let ruleId = editingRule?.id ?? "";
+    if (editingRule) {
+      const { error } = await supabase.from("fee_rules").update(payload).eq("id", editingRule.id);
+      if (error) {
+        toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+        return;
+      }
+      ruleId = editingRule.id;
+    } else {
+      const { data: ins, error } = await supabase.from("fee_rules").insert(payload).select("id").single();
+      if (error) {
+        toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+        return;
+      }
+      ruleId = ins?.id ?? "";
+    }
+    if (!ruleId) {
+      toast({ title: "Erro a guardar", description: "ID da regra em falta.", variant: "destructive" });
+      return;
+    }
+    await supabase.from("fee_rule_classrooms").delete().eq("fee_rule_id", ruleId);
+    await supabase.from("fee_rule_students").delete().eq("fee_rule_id", ruleId);
+    if (ruleForm.target_scope === "classrooms" && ruleForm.classroom_ids.length > 0) {
+      const { error: ce } = await supabase.from("fee_rule_classrooms").insert(
+        ruleForm.classroom_ids.map((cid) => ({ fee_rule_id: ruleId, classroom_id: cid })),
+      );
+      if (ce) {
+        toast({ title: "Erro ao guardar turmas", description: ce.message, variant: "destructive" });
+        return;
+      }
+    }
+    if (ruleForm.target_scope === "students" && ruleForm.student_ids.length > 0) {
+      const { error: se } = await supabase.from("fee_rule_students").insert(
+        ruleForm.student_ids.map((sid) => ({ fee_rule_id: ruleId, student_id: sid })),
+      );
+      if (se) {
+        toast({ title: "Erro ao guardar alunos", description: se.message, variant: "destructive" });
+        return;
+      }
+    }
+    toast({ title: editingRule ? "Regra actualizada" : "Regra criada" });
     setRuleDialog(false);
     fetchAll();
   };
@@ -893,7 +1017,6 @@ const Pagamentos = () => {
     let total = 0;
     let skipped = 0;
     for (const st of studs as Array<{ id: string; classroom: { grade_level: string | null } | null }>) {
-      if (!st.classroom?.grade_level) { skipped++; continue; }
       // Skip if already has fees for the year
       const { count } = await supabase
         .from("student_fees")
@@ -909,11 +1032,14 @@ const Pagamentos = () => {
     }
     setGenerating(false);
     setGenerateOpen(false);
-    toast({ title: "Geração concluída", description: `${total} propinas criadas. ${skipped} alunos ignorados (sem nível ou já gerado).` });
+    toast({ title: "Geração concluída", description: `${total} cobrança(s) criada(s). ${skipped} aluno(s) ignorados (sem regra aplicável ou já gerado).` });
   };
 
   const totalActiveStudents = students.length;
-  const monthlyRevenue = useMemo(() => rules.reduce((s, r) => s + Number(r.monthly_amount), 0), [rules]);
+  const classroomsForRulePicker = useMemo(() => {
+    if (!activeYearId) return classrooms;
+    return classrooms.filter((c) => c.academic_year_id === activeYearId);
+  }, [classrooms, activeYearId]);
 
   const filteredFees = useMemo(() => {
     const now = Date.now();
@@ -2020,12 +2146,12 @@ const Pagamentos = () => {
         {!isParent && (<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Regras de propina</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Regras de cobranças</CardTitle>
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-bold">{rules.length}</p>
-              <p className="text-xs text-muted-foreground">por nível de ensino</p>
+              <p className="text-xs text-muted-foreground">definidas na escola</p>
             </CardContent>
           </Card>
           <Card>
@@ -2100,7 +2226,7 @@ const Pagamentos = () => {
 
         <Tabs defaultValue="fees" className="w-full">
           <TabsList>
-            {!isParent && <TabsTrigger value="rules">Regras de propina</TabsTrigger>}
+            {!isParent && <TabsTrigger value="rules">Regras de cobranças</TabsTrigger>}
             <TabsTrigger value="fees">Propinas</TabsTrigger>
             <TabsTrigger value="enrollment-fees">Matrículas</TabsTrigger>
             <TabsTrigger value="activity-fees">Extracurriculares</TabsTrigger>
@@ -3510,13 +3636,18 @@ const Pagamentos = () => {
           {/* RULES TAB */}
           {!isParent && (
           <TabsContent value="rules" className="space-y-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>Propinas por nível de ensino</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">Define o valor mensal cobrado em cada nível.</p>
+            <Card className="border-border/80 shadow-card">
+              <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-1">
+                  <CardTitle>Regras de cobranças</CardTitle>
+                  <p className="text-sm text-muted-foreground max-w-xl">
+                    Configure o aluno ou as turmas, o valor por período, a recorrência e o calendário de vencimentos.
+                    Por omissão, os pagamentos geram-se à medida que chegam os períodos (não tudo de uma vez).
+                  </p>
                 </div>
-                <Button onClick={openNewRule} size="sm" className="gap-2"><Plus className="h-4 w-4" /> Nova regra</Button>
+                <Button onClick={openNewRule} size="sm" className="gap-2 shrink-0">
+                  <Plus className="h-4 w-4" /> Nova regra
+                </Button>
               </CardHeader>
               <CardContent>
                 {loading ? (
@@ -3524,29 +3655,41 @@ const Pagamentos = () => {
                 ) : rules.length === 0 ? (
                   <p className="text-center py-10 text-muted-foreground">Sem regras definidas.</p>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto rounded-xl border border-border bg-muted/20">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b text-left text-muted-foreground">
-                          <th className="py-2 px-2">Nível</th>
-                          <th className="py-2 px-2">Valor mensal</th>
-                          <th className="py-2 px-2">Vencimento</th>
-                          <th className="py-2 px-2">Meses</th>
-                          <th className="py-2 px-2">Início</th>
-                          <th className="py-2 px-2 text-right">Ações</th>
+                        <tr className="border-b bg-card text-left text-muted-foreground">
+                          <th className="py-3 px-3 font-medium">Alvo</th>
+                          <th className="py-3 px-3 font-medium">Recorrência</th>
+                          <th className="py-3 px-3 font-medium">Valor</th>
+                          <th className="py-3 px-3 font-medium">Vencimento</th>
+                          <th className="py-3 px-3 font-medium">Período</th>
+                          <th className="py-3 px-3 font-medium">Tudo de uma vez</th>
+                          <th className="py-3 px-3 text-right font-medium">Ações</th>
                         </tr>
                       </thead>
                       <tbody>
                         {rules.map((r) => (
-                          <tr key={r.id} className="border-b hover:bg-muted/30">
-                            <td className="py-2 px-2 font-medium">{r.grade_level}</td>
-                            <td className="py-2 px-2">{fmtAOA(Number(r.monthly_amount))}</td>
-                            <td className="py-2 px-2">Dia {r.due_day}</td>
-                            <td className="py-2 px-2">{r.months_count}</td>
-                            <td className="py-2 px-2">{monthNames[r.start_month - 1]}</td>
-                            <td className="py-2 px-2 text-right">
-                              <Button size="icon" variant="ghost" onClick={() => openEditRule(r)}><Pencil className="h-4 w-4" /></Button>
-                              <Button size="icon" variant="ghost" onClick={() => setDeleteRule(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                          <tr key={r.id} className="border-b border-border/60 bg-card hover:bg-muted/40">
+                            <td className="py-2.5 px-3 font-medium">{formatFeeRuleTarget(r)}</td>
+                            <td className="py-2.5 px-3">{formatRecurrenceLabel(r.recurrence)}</td>
+                            <td className="py-2.5 px-3">{fmtAOA(Number(r.monthly_amount))}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap">Dia {r.due_day}</td>
+                            <td className="py-2.5 px-3 text-muted-foreground">
+                              {monthNames[r.start_month - 1]}
+                              {r.end_month != null ? ` → ${monthNames[r.end_month - 1]}` : ""}
+                              <span className="text-xs"> · {r.months_count} período(s)</span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              {r.generate_all_upfront ? (
+                                <Badge className="bg-pastel-blue text-pastel-blue-foreground">Sim</Badge>
+                              ) : (
+                                <Badge variant="secondary">Não</Badge>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              <Button size="icon" variant="ghost" onClick={() => openEditRule(r)} aria-label="Editar"><Pencil className="h-4 w-4" /></Button>
+                              <Button size="icon" variant="ghost" onClick={() => setDeleteRule(r.id)} aria-label="Apagar"><Trash2 className="h-4 w-4 text-destructive" /></Button>
                             </td>
                           </tr>
                         ))}
@@ -3660,54 +3803,199 @@ const Pagamentos = () => {
 
       {/* RULE DIALOG */}
       <Dialog open={ruleDialog} onOpenChange={setRuleDialog}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingRule ? "Editar regra" : "Nova regra de propina"}</DialogTitle>
-            <DialogDescription>Define o valor mensal por nível de ensino.</DialogDescription>
+            <DialogTitle>{editingRule ? "Editar regra de cobrança" : "Nova regra de cobrança"}</DialogTitle>
+            <DialogDescription>
+              O valor é por período de cobrança (ex.: mensal ou trimestral). Sem «gerar tudo de uma vez», só são criadas
+              cobranças dos períodos já atingidos ou do mês actual.
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label>Nível de ensino</Label>
-              <Select value={ruleForm.grade_level} onValueChange={(v) => setRuleForm({ ...ruleForm, grade_level: v })}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar nível..." /></SelectTrigger>
+            <div className="rounded-xl border border-border bg-muted/30 p-3">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Alvo</Label>
+              <Select
+                value={ruleForm.target_scope}
+                onValueChange={(v) =>
+                  setRuleForm((f) => ({ ...f, target_scope: v as FeeTargetScope }))
+                }
+              >
+                <SelectTrigger className="mt-2 bg-card"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {GRADE_LEVELS.map((g) => (
-                    <SelectItem key={g} value={g}>{g}</SelectItem>
+                  <SelectItem value="grade_level">Nível de ensino (turma segue o nível)</SelectItem>
+                  <SelectItem value="classrooms">Turmas específicas</SelectItem>
+                  <SelectItem value="students">Alunos específicos</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {ruleForm.target_scope === "grade_level" && (
+                <div className="mt-3 grid gap-2">
+                  <Label>Nível de ensino</Label>
+                  <Select
+                    value={ruleForm.grade_level}
+                    onValueChange={(v) => setRuleForm((f) => ({ ...f, grade_level: v }))}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Seleccionar nível..." /></SelectTrigger>
+                    <SelectContent>
+                      {GRADE_LEVELS.map((g) => (
+                        <SelectItem key={g} value={g}>{g}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {ruleForm.target_scope === "classrooms" && (
+                <div className="mt-3 grid gap-2">
+                  <Label>Turmas {activeYearId ? `(ano activo)` : ""}</Label>
+                  <ScrollArea className="h-36 rounded-md border border-border bg-card px-2 py-2">
+                    {classroomsForRulePicker.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-2">Sem turmas para este ano.</p>
+                    ) : (
+                      <div className="space-y-2 pr-2">
+                        {classroomsForRulePicker.map((c) => (
+                          <label key={c.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                            <Checkbox
+                              checked={ruleForm.classroom_ids.includes(c.id)}
+                              onCheckedChange={(checked) => {
+                                const on = checked === true;
+                                setRuleForm((f) => ({
+                                  ...f,
+                                  classroom_ids: on
+                                    ? [...f.classroom_ids, c.id]
+                                    : f.classroom_ids.filter((id) => id !== c.id),
+                                }));
+                              }}
+                            />
+                            <span>{c.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                  <p className="text-xs text-muted-foreground">{ruleForm.classroom_ids.length} turma(s) seleccionada(s).</p>
+                </div>
+              )}
+
+              {ruleForm.target_scope === "students" && (
+                <div className="mt-3 grid gap-2">
+                  <Label>Alunos</Label>
+                  <ScrollArea className="h-36 rounded-md border border-border bg-card px-2 py-2">
+                    <div className="space-y-2 pr-2">
+                      {students.map((s) => (
+                        <label key={s.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={ruleForm.student_ids.includes(s.id)}
+                            onCheckedChange={(checked) => {
+                              const on = checked === true;
+                              setRuleForm((f) => ({
+                                ...f,
+                                student_ids: on
+                                  ? [...f.student_ids, s.id]
+                                  : f.student_ids.filter((id) => id !== s.id),
+                              }));
+                            }}
+                          />
+                          <span>{s.full_name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                  <p className="text-xs text-muted-foreground">{ruleForm.student_ids.length} aluno(s) seleccionado(s).</p>
+                </div>
+              )}
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Recorrência do pagamento</Label>
+              <Select
+                value={ruleForm.recurrence}
+                onValueChange={(v) => setRuleForm((f) => ({ ...f, recurrence: v as FeeRecurrence }))}
+              >
+                <SelectTrigger className="bg-card"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(RECURRENCE_LABELS) as FeeRecurrence[]).map((k) => (
+                    <SelectItem key={k} value={k}>{RECURRENCE_LABELS[k]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Mensal: um período por mês. Trimestral: a cada 3 meses a partir do mês de início. O valor abaixo é o valor de cada período.
+              </p>
             </div>
+
             <div className="grid gap-2">
-              <Label>Valor mensal (AOA)</Label>
-              <Input type="number" min="0" value={ruleForm.monthly_amount} onChange={(e) => setRuleForm({ ...ruleForm, monthly_amount: e.target.value })} />
+              <Label>Valor por período (AOA)</Label>
+              <Input
+                type="number"
+                min="0"
+                className="bg-card"
+                value={ruleForm.monthly_amount}
+                onChange={(e) => setRuleForm({ ...ruleForm, monthly_amount: e.target.value })}
+              />
             </div>
-            <div className="grid grid-cols-3 gap-4">
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="grid gap-2">
                 <Label>Dia vencimento</Label>
-                <Input type="number" min="1" max="28" value={ruleForm.due_day} onChange={(e) => setRuleForm({ ...ruleForm, due_day: e.target.value })} />
-              </div>
-              <div className="grid gap-2">
-                <Label>Nº de meses</Label>
-                <Input type="number" min="1" max="12" value={ruleForm.months_count} onChange={(e) => setRuleForm({ ...ruleForm, months_count: e.target.value })} />
+                <Input
+                  type="number"
+                  min="1"
+                  max="28"
+                  className="bg-card"
+                  value={ruleForm.due_day}
+                  onChange={(e) => setRuleForm({ ...ruleForm, due_day: e.target.value })}
+                />
               </div>
               <div className="grid gap-2">
                 <Label>Mês início</Label>
                 <Select value={ruleForm.start_month} onValueChange={(v) => setRuleForm({ ...ruleForm, start_month: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-card"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {monthNames.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}
+                    {monthNames.map((m, i) => (
+                      <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+              <div className="grid gap-2">
+                <Label>Mês fim</Label>
+                <Select value={ruleForm.end_month} onValueChange={(v) => setRuleForm({ ...ruleForm, end_month: v })}>
+                  <SelectTrigger className="bg-card"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {monthNames.map((m, i) => (
+                      <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-2 flex flex-col justify-end gap-2 rounded-lg border border-dashed border-border px-3 py-2 sm:col-span-1">
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="gen-all" className="text-sm font-normal leading-tight">
+                    Gerar todos os pagamentos de uma vez
+                  </Label>
+                  <Switch
+                    id="gen-all"
+                    checked={ruleForm.generate_all_upfront}
+                    onCheckedChange={(v) => setRuleForm((f) => ({ ...f, generate_all_upfront: v }))}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Desligado: cria só períodos em dia ou em atraso (recomendado).</p>
+              </div>
             </div>
+
             <div className="grid gap-2">
               <Label>Notas (opcional)</Label>
-              <Input value={ruleForm.notes} onChange={(e) => setRuleForm({ ...ruleForm, notes: e.target.value })} />
+              <Input
+                className="bg-card"
+                value={ruleForm.notes}
+                onChange={(e) => setRuleForm({ ...ruleForm, notes: e.target.value })}
+              />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRuleDialog(false)}>Cancelar</Button>
-            <Button onClick={saveRule}>Guardar</Button>
+            <Button variant="outline" type="button" onClick={() => setRuleDialog(false)}>Cancelar</Button>
+            <Button type="button" onClick={() => void saveRule()}>Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

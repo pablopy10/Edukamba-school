@@ -77,7 +77,7 @@ export const NewAcademicYearWizard = ({ schoolId, isAdmin }: Props) => {
     if (options.courses) list.push({ key: "courses", label: "Validar cursos", state: "pending" });
     if (options.subjects) list.push({ key: "subjects", label: "Validar disciplinas", state: "pending" });
     if (options.classrooms) list.push({ key: "classrooms", label: "Clonar turmas", state: "pending" });
-    if (options.fee_rules) list.push({ key: "fee_rules", label: "Clonar tabela de preços", state: "pending" });
+    if (options.fee_rules) list.push({ key: "fee_rules", label: "Clonar regras de cobrança", state: "pending" });
     list.push({ key: "finish", label: "Finalizar", state: "pending" });
     return list;
   }, [options]);
@@ -269,8 +269,8 @@ export const NewAcademicYearWizard = ({ schoolId, isAdmin }: Props) => {
             disabled={!isAdmin || running}
           />
           <CloneOption
-            label="Tabela de Preços e Propinas"
-            description="Replica os valores configurados por classe."
+            label="Regras de cobrança"
+            description="Replica valores, recorrências e alvos (inclui turmas clonadas quando aplicável)."
             checked={options.fee_rules}
             onChange={(v) => setOptions((s) => ({ ...s, fee_rules: v }))}
             disabled={!isAdmin || running}
@@ -349,7 +349,7 @@ export const NewAcademicYearWizard = ({ schoolId, isAdmin }: Props) => {
               <span className="text-base font-semibold">{result.classrooms}</span>
             </li>
             <li className="rounded-lg bg-card px-3 py-2 shadow-soft">
-              <span className="block text-xs text-muted-foreground">Regras de propina</span>
+              <span className="block text-xs text-muted-foreground">Regras de cobrança</span>
               <span className="text-base font-semibold">{result.fee_rules}</span>
             </li>
           </ul>

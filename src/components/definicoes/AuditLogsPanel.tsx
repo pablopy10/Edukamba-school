@@ -45,7 +45,7 @@ const TABLE_LABELS: Record<string, string> = {
   extracurricular_enrollments: "Inscrições extracurriculares",
   payments: "Pagamentos",
   student_fees: "Mensalidades",
-  fee_rules: "Regras de propinas",
+  fee_rules: "Regras de cobranças",
   fee_categories: "Categorias de propinas",
   family_discount_rules: "Descontos por familiar",
   activity_fees: "Taxas de actividades",

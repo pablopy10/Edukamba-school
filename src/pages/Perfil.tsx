@@ -221,14 +221,10 @@ const Perfil = () => {
         method: "PATCH",
         body: JSON.stringify(body),
       });
-      queryClient.setQueryData(qk.perfilProfile(user.id), (prev) =>
-        prev
-          ? {
-              ...prev,
-              ...body,
-            }
-          : prev,
-      );
+      queryClient.setQueryData(qk.perfilProfile(user.id), (prev) => {
+        if (!prev || typeof prev !== "object") return prev;
+        return { ...prev, ...body };
+      });
       setSaving(false);
       showToast("success", "Guardado offline — será sincronizado quando voltar a haver rede.");
       return;

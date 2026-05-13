@@ -7,12 +7,13 @@ export type PerfilDbRow = {
   phone: string | null;
   language: string | null;
   role: string | null;
+  school_id: string | null;
 };
 
 async function fetchPerfil(userId: string): Promise<PerfilDbRow | null> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("full_name, phone, language, role")
+    .select("full_name, phone, language, role, school_id")
     .eq("id", userId)
     .maybeSingle();
   if (error) throw error;

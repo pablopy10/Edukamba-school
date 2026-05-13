@@ -135,7 +135,7 @@ export default function DocumentSign() {
         .maybeSingle();
 
       if (error || !data) { setNotFound(true); setLoading(false); return; }
-      const row = data as RequestRow;
+      const row = data as unknown as RequestRow;
       setRequest(row);
       // Pre-fill signer name from profile
       if (user?.id) {

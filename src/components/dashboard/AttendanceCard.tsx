@@ -370,7 +370,7 @@ export const AttendanceCard = () => {
             <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 3" />
             <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
             <YAxis axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} domain={[0, yMax]} allowDecimals={false} />
-            <Tooltip
+            <Tooltip<number, string>
               cursor={{ fill: "hsl(var(--muted) / 0.35)" }}
               content={(props) => <AttendanceTooltip {...props} />}
             />

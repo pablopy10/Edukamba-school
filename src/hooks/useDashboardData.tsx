@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { SCHOOL_MANAGEMENT_ROLES } from "@/lib/schoolStaffRoles";
+import type { Enums } from "@/integrations/supabase/types";
 
-const DASHBOARD_STAFF_ROLE_FILTER = [...new Set([...SCHOOL_MANAGEMENT_ROLES, "TEACHER"])];
+const DASHBOARD_STAFF_ROLE_FILTER: Enums<"user_role">[] = [...SCHOOL_MANAGEMENT_ROLES, "TEACHER"];
 
 export interface DashboardCounts {
   students: number;
@@ -210,7 +211,7 @@ export const useDashboardData = () => {
               .map((m) => m.receiver_id as string),
           ),
         );
-        let receiverNameMap = new Map<string, string>();
+        const receiverNameMap = new Map<string, string>();
         if (receiverIds.length > 0) {
           const { data: profs } = await supabase
             .from("profiles")
