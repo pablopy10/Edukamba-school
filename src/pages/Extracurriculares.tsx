@@ -43,8 +43,24 @@ import { UserPlus, Wallet } from "lucide-react";
 import { CheckCircle2 } from "lucide-react";
 import { isSchoolManagementOrTeacher, isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 import { useParentChildren } from "@/hooks/useParentChildren";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { PagamentosFinanceHub } from "@/pages/Pagamentos";
+import { DomainChargeRulesPanel } from "@/components/finance/DomainChargeRulesPanel";
+import { useHomeroomStudentIds } from "@/hooks/useHomeroomStudentIds";
 
 type ActivityCategory = "musica" | "desporto" | "arte" | "tecnologia" | "academico" | "teatro";
+
+type EnrollmentListRow = {
+  id: string;
+  student_id: string;
+  status: string;
+  activity_id: string;
+  student?: { full_name: string; classroom?: { name: string | null } | null } | null;
+  activity?: { name: string; category: string } | null;
+};
 
 const categoryMeta: Record<string, { label: string; color: string; icon: typeof Music2 }> = {
   musica: { label: "Música", color: "bg-pastel-pink text-pastel-pink-foreground", icon: Music2 },
@@ -84,10 +100,16 @@ const Extracurriculares = () => {
   const native = isNativeMobileApp();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [academicYear, setAcademicYear] = useState<{ id: string; start_date: string; end_date: string } | null>(null);
+  const [hubTab, setHubTab] = useState<
+    "regras" | "atividades" | "inscricoes" | "pagamentos"
+  >("atividades");
 
   const [activities, setActivities] = useState<ActivityRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [allEnrollmentRows, setAllEnrollmentRows] = useState<EnrollmentListRow[]>([]);
+  const [enrollmentLoading, setEnrollmentLoading] = useState(false);
   const [billingStatus, setBillingStatus] = useState<Record<string, { enrolled: number; billed: number }>>({});
 
   const [view, setView] = useState<"lista" | "calendario">("lista");
@@ -106,11 +128,41 @@ const Extracurriculares = () => {
   const isParent = role === "PARENT";
   const canEnroll = canEdit || isParent;
   const { childIds } = useParentChildren();
+  const homeroomStudentIds = useHomeroomStudentIds(schoolId, role, userId);
+
+  const loadEnrollmentList = async () => {
+    if (!schoolId) return;
+    setEnrollmentLoading(true);
+    const { data, error } = await supabase
+      .from("extracurricular_enrollments")
+      .select("id, student_id, activity_id, status, student:students(full_name, classroom:classrooms(name)), activity:extracurricular_activities(name, category)")
+      .eq("school_id", schoolId)
+      .order("enrolled_at", { ascending: false });
+    setEnrollmentLoading(false);
+    if (error) toast.error(error.message);
+    else setAllEnrollmentRows((data ?? []) as EnrollmentListRow[]);
+  };
+
+  useEffect(() => {
+    if (!schoolId || hubTab !== "inscricoes") return;
+    void loadEnrollmentList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schoolId, hubTab]);
+  const visibleEnrollmentRows = useMemo(() => {
+    let rows = allEnrollmentRows;
+    if (isParent) rows = rows.filter((r) => childIds.includes(r.student_id));
+    if (role === "TEACHER") {
+      if (homeroomStudentIds.length === 0) return [];
+      rows = rows.filter((r) => homeroomStudentIds.includes(r.student_id));
+    }
+    return rows;
+  }, [allEnrollmentRows, isParent, childIds, role, homeroomStudentIds]);
 
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      setUserId(user.id);
       const { data: profile } = await supabase
         .from("profiles")
         .select("school_id, role")
@@ -262,14 +314,17 @@ const Extracurriculares = () => {
 
   return (
     <>
-      <div className={cn("flex flex-col gap-6", native && canEdit && "relative pb-28")}>
+      <div className={cn("flex flex-col gap-6", native && hubTab === "atividades" && canEdit && "relative pb-28")}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Extracurriculares</h1>
-            <p className="text-sm text-muted-foreground">Gerir atividades recorrentes e pontuais</p>
+            <p className="text-sm text-muted-foreground">
+              Igual ao ecrã de Propinas: regras de cobrança por atividade, actividades com lista e calendário, todas as inscrições e lista de cobranças / pagamentos.
+            </p>
           </div>
-          {canEdit && !native && (
+          {canEdit && !native && hubTab === "atividades" && (
             <button
+              type="button"
               onClick={handleNew}
               className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-soft hover:opacity-90 transition-[var(--transition-smooth)]"
             >
@@ -279,6 +334,21 @@ const Extracurriculares = () => {
           )}
         </div>
 
+        <Tabs value={hubTab} onValueChange={(v) => setHubTab(v as typeof hubTab)} className="w-full">
+          <TabsList className="flex h-auto w-full flex-wrap gap-1 py-2">
+            {!isParent && <TabsTrigger value="regras">Regras de cobranças</TabsTrigger>}
+            <TabsTrigger value="atividades">Atividades</TabsTrigger>
+            <TabsTrigger value="inscricoes">Inscrições</TabsTrigger>
+            <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
+          </TabsList>
+
+          {!isParent && (
+            <TabsContent value="regras" className="mt-4">
+              <DomainChargeRulesPanel variant="activity" schoolId={schoolId} role={role} />
+            </TabsContent>
+          )}
+
+          <TabsContent value="atividades" className="mt-4 space-y-6">
         {showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
@@ -574,9 +644,96 @@ const Extracurriculares = () => {
             </div>
           </div>
         )}
+          </TabsContent>
+
+          <TabsContent value="inscricoes" className="mt-4 space-y-3">
+            {role === "TEACHER" && homeroomStudentIds.length === 0 && (
+              <p className="text-sm text-muted-foreground rounded-lg border border-border bg-muted/30 px-3 py-2">
+                Só são listados alunos das turmas em que está como diretor de turma.
+              </p>
+            )}
+            {native ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {enrollmentLoading ? (
+                  <p className="text-muted-foreground">A carregar…</p>
+                ) : visibleEnrollmentRows.length === 0 ? (
+                  <Card className="p-8 text-center text-muted-foreground col-span-full">Sem inscrições.</Card>
+                ) : (
+                  visibleEnrollmentRows.map((row) => {
+                    const meta = categoryMeta[row.activity?.category ?? "academico"] ?? categoryMeta.academico;
+                    const Icon = meta.icon;
+                    return (
+                      <Card key={row.id} className="flex flex-col gap-2 p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <h3 className="text-lg font-semibold">{row.student?.full_name ?? "—"}</h3>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className={cn("inline-flex h-8 w-8 items-center justify-center rounded-lg", meta.color)}>
+                                <Icon className="h-4 w-4" />
+                              </span>
+                              <span className="text-sm text-muted-foreground">{row.activity?.name ?? "—"}</span>
+                            </div>
+                          </div>
+                          <Badge variant={row.status === "ativa" ? "default" : "secondary"}>
+                            {row.status === "ativa" ? "Ativa" : row.status ?? "—"}
+                          </Badge>
+                        </div>
+                        {row.student?.classroom?.name && (
+                          <p className="text-xs text-muted-foreground">Turma: {row.student.classroom.name}</p>
+                        )}
+                      </Card>
+                    );
+                  })
+                )}
+              </div>
+            ) : (
+              <Card className="overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Aluno</TableHead>
+                      <TableHead>Turma</TableHead>
+                      <TableHead>Atividade</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Estado</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {enrollmentLoading ? (
+                      <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">A carregar…</TableCell></TableRow>
+                    ) : visibleEnrollmentRows.length === 0 ? (
+                      <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Sem inscrições.</TableCell></TableRow>
+                    ) : (
+                      visibleEnrollmentRows.map((row) => {
+                        const meta = categoryMeta[row.activity?.category ?? "academico"] ?? categoryMeta.academico;
+                        return (
+                          <TableRow key={row.id}>
+                            <TableCell className="font-medium">{row.student?.full_name ?? "—"}</TableCell>
+                            <TableCell>{row.student?.classroom?.name ?? "—"}</TableCell>
+                            <TableCell>{row.activity?.name ?? "—"}</TableCell>
+                            <TableCell><Badge variant="outline" className={meta.color}>{meta.label}</Badge></TableCell>
+                            <TableCell>
+                              <Badge variant={row.status === "ativa" ? "default" : "secondary"}>
+                                {row.status === "ativa" ? "Ativa" : row.status ?? "—"}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="pagamentos" className="mt-4">
+            <PagamentosFinanceHub financePage="activityCharges" />
+          </TabsContent>
+        </Tabs>
       </div>
 
-      {native && canEdit && (
+      {native && canEdit && hubTab === "atividades" && (
         <NativeMobileFabPortal>
           <Button
             type="button"
@@ -603,7 +760,10 @@ const Extracurriculares = () => {
         open={enrollOpen}
         onOpenChange={(o) => {
           setEnrollOpen(o);
-          if (!o) loadBillingStatus(activities);
+          if (!o) {
+            loadBillingStatus(activities);
+            void loadEnrollmentList();
+          }
         }}
         activity={enrollActivity}
         schoolId={schoolId}

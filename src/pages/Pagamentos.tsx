@@ -294,11 +294,14 @@ function chunkBySize<T>(items: readonly T[], size: number): T[][] {
   return out;
 }
 
-export type PagamentosFinancePageMode = "payments" | "tuition";
+export type PagamentosFinancePageMode = "payments" | "tuition" | "activityCharges" | "transportCharges";
 
-/** `tuition` = página Propinas (regras + lista). `payments` = outras cobranças em Pagamentos. */
+/** `tuition` = página Propinas (regras + lista). `payments` = outras cobranças em Pagamentos. Modos *_Charges embutidos em extracurricular / transportes. */
 export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosFinancePageMode }) {
   const tuitionOnly = financePage === "tuition";
+  const activityChargesOnly = financePage === "activityCharges";
+  const transportChargesOnly = financePage === "transportCharges";
+  const chargesEmbeddedOnly = activityChargesOnly || transportChargesOnly;
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const { role } = useUserRole();
   const canEditSchoolPaymentPrefs = isSchoolManagementRole(role) || isSchoolSettingsAdmin(role);
@@ -711,6 +714,10 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       setRules((rRes.data ?? []) as FeeRule[]);
       setFamilyRules([]);
       setDiscounts([]);
+    } else if (chargesEmbeddedOnly) {
+      setRules([]);
+      setFamilyRules([]);
+      setDiscounts([]);
     } else {
       setRules([]);
       const [fRes, dRes] = await Promise.all([
@@ -775,11 +782,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         setRoutesList([]);
         setAllEnrollmentFees([]);
         setEnrollmentPayments([]);
-      } else {
+      } else if (activityChargesOnly) {
         setAllFees([]);
         setPayments([]);
+        setAllTransportFees([]);
+        setTransportPayments([]);
+        setRoutesList([]);
+        setAllEnrollmentFees([]);
+        setEnrollmentPayments([]);
 
-        // Activity fees + lista de atividades para filtros
         const [{ data: actFees }, { data: actsList }] = await Promise.all([
           (isParent
             ? supabase
@@ -794,11 +805,77 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 .eq("school_id", sId)
                 .order("due_date", { ascending: true })
           ),
-          supabase
-            .from("extracurricular_activities")
-          .select("id, name")
-          .eq("school_id", sId)
-          .order("name"),
+          supabase.from("extracurricular_activities").select("id, name").eq("school_id", sId).order("name"),
+        ]);
+        setAllActivityFees((actFees ?? []) as unknown as ActivityFeeRow[]);
+        setActivitiesList((actsList ?? []) as Array<{ id: string; name: string }>);
+        const actFeeIds = (actFees ?? []).map((f: { id: string }) => f.id);
+        if (actFeeIds.length > 0) {
+          const { data: actPayRows } = await supabase
+            .from("payments")
+            .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+            .in("activity_fee_id", actFeeIds)
+            .order("payment_date", { ascending: false });
+          setActivityPayments((actPayRows ?? []) as PaymentListRow[]);
+        } else {
+          setActivityPayments([]);
+        }
+      } else if (transportChargesOnly) {
+        setAllFees([]);
+        setPayments([]);
+        setAllActivityFees([]);
+        setActivitiesList([]);
+        setActivityPayments([]);
+        setAllEnrollmentFees([]);
+        setEnrollmentPayments([]);
+        const [{ data: trFees }, { data: rtsList }] = await Promise.all([
+          (isParent
+            ? supabase
+                .from("transport_fees")
+                .select("id, amount_due, due_date, is_paid, month_index, student_id, route_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), route:transport_routes(id, name)")
+                .eq("school_id", sId)
+                .in("student_id", scopedStudentIds)
+                .order("due_date", { ascending: true })
+            : supabase
+                .from("transport_fees")
+                .select("id, amount_due, due_date, is_paid, month_index, student_id, route_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), route:transport_routes(id, name)")
+                .eq("school_id", sId)
+                .order("due_date", { ascending: true })
+          ),
+          supabase.from("transport_routes").select("id, name").eq("school_id", sId).order("name"),
+        ]);
+        setAllTransportFees((trFees ?? []) as unknown as TransportFeeRow[]);
+        setRoutesList((rtsList ?? []) as Array<{ id: string; name: string }>);
+        const trFeeIds = (trFees ?? []).map((f: { id: string }) => f.id);
+        if (trFeeIds.length > 0) {
+          const { data: trPayRows } = await supabase
+            .from("payments")
+            .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+            .in("transport_fee_id", trFeeIds)
+            .order("payment_date", { ascending: false });
+          setTransportPayments((trPayRows ?? []) as PaymentListRow[]);
+        } else {
+          setTransportPayments([]);
+        }
+      } else {
+        setAllFees([]);
+        setPayments([]);
+
+        const [{ data: actFees }, { data: actsList }] = await Promise.all([
+          (isParent
+            ? supabase
+                .from("activity_fees")
+                .select("id, amount_due, due_date, is_paid, month_index, student_id, activity_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), activity:extracurricular_activities(id, name, category)")
+                .eq("school_id", sId)
+                .in("student_id", scopedStudentIds)
+                .order("due_date", { ascending: true })
+            : supabase
+                .from("activity_fees")
+                .select("id, amount_due, due_date, is_paid, month_index, student_id, activity_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), activity:extracurricular_activities(id, name, category)")
+                .eq("school_id", sId)
+                .order("due_date", { ascending: true })
+          ),
+          supabase.from("extracurricular_activities").select("id, name").eq("school_id", sId).order("name"),
         ]);
         setAllActivityFees((actFees ?? []) as unknown as ActivityFeeRow[]);
         setActivitiesList((actsList ?? []) as Array<{ id: string; name: string }>);
@@ -815,7 +892,6 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           setActivityPayments([]);
         }
 
-        // Transport fees + lista de rotas para filtros
         const [{ data: trFees }, { data: rtsList }] = await Promise.all([
           (isParent
             ? supabase
@@ -830,11 +906,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 .eq("school_id", sId)
                 .order("due_date", { ascending: true })
           ),
-          supabase
-            .from("transport_routes")
-          .select("id, name")
-          .eq("school_id", sId)
-          .order("name"),
+          supabase.from("transport_routes").select("id, name").eq("school_id", sId).order("name"),
         ]);
         setAllTransportFees((trFees ?? []) as unknown as TransportFeeRow[]);
         setRoutesList((rtsList ?? []) as Array<{ id: string; name: string }>);
@@ -851,19 +923,18 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           setTransportPayments([]);
         }
 
-        // Enrollment fees (matrículas / renovações)
         const { data: enFees } = await (isParent
-        ? supabase
-            .from("enrollment_fees")
-            .select("id, amount_due, due_date, is_paid, fee_type, student_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), academic_year:academic_years(id, label)")
-            .eq("school_id", sId)
-            .in("student_id", scopedStudentIds)
-            .order("due_date", { ascending: true })
-        : supabase
-            .from("enrollment_fees")
-            .select("id, amount_due, due_date, is_paid, fee_type, student_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), academic_year:academic_years(id, label)")
-            .eq("school_id", sId)
-            .order("due_date", { ascending: true })
+          ? supabase
+              .from("enrollment_fees")
+              .select("id, amount_due, due_date, is_paid, fee_type, student_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), academic_year:academic_years(id, label)")
+              .eq("school_id", sId)
+              .in("student_id", scopedStudentIds)
+              .order("due_date", { ascending: true })
+          : supabase
+              .from("enrollment_fees")
+              .select("id, amount_due, due_date, is_paid, fee_type, student_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), academic_year:academic_years(id, label)")
+              .eq("school_id", sId)
+              .order("due_date", { ascending: true })
         );
         setAllEnrollmentFees((enFees ?? []) as unknown as EnrollmentFeeRow[]);
 
@@ -897,18 +968,25 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   useEffect(() => {
     if (!parentLoading) void fetchAll();
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [parentLoading, isParent, childIds.join(","), tuitionOnly]);
+  }, [parentLoading, isParent, childIds.join(","), tuitionOnly, financePage]);
 
   /** Ano letivo global (header): alinha filtros aos separadores visíveis. */
   useEffect(() => {
     if (!globalAcademicYearId) return;
     setFeeYearFilter(globalAcademicYearId);
-    if (!tuitionOnly) {
+    if (tuitionOnly) return;
+    if (activityChargesOnly) {
       setActYearFilter(globalAcademicYearId);
-      setTrYearFilter(globalAcademicYearId);
-      setEnYearFilter(globalAcademicYearId);
+      return;
     }
-  }, [globalAcademicYearId, tuitionOnly]);
+    if (transportChargesOnly) {
+      setTrYearFilter(globalAcademicYearId);
+      return;
+    }
+    setActYearFilter(globalAcademicYearId);
+    setTrYearFilter(globalAcademicYearId);
+    setEnYearFilter(globalAcademicYearId);
+  }, [globalAcademicYearId, tuitionOnly, activityChargesOnly, transportChargesOnly]);
 
   // Lock classroom filter to parent's child classroom
   useEffect(() => {
@@ -2329,7 +2407,9 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">{tuitionOnly ? "Propinas" : "Pagamentos"}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">
+              {tuitionOnly ? "Propinas" : chargesEmbeddedOnly ? (activityChargesOnly ? "Extracurriculares — pagamentos" : "Transporte — pagamentos") : "Pagamentos"}
+            </h1>
             <p className="text-sm text-muted-foreground">
               {tuitionOnly
                 ? isParent
@@ -2337,7 +2417,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                     ? "Consulte as propinas do(s) seu(s) educando(s). Pode anexar comprovativos quando aplicável."
                     : "Consulte as propinas. O pagamento é efectuado presencialmente na escola quando assim for comunicado."
                   : "Regras de cobrança, geração anual e lista de propinas (validação, lembretes)."
-                : isParent
+                : chargesEmbeddedOnly
+                  ? activityChargesOnly
+                    ? isParent
+                      ? "Cobranças das actividades extracurriculares do(s) seu(s) educando(s)."
+                      : "Lista de cobranças extracurriculares, lembretes e registo / validação de pagamentos."
+                    : isParent
+                      ? "Cobranças de transporte do(s) seu(s) educando(s)."
+                      : "Mensalidades de transporte, lembretes e validação."
+                  : isParent
                   ? usarAnexoEncarregado
                     ? "Consulte as cobranças do(s) seu(s) educando(s). Pode anexar comprovativos de transferência quando aplicável."
                     : "Consulte as cobranças. O pagamento é efectuado presencialmente na escola conforme comunicado pela instituição."
@@ -2361,7 +2449,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         </div>
 
         {/* KPIs (só em Pagamentos: alunos e descontos manuais) */}
-        {!isParent && !tuitionOnly && (
+        {!isParent && !tuitionOnly && !chargesEmbeddedOnly && (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -2386,7 +2474,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           </div>
         )}
 
-        {!isParent && !tuitionOnly && canEditSchoolPaymentPrefs && (
+        {!isParent && !tuitionOnly && !chargesEmbeddedOnly && canEditSchoolPaymentPrefs && (
           <Card className="border-muted">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Cobrança aos encarregados</CardTitle>
@@ -2434,12 +2522,17 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           </Card>
         )}
 
-        <Tabs defaultValue={tuitionOnly ? "fees" : "enrollment-fees"} className="w-full">
-          <TabsList>
+        <Tabs defaultValue={tuitionOnly ? "fees" : activityChargesOnly ? "activity-fees" : transportChargesOnly ? "transport-fees" : "enrollment-fees"} className="w-full">
+          <TabsList className={chargesEmbeddedOnly ? "sr-only" : undefined}>
             {tuitionOnly ? (
               <>
                 {!isParent && <TabsTrigger value="rules">Regras de cobranças</TabsTrigger>}
                 <TabsTrigger value="fees">Propinas</TabsTrigger>
+              </>
+            ) : chargesEmbeddedOnly ? (
+              <>
+                {activityChargesOnly ? <TabsTrigger value="activity-fees">Lista de cobranças</TabsTrigger> : null}
+                {transportChargesOnly ? <TabsTrigger value="transport-fees">Lista de cobranças</TabsTrigger> : null}
               </>
             ) : (
               <>

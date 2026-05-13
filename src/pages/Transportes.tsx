@@ -28,6 +28,9 @@ import { TransportEnrollmentDialog, type TransportEnrollment } from "@/component
 import { cn } from "@/lib/utils";
 import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 import { useParentChildren } from "@/hooks/useParentChildren";
+import { PagamentosFinanceHub } from "@/pages/Pagamentos";
+import { DomainChargeRulesPanel } from "@/components/finance/DomainChargeRulesPanel";
+import { useHomeroomStudentIds } from "@/hooks/useHomeroomStudentIds";
 
 type Enrollment = TransportEnrollment & {
   student?: { full_name: string; classroom_id: string | null };
@@ -42,6 +45,7 @@ const Transportes = () => {
   const native = isNativeMobileApp();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [routes, setRoutes] = useState<RouteRow[]>([]);
   const [stops, setStops] = useState<StopRow[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
@@ -65,12 +69,15 @@ const Transportes = () => {
 
   // Passenger list
   const [listRouteId, setListRouteId] = useState<string>("");
-  const [transportTab, setTransportTab] = useState("rotas");
+  const [transportTab, setTransportTab] = useState<
+    "regras" | "rotas" | "inscricoes" | "lista" | "pagamentos"
+  >("rotas");
 
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      setUserId(user.id);
       const { data: profile } = await supabase
         .from("profiles")
         .select("school_id, role")
@@ -112,6 +119,7 @@ const Transportes = () => {
   const isParent = role === "PARENT";
   const canEnroll = isAdmin || isParent;
   const { childIds } = useParentChildren();
+  const homeroomStudentIds = useHomeroomStudentIds(schoolId, role, userId);
 
   const filteredRoutes = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -122,8 +130,14 @@ const Transportes = () => {
   }, [routes, search]);
 
   const visibleEnrollments = useMemo(() => {
-    return isParent ? enrollments.filter(e => childIds.includes(e.student_id)) : enrollments;
-  }, [enrollments, isParent, childIds]);
+    let list = enrollments;
+    if (isParent) list = list.filter((e) => childIds.includes(e.student_id));
+    if (role === "TEACHER") {
+      if (homeroomStudentIds.length === 0) return [];
+      list = list.filter((e) => homeroomStudentIds.includes(e.student_id));
+    }
+    return list;
+  }, [enrollments, isParent, childIds, role, homeroomStudentIds]);
 
   const enrollmentsByRoute = useMemo(() => {
     const map = new Map<string, Enrollment[]>();
@@ -197,7 +211,17 @@ const Transportes = () => {
 
   return (
     <>
-      <div className={cn("flex flex-col gap-6", native && isAdmin && transportTab !== "lista" && "relative pb-28")}>
+      <div
+        className={cn(
+          "flex flex-col gap-6",
+          native &&
+            isAdmin &&
+            transportTab !== "lista" &&
+            transportTab !== "pagamentos" &&
+            transportTab !== "regras" &&
+            "relative pb-28",
+        )}
+      >
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-foreground">
@@ -205,7 +229,7 @@ const Transportes = () => {
               Transporte Escolar
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Giros, paragens, inscrições e listas de passageiros para o motorista.
+              Regras de cobrança, rotas e paragens, inscrições, lista de passageiros e mensalidades (com lembretes e comprovativos).
             </p>
           </div>
           {isAdmin && !native && (
@@ -216,11 +240,19 @@ const Transportes = () => {
         </div>
 
         <Tabs value={transportTab} onValueChange={setTransportTab} className="w-full">
-          <TabsList>
+          <TabsList className="flex h-auto w-full flex-wrap gap-1">
+            {!isParent && <TabsTrigger value="regras">Regras de cobranças</TabsTrigger>}
             <TabsTrigger value="rotas"><Bus className="mr-2 h-4 w-4" />Rotas</TabsTrigger>
             <TabsTrigger value="inscricoes"><Users className="mr-2 h-4 w-4" />Inscrições</TabsTrigger>
             {!isParent && <TabsTrigger value="lista"><ListChecks className="mr-2 h-4 w-4" />Lista de passageiros</TabsTrigger>}
+            <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
           </TabsList>
+
+          {!isParent && (
+          <TabsContent value="regras" className="mt-4">
+            <DomainChargeRulesPanel variant="transport" schoolId={schoolId} role={role} />
+          </TabsContent>
+          )}
 
           {/* ROTAS */}
           <TabsContent value="rotas" className="mt-4">
@@ -324,6 +356,11 @@ const Transportes = () => {
 
           {/* INSCRIÇÕES */}
           <TabsContent value="inscricoes" className="mt-4">
+            {role === "TEACHER" && homeroomStudentIds.length === 0 && (
+              <p className="mb-3 text-sm text-muted-foreground rounded-lg border border-border bg-muted/30 px-3 py-2">
+                Só vê aqui os seus alunos (turmas em que está como diretor de turma). Se esta lista está vazia, confira a atribuição na escola.
+              </p>
+            )}
             <div className="mb-4 flex items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">Alunos inscritos no transporte</h2>
               {canEnroll && !native && (
@@ -431,6 +468,10 @@ const Transportes = () => {
             )}
           </TabsContent>
 
+          <TabsContent value="pagamentos" className="mt-4">
+            <PagamentosFinanceHub financePage="transportCharges" />
+          </TabsContent>
+
           {/* LISTA DE PASSAGEIROS */}
           <TabsContent value="lista" className="mt-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
@@ -523,7 +564,11 @@ const Transportes = () => {
         </Tabs>
       </div>
 
-      {native && (isAdmin || (isParent && transportTab === "inscricoes")) && transportTab !== "lista" && (
+      {native &&
+        (isAdmin || (isParent && transportTab === "inscricoes")) &&
+        transportTab !== "lista" &&
+        transportTab !== "pagamentos" &&
+        transportTab !== "regras" && (
         <NativeMobileFabPortal>
           <Button
             type="button"

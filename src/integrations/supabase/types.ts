@@ -1397,6 +1397,142 @@ export type Database = {
           },
         ]
       }
+      activity_charge_rule_classrooms: {
+        Row: {
+          charge_rule_id: string
+          classroom_id: string
+        }
+        Insert: {
+          charge_rule_id: string
+          classroom_id: string
+        }
+        Update: {
+          charge_rule_id?: string
+          classroom_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_charge_rule_classrooms_charge_rule_id_fkey"
+            columns: ["charge_rule_id"]
+            isOneToOne: false
+            referencedRelation: "activity_charge_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_charge_rule_classrooms_classroom_id_fkey"
+            columns: ["classroom_id"]
+            isOneToOne: false
+            referencedRelation: "classrooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      activity_charge_rule_students: {
+        Row: {
+          charge_rule_id: string
+          student_id: string
+        }
+        Insert: {
+          charge_rule_id: string
+          student_id: string
+        }
+        Update: {
+          charge_rule_id?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_charge_rule_students_charge_rule_id_fkey"
+            columns: ["charge_rule_id"]
+            isOneToOne: false
+            referencedRelation: "activity_charge_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_charge_rule_students_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      activity_charge_rules: {
+        Row: {
+          academic_year_id: string | null
+          activity_id: string
+          created_at: string
+          due_day: number
+          end_month: number | null
+          generate_all_upfront: boolean
+          id: string
+          monthly_amount: number
+          months_count: number
+          notes: string | null
+          recurrence: string
+          school_id: string
+          start_month: number
+          target_scope: string
+          updated_at: string
+        }
+        Insert: {
+          academic_year_id?: string | null
+          activity_id: string
+          created_at?: string
+          due_day?: number
+          end_month?: number | null
+          generate_all_upfront?: boolean
+          id?: string
+          monthly_amount?: number
+          months_count?: number
+          notes?: string | null
+          recurrence?: string
+          school_id: string
+          start_month?: number
+          target_scope?: string
+          updated_at?: string
+        }
+        Update: {
+          academic_year_id?: string | null
+          activity_id?: string
+          created_at?: string
+          due_day?: number
+          end_month?: number | null
+          generate_all_upfront?: boolean
+          id?: string
+          monthly_amount?: number
+          months_count?: number
+          notes?: string | null
+          recurrence?: string
+          school_id?: string
+          start_month?: number
+          target_scope?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_charge_rules_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_charge_rules_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "extracurricular_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_charge_rules_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       extracurricular_activities: {
         Row: {
           academic_year_id: string | null
@@ -3274,6 +3410,142 @@ export type Database = {
           },
           {
             foreignKeyName: "time_entries_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transport_charge_rule_classrooms: {
+        Row: {
+          charge_rule_id: string
+          classroom_id: string
+        }
+        Insert: {
+          charge_rule_id: string
+          classroom_id: string
+        }
+        Update: {
+          charge_rule_id?: string
+          classroom_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transport_charge_rule_classrooms_charge_rule_id_fkey"
+            columns: ["charge_rule_id"]
+            isOneToOne: false
+            referencedRelation: "transport_charge_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transport_charge_rule_classrooms_classroom_id_fkey"
+            columns: ["classroom_id"]
+            isOneToOne: false
+            referencedRelation: "classrooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transport_charge_rule_students: {
+        Row: {
+          charge_rule_id: string
+          student_id: string
+        }
+        Insert: {
+          charge_rule_id: string
+          student_id: string
+        }
+        Update: {
+          charge_rule_id?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transport_charge_rule_students_charge_rule_id_fkey"
+            columns: ["charge_rule_id"]
+            isOneToOne: false
+            referencedRelation: "transport_charge_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transport_charge_rule_students_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transport_charge_rules: {
+        Row: {
+          academic_year_id: string | null
+          created_at: string
+          due_day: number
+          end_month: number | null
+          generate_all_upfront: boolean
+          id: string
+          monthly_amount: number
+          months_count: number
+          notes: string | null
+          recurrence: string
+          route_id: string
+          school_id: string
+          start_month: number
+          target_scope: string
+          updated_at: string
+        }
+        Insert: {
+          academic_year_id?: string | null
+          created_at?: string
+          due_day?: number
+          end_month?: number | null
+          generate_all_upfront?: boolean
+          id?: string
+          monthly_amount?: number
+          months_count?: number
+          notes?: string | null
+          recurrence?: string
+          route_id: string
+          school_id: string
+          start_month?: number
+          target_scope?: string
+          updated_at?: string
+        }
+        Update: {
+          academic_year_id?: string | null
+          created_at?: string
+          due_day?: number
+          end_month?: number | null
+          generate_all_upfront?: boolean
+          id?: string
+          monthly_amount?: number
+          months_count?: number
+          notes?: string | null
+          recurrence?: string
+          route_id?: string
+          school_id?: string
+          start_month?: number
+          target_scope?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transport_charge_rules_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transport_charge_rules_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "transport_routes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transport_charge_rules_school_id_fkey"
             columns: ["school_id"]
             isOneToOne: false
             referencedRelation: "schools"
