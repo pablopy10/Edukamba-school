@@ -134,7 +134,7 @@ export function SaftExportCard({ schoolId }: Props) {
         </div>
         <Button type="button" onClick={runExport} disabled={busy} className="gap-2">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          Descarregar XML
+          Descarregar SAF-T
         </Button>
       </CardContent>
     </Card>
