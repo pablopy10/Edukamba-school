@@ -36,6 +36,7 @@ import Extracurriculares from "./pages/Extracurriculares.tsx";
 import Pedidos from "./pages/Pedidos.tsx";
 import Material from "./pages/Material.tsx";
 import Pagamentos from "./pages/Pagamentos.tsx";
+import Propinas from "./pages/Propinas.tsx";
 import HistoricoPagamentosEncarregado from "./pages/HistoricoPagamentosEncarregado.tsx";
 import Financas from "./pages/Financas.tsx";
 import Relatorios from "./pages/Relatorios.tsx";
@@ -90,6 +91,14 @@ function GatedPagamentosRoute() {
   if (loading || parentLoading) return <RouteSpinner />;
   if (!canOpenPagamentosPage(role, isParent)) return <Navigate to="/dashboard" replace />;
   return <Pagamentos />;
+}
+
+function GatedPropinasRoute() {
+  const { role, loading } = useUserRole();
+  const { isParent, loading: parentLoading } = useParentChildren();
+  if (loading || parentLoading) return <RouteSpinner />;
+  if (!canOpenPagamentosPage(role, isParent)) return <Navigate to="/dashboard" replace />;
+  return <Propinas />;
 }
 
 function GatedHistoricoPagamentosRoute() {
@@ -151,6 +160,7 @@ const App = () => (
                         <Route path="/avaliacoes/:id/notas" element={<AvaliacaoNotas />} />
                         <Route path="/notas" element={<Notas />} />
                         <Route path="/eventos" element={<Eventos />} />
+                        <Route path="/propinas" element={<GatedPropinasRoute />} />
                         <Route path="/extracurriculares" element={<Extracurriculares />} />
                         <Route path="/pedidos" element={<Pedidos />} />
                         <Route path="/material" element={<Material />} />

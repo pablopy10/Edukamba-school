@@ -16,7 +16,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap, FileSpreadsheet, FileDown } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap, FileSpreadsheet, FileDown } from "lucide-react";
 import { ErpArticleCodesCard } from "@/components/pagamentos/ErpArticleCodesCard";
 import { ErpExportMappingSection } from "@/components/pagamentos/ErpExportMappingSection";
 import { ErpExportPaymentsSection } from "@/components/pagamentos/ErpExportPaymentsSection";
@@ -294,7 +294,11 @@ function chunkBySize<T>(items: readonly T[], size: number): T[][] {
   return out;
 }
 
-const Pagamentos = () => {
+export type PagamentosFinancePageMode = "payments" | "tuition";
+
+/** `tuition` = página Propinas (regras + lista). `payments` = outras cobranças em Pagamentos. */
+export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosFinancePageMode }) {
+  const tuitionOnly = financePage === "tuition";
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const { role } = useUserRole();
   const canEditSchoolPaymentPrefs = isSchoolManagementRole(role) || isSchoolSettingsAdmin(role);
@@ -687,17 +691,9 @@ const Pagamentos = () => {
     setSchoolId(sId);
     if (!sId) { setLoading(false); return; }
 
-    const [yRes, rRes, fRes, dRes, sRes, cRes] = await Promise.all([
-      supabase.from("academic_years").select("id, label, is_active, start_date").eq("school_id", sId).order("start_date", { ascending: true }),
-      supabase.from("fee_rules").select("*, fee_rule_classrooms(classroom_id), fee_rule_students(student_id)").eq("school_id", sId).order("created_at", { ascending: false }),
-      supabase.from("family_discount_rules").select("*").eq("school_id", sId).order("sibling_position"),
-      supabase.from("student_discounts").select("*, student:students(full_name)").eq("school_id", sId).order("created_at", { ascending: false }),
-      supabase.from("students").select("id, full_name, classroom_id").eq("school_id", sId).order("full_name"),
-      supabase.from("classrooms").select("id, name, academic_year_id, grade_level").eq("school_id", sId).order("name"),
-    ]);
+    const yRes = await supabase.from("academic_years").select("id, label, is_active, start_date").eq("school_id", sId).order("start_date", { ascending: true });
 
     if (yRes.error) toast({ title: "Erro a carregar anos letivos", description: yRes.error.message, variant: "destructive" });
-    if (rRes.error) toast({ title: "Erro a carregar regras", description: rRes.error.message, variant: "destructive" });
 
     const yList = (yRes.data ?? []) as AcademicYear[];
     setYears(yList);
@@ -705,9 +701,30 @@ const Pagamentos = () => {
     setActiveYearId(active?.id ?? null);
     setGenerateYearId(active?.id ?? "");
 
-    setRules((rRes.data ?? []) as FeeRule[]);
-    setFamilyRules((fRes.data ?? []) as FamilyRule[]);
-    setDiscounts((dRes.data ?? []) as StudentDiscount[]);
+    if (tuitionOnly) {
+      const rRes = await supabase
+        .from("fee_rules")
+        .select("*, fee_rule_classrooms(classroom_id), fee_rule_students(student_id)")
+        .eq("school_id", sId)
+        .order("created_at", { ascending: false });
+      if (rRes.error) toast({ title: "Erro a carregar regras", description: rRes.error.message, variant: "destructive" });
+      setRules((rRes.data ?? []) as FeeRule[]);
+      setFamilyRules([]);
+      setDiscounts([]);
+    } else {
+      setRules([]);
+      const [fRes, dRes] = await Promise.all([
+        supabase.from("family_discount_rules").select("*").eq("school_id", sId).order("sibling_position"),
+        supabase.from("student_discounts").select("*, student:students(full_name)").eq("school_id", sId).order("created_at", { ascending: false }),
+      ]);
+      setFamilyRules((fRes.data ?? []) as FamilyRule[]);
+      setDiscounts((dRes.data ?? []) as StudentDiscount[]);
+    }
+
+    const [sRes, cRes] = await Promise.all([
+      supabase.from("students").select("id, full_name, classroom_id").eq("school_id", sId).order("full_name"),
+      supabase.from("classrooms").select("id, name, academic_year_id, grade_level").eq("school_id", sId).order("name"),
+    ]);
     setStudents(
       ((sRes.data ?? []) as Array<{ id: string; full_name: string; classroom_id?: string | null }>).map((s) => ({
         id: s.id,
@@ -725,103 +742,117 @@ const Pagamentos = () => {
     setGuardianPaymentMode(normalizeGuardianPaymentMode(payPrefsRow?.guardian_payment_mode));
     setBankIbanDraft(payPrefsRow?.bank_iban ?? "");
 
-    // Carregar propinas com aluno e educador
     const studentIds = (sRes.data ?? []).map((s) => s.id);
     const scopedStudentIds = isParent ? studentIds.filter((id) => childIds.includes(id)) : studentIds;
+
+    /** Propinas (lista + comprovativos) vs outras cobranças são páginas distintas: evita cargas duplicadas. */
     if (scopedStudentIds.length > 0) {
-      const { data: feesData } = await supabase
-        .from("student_fees")
-        .select("id, amount_due, due_date, is_paid, month_index, student_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name))")
-        .in("student_id", scopedStudentIds)
-        .order("due_date", { ascending: true });
-      setAllFees((feesData ?? []) as unknown as FeeListRow[]);
+      if (tuitionOnly) {
+        const { data: feesData } = await supabase
+          .from("student_fees")
+          .select("id, amount_due, due_date, is_paid, month_index, student_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name))")
+          .in("student_id", scopedStudentIds)
+          .order("due_date", { ascending: true });
+        setAllFees((feesData ?? []) as unknown as FeeListRow[]);
 
-      const feeIds = (feesData ?? []).map((f) => f.id);
-      if (feeIds.length > 0) {
-        const { data: payRows } = await supabase
-          .from("payments")
-          .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
-          .in("student_fee_id", feeIds)
-          .order("payment_date", { ascending: false });
-        setPayments((payRows ?? []) as PaymentListRow[]);
-      } else {
-        setPayments([]);
-      }
+        const feeIds = (feesData ?? []).map((f) => f.id);
+        if (feeIds.length > 0) {
+          const { data: payRows } = await supabase
+            .from("payments")
+            .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+            .in("student_fee_id", feeIds)
+            .order("payment_date", { ascending: false });
+          setPayments((payRows ?? []) as PaymentListRow[]);
+        } else {
+          setPayments([]);
+        }
 
-      // Activity fees + lista de atividades para filtros
-      const [{ data: actFees }, { data: actsList }] = await Promise.all([
-        (isParent
-          ? supabase
-              .from("activity_fees")
-              .select("id, amount_due, due_date, is_paid, month_index, student_id, activity_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), activity:extracurricular_activities(id, name, category)")
-              .eq("school_id", sId)
-              .in("student_id", scopedStudentIds)
-              .order("due_date", { ascending: true })
-          : supabase
-          .from("activity_fees")
-          .select("id, amount_due, due_date, is_paid, month_index, student_id, activity_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), activity:extracurricular_activities(id, name, category)")
-          .eq("school_id", sId)
-          .order("due_date", { ascending: true })
-        ),
-        supabase
-          .from("extracurricular_activities")
-          .select("id, name")
-          .eq("school_id", sId)
-          .order("name"),
-      ]);
-      setAllActivityFees((actFees ?? []) as unknown as ActivityFeeRow[]);
-      setActivitiesList((actsList ?? []) as Array<{ id: string; name: string }>);
-
-      const actFeeIds = (actFees ?? []).map((f: { id: string }) => f.id);
-      if (actFeeIds.length > 0) {
-        const { data: actPayRows } = await supabase
-          .from("payments")
-          .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
-          .in("activity_fee_id", actFeeIds)
-          .order("payment_date", { ascending: false });
-        setActivityPayments((actPayRows ?? []) as PaymentListRow[]);
-      } else {
+        setAllActivityFees([]);
         setActivityPayments([]);
-      }
+        setActivitiesList([]);
+        setAllTransportFees([]);
+        setTransportPayments([]);
+        setRoutesList([]);
+        setAllEnrollmentFees([]);
+        setEnrollmentPayments([]);
+      } else {
+        setAllFees([]);
+        setPayments([]);
 
-      // Transport fees + lista de rotas para filtros
-      const [{ data: trFees }, { data: rtsList }] = await Promise.all([
-        (isParent
-          ? supabase
-              .from("transport_fees")
-              .select("id, amount_due, due_date, is_paid, month_index, student_id, route_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), route:transport_routes(id, name)")
-              .eq("school_id", sId)
-              .in("student_id", scopedStudentIds)
-              .order("due_date", { ascending: true })
-          : supabase
-          .from("transport_fees")
-          .select("id, amount_due, due_date, is_paid, month_index, student_id, route_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), route:transport_routes(id, name)")
-          .eq("school_id", sId)
-          .order("due_date", { ascending: true })
-        ),
-        supabase
-          .from("transport_routes")
+        // Activity fees + lista de atividades para filtros
+        const [{ data: actFees }, { data: actsList }] = await Promise.all([
+          (isParent
+            ? supabase
+                .from("activity_fees")
+                .select("id, amount_due, due_date, is_paid, month_index, student_id, activity_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), activity:extracurricular_activities(id, name, category)")
+                .eq("school_id", sId)
+                .in("student_id", scopedStudentIds)
+                .order("due_date", { ascending: true })
+            : supabase
+                .from("activity_fees")
+                .select("id, amount_due, due_date, is_paid, month_index, student_id, activity_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), activity:extracurricular_activities(id, name, category)")
+                .eq("school_id", sId)
+                .order("due_date", { ascending: true })
+          ),
+          supabase
+            .from("extracurricular_activities")
           .select("id, name")
           .eq("school_id", sId)
           .order("name"),
-      ]);
-      setAllTransportFees((trFees ?? []) as unknown as TransportFeeRow[]);
-      setRoutesList((rtsList ?? []) as Array<{ id: string; name: string }>);
+        ]);
+        setAllActivityFees((actFees ?? []) as unknown as ActivityFeeRow[]);
+        setActivitiesList((actsList ?? []) as Array<{ id: string; name: string }>);
 
-      const trFeeIds = (trFees ?? []).map((f: { id: string }) => f.id);
-      if (trFeeIds.length > 0) {
-        const { data: trPayRows } = await supabase
-          .from("payments")
-          .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
-          .in("transport_fee_id", trFeeIds)
-          .order("payment_date", { ascending: false });
-        setTransportPayments((trPayRows ?? []) as PaymentListRow[]);
-      } else {
-        setTransportPayments([]);
-      }
+        const actFeeIds = (actFees ?? []).map((f: { id: string }) => f.id);
+        if (actFeeIds.length > 0) {
+          const { data: actPayRows } = await supabase
+            .from("payments")
+            .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+            .in("activity_fee_id", actFeeIds)
+            .order("payment_date", { ascending: false });
+          setActivityPayments((actPayRows ?? []) as PaymentListRow[]);
+        } else {
+          setActivityPayments([]);
+        }
 
-      // Enrollment fees (matrículas / renovações)
-      const { data: enFees } = await (isParent
+        // Transport fees + lista de rotas para filtros
+        const [{ data: trFees }, { data: rtsList }] = await Promise.all([
+          (isParent
+            ? supabase
+                .from("transport_fees")
+                .select("id, amount_due, due_date, is_paid, month_index, student_id, route_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), route:transport_routes(id, name)")
+                .eq("school_id", sId)
+                .in("student_id", scopedStudentIds)
+                .order("due_date", { ascending: true })
+            : supabase
+                .from("transport_fees")
+                .select("id, amount_due, due_date, is_paid, month_index, student_id, route_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), route:transport_routes(id, name)")
+                .eq("school_id", sId)
+                .order("due_date", { ascending: true })
+          ),
+          supabase
+            .from("transport_routes")
+          .select("id, name")
+          .eq("school_id", sId)
+          .order("name"),
+        ]);
+        setAllTransportFees((trFees ?? []) as unknown as TransportFeeRow[]);
+        setRoutesList((rtsList ?? []) as Array<{ id: string; name: string }>);
+
+        const trFeeIds = (trFees ?? []).map((f: { id: string }) => f.id);
+        if (trFeeIds.length > 0) {
+          const { data: trPayRows } = await supabase
+            .from("payments")
+            .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+            .in("transport_fee_id", trFeeIds)
+            .order("payment_date", { ascending: false });
+          setTransportPayments((trPayRows ?? []) as PaymentListRow[]);
+        } else {
+          setTransportPayments([]);
+        }
+
+        // Enrollment fees (matrículas / renovações)
+        const { data: enFees } = await (isParent
         ? supabase
             .from("enrollment_fees")
             .select("id, amount_due, due_date, is_paid, fee_type, student_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), academic_year:academic_years(id, label)")
@@ -833,43 +864,51 @@ const Pagamentos = () => {
             .select("id, amount_due, due_date, is_paid, fee_type, student_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), academic_year:academic_years(id, label)")
             .eq("school_id", sId)
             .order("due_date", { ascending: true })
-      );
-      setAllEnrollmentFees((enFees ?? []) as unknown as EnrollmentFeeRow[]);
+        );
+        setAllEnrollmentFees((enFees ?? []) as unknown as EnrollmentFeeRow[]);
 
-      const enFeeIds = (enFees ?? []).map((f: { id: string }) => f.id);
-      if (enFeeIds.length > 0) {
-        const { data: enPayRows } = await supabase
-          .from("payments")
-          .select("id, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
-          .in("enrollment_fee_id", enFeeIds)
-          .order("payment_date", { ascending: false });
-        setEnrollmentPayments((enPayRows ?? []) as PaymentListRow[]);
-      } else {
-        setEnrollmentPayments([]);
+        const enFeeIds = (enFees ?? []).map((f: { id: string }) => f.id);
+        if (enFeeIds.length > 0) {
+          const { data: enPayRows } = await supabase
+            .from("payments")
+            .select("id, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+            .in("enrollment_fee_id", enFeeIds)
+            .order("payment_date", { ascending: false });
+          setEnrollmentPayments((enPayRows ?? []) as PaymentListRow[]);
+        } else {
+          setEnrollmentPayments([]);
+        }
       }
     } else {
       setAllFees([]);
       setPayments([]);
       setAllActivityFees([]);
+      setActivitiesList([]);
       setActivityPayments([]);
       setAllTransportFees([]);
       setTransportPayments([]);
       setAllEnrollmentFees([]);
       setEnrollmentPayments([]);
+      setRoutesList([]);
     }
     setLoading(false);
   };
 
-  useEffect(() => { if (!parentLoading) fetchAll(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [parentLoading, isParent, childIds.join(",")]);
+  useEffect(() => {
+    if (!parentLoading) void fetchAll();
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [parentLoading, isParent, childIds.join(","), tuitionOnly]);
 
-  /** Ano letivo global (header): mantém os quatro separadores de cobranças alinhados ao dropdown. */
+  /** Ano letivo global (header): alinha filtros aos separadores visíveis. */
   useEffect(() => {
     if (!globalAcademicYearId) return;
     setFeeYearFilter(globalAcademicYearId);
-    setActYearFilter(globalAcademicYearId);
-    setTrYearFilter(globalAcademicYearId);
-    setEnYearFilter(globalAcademicYearId);
-  }, [globalAcademicYearId]);
+    if (!tuitionOnly) {
+      setActYearFilter(globalAcademicYearId);
+      setTrYearFilter(globalAcademicYearId);
+      setEnYearFilter(globalAcademicYearId);
+    }
+  }, [globalAcademicYearId, tuitionOnly]);
 
   // Lock classroom filter to parent's child classroom
   useEffect(() => {
@@ -1114,6 +1153,7 @@ const Pagamentos = () => {
     setGenerating(false);
     setGenerateOpen(false);
     toast({ title: "Geração concluída", description: `${total} cobrança(s) criada(s). ${skipped} aluno(s) ignorados (sem regra aplicável ou já gerado).` });
+    await fetchAll();
   };
 
   const totalActiveStudents = students.length;
@@ -2289,64 +2329,64 @@ const Pagamentos = () => {
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Pagamentos</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{tuitionOnly ? "Propinas" : "Pagamentos"}</h1>
             <p className="text-sm text-muted-foreground">
-              {isParent
-                ? usarAnexoEncarregado
-                  ? "Consulte as cobranças do(s) seu(s) educando(s). Pode anexar comprovativos de transferência quando aplicável."
-                  : "Consulte as cobranças. O pagamento é efectuado presencialmente na escola conforme comunicado pela instituição."
-                : "Gere as propinas, descontos e cobranças mensais."}
+              {tuitionOnly
+                ? isParent
+                  ? usarAnexoEncarregado
+                    ? "Consulte as propinas do(s) seu(s) educando(s). Pode anexar comprovativos quando aplicável."
+                    : "Consulte as propinas. O pagamento é efectuado presencialmente na escola quando assim for comunicado."
+                  : "Regras de cobrança, geração anual e lista de propinas (validação, lembretes)."
+                : isParent
+                  ? usarAnexoEncarregado
+                    ? "Consulte as cobranças do(s) seu(s) educando(s). Pode anexar comprovativos de transferência quando aplicável."
+                    : "Consulte as cobranças. O pagamento é efectuado presencialmente na escola conforme comunicado pela instituição."
+                  : "Matrículas, extracurriculares, transporte e descontos. As propinas estão na área Propinas."}
             </p>
           </div>
-          {!isParent && (
-            <Button onClick={() => setGenerateOpen(true)} className="gap-2">
-              <PlayCircle className="h-4 w-4" /> Gerar propinas do ano
-            </Button>
-          )}
-          {isParent && (
-            <Button variant="outline" size="sm" className="gap-2" asChild>
-              <Link to="/pagamentos/historico">
-                <FileText className="h-4 w-4" /> Histórico e faturas
-              </Link>
-            </Button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {tuitionOnly && !isParent && (
+              <Button onClick={() => setGenerateOpen(true)} className="gap-2">
+                <PlayCircle className="h-4 w-4" /> Gerar propinas do ano
+              </Button>
+            )}
+            {isParent && (
+              <Button variant="outline" size="sm" className="gap-2" asChild>
+                <Link to="/pagamentos/historico">
+                  <FileText className="h-4 w-4" /> Histórico e faturas
+                </Link>
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* KPIs */}
-        {!isParent && (<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Regras de cobranças</CardTitle>
-              <Wallet className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{rules.length}</p>
-              <p className="text-xs text-muted-foreground">definidas na escola</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Alunos ativos</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{totalActiveStudents}</p>
-              <p className="text-xs text-muted-foreground">na escola</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Descontos manuais</CardTitle>
-              <Percent className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{discounts.length}</p>
-              <p className="text-xs text-muted-foreground">overrides ativos</p>
-            </CardContent>
-          </Card>
-        </div>)}
+        {/* KPIs (só em Pagamentos: alunos e descontos manuais) */}
+        {!isParent && !tuitionOnly && (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Alunos ativos</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">{totalActiveStudents}</p>
+                <p className="text-xs text-muted-foreground">na escola</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Descontos manuais</CardTitle>
+                <Percent className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">{discounts.length}</p>
+                <p className="text-xs text-muted-foreground">overrides ativos</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
-        {!isParent && canEditSchoolPaymentPrefs && (
+        {!isParent && !tuitionOnly && canEditSchoolPaymentPrefs && (
           <Card className="border-muted">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Cobrança aos encarregados</CardTitle>
@@ -2394,22 +2434,31 @@ const Pagamentos = () => {
           </Card>
         )}
 
-        <Tabs defaultValue="fees" className="w-full">
+        <Tabs defaultValue={tuitionOnly ? "fees" : "enrollment-fees"} className="w-full">
           <TabsList>
-            {!isParent && <TabsTrigger value="rules">Regras de cobranças</TabsTrigger>}
-            <TabsTrigger value="fees">Propinas</TabsTrigger>
-            <TabsTrigger value="enrollment-fees">Matrículas</TabsTrigger>
-            <TabsTrigger value="activity-fees">Extracurriculares</TabsTrigger>
-            <TabsTrigger value="transport-fees">Transporte</TabsTrigger>
-            <TabsTrigger value="family">Descontos por familiar</TabsTrigger>
-            {!isParent && <TabsTrigger value="overrides">Descontos por aluno</TabsTrigger>}
-            {!isParent && (
-              <TabsTrigger value="erp-export" className="gap-1.5">
-                <FileSpreadsheet className="h-3.5 w-3.5" /> Exportar para Faturação
-              </TabsTrigger>
+            {tuitionOnly ? (
+              <>
+                {!isParent && <TabsTrigger value="rules">Regras de cobranças</TabsTrigger>}
+                <TabsTrigger value="fees">Propinas</TabsTrigger>
+              </>
+            ) : (
+              <>
+                <TabsTrigger value="enrollment-fees">Matrículas</TabsTrigger>
+                <TabsTrigger value="activity-fees">Extracurriculares</TabsTrigger>
+                <TabsTrigger value="transport-fees">Transporte</TabsTrigger>
+                <TabsTrigger value="family">Descontos por familiar</TabsTrigger>
+                {!isParent && <TabsTrigger value="overrides">Descontos por aluno</TabsTrigger>}
+                {!isParent && (
+                  <TabsTrigger value="erp-export" className="gap-1.5">
+                    <FileSpreadsheet className="h-3.5 w-3.5" /> Exportar para Faturação
+                  </TabsTrigger>
+                )}
+              </>
             )}
           </TabsList>
 
+          {tuitionOnly && (
+          <>
           {/* FEES TAB */}
           <TabsContent value="fees" className="space-y-4">
             {!isParent && (
@@ -2776,7 +2825,11 @@ const Pagamentos = () => {
               </CardContent>
             </Card>
           </TabsContent>
+          </>
+          )}
 
+          {!tuitionOnly && (
+          <>
           {/* ACTIVITY FEES TAB (extracurriculares) */}
           <TabsContent value="activity-fees" className="space-y-4">
             {!isParent && (
@@ -3802,9 +3855,11 @@ const Pagamentos = () => {
               </CardContent>
             </Card>
           </TabsContent>
+          </>
+          )}
 
           {/* RULES TAB */}
-          {!isParent && (
+          {tuitionOnly && !isParent && (
           <TabsContent value="rules" className="space-y-4">
             <Card className="border-border/80 shadow-card">
               <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -3873,6 +3928,8 @@ const Pagamentos = () => {
           </TabsContent>
           )}
 
+          {!tuitionOnly && (
+          <>
           {/* FAMILY TAB */}
           <TabsContent value="family" className="space-y-4">
             <Card>
@@ -3969,9 +4026,13 @@ const Pagamentos = () => {
             <ErpExportMappingSection schoolId={schoolId} />
             <ErpExportPaymentsSection schoolId={schoolId} />
           </TabsContent>
+          </>
+          )}
         </Tabs>
       </div>
 
+      {tuitionOnly && (
+      <>
       {/* RULE DIALOG */}
       <Dialog open={ruleDialog} onOpenChange={setRuleDialog}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
@@ -4317,7 +4378,11 @@ const Pagamentos = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </>
+      )}
 
+      {!tuitionOnly && (
+      <>
       {/* FAMILY DIALOG */}
       <Dialog open={familyDialog} onOpenChange={setFamilyDialog}>
         <DialogContent>
@@ -4381,7 +4446,11 @@ const Pagamentos = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </>
+      )}
 
+      {tuitionOnly && (
+      <>
       {/* GENERATE DIALOG */}
       <Dialog open={generateOpen} onOpenChange={setGenerateOpen}>
         <DialogContent>
@@ -4426,6 +4495,11 @@ const Pagamentos = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </>
+      )}
+
+      {!tuitionOnly && (
+      <>
       <AlertDialog open={!!deleteFamily} onOpenChange={(o) => !o && setDeleteFamily(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -4450,6 +4524,9 @@ const Pagamentos = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      </>
+      )}
 
       <Dialog open={!!rejectDialog} onOpenChange={(o) => { if (!o) { setRejectDialog(null); setRejectReason(""); } }}>
         <DialogContent>
@@ -4539,4 +4616,6 @@ const Pagamentos = () => {
   );
 };
 
-export default Pagamentos;
+export default function Pagamentos() {
+  return <PagamentosFinanceHub financePage="payments" />;
+}

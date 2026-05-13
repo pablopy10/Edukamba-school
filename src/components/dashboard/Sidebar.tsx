@@ -1,5 +1,5 @@
 import type { ElementType } from "react";
-import { GraduationCap, Home, Users, Receipt, BookOpen, Presentation, Contact, PersonStanding, UsersRound, CalendarDays, BookMarked, Table2, CalendarCheck, Smartphone, BookOpenCheck, BarChart3, Clock, UserCircle, Settings, Package, LogOut, ChevronRight, Sparkles, Wallet, TrendingUp, Bus, FolderOpen } from "lucide-react";
+import { GraduationCap, Home, Users, Receipt, BookOpen, Presentation, Contact, PersonStanding, UsersRound, CalendarDays, BookMarked, Table2, CalendarCheck, Smartphone, BookOpenCheck, BarChart3, Clock, UserCircle, Settings, Package, LogOut, ChevronRight, Sparkles, Wallet, TrendingUp, Bus, FolderOpen, Landmark } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useModules, ModuleKey } from "@/context/ModulesContext";
@@ -31,6 +31,7 @@ const menu: NavItem[] = [
   { icon: BookMarked, label: "Avaliações", to: "/avaliacoes", moduleKey: "avaliacoes" },
   { icon: Table2, label: "Notas", to: "/notas", moduleKey: "notas" },
   { icon: CalendarCheck, label: "Eventos", to: "/eventos", moduleKey: "eventos" },
+  { icon: Landmark, label: "Propinas", to: "/propinas", moduleKey: "pagamentos" },
   { icon: Sparkles, label: "Extracurriculares", to: "/extracurriculares", moduleKey: "extracurriculares" },
   { icon: Bus, label: "Transporte", to: "/transportes", moduleKey: "transportes" },
   { icon: Smartphone, label: "Pedidos", to: "/pedidos", moduleKey: "pedidos" },
