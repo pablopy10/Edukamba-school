@@ -3,16 +3,25 @@ import autoTable from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
-/** Cabeçalhos / marca (#1a3a5a) */
+/** Design alinhado à fatura moderna Edukamba (CSS de referência) */
+/** Marca #1a3a5a */
 const NAVY: [number, number, number] = [26, 58, 90];
-/** Linhas e contornos */
-const GRAY_STROKE: [number, number, number] = [190, 195, 200];
-/** Texto secundário */
-const GRAY_TEXT: [number, number, number] = [105, 110, 118];
-/** Fundo discreto nos blocos de dados */
-const PANEL_FILL: [number, number, number] = [248, 249, 251];
-/** Fundo zona hash */
-const HASH_BOX_FILL: [number, number, number] = [236, 242, 248];
+/** body color #333 */
+const BODY_TEXT: [number, number, number] = [51, 51, 51];
+/** .footer color #666 */
+const FOOTER_MUTED: [number, number, number] = [102, 102, 102];
+/** borders #eee */
+const BORDER_EEE: [number, number, number] = [238, 238, 238];
+/** .box-title border #ddd */
+const BORDER_DDD: [number, number, number] = [221, 221, 221];
+/** .details-box #fcfcfc */
+const PANEL_FCFCFC: [number, number, number] = [252, 252, 252];
+/** hash-container #f5f5f5 */
+const HASH_F5: [number, number, number] = [245, 245, 245];
+
+/** Conversão típica CSS px→pt (96dpi → jsPDF pts) */
+const pxToPt = (px: number) => Math.round(((px * 72) / 96) * 10) / 10;
+const pxMm = (px: number) => (px / 96) * 25.4;
 
 const PT_MONTH_NAMES = [
   "Janeiro",
@@ -144,19 +153,24 @@ function chunkTextForPdf(value: string, chunkSize: number): string[] {
   return rows;
 }
 
-/** Altura aproximada (mm) de um bloco com título + linhas de corpo. */
-function estimatePanelContentHeightMm(doc: jsPDF, title: string, bodyLines: string[], maxWidthMm: number): number {
+/** Altura approx. bloco detalhes (título tipo .box-title + corpo tipo table td #333). */
+function estimatePanelContentHeightMm(doc: jsPDF, titleUpper: string, bodyLines: string[], maxWidthMm: number): number {
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.35);
-  const titleLines = doc.splitTextToSize(title, maxWidthMm);
+  doc.setFontSize(pxToPt(10));
+  const titleLines = doc.splitTextToSize(titleUpper.toUpperCase(), maxWidthMm);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.95);
+  doc.setFontSize(pxToPt(13));
   let bodyCount = 0;
   for (const line of bodyLines) {
     const parts = doc.splitTextToSize(line, maxWidthMm);
     bodyCount += Math.max(1, parts.length);
   }
-  return titleLines.length * 5.1 + 2.2 + bodyCount * 4.65;
+  const underlinePad = pxMm(3) + pxMm(8);
+  return (
+    Math.max(pxMm(1), titleLines.length * pxMm(13) * 0.52) +
+    underlinePad +
+    bodyCount * pxMm(13 * 1.5 * 0.35)
+  );
 }
 
 type DocWithAutoTable = jsPDF & {
@@ -346,139 +360,145 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
 
-  const margin = 14;
-  const gutter = 6;
+  /* @page margin: 15mm */
+  const margin = 15;
   const usableW = pageW - margin * 2;
+  const rhs = pageW - margin;
 
-  const rightBoxW = 72;
-  const rightX = pageW - margin - rightBoxW;
-  let y = margin;
+  const logoW = pxMm(64);
+  const logoH = pxMm(42);
+  const hdrTop = margin;
 
-  const logoW = 21;
-  const logoH = 13;
-
-  const hdrTop = y;
-  const schoolBlockStartX = margin + logoW + 4;
-  const leftTextMax = rightX - schoolBlockStartX - gutter;
-
-  doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
-  doc.roundedRect(rightX - 2.5, hdrTop - 2, rightBoxW + 2.5, 34.6, 1.85, 1.85, "F");
-
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.text("FACTURA RECIBO", rightX + rightBoxW / 2, hdrTop + 7.2, { align: "center" });
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.3);
-  doc.text(opts.documentNumber, rightX + rightBoxW / 2, hdrTop + 15.9, { align: "center" });
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  const issueLabel = fmtPtLongDateYYYYMMDD(opts.invoiceDateYYYYMMDD);
-  doc.text(`Emissão: ${issueLabel}`, rightX + rightBoxW / 2, hdrTop + 24.9, {
-    align: "center",
-  });
-
-  doc.setTextColor(0);
+  const schoolColRight = margin + usableW * 0.61;
+  const schoolTextX = margin + logoW + pxMm(14);
+  const schoolTextMax = Math.max(pxMm(24), schoolColRight - schoolTextX - pxMm(4));
 
   addLogoIfPossible(doc, opts.logoDataUrl ?? undefined, margin, hdrTop, logoW, logoH);
 
-  const schoolNameLeading = opts.schoolName.length > 44 ? 5.35 : 5.9;
+  /* .school-info / .school-name — #333 family on bodylines, nome escola navy */
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(pxToPt(24));
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
   let ySchool = drawWrappedTexts(
     doc,
     [opts.schoolName.trim() || "Instituição de ensino"],
-    schoolBlockStartX,
-    hdrTop + 0.35,
-    leftTextMax,
-    {
-      leading: schoolNameLeading,
-      size: opts.schoolName.length > 48 ? 9.95 : 11.05,
-      style: "bold",
-    },
+    schoolTextX,
+    hdrTop + pxMm(2),
+    schoolTextMax,
+    { leading: pxMm(24) * 0.55, size: pxToPt(24), style: "bold", color: NAVY },
   );
 
-  ySchool = drawWrappedTexts(
-    doc,
-    ["Plataforma fiscal Edukamba"],
-    schoolBlockStartX,
-    ySchool + 0.45,
-    leftTextMax,
-    { leading: 4.1, size: 7.65, color: GRAY_TEXT, style: "normal" },
-  );
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(pxToPt(11));
+  doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
+  ySchool = drawWrappedTexts(doc, ["Edukamba • documento fiscal"], schoolTextX, ySchool + pxMm(6), schoolTextMax, {
+    leading: pxMm(12) * 0.45,
+  });
 
   const schoolLines: string[] = [];
   if (opts.schoolNif?.trim()) schoolLines.push(`NIF: ${opts.schoolNif.trim()}`);
   if (opts.schoolAddress?.trim()) schoolLines.push(`Morada: ${opts.schoolAddress.trim()}`);
-  if (opts.schoolContactLines?.length) opts.schoolContactLines.forEach((l) => l?.trim() && schoolLines.push(l.trim()));
+  if (opts.schoolContactLines?.length)
+    opts.schoolContactLines.forEach((l) => l?.trim() && schoolLines.push(l.trim()));
 
-  ySchool = drawWrappedTexts(doc, schoolLines, schoolBlockStartX, ySchool + 1.05, leftTextMax, {
-    leading: 4.3,
-    size: 8.75,
-    color: GRAY_TEXT,
+  doc.setFontSize(pxToPt(12));
+  doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
+  ySchool = drawWrappedTexts(doc, schoolLines, schoolTextX, ySchool + pxMm(14), schoolTextMax, {
+    leading: pxMm(15),
   });
 
-  y = Math.max(ySchool + 2.2, hdrTop + logoH + 4, hdrTop + 33.2) + 4.4;
+  /* .doc-info — alinhamento à direita, sem «caixa» de fundo */
+  let yDoc = hdrTop + pxMm(16);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(pxToPt(20));
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text("FACTURA RECIBO", rhs, yDoc, { align: "right", baseline: "top" });
+  yDoc += pxMm(34);
 
-  doc.setDrawColor(GRAY_STROKE[0], GRAY_STROKE[1], GRAY_STROKE[2]);
-  doc.setLineWidth(0.35);
-  doc.line(margin, y - 2.85, pageW - margin, y - 2.85);
+  doc.setFontSize(pxToPt(13));
+  doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
+  doc.text(opts.documentNumber.trim(), rhs, yDoc, { align: "right", baseline: "top" });
+  yDoc += pxMm(22);
 
-  const boxGap = 4;
-  const half = (usableW - boxGap) / 2;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(pxToPt(13));
+  const issueLabel = fmtPtLongDateYYYYMMDD(opts.invoiceDateYYYYMMDD);
+  doc.text(`Emissão: ${issueLabel}`, rhs, yDoc, { align: "right", baseline: "top" });
+  yDoc += pxMm(10);
+
+  /* .header { border-bottom: 2px solid #1a3a5a; padding-bottom: 20px } */
+  const headerBottomInner = Math.max(ySchool + pxMm(4), yDoc);
+  const dividerY = headerBottomInner + pxMm(18);
+  doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.setLineWidth(Math.max(pxMm(1.75), 0.45));
+  doc.line(margin, dividerY, rhs, dividerY);
+
+  let y = dividerY + pxMm(26);
+
+  /* .details-container + .details-box */
+  const boxGap = usableW * 0.038;
+  const panelW = (usableW - boxGap) / 2;
   const bx1 = margin;
-  const bx2 = margin + half + boxGap;
-  const padInner = 4.2;
+  const bx2 = margin + panelW + boxGap;
+  const padInner = pxMm(15);
+  const rBox = pxMm(4);
 
   const encNomeReal = opts.encarregadoNome?.trim() || opts.clienteNome.trim() || "—";
   const turma = opts.studentClassroom?.trim() || "—";
   const ano = opts.academicYearLabel?.trim() || "—";
-
   const encBody = [`Nome: ${encNomeReal}`, `NIF (efeitos fiscais): ${opts.clienteNif.trim()}`];
   const studBody = [`Nome: ${opts.studentName.trim()}`, `Turma: ${turma}`, `Ano lectivo: ${ano}`];
 
-  const innerEncW = half - padInner * 2;
-  const innerStudW = half - padInner * 2;
-
+  const innerEncW = panelW - padInner * 2 - pxMm(1);
+  const innerStudW = panelW - padInner * 2 - pxMm(1);
   const hEnc = estimatePanelContentHeightMm(doc, "Dados do encarregado", encBody, innerEncW);
   const hStud = estimatePanelContentHeightMm(doc, "Dados do aluno", studBody, innerStudW);
-
-  const boxH = Math.max(hEnc + padInner * 2 + 1.85, hStud + padInner * 2 + 1.85, 30.8);
+  const boxH = Math.max(hEnc + padInner * 2 + pxMm(4), hStud + padInner * 2 + pxMm(4), pxMm(108));
 
   const boxTop = y;
 
-  doc.setDrawColor(GRAY_STROKE[0], GRAY_STROKE[1], GRAY_STROKE[2]);
-  doc.setFillColor(PANEL_FILL[0], PANEL_FILL[1], PANEL_FILL[2]);
-  doc.roundedRect(bx1, boxTop, half, boxH, 2, 2, "FD");
-  doc.roundedRect(bx2, boxTop, half, boxH, 2, 2, "FD");
+  doc.setDrawColor(BORDER_EEE[0], BORDER_EEE[1], BORDER_EEE[2]);
+  doc.setFillColor(PANEL_FCFCFC[0], PANEL_FCFCFC[1], PANEL_FCFCFC[2]);
+  doc.setLineWidth(pxMm(1));
+  doc.roundedRect(bx1, boxTop, panelW, boxH, rBox, rBox, "FD");
+  doc.roundedRect(bx2, boxTop, panelW, boxH, rBox, rBox, "FD");
 
-  let tyLeft = boxTop + padInner + 5;
-  tyLeft = drawWrappedTexts(doc, ["Dados do encarregado"], bx1 + padInner, tyLeft, innerEncW, {
-    style: "bold",
-    color: NAVY,
-    size: 8.5,
-    leading: 5.2,
-  });
-  drawWrappedTexts(doc, encBody, bx1 + padInner, tyLeft + 1.05, innerEncW, {
-    leading: 4.62,
-    size: 8.95,
-  });
+  const drawModernBoxInner = (
+    bx: number,
+    titlePt: string,
+    bodyPts: string[],
+    innerMaxW: number,
+  ): void => {
+    let yt = boxTop + padInner + pxMm(4);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(pxToPt(10));
+    doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+    yt = drawWrappedTexts(doc, [titlePt.toUpperCase()], bx + padInner, yt, innerMaxW, {
+      leading: pxMm(12) * 0.48,
+      style: "bold",
+    });
 
-  let tyStud = boxTop + padInner + 5;
-  tyStud = drawWrappedTexts(doc, ["Dados do aluno"], bx2 + padInner, tyStud, innerStudW, {
-    style: "bold",
-    color: NAVY,
-    size: 8.5,
-    leading: 5.2,
-  });
-  drawWrappedTexts(doc, studBody, bx2 + padInner, tyStud + 1.05, innerStudW, {
-    leading: 4.62,
-    size: 8.95,
-  });
+    doc.setDrawColor(BORDER_DDD[0], BORDER_DDD[1], BORDER_DDD[2]);
+    doc.setLineWidth(pxMm(0.9));
+    doc.line(bx + padInner, yt + pxMm(2), bx + padInner + innerMaxW, yt + pxMm(2));
+    yt += pxMm(10);
 
-  y = boxTop + boxH + 6.4;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(pxToPt(13));
+    doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
+    drawWrappedTexts(doc, bodyPts, bx + padInner, yt, innerMaxW, {
+      leading: pxMm(16),
+      size: pxToPt(13),
+      color: BODY_TEXT,
+    });
+  };
 
-  const head = [["Descrição do serviço", "Qtd", "P. unitário", "Total"]];
+  drawModernBoxInner(bx1, "Dados do encarregado", encBody, innerEncW);
+  drawModernBoxInner(bx2, "Dados do aluno", studBody, innerStudW);
+
+  y = boxTop + boxH + pxMm(18);
+
+  const head = [["DESCRIÇÃO DO SERVIÇO", "QTD", "P. UNITÁRIO", "TOTAL"]];
   const body = opts.lineItems.map((it) => [
     it.description.replace(/\u00a0/g, " "),
     String(it.quantity),
@@ -493,158 +513,140 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
     margin: { left: margin, right: margin },
     theme: "plain",
     styles: {
-      fontSize: 9,
-      cellPadding: 4,
-      lineColor: GRAY_STROKE,
-      lineWidth: 0.12,
-      textColor: GRAY_TEXT,
+      fontSize: pxToPt(13),
+      cellPadding: { top: pxMm(10), right: pxMm(10), bottom: pxMm(11), left: pxMm(10) },
+      lineWidth: pxMm(0.7),
+      lineColor: BORDER_EEE,
+      textColor: BODY_TEXT,
       valign: "middle",
       overflow: "linebreak",
+      fontStyle: "normal",
     },
     headStyles: {
       fillColor: NAVY,
       textColor: 255,
       fontStyle: "bold",
-      fontSize: 8.95,
+      fontSize: pxToPt(12),
       halign: "left",
-      cellPadding: 3.95,
+      valign: "middle",
+      cellPadding: { top: pxMm(10), right: pxMm(10), bottom: pxMm(10), left: pxMm(10) },
     },
     columnStyles: {
-      0: { cellWidth: usableW - 62 },
+      0: { cellWidth: usableW - 63 },
       1: { cellWidth: 18, halign: "center" },
-      2: { cellWidth: 23, halign: "right" },
-      3: { cellWidth: 23, halign: "right", fontStyle: "bold", textColor: [35, 40, 48] },
+      2: { cellWidth: 24, halign: "right" },
+      3: { cellWidth: 24, halign: "right", fontStyle: "bold", textColor: [35, 40, 48] },
     },
   });
 
   const d = doc as DocWithAutoTable;
-  const tableFinalY = d.lastAutoTable?.finalY ?? y + 42;
+  const tableFinalY = d.lastAutoTable?.finalY ?? y + pxMm(90);
 
-  /* ——— Totais (alinhamento à direita) ——— */
-  const rhs = pageW - margin;
-  let totY = tableFinalY + 9;
+  /* .totals-container float:right width:250px + .grand-total */
+  const totalsW = pxMm(250);
+  const totalsX = rhs - totalsW;
+  let blockY = tableFinalY + pxMm(14);
 
-  doc.setFillColor(PANEL_FILL[0], PANEL_FILL[1], PANEL_FILL[2]);
-  doc.setDrawColor(GRAY_STROKE[0], GRAY_STROKE[1], GRAY_STROKE[2]);
-  doc.setLineWidth(0.15);
-  const totPanelW = 88;
-  const totPanelX = rhs - totPanelW;
-  doc.rect(totPanelX, totY - 6.4, totPanelW, 29, "FD");
-
+  /* linha antes do destacado navy (tipo .total-row) */
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(GRAY_TEXT[0], GRAY_TEXT[1], GRAY_TEXT[2]);
-  doc.text("Subtotal (valor da operação)", totPanelX + 4.2, totY + 2.2);
+  doc.setFontSize(pxToPt(12));
+  doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
+  const subLabel = "Subtotal";
+  doc.text(subLabel, totalsX, blockY + pxMm(4));
+  doc.text(opts.grossTotalFmt, totalsX + totalsW, blockY + pxMm(4), { align: "right" });
 
-  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-  doc.text(opts.grossTotalFmt, rhs - 4.8, totY + 2.2, { align: "right" });
+  blockY += pxMm(10) + pxMm(10); /* espaço tipo margin-top antes do grande total */
 
-  doc.setDrawColor(GRAY_STROKE[0], GRAY_STROKE[1], GRAY_STROKE[2]);
-  doc.setLineWidth(0.12);
-  doc.line(totPanelX + 3.9, totY + 5.95, rhs - 3.9, totY + 5.95);
+  const grandH = pxMm(42);
+  doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.rect(totalsX, blockY, totalsW, grandH, "F");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(12.85);
-  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-  doc.text("TOTAL PAGO", totPanelX + 4.2, totY + 12.95);
+  doc.setFontSize(pxToPt(16));
+  doc.setTextColor(255, 255, 255);
+  doc.text("TOTAL PAGO", totalsX + pxMm(12), blockY + grandH / 2 + pxMm(2), {
+    baseline: "middle",
+  });
+  doc.text(opts.grossTotalFmt, totalsX + totalsW - pxMm(12), blockY + grandH / 2 + pxMm(2), {
+    align: "right",
+    baseline: "middle",
+  });
 
-  doc.setFontSize(14.85);
-  doc.text(opts.grossTotalFmt, rhs - 4.8, totY + 13.85, { align: "right" });
-
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(8.15);
-  doc.setTextColor(GRAY_TEXT[0], GRAY_TEXT[1], GRAY_TEXT[2]);
-  doc.text("Importância certificada através do presente documento fiscal.", totPanelX + 4.2, totY + 20.95);
-
-  totY += 27.65;
-
-  /* ——— Rodapé: isenção IVA ——— */
-  doc.setDrawColor(GRAY_STROKE[0], GRAY_STROKE[1], GRAY_STROKE[2]);
-  doc.setLineWidth(0.22);
-  doc.line(margin, totY + 1.95, pageW - margin, totY + 1.95);
-
+  /* .footer … .fiscal-text */
+  let footY = blockY + grandH + pxMm(48);
   const code = (opts.exemptionCode ?? "M10").trim();
   const reason =
     opts.exemptionReason?.trim() ||
     "Isenção de IVA no domínio da educação nos termos legais aplicáveis ao estabelecimento.";
-
   const exemptText = formatIvaExemptionParagraph(code, reason);
   doc.setFont("helvetica", "italic");
-  doc.setFontSize(8.4);
-  doc.setTextColor(GRAY_TEXT[0], GRAY_TEXT[1], GRAY_TEXT[2]);
-  let exY = totY + 6.95;
-  const wrappedEx = doc.splitTextToSize(exemptText, usableW);
-  for (const ln of wrappedEx) {
-    doc.text(ln, margin, exY);
-    exY += 4.25;
+  doc.setFontSize(pxToPt(11));
+  doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
+  for (const ln of doc.splitTextToSize(exemptText, usableW)) {
+    doc.text(ln, margin, footY);
+    footY += pxMm(16);
   }
 
-  /* ——— Caixa destacada AGT Hash ——— */
-  let hashTop = Math.max(exY + 6.2, totY + 22);
+  footY += pxMm(12);
 
-  /** Garantir espaço mínimo acima da faixa Edukamba */
-  const reservedFooter = pageH - 27;
-  hashTop = Math.min(hashTop, reservedFooter - 44);
+  /* .hash-container: #f5f5f5, border-left 4px solid navy, Courier */
+  let hashRows = chunkTextForPdf(opts.documentHashFootnote?.trim() || "", 92);
+  if (!hashRows.length) hashRows = ["(hash não disponível)"];
+  const stripW = pxMm(4);
+  const padHash = pxMm(10);
 
-  const hashMain = opts.documentHashFootnote?.trim();
-  let hashRows = chunkTextForPdf(hashMain || "", 108);
-  if (!hashRows.length) hashRows = ["(hash não disponível no momento)"];
+  let hashBoxMinH = padHash * 2 + hashRows.length * pxMm(16) + (opts.digitalSignatureSha1?.trim() ? pxMm(42) : 0);
+  hashBoxMinH = Math.max(hashBoxMinH, pxMm(64));
 
-  let hashBoxMinH =
-    20.65 + hashRows.length * 4.15 + (opts.digitalSignatureSha1?.trim() ? 14 : 0);
-  hashBoxMinH = Math.max(hashBoxMinH, 27.85);
+  const hashTop = footY;
 
-  doc.setFillColor(HASH_BOX_FILL[0], HASH_BOX_FILL[1], HASH_BOX_FILL[2]);
-  doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
-  doc.rect(margin, hashTop, usableW, hashBoxMinH, "FD");
+  doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.rect(margin, hashTop, stripW, hashBoxMinH, "F");
+  doc.setFillColor(HASH_F5[0], HASH_F5[1], HASH_F5[2]);
+  doc.rect(margin + stripW, hashTop, usableW - stripW, hashBoxMinH, "F");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.05);
+  doc.setFontSize(pxToPt(11));
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-  doc.text("Hash AGT — assinatura digital / cadeia de documentos", margin + 4.4, hashTop + 7.05);
+  doc.text("Hash AGT — assinatura digital", margin + stripW + padHash, hashTop + padHash + pxMm(11));
 
   doc.setFont("courier", "normal");
-  doc.setFontSize(7.95);
-  doc.setTextColor(35, 40, 48);
-
-  let hy = hashTop + 13.95;
+  doc.setFontSize(pxToPt(11));
+  doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
+  let hx = hashTop + padHash + pxMm(30);
   for (const row of hashRows) {
-    doc.text(row, margin + 4.35, hy);
-    hy += 4.08;
+    doc.splitTextToSize(row, usableW - stripW - padHash * 2 - pxMm(4)).forEach((line) => {
+      doc.text(line, margin + stripW + padHash, hx);
+      hx += pxMm(14.5);
+    });
   }
 
   if (opts.digitalSignatureSha1?.trim()) {
     doc.setFont("helvetica", "italic");
-    doc.setFontSize(7.15);
-    doc.setTextColor(GRAY_TEXT[0], GRAY_TEXT[1], GRAY_TEXT[2]);
+    doc.setFontSize(pxToPt(10));
+    doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
     const sigTxt = opts.digitalSignatureSha1.trim();
-    const sigShow =
-      sigTxt.length <= 96 ? sigTxt : `${sigTxt.slice(0, 44)} … ${sigTxt.slice(-44)}`;
-    let sigY = hashTop + hashBoxMinH - 9;
-    doc.splitTextToSize(`Assinatura digital PKCS#1 RSA-SHA1 (Base64): ${sigShow}`, usableW - 9).forEach((line) => {
-      doc.text(line, margin + 4.35, sigY);
-      sigY += 3.95;
+    const sigShow = sigTxt.length <= 92 ? sigTxt : `${sigTxt.slice(0, 40)} … ${sigTxt.slice(-40)}`;
+    hx += pxMm(6);
+    doc.splitTextToSize(`Assinatura digital PKCS#1 RSA-SHA1 (Base64): ${sigShow}`, usableW - stripW - padHash * 2).forEach((line) => {
+      doc.text(line, margin + stripW + padHash, hx);
+      hx += pxMm(14);
     });
   }
 
-  /* ——— Rodapé institucional (fixo) ——— */
-  doc.setDrawColor(GRAY_STROKE[0], GRAY_STROKE[1], GRAY_STROKE[2]);
-
+  /* .watermark + processado por computador */
+  const wmY = Math.min(pageH - pxMm(16), hx + pxMm(40));
   doc.setFont("helvetica", "italic");
-  doc.setFontSize(8.15);
-  doc.setTextColor(GRAY_TEXT[0], GRAY_TEXT[1], GRAY_TEXT[2]);
-
-  doc.text(`Processado por computador • ${opts.schoolName}`, pageW / 2, pageH - 16.95, {
-    align: "center",
-  });
-  doc.text("Documento com dados gerados dinamicamente a partir do portal Edukamba.", pageW / 2, pageH - 13.25, {
-    align: "center",
-  });
+  doc.setFontSize(pxToPt(10));
+  doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
+  doc.text(`Processado por computador • ${opts.schoolName}`, rhs, wmY, { align: "right" });
+  doc.setFontSize(pxToPt(10));
+  doc.text("Edukamba — dados dinâmicos conforme o portal.", rhs, wmY + pxMm(14), { align: "right" });
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
+  doc.setFontSize(pxToPt(10));
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-  doc.text("edukamba.com", pageW / 2, pageH - 8.85, { align: "center" });
+  doc.text("edukamba.com", rhs, pageH - margin, { align: "right" });
 
   doc.setTextColor(0);
   doc.setDrawColor(0);
