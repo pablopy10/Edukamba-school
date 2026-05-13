@@ -5,9 +5,9 @@ import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useParentChildren } from "@/hooks/useParentChildren";
-import { ArrowLeft, FileText, Loader2 } from "lucide-react";
+import { ArrowLeft, FileDown, Loader2 } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
-import { buildInvoicePdf, fetchLogoAsDataUrl } from "@/lib/fiscal/invoicePdf";
+import { downloadFiscalInvoicePdfFromInvoice } from "@/lib/fiscal/downloadFiscalInvoicePdf";
 
 type PaymentRow = Pick<
   Tables<"payments">,
@@ -144,6 +144,7 @@ const HistoricoPagamentosEncarregado = () => {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<EnrichedPayment[]>([]);
   const [invoiceByPayment, setInvoiceByPayment] = useState<Map<string, Tables<"invoices">>>(new Map());
+  const [pdfLoadingPaymentId, setPdfLoadingPaymentId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const {
@@ -210,23 +211,21 @@ const HistoricoPagamentosEncarregado = () => {
       return;
     }
 
-    const { data: school } = await supabase.from("schools").select("name, logo_url").eq("id", inv.school_id).maybeSingle();
-    const logo = await fetchLogoAsDataUrl(school?.logo_url ?? null);
-
-    const doc = buildInvoicePdf({
-      schoolName: school?.name ?? "Escola",
-      logoDataUrl: logo,
-      documentNumber: inv.document_number,
-      invoiceDateYYYYMMDD: inv.invoice_date.slice(0, 10),
-      studentDisplayName: p.studentLabel || "—",
-      clienteNome: inv.cliente_nome,
-      clienteNif: inv.cliente_nif,
-      grossTotalFmt: fmtAOA(Number(inv.gross_total)),
-      documentHashFootnote: inv.document_hash,
-      digitalSignatureSha1: inv.digital_signature_sha1_b64,
-    });
-
-    doc.save(`${inv.document_number.replace(/\s+/g, "_")}.pdf`);
+    setPdfLoadingPaymentId(p.id);
+    try {
+      await downloadFiscalInvoicePdfFromInvoice(inv);
+      toast({
+        title: "PDF transferido",
+        description: inv.document_number?.trim()
+          ? `FACTURA‑RECIBO ${inv.document_number.trim()} guardada.`
+          : "Guarde ou partilhe o ficheiro conforme necessário.",
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: "Erro ao gerar PDF", description: msg, variant: "destructive" });
+    } finally {
+      setPdfLoadingPaymentId(null);
+    }
   };
 
   if (parentLoading) {
@@ -276,12 +275,13 @@ const HistoricoPagamentosEncarregado = () => {
                     <th className="py-2 pr-2">Tipo</th>
                     <th className="py-2 pr-2">Educando</th>
                     <th className="py-2 pr-2 text-right">Valor</th>
-                    <th className="py-2 text-right">Fatura</th>
+                    <th className="py-2 text-right">PDF</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((p) => {
                     const hasInv = invoiceByPayment.has(p.id);
+                    const pdfBusy = pdfLoadingPaymentId === p.id;
                     return (
                       <tr key={p.id} className="border-b border-border/70">
                         <td className="py-3 pr-2">
@@ -291,27 +291,26 @@ const HistoricoPagamentosEncarregado = () => {
                         <td className="py-3 pr-2">{p.studentLabel || "—"}</td>
                         <td className="py-3 pr-2 text-right font-semibold">{fmtAOA(Number(p.amount_paid))}</td>
                         <td className="py-3 text-right">
-                          <div className="flex flex-col items-end gap-2 sm:flex-row sm:justify-end sm:gap-3">
-                            {hasInv ? (
-                              <Link
-                                to={`/fatura/${invoiceByPayment.get(p.id)!.id}`}
-                                className="text-sm font-medium text-primary underline underline-offset-2 hover:no-underline"
-                              >
-                                Ver página
-                              </Link>
-                            ) : null}
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="gap-1"
-                              onClick={() => void handlePdf(p)}
-                              disabled={!hasInv}
-                            >
-                              <FileText className="h-3.5 w-3.5" />
-                              Transferir PDF
-                            </Button>
-                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-1"
+                            onClick={() => void handlePdf(p)}
+                            disabled={!hasInv || pdfBusy}
+                            title={
+                              hasInv
+                                ? "Transferir PDF da factura‑recibo (AGT)"
+                                : "Ainda não existe documento fiscal para este pagamento."
+                            }
+                          >
+                            {pdfBusy ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <FileDown className="h-3.5 w-3.5" />
+                            )}
+                            Transferir PDF
+                          </Button>
                         </td>
                       </tr>
                     );

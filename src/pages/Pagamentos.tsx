@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap, FileSpreadsheet, Receipt } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Wallet, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap, FileSpreadsheet, FileDown } from "lucide-react";
 import { ErpArticleCodesCard } from "@/components/pagamentos/ErpArticleCodesCard";
 import { ErpExportMappingSection } from "@/components/pagamentos/ErpExportMappingSection";
 import { ErpExportPaymentsSection } from "@/components/pagamentos/ErpExportPaymentsSection";
@@ -31,6 +31,7 @@ import { canValidateSchoolPaymentProofs, isSchoolManagementRole, isSchoolSetting
 import type { GuardianPaymentMode } from "@/lib/guardianPayment";
 import { encarregadosUsamAnexo, normalizeGuardianPaymentMode } from "@/lib/guardianPayment";
 import { invokeEmitFiscalInvoices, type EmitFiscalInvoicesResult } from "@/lib/fiscal/invokeEmitFiscalInvoices";
+import { downloadFiscalInvoicePdfById } from "@/lib/fiscal/downloadFiscalInvoicePdf";
 
 type StaffValidatedInsertResult = { error: string | null; paymentId?: string };
 
@@ -176,7 +177,6 @@ function chunkBySize<T>(items: readonly T[], size: number): T[][] {
 }
 
 const Pagamentos = () => {
-  const navigate = useNavigate();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const { role } = useUserRole();
   const canEditSchoolPaymentPrefs = isSchoolManagementRole(role) || isSchoolSettingsAdmin(role);
@@ -279,6 +279,7 @@ const Pagamentos = () => {
   const [invoiceByPaymentId, setInvoiceByPaymentId] = useState<
     Record<string, { invoiceId: string; documentNumber: string }>
   >({});
+  const [downloadingInvoicePdfId, setDownloadingInvoicePdfId] = useState<string | null>(null);
 
   // Staff "registar pagamento" dialog (works for both tuition and activity fees)
   const [recordDialog, setRecordDialog] = useState<
@@ -1060,16 +1061,33 @@ const Pagamentos = () => {
         title: emitted.length > 1 ? "Faturas emitidas" : "Fatura emitida",
         description: (
           <div className="flex flex-col gap-2 pt-0.5">
-            <p className="text-sm text-muted-foreground">Consulte ou transfira o PDF (FACTURA‑RECIBO).</p>
+            <p className="text-sm text-muted-foreground">Transfira o PDF (FACTURA‑RECIBO) para cada documento.</p>
             <ul className="list-none space-y-1.5 text-sm">
               {emitted.map((r) => (
                 <li key={`${r.invoice_id}_${r.payment_id}`}>
                   <button
                     type="button"
                     className="block w-fit text-left font-medium text-primary underline underline-offset-2 hover:no-underline"
-                    onClick={() => navigate(`/fatura/${r.invoice_id}`)}
+                    onClick={() => {
+                      void (async () => {
+                        const id = r.invoice_id?.trim();
+                        if (!id) return;
+                        try {
+                          await downloadFiscalInvoicePdfById(id);
+                          toast({
+                            title: "PDF transferido",
+                            description: r.document_number?.trim()
+                              ? `FACTURA‑RECIBO ${r.document_number.trim()} guardada.`
+                              : "Guarde ou partilhe o ficheiro conforme necessário.",
+                          });
+                        } catch (e: unknown) {
+                          const msg = e instanceof Error ? e.message : String(e);
+                          toast({ title: "Erro ao gerar PDF", description: msg, variant: "destructive" });
+                        }
+                      })();
+                    }}
                   >
-                    {r.document_number?.trim() || "Ver fatura"} — abrir página e PDF
+                    {r.document_number?.trim() || "Transferir PDF"} — FACTURA‑RECIBO
                   </button>
                 </li>
               ))}
@@ -1928,16 +1946,42 @@ const Pagamentos = () => {
     if (!feeMarkedPaid || !pay || pay.status !== "validado" || !pay.id?.trim()) return null;
     const inv = invoiceByPaymentId[pay.id];
     if (!inv?.invoiceId) return null;
+    const busy = downloadingInvoicePdfId === inv.invoiceId;
     return (
       <Button
         type="button"
         size="icon"
         variant="ghost"
         className="h-8 w-8 shrink-0 text-primary"
-        title={inv.documentNumber ? `Factura-recibo ${inv.documentNumber}` : "Ver fatura"}
-        onClick={() => navigate(`/fatura/${inv.invoiceId}`)}
+        disabled={busy}
+        title={
+          busy
+            ? "A gerar PDF…"
+            : inv.documentNumber
+              ? `Factura-recibo ${inv.documentNumber} — transferir PDF`
+              : "Transferir PDF da fatura"
+        }
+        onClick={() => {
+          void (async () => {
+            setDownloadingInvoicePdfId(inv.invoiceId);
+            try {
+              await downloadFiscalInvoicePdfById(inv.invoiceId);
+              toast({
+                title: "PDF transferido",
+                description: inv.documentNumber
+                  ? `FACTURA‑RECIBO ${inv.documentNumber} guardada.`
+                  : "Guarde ou partilhe o ficheiro conforme necessário.",
+              });
+            } catch (e: unknown) {
+              const msg = e instanceof Error ? e.message : String(e);
+              toast({ title: "Erro ao gerar PDF", description: msg, variant: "destructive" });
+            } finally {
+              setDownloadingInvoicePdfId(null);
+            }
+          })();
+        }}
       >
-        <Receipt className="h-4 w-4" />
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
       </Button>
     );
   };
