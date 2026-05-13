@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Tables } from "@/integrations/supabase/types";
 import { Loader2, Download, ArrowLeft, Copy } from "lucide-react";
-import { buildInvoicePdf, fetchLogoAsDataUrl } from "@/lib/fiscal/invoicePdf";
+import { buildInvoicePdf, resolveFiscalInvoicePdfInput } from "@/lib/fiscal/invoicePdf";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { useUserRole, type UserRole } from "@/hooks/useUserRole";
@@ -87,20 +87,8 @@ export default function FiscalInvoice() {
     if (!invoice) return;
     setDownloading(true);
     try {
-      const { data: school } = await supabase.from("schools").select("name, logo_url").eq("id", invoice.school_id).maybeSingle();
-      const logo = await fetchLogoAsDataUrl(school?.logo_url ?? null);
-      const doc = buildInvoicePdf({
-        schoolName: school?.name ?? "Escola",
-        logoDataUrl: logo,
-        documentNumber: invoice.document_number,
-        invoiceDateYYYYMMDD: invoice.invoice_date.slice(0, 10),
-        studentDisplayName: studentName || "—",
-        clienteNome: invoice.cliente_nome,
-        clienteNif: invoice.cliente_nif,
-        grossTotalFmt: fmtAOA(Number(invoice.gross_total)),
-        documentHashFootnote: invoice.document_hash,
-        digitalSignatureSha1: invoice.digital_signature_sha1_b64,
-      });
+      const payload = await resolveFiscalInvoicePdfInput(invoice, fmtAOA);
+      const doc = buildInvoicePdf(payload);
       doc.save(`${invoice.document_number.replace(/\s+/g, "_")}.pdf`);
       toast({ title: "PDF transferido", description: "Guarde ou partilhe o ficheiro conforme necessário." });
     } catch (e: unknown) {
