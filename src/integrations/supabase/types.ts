@@ -3670,6 +3670,15 @@ export type Database = {
         Args: { _academic_year_id: string; _student_id: string }
         Returns: number
       }
+      generate_student_fee_for_rule_period: {
+        Args: {
+          _academic_year_id: string
+          _fee_rule_id: string
+          _period_index: number
+          _student_id: string
+        }
+        Returns: number
+      }
       generate_transport_fees: {
         Args: { _enrollment_id: string }
         Returns: number

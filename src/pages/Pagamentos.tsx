@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -112,9 +112,9 @@ type StudentDiscount = {
   student?: { full_name: string };
 };
 
-type AcademicYear = { id: string; label: string; is_active: boolean | null };
-type StudentLite = { id: string; full_name: string };
-type ClassroomLite = { id: string; name: string; academic_year_id?: string | null };
+type AcademicYear = { id: string; label: string; is_active: boolean | null; start_date?: string | null };
+type StudentLite = { id: string; full_name: string; classroom_id: string | null };
+type ClassroomLite = { id: string; name: string; academic_year_id?: string | null; grade_level?: string | null };
 
 type FeeListRow = {
   id: string;
@@ -132,6 +132,76 @@ type FeeListRow = {
     classroom?: { id: string; name: string } | null;
   } | null;
 };
+
+/** Data de vencimento e índice de mês civil (1–12), alinhado com `generate_student_fees_for_year`. */
+function feeRuleDueDateForPeriodIndex(
+  rule: Pick<FeeRule, "start_month" | "due_day" | "recurrence" | "months_count">,
+  academicYearStartDate: string | null | undefined,
+  periodIndex: number,
+): { monthIndex: number; dueIso: string } | null {
+  if (!academicYearStartDate?.trim() || periodIndex < 0 || periodIndex >= rule.months_count) return null;
+  const step = recurrenceStepMonths(rule.recurrence as FeeRecurrence);
+  const im = periodIndex * step;
+  const monthIdx = ((rule.start_month - 1 + im) % 12) + 1;
+  const m = /^(\d{4})-\d{2}-\d{2}/.exec(academicYearStartDate);
+  const startYear = m ? Number(m[1]) : new Date().getFullYear();
+  const yearPart = startYear + Math.floor((rule.start_month - 1 + im) / 12);
+  const day = Math.min(Number(rule.due_day) || 10, 28);
+  const dueIso = `${yearPart}-${String(monthIdx).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  return { monthIndex: monthIdx, dueIso };
+}
+
+/** Alunos abrangidos por esta regra no ano lectivo seleccionado (pré-visualização; a RPC valida prioridade entre regras). */
+function studentsMatchingFeeRule(
+  rule: FeeRule,
+  yearId: string | null | undefined,
+  studentList: StudentLite[],
+  roomList: ClassroomLite[],
+): StudentLite[] {
+  if (!yearId) return [];
+  if (rule.academic_year_id && rule.academic_year_id !== yearId) return [];
+
+  const yearClsIds = new Set(roomList.filter((c) => c.academic_year_id === yearId).map((c) => c.id));
+  const ts = rule.target_scope || "grade_level";
+
+  if (ts === "students") {
+    const allow = new Set((rule.fee_rule_students ?? []).map((x) => x.student_id));
+    return studentList.filter((s) => allow.has(s.id));
+  }
+
+  if (ts === "classrooms") {
+    const allowCls = new Set((rule.fee_rule_classrooms ?? []).map((x) => x.classroom_id));
+    return studentList.filter(
+      (s) => !!(s.classroom_id && allowCls.has(s.classroom_id) && yearClsIds.has(s.classroom_id)),
+    );
+  }
+
+  const gl = rule.grade_level;
+  if (!gl) return [];
+  const clsGrade = new Map(
+    roomList.filter((c) => c.academic_year_id === yearId).map((c) => [c.id, c.grade_level ?? null]),
+  );
+  return studentList.filter((s) => {
+    if (!s.classroom_id || !yearClsIds.has(s.classroom_id)) return false;
+    return clsGrade.get(s.classroom_id) === gl;
+  });
+}
+
+function findTuitionFeeForPeriod(
+  fees: FeeListRow[],
+  studentId: string,
+  yearId: string | null | undefined,
+  monthIndex: number,
+  dueIso: string,
+): FeeListRow | null {
+  if (!yearId) return null;
+  const hits = fees.filter(
+    (f) => f.student_id === studentId && f.academic_year_id === yearId && Number(f.month_index) === monthIndex,
+  );
+  if (hits.length === 0) return null;
+  const exact = hits.find((f) => (f.due_date ?? "").slice(0, 10) === dueIso);
+  return exact ?? hits[0] ?? null;
+}
 
 type PaymentListRow = {
   id: string;
@@ -271,6 +341,11 @@ const Pagamentos = () => {
   const [deleteRule, setDeleteRule] = useState<string | null>(null);
   const [deleteFamily, setDeleteFamily] = useState<string | null>(null);
   const [deleteDiscount, setDeleteDiscount] = useState<string | null>(null);
+
+  const [ruleDetailOpen, setRuleDetailOpen] = useState(false);
+  const [ruleDetailRule, setRuleDetailRule] = useState<FeeRule | null>(null);
+  const [ruleDetailYearId, setRuleDetailYearId] = useState<string | null>(null);
+  const [ruleDetailGeneratingKey, setRuleDetailGeneratingKey] = useState<string | null>(null);
 
   const [generating, setGenerating] = useState(false);
   const [generateOpen, setGenerateOpen] = useState(false);
@@ -613,12 +688,12 @@ const Pagamentos = () => {
     if (!sId) { setLoading(false); return; }
 
     const [yRes, rRes, fRes, dRes, sRes, cRes] = await Promise.all([
-      supabase.from("academic_years").select("id, label, is_active").eq("school_id", sId).order("start_date", { ascending: true }),
+      supabase.from("academic_years").select("id, label, is_active, start_date").eq("school_id", sId).order("start_date", { ascending: true }),
       supabase.from("fee_rules").select("*, fee_rule_classrooms(classroom_id), fee_rule_students(student_id)").eq("school_id", sId).order("created_at", { ascending: false }),
       supabase.from("family_discount_rules").select("*").eq("school_id", sId).order("sibling_position"),
       supabase.from("student_discounts").select("*, student:students(full_name)").eq("school_id", sId).order("created_at", { ascending: false }),
-      supabase.from("students").select("id, full_name").eq("school_id", sId).order("full_name"),
-      supabase.from("classrooms").select("id, name, academic_year_id").eq("school_id", sId).order("name"),
+      supabase.from("students").select("id, full_name, classroom_id").eq("school_id", sId).order("full_name"),
+      supabase.from("classrooms").select("id, name, academic_year_id, grade_level").eq("school_id", sId).order("name"),
     ]);
 
     if (yRes.error) toast({ title: "Erro a carregar anos letivos", description: yRes.error.message, variant: "destructive" });
@@ -633,7 +708,13 @@ const Pagamentos = () => {
     setRules((rRes.data ?? []) as FeeRule[]);
     setFamilyRules((fRes.data ?? []) as FamilyRule[]);
     setDiscounts((dRes.data ?? []) as StudentDiscount[]);
-    setStudents((sRes.data ?? []) as StudentLite[]);
+    setStudents(
+      ((sRes.data ?? []) as Array<{ id: string; full_name: string; classroom_id?: string | null }>).map((s) => ({
+        id: s.id,
+        full_name: s.full_name,
+        classroom_id: s.classroom_id ?? null,
+      })),
+    );
     setClassrooms((cRes.data ?? []) as ClassroomLite[]);
 
     const { data: payPrefsRow } = await supabase
@@ -1040,6 +1121,95 @@ const Pagamentos = () => {
     if (!activeYearId) return classrooms;
     return classrooms.filter((c) => c.academic_year_id === activeYearId);
   }, [classrooms, activeYearId]);
+
+  const openRuleDetail = useCallback(
+    (r: FeeRule) => {
+      setRuleDetailRule(r);
+      const y =
+        r.academic_year_id && years.some((x) => x.id === r.academic_year_id)
+          ? r.academic_year_id
+          : activeYearId;
+      setRuleDetailYearId(y ?? years[0]?.id ?? null);
+      setRuleDetailOpen(true);
+    },
+    [activeYearId, years],
+  );
+
+  const ruleDetailYearStart = useMemo(() => {
+    if (!ruleDetailYearId) return null;
+    const raw = years.find((x) => x.id === ruleDetailYearId)?.start_date;
+    if (typeof raw === "string" && raw.trim().length >= 10) return raw.slice(0, 10);
+    return null;
+  }, [ruleDetailYearId, years]);
+
+  const ruleDetailRows = useMemo(() => {
+    if (!ruleDetailRule || !ruleDetailYearId || !ruleDetailYearStart) return [];
+    const elig = studentsMatchingFeeRule(ruleDetailRule, ruleDetailYearId, students, classrooms);
+    const rows: Array<{
+      key: string;
+      studentId: string;
+      studentName: string;
+      periodIndex: number;
+      monthLabel: string;
+      dueIso: string;
+      fee: FeeListRow | null;
+      baseEstimate: number;
+    }> = [];
+    const n = ruleDetailRule.months_count;
+    for (const st of elig) {
+      for (let p = 0; p < n; p++) {
+        const dd = feeRuleDueDateForPeriodIndex(ruleDetailRule, ruleDetailYearStart, p);
+        if (!dd) continue;
+        const fee = findTuitionFeeForPeriod(allFees, st.id, ruleDetailYearId, dd.monthIndex, dd.dueIso);
+        rows.push({
+          key: `${st.id}-${p}`,
+          studentId: st.id,
+          studentName: st.full_name,
+          periodIndex: p,
+          monthLabel: `${monthNames[dd.monthIndex - 1]} · P${p + 1}`,
+          dueIso: dd.dueIso,
+          fee,
+          baseEstimate: Number(ruleDetailRule.monthly_amount) || 0,
+        });
+      }
+    }
+    rows.sort((a, b) => {
+      if (!!a.fee !== !!b.fee) return a.fee ? -1 : 1;
+      const cmp = a.studentName.localeCompare(b.studentName, "pt");
+      if (cmp !== 0) return cmp;
+      return a.periodIndex - b.periodIndex;
+    });
+    return rows;
+  }, [ruleDetailRule, ruleDetailYearId, ruleDetailYearStart, students, classrooms, allFees]);
+
+  const generateRulePeriodFee = async (studentId: string, periodIndex: number) => {
+    if (!ruleDetailRule || !ruleDetailYearId || !schoolId) return;
+    const k = `${studentId}-${periodIndex}`;
+    setRuleDetailGeneratingKey(k);
+    const { data, error } = await supabase.rpc("generate_student_fee_for_rule_period", {
+      _student_id: studentId,
+      _academic_year_id: ruleDetailYearId,
+      _fee_rule_id: ruleDetailRule.id,
+      _period_index: periodIndex,
+    });
+    setRuleDetailGeneratingKey(null);
+    if (error) {
+      toast({ title: "Erro ao gerar", description: error.message, variant: "destructive" });
+      return;
+    }
+    const created = typeof data === "number" ? data : Number(data);
+    if (!Number.isFinite(created) || created <= 0) {
+      toast({
+        title: "Não foi possível gerar",
+        description:
+          "Já existe propina neste período para o aluno, ou outra regra tem prioridade (ex.: específica por aluno) sobre esta.",
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({ title: "Propina criada" });
+    await fetchAll();
+  };
 
   const filteredFees = useMemo(() => {
     const now = Date.now();
@@ -3688,6 +3858,7 @@ const Pagamentos = () => {
                               )}
                             </td>
                             <td className="py-2.5 px-3 text-right">
+                              <Button size="icon" variant="ghost" onClick={() => openRuleDetail(r)} aria-label="Ver detalhes"><Eye className="h-4 w-4" /></Button>
                               <Button size="icon" variant="ghost" onClick={() => openEditRule(r)} aria-label="Editar"><Pencil className="h-4 w-4" /></Button>
                               <Button size="icon" variant="ghost" onClick={() => setDeleteRule(r.id)} aria-label="Apagar"><Trash2 className="h-4 w-4 text-destructive" /></Button>
                             </td>
@@ -3999,6 +4170,150 @@ const Pagamentos = () => {
           <DialogFooter>
             <Button variant="outline" type="button" onClick={() => setRuleDialog(false)}>Cancelar</Button>
             <Button type="button" onClick={() => void saveRule()}>Guardar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* REGRA: detalhes + propinas geradas / previstas */}
+      <Dialog
+        open={ruleDetailOpen}
+        onOpenChange={(o) => {
+          setRuleDetailOpen(o);
+          if (!o) {
+            setRuleDetailRule(null);
+            setRuleDetailYearId(null);
+            setRuleDetailGeneratingKey(null);
+          }
+        }}
+      >
+        <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col">
+          <DialogHeader>
+            <DialogTitle>Detalhes da regra de cobrança</DialogTitle>
+            <DialogDescription>
+              Propinas já geradas neste ano letivo e períodos previstos. «Gerar» cria uma propina em falta (usa a mesma lógica de valor e descontos que a geração automática).
+            </DialogDescription>
+          </DialogHeader>
+          {ruleDetailRule ? (
+            <div className="grid min-h-0 flex-1 gap-4">
+              <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-muted/25 p-3 text-sm">
+                <div className="min-w-[200px] space-y-1">
+                  <p className="font-medium text-foreground">Alvo: {formatFeeRuleTarget(ruleDetailRule)}</p>
+                  <p className="text-muted-foreground">
+                    {formatRecurrenceLabel(ruleDetailRule.recurrence)} · {fmtAOA(Number(ruleDetailRule.monthly_amount))} por período · dia {ruleDetailRule.due_day}
+                  </p>
+                  <p className="text-muted-foreground">
+                    Calendário: {monthNames[ruleDetailRule.start_month - 1]}
+                    {ruleDetailRule.end_month != null ? ` → ${monthNames[ruleDetailRule.end_month - 1]}` : ""} · {ruleDetailRule.months_count} período(s)
+                  </p>
+                  <p className="text-muted-foreground">
+                    Gerar tudo de uma vez: {ruleDetailRule.generate_all_upfront ? "sim" : "não"}
+                  </p>
+                </div>
+                <div className="grid min-w-[220px] gap-1.5">
+                  <Label className="text-xs">Ano letivo</Label>
+                  <Select value={ruleDetailYearId ?? ""} onValueChange={(v) => setRuleDetailYearId(v)}>
+                    <SelectTrigger className="bg-card">
+                      <SelectValue placeholder="Ano letivo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {years.map((y) => (
+                        <SelectItem key={y.id} value={y.id}>
+                          {y.label}
+                          {y.is_active ? " · activo" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {!ruleDetailYearStart ? (
+                <p className="text-sm text-destructive">
+                  Este ano letivo não tem data de início na base de dados; não foi possível calcular os vencimentos dos períodos.
+                </p>
+              ) : ruleDetailRows.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  Nenhuma linha para mostrar — não há alunos abrangidos por esta regra neste ano, ou a regra está ligada noutro ano letivo.
+                </p>
+              ) : (
+                <ScrollArea className="max-h-[min(420px,calc(85vh-14rem))] rounded-lg border border-border">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/40 text-left text-muted-foreground">
+                        <th className="px-3 py-2.5 font-medium">Aluno</th>
+                        <th className="px-3 py-2.5 font-medium">Período</th>
+                        <th className="px-3 py-2.5 font-medium whitespace-nowrap">Vencimento</th>
+                        <th className="px-3 py-2.5 font-medium">Valor</th>
+                        <th className="px-3 py-2.5 font-medium">Estado</th>
+                        <th className="px-3 py-2.5 text-right font-medium">Acção</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ruleDetailRows.map((row) => {
+                        const genKey = `${row.studentId}-${row.periodIndex}`;
+                        const busy = ruleDetailGeneratingKey === genKey;
+                        return (
+                          <tr key={row.key} className="border-b border-border/60 bg-card">
+                            <td className="px-3 py-2 font-medium">{row.studentName}</td>
+                            <td className="px-3 py-2 text-muted-foreground">{row.monthLabel}</td>
+                            <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
+                              {new Date(`${row.dueIso}T12:00:00`).toLocaleDateString("pt-PT")}
+                            </td>
+                            <td className="px-3 py-2">
+                              {row.fee ? (
+                                <span className="font-semibold">{fmtAOA(Number(row.fee.amount_due))}</span>
+                              ) : (
+                                <span className="text-muted-foreground">
+                                  {fmtAOA(row.baseEstimate)}
+                                  <span className="mt-0.5 block text-[10px] font-normal leading-tight">
+                                    Valor da regra; descontos na geração
+                                  </span>
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              {row.fee ? (
+                                row.fee.is_paid ? (
+                                  <Badge className="bg-pastel-green text-pastel-green-foreground">Pago</Badge>
+                                ) : (
+                                  <Badge variant="secondary">Gerada</Badge>
+                                )
+                              ) : (
+                                <Badge variant="outline">Por gerar</Badge>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              {!row.fee ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1"
+                                  disabled={busy}
+                                  onClick={() => void generateRulePeriodFee(row.studentId, row.periodIndex)}
+                                >
+                                  {busy ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <PlayCircle className="h-3.5 w-3.5" />
+                                  )}
+                                  Gerar
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </ScrollArea>
+              )}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" type="button" onClick={() => setRuleDetailOpen(false)}>
+              Fechar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
