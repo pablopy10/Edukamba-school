@@ -90,16 +90,44 @@ type TransportRuleRow = {
   transport_charge_rule_students?: { student_id: string }[] | null;
 };
 
-type RuleRow = ActivityRuleRow | TransportRuleRow;
+type MealRuleRow = {
+  id: string;
+  school_id: string;
+  academic_year_id: string | null;
+  meal_program_id: string;
+  target_scope: string;
+  monthly_amount: number;
+  due_day: number;
+  months_count: number;
+  start_month: number;
+  end_month: number | null;
+  recurrence: string;
+  generate_all_upfront: boolean;
+  notes: string | null;
+  meal_charge_rule_classrooms?: { classroom_id: string }[] | null;
+  meal_charge_rule_students?: { student_id: string }[] | null;
+};
+
+type RuleRow = ActivityRuleRow | TransportRuleRow | MealRuleRow;
 
 function formatTarget(r: RuleRow): string {
   const ts = r.target_scope || "all_enrolled";
   if (ts === "students") {
-    const n = "activity_id" in r ? r.activity_charge_rule_students?.length : r.transport_charge_rule_students?.length;
+    const n =
+      "activity_id" in r
+        ? r.activity_charge_rule_students?.length
+        : "route_id" in r
+          ? r.transport_charge_rule_students?.length
+          : r.meal_charge_rule_students?.length;
     return `${n ?? 0} aluno(s)`;
   }
   if (ts === "classrooms") {
-    const n = "activity_id" in r ? r.activity_charge_rule_classrooms?.length : r.transport_charge_rule_classrooms?.length;
+    const n =
+      "activity_id" in r
+        ? r.activity_charge_rule_classrooms?.length
+        : "route_id" in r
+          ? r.transport_charge_rule_classrooms?.length
+          : r.meal_charge_rule_classrooms?.length;
     return `${n ?? 0} turma(s)`;
   }
   return "Todos os inscritos";
@@ -111,7 +139,7 @@ function formatRecurrenceLabel(r: string | undefined): string {
 }
 
 type Props = {
-  variant: "activity" | "transport";
+  variant: "activity" | "transport" | "meal";
   schoolId: string | null;
   role: string | null;
 };
@@ -124,6 +152,7 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
   const [classrooms, setClassrooms] = useState<ClassroomLite[]>([]);
   const [activities, setActivities] = useState<Array<{ id: string; name: string }>>([]);
   const [routes, setRoutes] = useState<Array<{ id: string; name: string }>>([]);
+  const [mealPrograms, setMealPrograms] = useState<Array<{ id: string; name: string }>>([]);
   const [rules, setRules] = useState<RuleRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -171,7 +200,7 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
       ]);
       setActivities((acts ?? []) as Array<{ id: string; name: string }>);
       setRules((rRes.data ?? []) as ActivityRuleRow[]);
-    } else {
+    } else if (variant === "transport") {
       const [{ data: rts }, rRes] = await Promise.all([
         supabase.from("transport_routes").select("id, name").eq("school_id", schoolId).order("name"),
         supabase
@@ -182,6 +211,17 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
       ]);
       setRoutes((rts ?? []) as Array<{ id: string; name: string }>);
       setRules((rRes.data ?? []) as TransportRuleRow[]);
+    } else {
+      const [{ data: progs }, rRes] = await Promise.all([
+        supabase.from("meal_programs").select("id, name").eq("school_id", schoolId).order("name"),
+        supabase
+          .from("meal_charge_rules")
+          .select("*, meal_charge_rule_classrooms(classroom_id), meal_charge_rule_students(student_id)")
+          .eq("school_id", schoolId)
+          .order("created_at", { ascending: false }),
+      ]);
+      setMealPrograms((progs ?? []) as Array<{ id: string; name: string }>);
+      setRules((rRes.data ?? []) as MealRuleRow[]);
     }
     setLoading(false);
   }, [schoolId, variant]);
@@ -216,18 +256,22 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
   const openEdit = (r: RuleRow) => {
     setEditingRule(r);
     const ts = (r.target_scope as ChargeTargetScope) || "all_enrolled";
-    const entityId = "activity_id" in r ? r.activity_id : r.route_id;
+    const entityId = "activity_id" in r ? r.activity_id : "route_id" in r ? r.route_id : r.meal_program_id;
     setRuleForm({
       entity_id: entityId,
       target_scope: ts,
       classroom_ids:
         "activity_id" in r
           ? (r.activity_charge_rule_classrooms ?? []).map((x) => x.classroom_id)
-          : (r.transport_charge_rule_classrooms ?? []).map((x) => x.classroom_id),
+          : "route_id" in r
+            ? (r.transport_charge_rule_classrooms ?? []).map((x) => x.classroom_id)
+            : (r.meal_charge_rule_classrooms ?? []).map((x) => x.classroom_id),
       student_ids:
         "activity_id" in r
           ? (r.activity_charge_rule_students ?? []).map((x) => x.student_id)
-          : (r.transport_charge_rule_students ?? []).map((x) => x.student_id),
+          : "route_id" in r
+            ? (r.transport_charge_rule_students ?? []).map((x) => x.student_id)
+            : (r.meal_charge_rule_students ?? []).map((x) => x.student_id),
       monthly_amount: String(r.monthly_amount),
       recurrence: (r.recurrence as FeeRecurrence) || "monthly",
       due_day: String(r.due_day),
@@ -245,7 +289,11 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
     const endMonth = Math.max(1, Math.min(12, Number(ruleForm.end_month) || startMonth));
     const periods = countBillingPeriods(startMonth, endMonth, ruleForm.recurrence);
     if (!ruleForm.entity_id.trim()) {
-      toast({ title: variant === "activity" ? "Seleccione uma atividade" : "Seleccione uma rota", variant: "destructive" });
+      toast({
+        title:
+          variant === "activity" ? "Seleccione uma atividade" : variant === "transport" ? "Seleccione uma rota" : "Seleccione um plano de refeições",
+        variant: "destructive",
+      });
       return;
     }
     if (ruleForm.target_scope === "classrooms" && ruleForm.classroom_ids.length === 0) {
@@ -308,7 +356,7 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
           return;
         }
       }
-    } else {
+    } else if (variant === "transport") {
       const payload = { ...base, route_id: ruleForm.entity_id };
       if (editingRule && "route_id" in editingRule) {
         const { error } = await supabase.from("transport_charge_rules").update(payload).eq("id", editingRule.id);
@@ -345,6 +393,43 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
           return;
         }
       }
+    } else {
+      const payload = { ...base, meal_program_id: ruleForm.entity_id };
+      if (editingRule && "meal_program_id" in editingRule) {
+        const { error } = await supabase.from("meal_charge_rules").update(payload).eq("id", editingRule.id);
+        if (error) {
+          toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+          return;
+        }
+        ruleId = editingRule.id;
+      } else {
+        const { data: ins, error } = await supabase.from("meal_charge_rules").insert(payload).select("id").single();
+        if (error) {
+          toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+          return;
+        }
+        ruleId = ins?.id ?? "";
+      }
+      await supabase.from("meal_charge_rule_classrooms").delete().eq("charge_rule_id", ruleId);
+      await supabase.from("meal_charge_rule_students").delete().eq("charge_rule_id", ruleId);
+      if (ruleForm.target_scope === "classrooms" && ruleForm.classroom_ids.length > 0) {
+        const { error: ce } = await supabase
+          .from("meal_charge_rule_classrooms")
+          .insert(ruleForm.classroom_ids.map((cid) => ({ charge_rule_id: ruleId, classroom_id: cid })));
+        if (ce) {
+          toast({ title: "Erro ao guardar turmas", description: ce.message, variant: "destructive" });
+          return;
+        }
+      }
+      if (ruleForm.target_scope === "students" && ruleForm.student_ids.length > 0) {
+        const { error: se } = await supabase
+          .from("meal_charge_rule_students")
+          .insert(ruleForm.student_ids.map((sid) => ({ charge_rule_id: ruleId, student_id: sid })));
+        if (se) {
+          toast({ title: "Erro ao guardar alunos", description: se.message, variant: "destructive" });
+          return;
+        }
+      }
     }
 
     toast({ title: editingRule ? "Regra actualizada" : "Regra criada" });
@@ -354,7 +439,8 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
 
   const confirmDelete = async () => {
     if (!deleteRule) return;
-    const t = variant === "activity" ? "activity_charge_rules" : "transport_charge_rules";
+    const t =
+      variant === "activity" ? "activity_charge_rules" : variant === "transport" ? "transport_charge_rules" : "meal_charge_rules";
     const { error } = await supabase.from(t).delete().eq("id", deleteRule);
     if (error) toast({ title: "Erro a apagar", description: error.message, variant: "destructive" });
     else toast({ title: "Regra apagada" });
@@ -362,8 +448,8 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
     await load();
   };
 
-  const entityLabel = variant === "activity" ? "Atividade" : "Rota";
-  const options = variant === "activity" ? activities : routes;
+  const entityLabel = variant === "activity" ? "Atividade" : variant === "transport" ? "Rota" : "Plano de refeições";
+  const options = variant === "activity" ? activities : variant === "transport" ? routes : mealPrograms;
 
   return (
     <div className="space-y-4">
@@ -374,7 +460,9 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
             <CardDescription>
               {variant === "activity"
                 ? "Valor por período, recorrência e alvo (todos os inscritos, turmas ou alunos). Ao guardar uma inscrição, as mensalidades passam a seguir estas regras quando aplicáveis; caso contrário mantém-se o valor configurado na atividade."
-                : "Valor por período, recorrência e alvo. Quando há regra aplicável à inscrição, as mensalidades seguem estas definições; caso contrário usa-se o valor da rota ou o override por aluno."}
+                : variant === "transport"
+                  ? "Valor por período, recorrência e alvo. Quando há regra aplicável à inscrição, as mensalidades seguem estas definições; caso contrário usa-se o valor da rota ou o override por aluno."
+                  : "Valor por período, recorrência e alvo. Se existir regra para o plano e o aluno, as cobranças seguem estas definições; caso contrário usa-se o valor por omissão do plano ou o valor manual na inscrição."}
             </CardDescription>
           </div>
           {canManage && (
@@ -403,11 +491,13 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
                 </thead>
                 <tbody>
                   {rules.map((r) => {
-                    const eid = "activity_id" in r ? r.activity_id : r.route_id;
+                    const eid = "activity_id" in r ? r.activity_id : "route_id" in r ? r.route_id : r.meal_program_id;
                     const ename =
                       variant === "activity"
                         ? activities.find((x) => x.id === eid)?.name ?? "—"
-                        : routes.find((x) => x.id === eid)?.name ?? "—";
+                        : variant === "transport"
+                          ? routes.find((x) => x.id === eid)?.name ?? "—"
+                          : mealPrograms.find((x) => x.id === eid)?.name ?? "—";
                     const yr = r.academic_year_id ? years.find((y) => y.id === r.academic_year_id)?.label : null;
                     return (
                       <tr key={r.id} className="border-t border-border">

@@ -2284,6 +2284,7 @@ export type Database = {
           enrollment_fee_id: string | null
           erp_exported_at: string | null
           id: string
+          meal_fee_id: string | null
           method: string | null
           notes: string | null
           payment_date: string | null
@@ -2303,6 +2304,7 @@ export type Database = {
           enrollment_fee_id?: string | null
           erp_exported_at?: string | null
           id?: string
+          meal_fee_id?: string | null
           method?: string | null
           notes?: string | null
           payment_date?: string | null
@@ -2322,6 +2324,7 @@ export type Database = {
           enrollment_fee_id?: string | null
           erp_exported_at?: string | null
           id?: string
+          meal_fee_id?: string | null
           method?: string | null
           notes?: string | null
           payment_date?: string | null
@@ -2348,6 +2351,13 @@ export type Database = {
             columns: ["enrollment_fee_id"]
             isOneToOne: false
             referencedRelation: "enrollment_fees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_meal_fee_id_fkey"
+            columns: ["meal_fee_id"]
+            isOneToOne: false
+            referencedRelation: "meal_fees"
             referencedColumns: ["id"]
           },
           {
@@ -3417,6 +3427,341 @@ export type Database = {
           },
         ]
       }
+      meal_charge_rule_classrooms: {
+        Row: {
+          charge_rule_id: string
+          classroom_id: string
+        }
+        Insert: {
+          charge_rule_id: string
+          classroom_id: string
+        }
+        Update: {
+          charge_rule_id?: string
+          classroom_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_charge_rule_classrooms_charge_rule_id_fkey"
+            columns: ["charge_rule_id"]
+            isOneToOne: false
+            referencedRelation: "meal_charge_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meal_charge_rule_classrooms_classroom_id_fkey"
+            columns: ["classroom_id"]
+            isOneToOne: false
+            referencedRelation: "classrooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meal_charge_rule_students: {
+        Row: {
+          charge_rule_id: string
+          student_id: string
+        }
+        Insert: {
+          charge_rule_id: string
+          student_id: string
+        }
+        Update: {
+          charge_rule_id?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_charge_rule_students_charge_rule_id_fkey"
+            columns: ["charge_rule_id"]
+            isOneToOne: false
+            referencedRelation: "meal_charge_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meal_charge_rule_students_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meal_charge_rules: {
+        Row: {
+          academic_year_id: string | null
+          created_at: string
+          due_day: number
+          end_month: number | null
+          generate_all_upfront: boolean
+          id: string
+          meal_program_id: string
+          monthly_amount: number
+          months_count: number
+          notes: string | null
+          recurrence: string
+          school_id: string
+          start_month: number
+          target_scope: string
+          updated_at: string
+        }
+        Insert: {
+          academic_year_id?: string | null
+          created_at?: string
+          due_day?: number
+          end_month?: number | null
+          generate_all_upfront?: boolean
+          id?: string
+          meal_program_id: string
+          monthly_amount?: number
+          months_count?: number
+          notes?: string | null
+          recurrence?: string
+          school_id: string
+          start_month?: number
+          target_scope?: string
+          updated_at?: string
+        }
+        Update: {
+          academic_year_id?: string | null
+          created_at?: string
+          due_day?: number
+          end_month?: number | null
+          generate_all_upfront?: boolean
+          id?: string
+          meal_program_id?: string
+          monthly_amount?: number
+          months_count?: number
+          notes?: string | null
+          recurrence?: string
+          school_id?: string
+          start_month?: number
+          target_scope?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_charge_rules_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meal_charge_rules_meal_program_id_fkey"
+            columns: ["meal_program_id"]
+            isOneToOne: false
+            referencedRelation: "meal_programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meal_charge_rules_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meal_enrollments: {
+        Row: {
+          created_at: string
+          end_date: string | null
+          enrolled_at: string
+          id: string
+          meal_program_id: string
+          monthly_fee_override: number | null
+          notes: string | null
+          school_id: string
+          start_date: string
+          status: string
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          end_date?: string | null
+          enrolled_at?: string
+          id?: string
+          meal_program_id: string
+          monthly_fee_override?: number | null
+          notes?: string | null
+          school_id: string
+          start_date?: string
+          status?: string
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string | null
+          enrolled_at?: string
+          id?: string
+          meal_program_id?: string
+          monthly_fee_override?: number | null
+          notes?: string | null
+          school_id?: string
+          start_date?: string
+          status?: string
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_enrollments_meal_program_id_fkey"
+            columns: ["meal_program_id"]
+            isOneToOne: false
+            referencedRelation: "meal_programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meal_enrollments_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meal_enrollments_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meal_fees: {
+        Row: {
+          academic_year_id: string | null
+          amount_due: number
+          created_at: string
+          due_date: string
+          enrollment_id: string
+          id: string
+          is_paid: boolean
+          meal_program_id: string
+          month_index: number | null
+          school_id: string
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          academic_year_id?: string | null
+          amount_due?: number
+          created_at?: string
+          due_date: string
+          enrollment_id: string
+          id?: string
+          is_paid?: boolean
+          meal_program_id: string
+          month_index?: number | null
+          school_id: string
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          academic_year_id?: string | null
+          amount_due?: number
+          created_at?: string
+          due_date?: string
+          enrollment_id?: string
+          id?: string
+          is_paid?: boolean
+          meal_program_id?: string
+          month_index?: number | null
+          school_id?: string
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_fees_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meal_fees_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "meal_enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meal_fees_meal_program_id_fkey"
+            columns: ["meal_program_id"]
+            isOneToOne: false
+            referencedRelation: "meal_programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meal_fees_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meal_fees_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meal_programs: {
+        Row: {
+          academic_year_id: string | null
+          created_at: string
+          default_monthly_fee: number
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          school_id: string
+          updated_at: string
+        }
+        Insert: {
+          academic_year_id?: string | null
+          created_at?: string
+          default_monthly_fee?: number
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          school_id: string
+          updated_at?: string
+        }
+        Update: {
+          academic_year_id?: string | null
+          created_at?: string
+          default_monthly_fee?: number
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          school_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_programs_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meal_programs_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transport_charge_rule_classrooms: {
         Row: {
           charge_rule_id: string
@@ -3952,6 +4297,10 @@ export type Database = {
         Returns: number
       }
       generate_transport_fees: {
+        Args: { _enrollment_id: string }
+        Returns: number
+      }
+      generate_meal_fees: {
         Args: { _enrollment_id: string }
         Returns: number
       }

@@ -16,7 +16,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap, FileSpreadsheet, FileDown } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap, FileSpreadsheet, FileDown, Utensils } from "lucide-react";
 import { ErpArticleCodesCard } from "@/components/pagamentos/ErpArticleCodesCard";
 import { ErpExportMappingSection } from "@/components/pagamentos/ErpExportMappingSection";
 import { ErpExportPaymentsSection } from "@/components/pagamentos/ErpExportPaymentsSection";
@@ -208,6 +208,7 @@ type PaymentListRow = {
   student_fee_id: string | null;
   activity_fee_id: string | null;
   transport_fee_id: string | null;
+  meal_fee_id?: string | null;
   enrollment_fee_id?: string | null;
   amount_paid: number;
   method: string | null;
@@ -259,6 +260,26 @@ type TransportFeeRow = {
   route?: { id: string; name: string } | null;
 };
 
+type MealFeeRow = {
+  id: string;
+  amount_due: number;
+  due_date: string;
+  is_paid: boolean | null;
+  month_index: number | null;
+  student_id: string;
+  meal_program_id: string;
+  enrollment_id: string;
+  academic_year_id: string | null;
+  student?: {
+    id: string;
+    full_name: string;
+    parent_id: string | null;
+    classroom_id: string | null;
+    classroom?: { id: string; name: string } | null;
+  } | null;
+  meal_program?: { id: string; name: string } | null;
+};
+
 type EnrollmentFeeRow = {
   id: string;
   amount_due: number;
@@ -294,14 +315,15 @@ function chunkBySize<T>(items: readonly T[], size: number): T[][] {
   return out;
 }
 
-export type PagamentosFinancePageMode = "payments" | "tuition" | "activityCharges" | "transportCharges";
+export type PagamentosFinancePageMode = "payments" | "tuition" | "activityCharges" | "transportCharges" | "mealCharges";
 
-/** `tuition` = página Propinas (regras + lista). `payments` = outras cobranças em Pagamentos. Modos *_Charges embutidos em extracurricular / transportes. */
+/** `tuition` = página Propinas (regras + lista). `payments` = outras cobranças em Pagamentos. Modos *_Charges embutidos em extracurricular / transportes / refeições. */
 export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosFinancePageMode }) {
   const tuitionOnly = financePage === "tuition";
   const activityChargesOnly = financePage === "activityCharges";
   const transportChargesOnly = financePage === "transportCharges";
-  const chargesEmbeddedOnly = activityChargesOnly || transportChargesOnly;
+  const mealChargesOnly = financePage === "mealCharges";
+  const chargesEmbeddedOnly = activityChargesOnly || transportChargesOnly || mealChargesOnly;
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const { role } = useUserRole();
   const canEditSchoolPaymentPrefs = isSchoolManagementRole(role) || isSchoolSettingsAdmin(role);
@@ -371,6 +393,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   const [bulkRemindingTuition, setBulkRemindingTuition] = useState(false);
   const [bulkSelectedActivityFeeIds, setBulkSelectedActivityFeeIds] = useState<Set<string>>(() => new Set());
   const [bulkSelectedTransportFeeIds, setBulkSelectedTransportFeeIds] = useState<Set<string>>(() => new Set());
+  const [bulkSelectedMealFeeIds, setBulkSelectedMealFeeIds] = useState<Set<string>>(() => new Set());
   const [bulkSelectedEnrollmentFeeIds, setBulkSelectedEnrollmentFeeIds] = useState<Set<string>>(() => new Set());
   /** Propinas (student_fees): selecção na lista principal e em «Comprovativos a validar». */
   const [bulkSelectedTuitionFeeIds, setBulkSelectedTuitionFeeIds] = useState<Set<string>>(() => new Set());
@@ -401,6 +424,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   const [routesList, setRoutesList] = useState<Array<{ id: string; name: string }>>([]);
   const [remindingTrFeeId, setRemindingTrFeeId] = useState<string | null>(null);
 
+  const [allMealFees, setAllMealFees] = useState<MealFeeRow[]>([]);
+  const [mealPayments, setMealPayments] = useState<PaymentListRow[]>([]);
+  const [meFilter, setMeFilter] = useState<"all" | "paid" | "pending" | "overdue">("pending");
+  const [meYearFilter, setMeYearFilter] = useState<string>("all");
+  const [meProgramFilter, setMeProgramFilter] = useState<string>("all");
+  const [meSearch, setMeSearch] = useState("");
+  const [mealProgramsList, setMealProgramsList] = useState<Array<{ id: string; name: string }>>([]);
+  const [remindingMeFeeId, setRemindingMeFeeId] = useState<string | null>(null);
+
   // Enrollment fees (matrículas / renovações)
   const [allEnrollmentFees, setAllEnrollmentFees] = useState<EnrollmentFeeRow[]>([]);
   const [enrollmentPayments, setEnrollmentPayments] = useState<PaymentListRow[]>([]);
@@ -421,6 +453,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     | { kind: "fee"; fee: FeeListRow }
     | { kind: "activity"; fee: ActivityFeeRow }
     | { kind: "transport"; fee: TransportFeeRow }
+    | { kind: "meal"; fee: MealFeeRow }
     | { kind: "enrollment"; fee: EnrollmentFeeRow }
     | null
   >(null);
@@ -446,6 +479,13 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   };
   const openRecordForTransport = (fee: TransportFeeRow) => {
     setRecordDialog({ kind: "transport", fee });
+    setRecordFile(null);
+    setRecordAmount(String(fee.amount_due));
+    setRecordMethod("transferencia");
+    setRecordNotes("");
+  };
+  const openRecordForMeal = (fee: MealFeeRow) => {
+    setRecordDialog({ kind: "meal", fee });
     setRecordFile(null);
     setRecordAmount(String(fee.amount_due));
     setRecordMethod("transferencia");
@@ -479,6 +519,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         ? (fee as ActivityFeeRow).student_id
         : kind === "transport"
         ? (fee as TransportFeeRow).student_id
+        : kind === "meal"
+        ? (fee as MealFeeRow).student_id
         : (fee as EnrollmentFeeRow).student_id;
     setRecordUploading(true);
     let proofPath: string | null = null;
@@ -505,6 +547,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       student_fee_id: kind === "fee" ? fee.id : null,
       activity_fee_id: kind === "activity" ? fee.id : null,
       transport_fee_id: kind === "transport" ? fee.id : null,
+      meal_fee_id: kind === "meal" ? fee.id : null,
       enrollment_fee_id: kind === "enrollment" ? fee.id : null,
     } : {
       amount_paid: amount,
@@ -519,6 +562,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       student_fee_id: kind === "fee" ? fee.id : null,
       activity_fee_id: kind === "activity" ? fee.id : null,
       transport_fee_id: kind === "transport" ? fee.id : null,
+      meal_fee_id: kind === "meal" ? fee.id : null,
       enrollment_fee_id: kind === "enrollment" ? fee.id : null,
     };
     const { data: payRow, error: insErr } = await supabase.from("payments").insert(insertPayload).select("id").single();
@@ -534,6 +578,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         ? await supabase.from("activity_fees").update({ is_paid: true }).eq("id", fee.id)
         : kind === "transport"
         ? await supabase.from("transport_fees").update({ is_paid: true }).eq("id", fee.id)
+        : kind === "meal"
+        ? await supabase.from("meal_fees").update({ is_paid: true }).eq("id", fee.id)
         : await supabase.from("enrollment_fees").update({ is_paid: true }).eq("id", fee.id);
     if (feeErr) {
       setRecordUploading(false);
@@ -541,7 +587,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       return;
     }
     const comprovativoMencao = proofPath ? " Pode consultar o comprovativo no portal." : "";
-    const parentId = isParent ? null : (fee as FeeListRow | ActivityFeeRow | TransportFeeRow | EnrollmentFeeRow).student?.parent_id;
+    const parentId = isParent ? null : (fee as FeeListRow | ActivityFeeRow | TransportFeeRow | MealFeeRow | EnrollmentFeeRow).student?.parent_id;
     if (parentId) {
       if (kind === "fee") {
         const f = fee as FeeListRow;
@@ -575,6 +621,17 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           category: "pagamento",
           link: "https://www.edukamba.com/pagamentos",
         });
+      } else if (kind === "meal") {
+        const f = fee as MealFeeRow;
+        const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
+        await supabase.from("notifications").insert({
+          recipient_id: parentId,
+          school_id: schoolId,
+          title: `Pagamento de refeições registado — ${monthLabel}`.trim(),
+          description: `A escola registou o pagamento do plano ${f.meal_program?.name ?? "refeições"} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
+          category: "pagamento",
+          link: "https://www.edukamba.com/pagamentos",
+        });
       } else {
         const f = fee as EnrollmentFeeRow;
         const label = f.fee_type === "RENEWAL" ? "renovação de matrícula" : "matrícula";
@@ -599,8 +656,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
    * Regista na escola um pagamento já válido quando não há comprovativo pendente (ex.: validação em lote).
    */
   const insertStaffValidatedCharge = async (
-    kind: "fee" | "activity" | "transport" | "enrollment",
-    fee: FeeListRow | ActivityFeeRow | TransportFeeRow | EnrollmentFeeRow,
+    kind: "fee" | "activity" | "transport" | "meal" | "enrollment",
+    fee: FeeListRow | ActivityFeeRow | TransportFeeRow | MealFeeRow | EnrollmentFeeRow,
     userId: string | null,
   ): Promise<StaffValidatedInsertResult> => {
     if (!schoolId) return { error: "Sem escola" };
@@ -619,6 +676,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       student_fee_id: kind === "fee" ? fee.id : null,
       activity_fee_id: kind === "activity" ? fee.id : null,
       transport_fee_id: kind === "transport" ? fee.id : null,
+      meal_fee_id: kind === "meal" ? fee.id : null,
       enrollment_fee_id: kind === "enrollment" ? fee.id : null,
     }).select("id").single();
     if (insErr) return { error: insErr.message };
@@ -630,7 +688,9 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           ? await supabase.from("activity_fees").update({ is_paid: true }).eq("id", fee.id)
           : kind === "transport"
             ? await supabase.from("transport_fees").update({ is_paid: true }).eq("id", fee.id)
-            : await supabase.from("enrollment_fees").update({ is_paid: true }).eq("id", fee.id);
+            : kind === "meal"
+              ? await supabase.from("meal_fees").update({ is_paid: true }).eq("id", fee.id)
+              : await supabase.from("enrollment_fees").update({ is_paid: true }).eq("id", fee.id);
     if (feeErr) return { error: feeErr.message };
     const parentId = fee.student?.parent_id ?? null;
     const comprovativoMencao = "";
@@ -664,6 +724,17 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           school_id: schoolId,
           title: `Pagamento de transporte registado — ${monthLabel}`.trim(),
           description: `A escola registou o pagamento do transporte (${f.route?.name ?? "rota"}) de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
+          category: "pagamento",
+          link: "https://www.edukamba.com/pagamentos",
+        });
+      } else if (kind === "meal") {
+        const f = fee as MealFeeRow;
+        const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
+        await supabase.from("notifications").insert({
+          recipient_id: parentId,
+          school_id: schoolId,
+          title: `Pagamento de refeições registado — ${monthLabel}`.trim(),
+          description: `A escola registou o pagamento do plano ${f.meal_program?.name ?? "refeições"} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
           category: "pagamento",
           link: "https://www.edukamba.com/pagamentos",
         });
@@ -780,6 +851,9 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         setAllTransportFees([]);
         setTransportPayments([]);
         setRoutesList([]);
+        setAllMealFees([]);
+        setMealPayments([]);
+        setMealProgramsList([]);
         setAllEnrollmentFees([]);
         setEnrollmentPayments([]);
       } else if (activityChargesOnly) {
@@ -788,6 +862,9 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         setAllTransportFees([]);
         setTransportPayments([]);
         setRoutesList([]);
+        setAllMealFees([]);
+        setMealPayments([]);
+        setMealProgramsList([]);
         setAllEnrollmentFees([]);
         setEnrollmentPayments([]);
 
@@ -828,6 +905,9 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         setActivityPayments([]);
         setAllEnrollmentFees([]);
         setEnrollmentPayments([]);
+        setAllMealFees([]);
+        setMealPayments([]);
+        setMealProgramsList([]);
         const [{ data: trFees }, { data: rtsList }] = await Promise.all([
           (isParent
             ? supabase
@@ -856,6 +936,46 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           setTransportPayments((trPayRows ?? []) as PaymentListRow[]);
         } else {
           setTransportPayments([]);
+        }
+      } else if (mealChargesOnly) {
+        setAllFees([]);
+        setPayments([]);
+        setAllActivityFees([]);
+        setActivitiesList([]);
+        setActivityPayments([]);
+        setAllTransportFees([]);
+        setTransportPayments([]);
+        setRoutesList([]);
+        setAllEnrollmentFees([]);
+        setEnrollmentPayments([]);
+        const [{ data: meFees }, { data: progs }] = await Promise.all([
+          (isParent
+            ? supabase
+                .from("meal_fees")
+                .select("id, amount_due, due_date, is_paid, month_index, student_id, meal_program_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), meal_program:meal_programs(id, name)")
+                .eq("school_id", sId)
+                .in("student_id", scopedStudentIds)
+                .order("due_date", { ascending: true })
+            : supabase
+                .from("meal_fees")
+                .select("id, amount_due, due_date, is_paid, month_index, student_id, meal_program_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), meal_program:meal_programs(id, name)")
+                .eq("school_id", sId)
+                .order("due_date", { ascending: true })
+          ),
+          supabase.from("meal_programs").select("id, name").eq("school_id", sId).order("name"),
+        ]);
+        setAllMealFees((meFees ?? []) as unknown as MealFeeRow[]);
+        setMealProgramsList((progs ?? []) as Array<{ id: string; name: string }>);
+        const meFeeIds = (meFees ?? []).map((f: { id: string }) => f.id);
+        if (meFeeIds.length > 0) {
+          const { data: mePayRows } = await supabase
+            .from("payments")
+            .select("id, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, meal_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+            .in("meal_fee_id", meFeeIds)
+            .order("payment_date", { ascending: false });
+          setMealPayments((mePayRows ?? []) as PaymentListRow[]);
+        } else {
+          setMealPayments([]);
         }
       } else {
         setAllFees([]);
@@ -961,6 +1081,9 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       setAllEnrollmentFees([]);
       setEnrollmentPayments([]);
       setRoutesList([]);
+      setAllMealFees([]);
+      setMealPayments([]);
+      setMealProgramsList([]);
     }
     setLoading(false);
   };
@@ -983,10 +1106,14 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       setTrYearFilter(globalAcademicYearId);
       return;
     }
+    if (mealChargesOnly) {
+      setMeYearFilter(globalAcademicYearId);
+      return;
+    }
     setActYearFilter(globalAcademicYearId);
     setTrYearFilter(globalAcademicYearId);
     setEnYearFilter(globalAcademicYearId);
-  }, [globalAcademicYearId, tuitionOnly, activityChargesOnly, transportChargesOnly]);
+  }, [globalAcademicYearId, tuitionOnly, activityChargesOnly, transportChargesOnly, mealChargesOnly]);
 
   // Lock classroom filter to parent's child classroom
   useEffect(() => {
@@ -1370,9 +1497,10 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     for (const p of payments) if (p.status === "validado") ids.add(p.id);
     for (const p of activityPayments) if (p.status === "validado") ids.add(p.id);
     for (const p of transportPayments) if (p.status === "validado") ids.add(p.id);
+    for (const p of mealPayments) if (p.status === "validado") ids.add(p.id);
     for (const p of enrollmentPayments) if (p.status === "validado") ids.add(p.id);
     return [...ids].sort();
-  }, [payments, activityPayments, transportPayments, enrollmentPayments]);
+  }, [payments, activityPayments, transportPayments, mealPayments, enrollmentPayments]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1580,6 +1708,28 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     return null;
   };
 
+  const finalizeMealFeeValidation = async (fee: MealFeeRow, payment: PaymentListRow, userId: string | null): Promise<string | null> => {
+    if (!schoolId) return "Sem escola";
+    const { error: payErr } = await supabase
+      .from("payments")
+      .update({ status: "validado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: null })
+      .eq("id", payment.id);
+    if (payErr) return payErr.message;
+    const { error: feeErr } = await supabase.from("meal_fees").update({ is_paid: true }).eq("id", fee.id);
+    if (feeErr) return feeErr.message;
+    if (fee.student?.parent_id) {
+      await supabase.from("notifications").insert({
+        recipient_id: fee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento de refeições validado`,
+        description: `O pagamento do plano ${fee.meal_program?.name ?? "refeições"} de ${fee.student.full_name} (${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
+        category: "pagamento",
+        link: "https://www.edukamba.com/pagamentos",
+      });
+    }
+    return null;
+  };
+
   const finalizeEnrollmentFeeValidation = async (fee: EnrollmentFeeRow, payment: PaymentListRow, userId: string | null): Promise<string | null> => {
     if (!schoolId) return "Sem escola";
     const { error: payErr } = await supabase
@@ -1614,6 +1764,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
 
   const setBulkTransportFeeChecked = (feeId: string, checked: boolean) => {
     setBulkSelectedTransportFeeIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(feeId);
+      else next.delete(feeId);
+      return next;
+    });
+  };
+
+  const setBulkMealFeeChecked = (feeId: string, checked: boolean) => {
+    setBulkSelectedMealFeeIds((prev) => {
       const next = new Set(prev);
       if (checked) next.add(feeId);
       else next.delete(feeId);
@@ -1719,6 +1878,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     const fee = payment.student_fee_id ? allFees.find((f) => f.id === payment.student_fee_id) : null;
     const actFee = payment.activity_fee_id ? allActivityFees.find((f) => f.id === payment.activity_fee_id) : null;
     const trFee = payment.transport_fee_id ? allTransportFees.find((f) => f.id === payment.transport_fee_id) : null;
+    const meFee = payment.meal_fee_id ? allMealFees.find((f) => f.id === payment.meal_fee_id) : null;
     const enFee = payment.enrollment_fee_id ? allEnrollmentFees.find((f) => f.id === payment.enrollment_fee_id) : null;
     setValidatingId(payment.id);
     const { data: userRes } = await supabase.auth.getUser();
@@ -1764,6 +1924,17 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         school_id: schoolId,
         title: `Pagamento de transporte rejeitado`,
         description: `O comprovativo de pagamento do transporte (${trFee.route?.name ?? "rota"}) de ${trFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}. ` : ""}${followUp}`,
+        category: "pagamento",
+        link: "https://www.edukamba.com/pagamentos",
+      });
+    }
+    if (meFee?.student?.parent_id) {
+      const followUp = usarAnexoEncarregado ? "Por favor reenvie o comprovativo correto." : "Para regularizar o pagamento, dirija-se à escola.";
+      await supabase.from("notifications").insert({
+        recipient_id: meFee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento de refeições rejeitado`,
+        description: `O comprovativo de pagamento do plano ${meFee.meal_program?.name ?? "refeições"} de ${meFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}. ` : ""}${followUp}`,
         category: "pagamento",
         link: "https://www.edukamba.com/pagamentos",
       });
@@ -2182,6 +2353,160 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     else toast({ title: `${rows.length} lembrete(s) enviado(s)` });
   };
 
+  // ===== Meal fees logic =====
+  const filteredMealFees = useMemo(() => {
+    const now = Date.now();
+    const search = meSearch.trim().toLowerCase();
+    return allMealFees.filter((f) => {
+      if (meYearFilter !== "all" && f.academic_year_id !== meYearFilter) return false;
+      if (meProgramFilter !== "all" && f.meal_program_id !== meProgramFilter) return false;
+      if (meFilter === "paid" && !f.is_paid) return false;
+      if (meFilter === "pending" && f.is_paid) return false;
+      if (meFilter === "overdue" && (f.is_paid || new Date(f.due_date).getTime() >= now)) return false;
+      if (
+        search &&
+        !(f.student?.full_name ?? "").toLowerCase().includes(search) &&
+        !(f.meal_program?.name ?? "").toLowerCase().includes(search)
+      )
+        return false;
+      return true;
+    });
+  }, [allMealFees, meFilter, meYearFilter, meProgramFilter, meSearch]);
+
+  const mealFeeStats = useMemo(() => {
+    const now = Date.now();
+    let paid = 0, pending = 0, overdue = 0;
+    allMealFees.forEach((f) => {
+      if (f.is_paid) paid += Number(f.amount_due);
+      else {
+        pending += Number(f.amount_due);
+        if (new Date(f.due_date).getTime() < now) overdue += Number(f.amount_due);
+      }
+    });
+    return { paid, pending, overdue };
+  }, [allMealFees]);
+
+  const latestPaymentByMealFee = useMemo(() => {
+    const map = new Map<string, PaymentListRow>();
+    mealPayments.forEach((p) => {
+      if (!p.meal_fee_id) return;
+      if (!map.has(p.meal_fee_id)) map.set(p.meal_fee_id, p);
+    });
+    return map;
+  }, [mealPayments]);
+
+  const pendingMealValidations = useMemo(() => {
+    return allMealFees
+      .map((f) => ({ fee: f, payment: latestPaymentByMealFee.get(f.id) }))
+      .filter((x) => x.payment && x.payment.status === "pendente") as Array<{ fee: MealFeeRow; payment: PaymentListRow }>;
+  }, [allMealFees, latestPaymentByMealFee]);
+
+  const validateMealPayment = async (fee: MealFeeRow, payment: PaymentListRow) => {
+    if (!schoolId || !canValidatePaymentProofs) return;
+    setValidatingId(payment.id);
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id ?? null;
+    const errMsg = await finalizeMealFeeValidation(fee, payment, userId);
+    setValidatingId(null);
+    if (errMsg) {
+      toast({ title: "Erro a validar", description: errMsg, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Pagamento validado", description: "O encarregado foi notificado." });
+    await emitFtAfterValidation([payment.id]);
+    await fetchAll();
+  };
+
+  const bulkValidateMealFeesList = async () => {
+    if (!canValidatePaymentProofs) return;
+    const targets = [...bulkSelectedMealFeeIds]
+      .map((id) => allMealFees.find((f) => f.id === id))
+      .filter((f): f is MealFeeRow => !!f && !f.is_paid);
+    if (!targets.length) {
+      toast({
+        title: "Nada a validar nas linhas seleccionadas",
+        description: "Seleccione cobranças de refeições não pagas (com ou sem comprovativo).",
+        variant: "destructive",
+      });
+      return;
+    }
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id ?? null;
+    setBulkValidating(true);
+    let failed = 0;
+    const emitIds: string[] = [];
+    for (const fee of targets) {
+      const pay = latestPaymentByMealFee.get(fee.id);
+      if (pay && pay.status === "pendente") {
+        const errMsg = await finalizeMealFeeValidation(fee, pay, userId);
+        if (errMsg) failed++;
+        else emitIds.push(pay.id);
+      } else {
+        const ins = await insertStaffValidatedCharge("meal", fee, userId);
+        if (ins.error) failed++;
+        else if (ins.paymentId) emitIds.push(ins.paymentId);
+      }
+    }
+    setBulkValidating(false);
+    setBulkSelectedMealFeeIds(new Set());
+    if (failed)
+      toast({
+        title: "Validação em lote concluída com erros",
+        description: `${targets.length - failed} concluída(s), ${failed} falha(s).`,
+        variant: "destructive",
+      });
+    else toast({ title: "Pagamentos validados", description: `${targets.length} cobrança(s) concluída(s).` });
+    await emitFtAfterValidation(emitIds);
+    await fetchAll();
+  };
+
+  const sendMealReminder = async (fee: MealFeeRow) => {
+    if (!schoolId) return;
+    const parentId = fee.student?.parent_id;
+    if (!parentId) {
+      toast({ title: "Aluno sem encarregado", description: "Não é possível enviar lembrete.", variant: "destructive" });
+      return;
+    }
+    setRemindingMeFeeId(fee.id);
+    const title = `Lembrete — Refeições (${fee.meal_program?.name ?? "plano"})`;
+    const description = `A cobrança de refeições (${fee.meal_program?.name ?? "plano"}) de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`;
+    const { error } = await supabase.from("notifications").insert({
+      recipient_id: parentId,
+      school_id: schoolId,
+      title,
+      description,
+      category: "pagamento",
+      link: "https://www.edukamba.com/pagamentos",
+    });
+    if (!error) {
+      void supabase.functions.invoke("send-cobrar-email", {
+        body: { student_id: fee.student_id, title, description, link: `https://www.edukamba.com/pagamentos` },
+      });
+    }
+    setRemindingMeFeeId(null);
+    if (error) toast({ title: "Erro a enviar lembrete", description: error.message, variant: "destructive" });
+    else toast({ title: "Lembrete enviado ao encarregado e ao aluno" });
+  };
+
+  const sendMealBulkReminders = async () => {
+    const targets = filteredMealFees.filter((f) => !f.is_paid && f.student?.parent_id);
+    if (targets.length === 0) {
+      toast({ title: "Sem destinatários", description: "Não há cobranças em dívida com encarregado associado." });
+      return;
+    }
+    const rows = targets.map((f) => ({
+      recipient_id: f.student!.parent_id!,
+      school_id: schoolId!,
+      title: `Lembrete — Refeições (${f.meal_program?.name ?? "plano"})`,
+      description: `A cobrança de refeições de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      category: "pagamento",
+      link: "https://www.edukamba.com/pagamentos",
+    }));
+    const { error } = await supabase.from("notifications").insert(rows);
+    if (error) toast({ title: "Erro a enviar lembretes", description: error.message, variant: "destructive" });
+    else toast({ title: `${rows.length} lembrete(s) enviado(s)` });
+  };
+
   // ===== Enrollment fees helpers =====
   const filteredEnrollmentFees = useMemo(() => {
     const now = Date.now();
@@ -2297,6 +2622,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
 
   const filteredUnpaidTransportFeesForBulk = useMemo(() => filteredTransportFees.filter((f) => !f.is_paid), [filteredTransportFees]);
 
+  const filteredUnpaidMealFeesForBulk = useMemo(() => filteredMealFees.filter((f) => !f.is_paid), [filteredMealFees]);
+
   const filteredUnpaidEnrollmentFeesForBulk = useMemo(() => filteredEnrollmentFees.filter((f) => !f.is_paid), [filteredEnrollmentFees]);
 
   /** Propinas seleccionadas e não pagas → elegíveis para validação em lote. */
@@ -2317,6 +2644,12 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       .map((id) => allTransportFees.find((f) => f.id === id))
       .filter((f): f is TransportFeeRow => !!f && !f.is_paid);
   }, [bulkSelectedTransportFeeIds, allTransportFees]);
+
+  const selectedMealFeesEligibleForBulkValidate = useMemo(() => {
+    return [...bulkSelectedMealFeeIds]
+      .map((id) => allMealFees.find((f) => f.id === id))
+      .filter((f): f is MealFeeRow => !!f && !f.is_paid);
+  }, [bulkSelectedMealFeeIds, allMealFees]);
 
   const selectedEnrollmentFeesEligibleForBulkValidate = useMemo(() => {
     return [...bulkSelectedEnrollmentFeeIds]
@@ -2408,7 +2741,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">
-              {tuitionOnly ? "Propinas" : chargesEmbeddedOnly ? (activityChargesOnly ? "Extracurriculares — pagamentos" : "Transporte — pagamentos") : "Pagamentos"}
+              {tuitionOnly
+                ? "Propinas"
+                : chargesEmbeddedOnly
+                  ? activityChargesOnly
+                    ? "Extracurriculares — pagamentos"
+                    : transportChargesOnly
+                      ? "Transporte — pagamentos"
+                      : "Refeições — pagamentos"
+                  : "Pagamentos"}
             </h1>
             <p className="text-sm text-muted-foreground">
               {tuitionOnly
@@ -2422,9 +2763,13 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                     ? isParent
                       ? "Cobranças das actividades extracurriculares do(s) seu(s) educando(s)."
                       : "Lista de cobranças extracurriculares, lembretes e registo / validação de pagamentos."
-                    : isParent
-                      ? "Cobranças de transporte do(s) seu(s) educando(s)."
-                      : "Mensalidades de transporte, lembretes e validação."
+                    : transportChargesOnly
+                      ? isParent
+                        ? "Cobranças de transporte do(s) seu(s) educando(s)."
+                        : "Mensalidades de transporte, lembretes e validação."
+                      : isParent
+                        ? "Cobranças de refeições do(s) seu(s) educando(s)."
+                        : "Mensalidades de refeições, lembretes e validação."
                   : isParent
                   ? usarAnexoEncarregado
                     ? "Consulte as cobranças do(s) seu(s) educando(s). Pode anexar comprovativos de transferência quando aplicável."
@@ -2522,7 +2867,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           </Card>
         )}
 
-        <Tabs defaultValue={tuitionOnly ? "fees" : activityChargesOnly ? "activity-fees" : transportChargesOnly ? "transport-fees" : "enrollment-fees"} className="w-full">
+        <Tabs defaultValue={tuitionOnly ? "fees" : activityChargesOnly ? "activity-fees" : transportChargesOnly ? "transport-fees" : mealChargesOnly ? "meal-fees" : "enrollment-fees"} className="w-full">
           <TabsList className={chargesEmbeddedOnly ? "sr-only" : undefined}>
             {tuitionOnly ? (
               <>
@@ -2533,6 +2878,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
               <>
                 {activityChargesOnly ? <TabsTrigger value="activity-fees">Lista de cobranças</TabsTrigger> : null}
                 {transportChargesOnly ? <TabsTrigger value="transport-fees">Lista de cobranças</TabsTrigger> : null}
+                {mealChargesOnly ? <TabsTrigger value="meal-fees">Lista de cobranças</TabsTrigger> : null}
               </>
             ) : (
               <>
@@ -3611,6 +3957,350 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             </Card>
           </TabsContent>
 
+          {/* MEAL FEES TAB */}
+          <TabsContent value="meal-fees" className="space-y-4">
+            {!isParent && (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total recebido</CardTitle></CardHeader>
+                <CardContent><p className="text-2xl font-bold text-pastel-green-foreground">{fmtAOA(mealFeeStats.paid)}</p></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em dívida</CardTitle></CardHeader>
+                <CardContent><p className="text-2xl font-bold text-pastel-yellow-foreground">{fmtAOA(mealFeeStats.pending)}</p></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em atraso</CardTitle></CardHeader>
+                <CardContent><p className="text-2xl font-bold text-destructive">{fmtAOA(mealFeeStats.overdue)}</p></CardContent>
+              </Card>
+            </div>
+            )}
+
+            {!isParent && canValidatePaymentProofs && pendingMealValidations.length > 0 && (
+              <Card className="border-pastel-blue/60">
+                <CardHeader className="space-y-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                        <FileText className="h-4 w-4" /> Comprovativos a validar
+                        <Badge variant="secondary">{pendingMealValidations.length}</Badge>
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1">Envios pelos encarregados relativos às refeições escolares.</p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80 shrink-0"
+                      disabled={bulkValidating || pendingMealValidations.every((x) => !bulkSelectedMealFeeIds.has(x.fee.id))}
+                      onClick={() => void bulkValidateMealFeesList()}
+                    >
+                      {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                      Validar seleccionados
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="py-2 px-2 w-10 align-middle">
+                            <Checkbox
+                              disabled={bulkValidating}
+                              checked={
+                                pendingMealValidations.length > 0 &&
+                                pendingMealValidations.every(({ fee }) => bulkSelectedMealFeeIds.has(fee.id))
+                              }
+                              onCheckedChange={(v) => {
+                                const checked = v === true;
+                                setBulkSelectedTransportFeeIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (checked) pendingMealValidations.forEach(({ fee }) => next.add(fee.id));
+                                  else pendingMealValidations.forEach(({ fee }) => next.delete(fee.id));
+                                  return next;
+                                });
+                              }}
+                              aria-label="Seleccionar todos"
+                            />
+                          </th>
+                          <th className="py-2 px-2">Aluno</th>
+                          <th className="py-2 px-2">Plano</th>
+                          <th className="py-2 px-2">Valor pago</th>
+                          <th className="py-2 px-2">Método</th>
+                          <th className="py-2 px-2">Submetido</th>
+                          <th className="py-2 px-2 text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pendingMealValidations.map(({ fee, payment }) => (
+                          <tr key={payment.id} className="border-b hover:bg-muted/30">
+                            <td className="py-2 px-2 align-middle">
+                              <Checkbox
+                                disabled={bulkValidating || validatingId === payment.id}
+                                checked={bulkSelectedMealFeeIds.has(fee.id)}
+                                onCheckedChange={(v) => setBulkMealFeeChecked(fee.id, v === true)}
+                              />
+                            </td>
+                            <td className="py-2 px-2 font-medium">{fee.student?.full_name ?? "—"}</td>
+                            <td className="py-2 px-2">{fee.meal_program?.name ?? "—"}</td>
+                            <td className="py-2 px-2 font-semibold">{fmtAOA(Number(payment.amount_paid))}</td>
+                            <td className="py-2 px-2 capitalize text-muted-foreground">{payment.method ?? "—"}</td>
+                            <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString("pt-PT") : "—"}</td>
+                            <td className="py-2 px-2">
+                              <div className="flex flex-wrap justify-end gap-2">
+                                {payment.proof_url && (
+                                  <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(payment.proof_url!)}>
+                                    <Eye className="h-3.5 w-3.5" /> Ver
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                                  disabled={bulkValidating || validatingId === payment.id}
+                                  onClick={() => validateMealPayment(fee, payment)}
+                                >
+                                  {validatingId === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                  Validar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1 text-destructive"
+                                  disabled={bulkValidating || validatingId === payment.id}
+                                  onClick={() => { setRejectDialog(payment); setRejectReason(""); }}
+                                >
+                                  <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card>
+              <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2"><Utensils className="h-4 w-4" /> Cobranças de refeições escolares</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">Controla as cobranças de refeições e envia lembretes aos encarregados.</p>
+                </div>
+                {!isParent && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {canValidatePaymentProofs && filteredUnpaidMealFeesForBulk.length > 0 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                        disabled={
+                          bulkValidating ||
+                          selectedMealFeesEligibleForBulkValidate.length === 0
+                        }
+                        onClick={() => void bulkValidateMealFeesList()}
+                      >
+                        {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                        Validar seleccionados
+                      </Button>
+                    )}
+                    <Button onClick={sendMealBulkReminders} size="sm" variant="outline" className="gap-2">
+                      <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                    </Button>
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input className="pl-9" placeholder="Pesquisar aluno ou plano..." value={meSearch} onChange={(e) => setMeSearch(e.target.value)} />
+                  </div>
+                  <Select value={meFilter} onValueChange={(v) => setMeFilter(v as typeof meFilter)}>
+                    <SelectTrigger className="md:w-44"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="pending">Não pagas</SelectItem>
+                      <SelectItem value="overdue">Em atraso</SelectItem>
+                      <SelectItem value="paid">Pagas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={meYearFilter} onValueChange={setMeYearFilter}>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Ano letivo" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os anos</SelectItem>
+                      {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={meProgramFilter} onValueChange={setMeProgramFilter}>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Plano" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os planos</SelectItem>
+                      {mealProgramsList.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {loading ? (
+                  <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                ) : filteredMealFees.length === 0 ? (
+                  <p className="text-center py-10 text-muted-foreground">Sem cobranças a apresentar.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          {!isParent && canValidatePaymentProofs && filteredUnpaidMealFeesForBulk.length > 0 && (
+                            <th className="py-2 px-2 w-10 align-middle">
+                              <Checkbox
+                                disabled={bulkValidating}
+                                checked={
+                                  filteredUnpaidMealFeesForBulk.length > 0 &&
+                                  filteredUnpaidMealFeesForBulk.every((row) =>
+                                    bulkSelectedMealFeeIds.has(row.id),
+                                  )
+                                }
+                                onCheckedChange={(v) => {
+                                  const checked = v === true;
+                                  setBulkSelectedTransportFeeIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (checked) {
+                                      filteredUnpaidMealFeesForBulk.forEach((row) =>
+                                        next.add(row.id),
+                                      );
+                                    } else {
+                                      filteredUnpaidMealFeesForBulk.forEach((row) =>
+                                        next.delete(row.id),
+                                      );
+                                    }
+                                    return next;
+                                  });
+                                }}
+                                aria-label="Seleccionar todos (filtro atual)"
+                              />
+                            </th>
+                          )}
+                          <th className="py-2 px-2">Aluno</th>
+                          <th className="py-2 px-2">Plano</th>
+                          <th className="py-2 px-2">Mês</th>
+                          <th className="py-2 px-2">Vencimento</th>
+                          <th className="py-2 px-2">Valor</th>
+                          <th className="py-2 px-2">Estado</th>
+                          <th className="py-2 px-2 text-center w-12" title="Factura-recibo fiscal (FACTURA‑RECIBO AGT)">
+                            FT
+                          </th>
+                          <th className="py-2 px-2 text-right">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredMealFees.slice(0, 200).map((f) => {
+                          const overdue = !f.is_paid && new Date(f.due_date).getTime() < Date.now();
+                          const pay = latestPaymentByMealFee.get(f.id);
+                          const pendingValidation = !!pay && pay.status === "pendente";
+                          const rejected = !!pay && pay.status === "rejeitado";
+                          return (
+                            <tr key={f.id} className="border-b hover:bg-muted/30">
+                              {!isParent && canValidatePaymentProofs && filteredUnpaidMealFeesForBulk.length > 0 && (
+                                <td className="py-2 px-2 align-middle w-10">
+                                  {!f.is_paid ? (
+                                    <Checkbox
+                                      disabled={bulkValidating || (!!pay && validatingId === pay.id)}
+                                      checked={bulkSelectedMealFeeIds.has(f.id)}
+                                      onCheckedChange={(v) => setBulkMealFeeChecked(f.id, v === true)}
+                                      title="Incluída na validação em lote («Validar seleccionados») para cobranças não pagas."
+                                    />
+                                  ) : null}
+                                </td>
+                              )}
+                              <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
+                              <td className="py-2 px-2">{f.route?.name ?? "—"}</td>
+                              <td className="py-2 px-2">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
+                              <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
+                              <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
+                              <td className="py-2 px-2">
+                                {f.is_paid ? (
+                                  <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">Pago</Badge>
+                                ) : pendingValidation ? (
+                                  <Badge className="bg-pastel-blue text-pastel-blue-foreground hover:bg-pastel-blue">A validar</Badge>
+                                ) : rejected ? (
+                                  <Badge variant="outline" className="border-destructive text-destructive">Rejeitado</Badge>
+                                ) : overdue ? (
+                                  <Badge variant="destructive">Em atraso</Badge>
+                                ) : (
+                                  <Badge variant="secondary">Pendente</Badge>
+                                )}
+                              </td>
+                              <td className="py-2 px-2 align-middle text-center">{invoiceIconForValidatedPayment(!!f.is_paid, pay)}</td>
+                              <td className="py-2 px-2 text-right">
+                                <div className="flex flex-wrap justify-end gap-2">
+                                  {pendingValidation && pay && !isParent && (
+                                    <>
+                                      {pay.proof_url && (
+                                        <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
+                                          <Eye className="h-3.5 w-3.5" /> Ver
+                                        </Button>
+                                      )}
+                                      {canValidatePaymentProofs && (
+                                        <>
+                                          <Button
+                                            size="sm"
+                                            className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                                            disabled={bulkValidating || validatingId === pay.id}
+                                            onClick={() => validateMealPayment(f, pay)}
+                                          >
+                                            {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                            Validar
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="gap-1 text-destructive"
+                                            disabled={bulkValidating || validatingId === pay.id}
+                                            onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
+                                          >
+                                            <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                          </Button>
+                                        </>
+                                      )}
+                                    </>
+                                  )}
+                                  {!f.is_paid && !pendingValidation && (
+                                    <>
+                                      {(!isParent || usarAnexoEncarregado) && (
+                                        <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForMeal(f)}>
+                                          <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
+                                        </Button>
+                                      )}
+                                      {isParent && !usarAnexoEncarregado && (
+                                        <span className="rounded-md border border-muted bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
+                                          Pagamento presencial na escola
+                                        </span>
+                                      )}
+                                      {!isParent && (
+                                        <Button size="sm" variant="outline" className="gap-2" onClick={() => sendMealReminder(f)} disabled={remindingMeFeeId === f.id || !f.student?.parent_id}>
+                                          {remindingMeFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                          Cobrar
+                                        </Button>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {filteredMealFees.length > 200 && (
+                      <p className="text-xs text-muted-foreground text-center py-3">A mostrar 200 de {filteredMealFees.length}. Refina os filtros para ver as restantes.</p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* ENROLLMENT FEES TAB */}
           <TabsContent value="enrollment-fees" className="space-y-4">
             {!isParent && (
@@ -4657,6 +5347,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 ? `Atividade ${recordDialog.fee.activity?.name ?? ""} (${recordDialog.fee.student?.full_name ?? ""}). ${isParent ? "Fica à espera da validação." : recordNeedsFile ? "Comprovativo opcional apenas se anexado." : "Registo direto pela equipa financeira da escola."}`
                 : recordDialog?.kind === "transport"
                 ? `Transporte (${recordDialog.fee.route?.name ?? ""}) — ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Fica à espera da validação." : recordNeedsFile ? "Envie imagem apenas se disponível." : "Valor recebido presencialmente."}`
+                : recordDialog?.kind === "meal"
+                ? `Refeições (${recordDialog.fee.meal_program?.name ?? ""}) — ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Fica à espera da validação." : recordNeedsFile ? "Associe um comprovativo se existir." : "Valor recebido presencialmente."}`
                 : recordDialog?.kind === "enrollment"
                 ? `${recordDialog.fee.fee_type === "RENEWAL" ? "Renovação de matrícula" : "Matrícula"} — ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "À espera de validação pela escola." : recordNeedsFile ? "Associe um comprovativo digital se existir." : "Pagamento físico apenas."}`
                 : ""}
