@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Search,
   Plus,
@@ -97,6 +98,7 @@ function weekdayNumbers(raw: ActivityRow["weekdays"]): number[] {
 }
 
 const Extracurriculares = () => {
+  const [searchParams] = useSearchParams();
   const native = isNativeMobileApp();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
@@ -183,6 +185,12 @@ const Extracurriculares = () => {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("tab") === "autorizacoes") {
+      setHubTab("autorizacoes");
+    }
+  }, [searchParams]);
 
   const loadActivities = async () => {
     if (!schoolId) return;
@@ -744,7 +752,6 @@ const Extracurriculares = () => {
               role={role}
               isParent={isParent}
               childIds={childIds}
-              homeroomStudentIds={homeroomStudentIds}
               canManageTemplates={canManageAuthorizations}
             />
           </TabsContent>

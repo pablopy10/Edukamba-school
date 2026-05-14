@@ -43,6 +43,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SignatureCanvas } from "@/components/documents/SignatureCanvas";
 import { DocumentUpload } from "@/components/documents/DocumentUpload";
+import { notifyModuleAuthorizationAssignees } from "@/lib/notifications/notifyModuleAuthorizationAssignees";
+import { useTeacherModuleAuthStudentIds } from "@/hooks/useHomeroomStudentIds";
 
 /** Módulos alinhados à coluna SQL `module`. */
 export type AuthorizationModuleKind = "extracurricular" | "transport" | "meal";
@@ -66,7 +68,7 @@ export type AuthorizationFieldDef = {
   helper?: string;
 };
 
-type TemplateRecipientMode = "school_all_teachers" | "classroom_homeroom_teachers" | "named_student_assignee";
+type TemplateRecipientMode = "classroom_homeroom_teachers" | "named_student_assignee";
 
 type StudentDetailed = {
   id: string;
@@ -112,7 +114,6 @@ type Props = {
   role: string | null;
   isParent: boolean;
   childIds: string[];
-  homeroomStudentIds: string[];
   canManageTemplates: boolean;
 };
 
@@ -123,20 +124,20 @@ const MODULE_LABEL: Record<AuthorizationModuleKind, string> = {
 };
 
 const RECIPIENT_MODE_META: Record<TemplateRecipientMode, { title: string; hint: string }> = {
-  school_all_teachers: {
-    title: "Todos os educadores (professorado)",
-    hint: "Professores com turma definida poderão preencher para os alunos em que são directores(as) de turma.",
-  },
   classroom_homeroom_teachers: {
-    title: "Professores de turmas específicas",
-    hint: "Só é visível aos directores de turma das turmas que seleccionar abaixo.",
+    title: "Educadores das turmas seleccionadas",
+    hint:
+      "Todos os directores de turma e todos os professores com aulas dessas turmas no horário recebem notificação e podem responder.",
   },
   named_student_assignee: {
-    title: "Aluno + educador concreto",
-    hint:
-      "Liste pares — encarregado de educação ou director(a) de turma por aluno. Só esse perfil verá este formulário.",
+    title: "Educador de cada aluno (nominal)",
+    hint: "Indique por linha um aluno e o educador (perfil professor) que deve receber e preencher o formulário para esse aluno.",
   },
 };
+
+function normalizeRecipientMode(raw: unknown): TemplateRecipientMode {
+  return raw === "named_student_assignee" ? "named_student_assignee" : "classroom_homeroom_teachers";
+}
 
 function parseTemplateClassroomIds(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
@@ -145,25 +146,14 @@ function parseTemplateClassroomIds(raw: unknown): string[] {
 
 function assigneePickToProfileId(pick: string): string | null {
   if (!pick || pick === "__") return null;
-  if (pick.startsWith("parent:")) return pick.slice("parent:".length) || null;
-  if (pick.startsWith("homeroom:")) return pick.slice("homeroom:".length) || null;
   if (pick.startsWith("direct:")) return pick.slice("direct:".length) || null;
   return null;
 }
 
-function resolveAssigneePick(student: StudentDetailed | undefined, profileId: string): string {
-  if (!student) return `direct:${profileId}`;
-  if (student.parent_id === profileId) return `parent:${profileId}`;
-  if (student.classroom?.homeroom_teacher_id === profileId) return `homeroom:${profileId}`;
-  return `direct:${profileId}`;
-}
-
 function templateRecipientSummary(t: TemplateRow): string {
-  const mode = (t.recipient_mode ?? "school_all_teachers") as TemplateRecipientMode;
-  if (mode === "classroom_homeroom_teachers")
-    return `${parseTemplateClassroomIds(t.recipient_classroom_ids).length} turma(s)`;
+  const mode = normalizeRecipientMode(t.recipient_mode);
   if (mode === "named_student_assignee") return "Destinatários nomeados";
-  return "Todos os docentes";
+  return `${parseTemplateClassroomIds(t.recipient_classroom_ids).length} turma(s)`;
 }
 
 const FIELD_TYPE_META: Record<AuthorizationFieldType, { label: string }> = {
@@ -196,7 +186,6 @@ export function ModuleAuthorizationsPanel({
   role,
   isParent,
   childIds,
-  homeroomStudentIds,
   canManageTemplates,
 }: Props) {
   const [innerTab, setInnerTab] = useState<"preencher" | "historico">("preencher");
@@ -204,6 +193,7 @@ export function ModuleAuthorizationsPanel({
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
   const [studentsDetailed, setStudentsDetailed] = useState<StudentDetailed[]>([]);
   const [classroomsForSchool, setClassroomsForSchool] = useState<Array<{ id: string; name: string }>>([]);
+  const [educatorsForSchool, setEducatorsForSchool] = useState<Array<{ id: string; full_name: string | null }>>([]);
   const [myNamedTargeting, setMyNamedTargeting] = useState<Array<{ template_id: string; student_id: string }>>([]);
   const [loading, setLoading] = useState(true);
 
@@ -213,7 +203,7 @@ export function ModuleAuthorizationsPanel({
   const [tplDesc, setTplDesc] = useState("");
   const [tplFields, setTplFields] = useState<AuthorizationFieldDef[]>([]);
   const [tplSaving, setTplSaving] = useState(false);
-  const [tplRecipientMode, setTplRecipientMode] = useState<TemplateRecipientMode>("school_all_teachers");
+  const [tplRecipientMode, setTplRecipientMode] = useState<TemplateRecipientMode>("classroom_homeroom_teachers");
   const [tplClassroomIds, setTplClassroomIds] = useState<Set<string>>(new Set());
   const [tplNamedDrafts, setTplNamedDrafts] = useState<NamedDraftRow[]>([{ rowKey: nanoid(), student_id: "", assignee_pick: "__" }]);
   const [deleteTplId, setDeleteTplId] = useState<string | null>(null);
@@ -226,12 +216,14 @@ export function ModuleAuthorizationsPanel({
 
   const [viewSub, setViewSub] = useState<SubmissionRow | null>(null);
 
+  const { ids: teacherModuleAuthStudentIds } = useTeacherModuleAuthStudentIds(schoolId, role, userId);
+
   const allowedStudentIds = useMemo(() => {
     if (!role || role === "STUDENT") return [];
     if (isParent) return childIds;
-    if (role === "TEACHER") return homeroomStudentIds;
+    if (role === "TEACHER") return teacherModuleAuthStudentIds;
     return studentsDetailed.map((s) => s.id);
-  }, [role, isParent, childIds, homeroomStudentIds, studentsDetailed]);
+  }, [role, isParent, childIds, teacherModuleAuthStudentIds, studentsDetailed]);
 
   const loadAll = useCallback(async () => {
     if (!schoolId) return;
@@ -253,7 +245,7 @@ export function ModuleAuthorizationsPanel({
         setTemplates((tData ?? []) as TemplateRow[]);
       }
 
-      const [{ data: sData }, classroomsRes, namedMineRes] = await Promise.all([
+      const [{ data: sData }, classroomsRes, educatorsRes, namedMineRes] = await Promise.all([
         supabase
           .from("students")
           .select(
@@ -270,6 +262,9 @@ export function ModuleAuthorizationsPanel({
         canManageTemplates
           ? supabase.from("classrooms").select("id, name").eq("school_id", schoolId).order("name")
           : Promise.resolve({ data: [], error: null }),
+        canManageTemplates
+          ? supabase.from("profiles").select("id, full_name").eq("school_id", schoolId).eq("role", "TEACHER").order("full_name")
+          : Promise.resolve({ data: [], error: null }),
         userId
           ? supabase.from("module_authorization_named_recipients").select("template_id, student_id").eq("assignee_profile_id", userId)
           : Promise.resolve({ data: [], error: null }),
@@ -278,8 +273,11 @@ export function ModuleAuthorizationsPanel({
       setStudentsDetailed(((sData ?? []) as StudentDetailed[]) ?? []);
       if (canManageTemplates) {
         setClassroomsForSchool((classroomsRes.data as { id: string; name: string }[]) ?? []);
+        if (educatorsRes.error) setEducatorsForSchool([]);
+        else setEducatorsForSchool(((educatorsRes.data ?? []) as { id: string; full_name: string | null }[]) ?? []);
       } else {
         setClassroomsForSchool([]);
+        setEducatorsForSchool([]);
       }
       setMyNamedTargeting(((namedMineRes.data ?? []) as { template_id: string; student_id: string }[]) ?? []);
 
@@ -329,7 +327,7 @@ export function ModuleAuthorizationsPanel({
     setTplTitle("");
     setTplDesc("");
     setTplFields([]);
-    setTplRecipientMode("school_all_teachers");
+    setTplRecipientMode("classroom_homeroom_teachers");
     setTplClassroomIds(new Set());
     setTplNamedDrafts([{ rowKey: nanoid(), student_id: "", assignee_pick: "__" }]);
     setTplDialog(true);
@@ -341,37 +339,24 @@ export function ModuleAuthorizationsPanel({
     setTplTitle(t.title);
     setTplDesc(t.description ?? "");
     setTplFields(parseFields(t.fields));
-    setTplRecipientMode((t.recipient_mode as TemplateRecipientMode) ?? "school_all_teachers");
+    setTplRecipientMode(normalizeRecipientMode(t.recipient_mode));
     setTplClassroomIds(new Set(parseTemplateClassroomIds(t.recipient_classroom_ids)));
     setTplDialog(true);
     setTplNamedDrafts([{ rowKey: nanoid(), student_id: "", assignee_pick: "__" }]);
     void (async () => {
-      const [{ data: namedRows, error: namedErr }, { data: studs }] = await Promise.all([
-        supabase.from("module_authorization_named_recipients").select("student_id, assignee_profile_id").eq("template_id", t.id),
-        supabase
-          .from("students")
-          .select(
-            `
-            id,
-            full_name,
-            parent_id,
-            classroom_id,
-            classroom:classrooms(id, name, homeroom_teacher_id)
-          `,
-          )
-          .eq("school_id", schoolId),
-      ]);
+      const { data: namedRows, error: namedErr } = await supabase
+        .from("module_authorization_named_recipients")
+        .select("student_id, assignee_profile_id")
+        .eq("template_id", t.id);
       if (namedErr?.message?.includes("does not exist") || !namedRows?.length) {
         setTplNamedDrafts([{ rowKey: nanoid(), student_id: "", assignee_pick: "__" }]);
         return;
       }
-      const studentList = (studs ?? []) as StudentDetailed[];
-      const byStudent = new Map(studentList.map((s) => [s.id, s]));
       setTplNamedDrafts(
-        namedRows.map((row) => ({
+        namedRows.map((row: { student_id: string; assignee_profile_id: string }) => ({
           rowKey: nanoid(),
           student_id: row.student_id,
-          assignee_pick: resolveAssigneePick(byStudent.get(row.student_id), row.assignee_profile_id),
+          assignee_pick: `direct:${row.assignee_profile_id}`,
         })),
       );
     })();
@@ -432,17 +417,26 @@ export function ModuleAuthorizationsPanel({
 
     const namedPairs: Array<{ student_id: string; assignee_profile_id: string }> = [];
     if (tplRecipientMode === "named_student_assignee") {
+      const educatorIds = new Set(educatorsForSchool.map((e) => e.id));
+      if (educatorIds.size === 0) {
+        toast.error("Não há educadores (perfil professor) registados nesta escola.");
+        return;
+      }
       const seenKeys = new Set<string>();
       for (const row of tplNamedDrafts) {
+        if (!row.student_id) continue;
         const pid = assigneePickToProfileId(row.assignee_pick);
-        if (!row.student_id || !pid) continue;
+        if (!pid || !educatorIds.has(pid)) {
+          toast.error("Em cada linha com aluno, escolha um educador válido (perfil professor).");
+          return;
+        }
         const k = `${row.student_id}:${pid}`;
         if (seenKeys.has(k)) continue;
         seenKeys.add(k);
         namedPairs.push({ student_id: row.student_id, assignee_profile_id: pid });
       }
       if (namedPairs.length === 0) {
-        toast.error("Adicione pelo menos uma linha com aluno e educador (encarregado ou director de turma).");
+        toast.error("Adicione pelo menos uma linha com aluno e educador (perfil professor) escolhido.");
         return;
       }
     }
@@ -478,6 +472,23 @@ export function ModuleAuthorizationsPanel({
           toast.success("Formulário actualizado.");
           setTplDialog(false);
           await loadAll();
+          if (canManageTemplates && userId && schoolId && editingTpl.is_active) {
+            const nr = await notifyModuleAuthorizationAssignees({
+              schoolId,
+              actorId: userId,
+              module,
+              template: {
+                id: editingTpl.id,
+                title: base.title,
+                is_active: true,
+                recipient_mode: tplRecipientMode,
+                recipient_classroom_ids: recipientPayload.recipient_classroom_ids,
+              },
+            });
+            if (nr.error) toast.warning(`Notificações: ${nr.error}`);
+            else if (nr.sent > 0)
+              toast.success(`${nr.sent} notificação(ões) enviadas (email e push segundo preferências dos educadores).`);
+          }
         }
       } else {
         const { data: inserted, error } = await supabase
@@ -509,6 +520,23 @@ export function ModuleAuthorizationsPanel({
           toast.success("Formulário criado.");
           setTplDialog(false);
           await loadAll();
+          if (canManageTemplates && userId && schoolId) {
+            const nr = await notifyModuleAuthorizationAssignees({
+              schoolId,
+              actorId: userId,
+              module,
+              template: {
+                id: inserted.id,
+                title: base.title,
+                is_active: true,
+                recipient_mode: tplRecipientMode,
+                recipient_classroom_ids: recipientPayload.recipient_classroom_ids,
+              },
+            });
+            if (nr.error) toast.warning(`Notificações: ${nr.error}`);
+            else if (nr.sent > 0)
+              toast.success(`${nr.sent} notificação(ões) enviadas (email e push segundo preferências dos educadores).`);
+          }
         }
       }
     } finally {
@@ -528,17 +556,38 @@ export function ModuleAuthorizationsPanel({
   };
 
   const toggleTemplateActive = async (t: TemplateRow) => {
+    const activating = !t.is_active;
     const { error } = await supabase
       .from("module_authorization_templates")
-      .update({ is_active: !t.is_active })
+      .update({ is_active: activating })
       .eq("id", t.id);
     if (error) toast.error(error.message);
-    else await loadAll();
+    else {
+      toast.success(activating ? "Formulário activado." : "Formulário desactivado.");
+      await loadAll();
+      if (activating && canManageTemplates && userId && schoolId && parseFields(t.fields).length > 0) {
+        const nr = await notifyModuleAuthorizationAssignees({
+          schoolId,
+          actorId: userId,
+          module,
+          template: {
+            id: t.id,
+            title: t.title,
+            is_active: true,
+            recipient_mode: t.recipient_mode,
+            recipient_classroom_ids: t.recipient_classroom_ids,
+          },
+        });
+        if (nr.error) toast.warning(`Notificações: ${nr.error}`);
+        else if (nr.sent > 0)
+          toast.success(`${nr.sent} notificação(ões) enviadas (email e push segundo preferências dos educadores).`);
+      }
+    }
   };
 
   const filteredStudentsForFill = useMemo(() => {
     if (!selectedTemplate) return [];
-    const mode = (selectedTemplate.recipient_mode ?? "school_all_teachers") as TemplateRecipientMode;
+    const mode = normalizeRecipientMode(selectedTemplate.recipient_mode);
     const classIds = new Set(parseTemplateClassroomIds(selectedTemplate.recipient_classroom_ids));
     let pool = studentsDetailed.filter((s) => allowedStudentIds.includes(s.id));
 
@@ -813,9 +862,9 @@ export function ModuleAuthorizationsPanel({
             Autorizações ({MODULE_LABEL[module]})
           </h2>
           <p className="mt-1 max-w-xl text-xs text-muted-foreground">
-            A escola configura formulários e define para quais educadores (professorado ou encarregados nomeados)
-            ficam disponíveis. Estes utilizadores preenchem e assinam; as submissões ficam registadas aqui dentro de{" "}
-            {MODULE_LABEL[module]}.
+            A escola configura formulários e define o envio apenas a educadores: por turmas seleccionadas (directores e
+            professorado no horário dessas turmas) ou um educador concreto por aluno. As submissões ficam registadas aqui dentro
+            de {MODULE_LABEL[module]}.
           </p>
         </div>
         {canManageTemplates ? (
@@ -1010,8 +1059,8 @@ export function ModuleAuthorizationsPanel({
               <div className="grid gap-2 rounded-xl border border-border bg-muted/20 p-3">
                 <Label className="text-sm font-semibold">Envio aos educadores</Label>
                 <p className="text-[11px] text-muted-foreground">
-                  Escolha se o formulário aparece para todo o professorado (directores de turma ao preencher), só para algumas turmas ou
-                  para encarregados / directores de turma caso a caso por aluno.
+                  O formulário notifica apenas educadores (perfil professor). Pode enviar por turmas (directores de turma +
+                  professores com aulas nessas turmas no horário) ou definir linha a linha o educador responsável por cada aluno.
                 </p>
                 <div className="flex flex-col gap-2">
                   {(Object.keys(RECIPIENT_MODE_META) as TemplateRecipientMode[]).map((m) => (
@@ -1074,18 +1123,14 @@ export function ModuleAuthorizationsPanel({
                       </Button>
                     </div>
                     {tplNamedDrafts.map((row) => {
-                      const st = studentsDetailed.find((s) => s.id === row.student_id);
-                      const opts: Array<{ value: string; label: string }> = [];
-                      if (st?.parent_id) opts.push({ value: `parent:${st.parent_id}`, label: "Encarregado de educação" });
-                      if (st?.classroom?.homeroom_teacher_id) {
-                        opts.push({
-                          value: `homeroom:${st.classroom.homeroom_teacher_id}`,
-                          label: `Director(a) de turma (${st.classroom.name ?? "turma"})`,
-                        });
-                      }
-                      const hasDirectFallback = row.assignee_pick.startsWith("direct:");
+                      const educatorOpts = educatorsForSchool.map((p) => ({
+                        value: `direct:${p.id}`,
+                        label: (p.full_name ?? "").trim() || "Sem nome",
+                      }));
                       const selectValue =
-                        opts.some((o) => o.value === row.assignee_pick) || hasDirectFallback ? row.assignee_pick : "__";
+                        row.assignee_pick.startsWith("direct:") && educatorOpts.some((o) => o.value === row.assignee_pick)
+                          ? row.assignee_pick
+                          : "__";
                       return (
                         <Card key={row.rowKey} className="border-border bg-card p-3">
                           <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
@@ -1142,29 +1187,26 @@ export function ModuleAuthorizationsPanel({
                                     prev.map((x) => (x.rowKey === row.rowKey ? { ...x, assignee_pick: v } : x)),
                                   )
                                 }
-                                disabled={!row.student_id || (opts.length === 0 && !hasDirectFallback)}
+                                disabled={!row.student_id || educatorOpts.length === 0}
                               >
                                 <SelectTrigger>
                                   <SelectValue
                                     placeholder={
                                       !row.student_id
-                                        ? "Escolha o aluno"
-                                        : opts.length === 0 && !hasDirectFallback
-                                          ? "Sem encarregado ou director de turma"
-                                          : "Escolher…"
+                                        ? "Escolha o aluno primeiro"
+                                        : educatorOpts.length === 0
+                                          ? "Sem educadores registados nesta escola"
+                                          : "Escolher educador"
                                     }
                                   />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="__">—</SelectItem>
-                                  {opts.map((o) => (
+                                  {educatorOpts.map((o) => (
                                     <SelectItem key={o.value} value={o.value}>
                                       {o.label}
                                     </SelectItem>
                                   ))}
-                                  {hasDirectFallback ? (
-                                    <SelectItem value={row.assignee_pick}>Educador já associado (importado)</SelectItem>
-                                  ) : null}
                                 </SelectContent>
                               </Select>
                             </div>

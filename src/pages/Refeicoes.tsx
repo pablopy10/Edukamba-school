@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -63,6 +64,7 @@ type MealEnrollmentRow = {
 };
 
 const Refeicoes = () => {
+  const [searchParams] = useSearchParams();
   const native = isNativeMobileApp();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
@@ -114,6 +116,12 @@ const Refeicoes = () => {
     };
     void init();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("tab") === "autorizacoes") {
+      setTab("autorizacoes");
+    }
+  }, [searchParams]);
 
   const loadAll = async () => {
     if (!schoolId) return;
@@ -474,7 +482,6 @@ const Refeicoes = () => {
               role={role}
               isParent={isParent}
               childIds={childIds}
-              homeroomStudentIds={homeroomStudentIds}
               canManageTemplates={canManageAuthorizations}
             />
           </TabsContent>

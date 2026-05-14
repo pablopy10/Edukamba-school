@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +44,7 @@ const shiftLabel = (s: string) => (s === "MORNING" ? "Manhã" : s === "AFTERNOON
 const directionLabel = (d: string) => (d === "PICKUP" ? "Ida" : d === "DROPOFF" ? "Regresso" : "Ida + Regresso");
 
 const Transportes = () => {
+  const [searchParams] = useSearchParams();
   const native = isNativeMobileApp();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
@@ -91,6 +93,12 @@ const Transportes = () => {
     };
     init();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("tab") === "autorizacoes") {
+      setTransportTab("autorizacoes");
+    }
+  }, [searchParams]);
 
   const loadAll = async () => {
     if (!schoolId) return;
@@ -491,7 +499,6 @@ const Transportes = () => {
               role={role}
               isParent={isParent}
               childIds={childIds}
-              homeroomStudentIds={homeroomStudentIds}
               canManageTemplates={isAdmin}
             />
           </TabsContent>
