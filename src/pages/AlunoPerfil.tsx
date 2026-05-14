@@ -961,7 +961,7 @@ const AlunoPerfil = () => {
                     </tbody>
                   </table>
                   <div className="px-5 py-3 text-right">
-                    <Link to="/pagamentos" className="text-xs font-medium text-pastel-blue-foreground hover:underline">Gerir pagamentos →</Link>
+                    <Link to="/extracurriculares" className="text-xs font-medium text-pastel-blue-foreground hover:underline">Gerir extracurriculares →</Link>
                   </div>
                 </div>
               )}
@@ -1020,7 +1020,7 @@ const AlunoPerfil = () => {
                     </tbody>
                   </table>
                   <div className="px-5 py-3 text-right">
-                    <Link to="/pagamentos" className="text-xs font-medium text-pastel-blue-foreground hover:underline">Gerir pagamentos →</Link>
+                    <Link to="/transportes" className="text-xs font-medium text-pastel-blue-foreground hover:underline">Gerir transporte →</Link>
                   </div>
                 </div>
               )}

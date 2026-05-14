@@ -18,7 +18,6 @@ export type ModuleKey =
   | "extracurriculares"
   | "pedidos"
   | "material"
-  | "pagamentos"
   | "propinas"
   | "financas"
   | "relatorios"
@@ -43,7 +42,6 @@ export const moduleMeta: Record<ModuleKey, { label: string; description: string;
   extracurriculares: { label: "Extracurriculares", description: "Atividades fora do plano curricular.", path: "/extracurriculares" },
   pedidos: { label: "Pedidos", description: "Pedidos de ausência e aprovações.", path: "/pedidos" },
   material: { label: "Material", description: "Stock e pedidos de material escolar.", path: "/material" },
-  pagamentos: { label: "Pagamentos", description: "Outras cobranças: matrículas, extracurriculares, transporte e descontos.", path: "/pagamentos" },
   propinas: { label: "Propinas", description: "Regras de cobrança, lista de propinas, validação e lembretes.", path: "/propinas" },
   financas: { label: "Finanças", description: "Despesas, receitas e gráficos de lucro.", path: "/financas" },
   relatorios: { label: "Relatórios", description: "Exportações e análises da escola.", path: "/relatorios" },
@@ -70,7 +68,6 @@ export const modulePlan: Record<ModuleKey, PlanType> = {
   avaliacoes: "Essencial",
   notas: "Essencial",
   eventos: "Essencial",
-  pagamentos: "Essencial",
   propinas: "Essencial",
   financas: "Essencial",
   relatorios: "Essencial",
@@ -117,8 +114,9 @@ export const ModulesProvider = ({ children }: { children: ReactNode }) => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (!raw) return defaults;
-      const parsed = JSON.parse(raw) as Partial<Record<ModuleKey, boolean>>;
-      return { ...defaults, ...parsed };
+      const parsed = JSON.parse(raw) as Partial<Record<ModuleKey, boolean>> & { pagamentos?: boolean };
+      const { pagamentos: _removedPagamentos, ...rest } = parsed;
+      return { ...defaults, ...rest };
     } catch {
       return defaults;
     }

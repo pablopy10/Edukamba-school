@@ -146,7 +146,7 @@ const Refeicoes = () => {
   const canEnroll =
     role === "TEACHER" || isParent || role === "ADMIN" || role === "SUPER_ADMIN";
   const { childIds } = useParentChildren();
-  const homeroomStudentIds = useHomeroomStudentIds(schoolId, role, userId);
+  const { ids: homeroomStudentIds } = useHomeroomStudentIds(schoolId, role, userId);
 
   const visibleEnrollments = useMemo(() => {
     let list = enrollments;

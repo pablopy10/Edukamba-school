@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Search, Plus, Pencil, Trash2, Loader2, CheckCircle2 } from "lucide-react";
-import { cn, sortByName } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { EnrollmentFormDialog, EnrollmentRow } from "@/components/matriculas/EnrollmentFormDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,10 +9,15 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "@/hooks/use-toast";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useParentChildren } from "@/hooks/useParentChildren";
+import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
+import { useHomeroomStudentIds } from "@/hooks/useHomeroomStudentIds";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { isNativeMobileApp, showPageKpiCards, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PagamentosFinanceHub } from "@/pages/Pagamentos";
 
 type Opt = { id: string; name: string };
 type YearOpt = { id: string; label: string; is_active: boolean | null };
@@ -40,7 +45,20 @@ const initialsOf = (name: string) =>
 const Matriculas = () => {
   const native = isNativeMobileApp();
   const { selectedYearId } = useAcademicYear();
+  const { user } = useAuth();
+  const { role, loading: roleLoading } = useUserRole();
   const { isParent, childIds, loading: parentLoading } = useParentChildren();
+  const [schoolId, setSchoolId] = useState<string | null>(null);
+  const { ids: homeroomStudentIds, loading: homeroomLoading } = useHomeroomStudentIds(
+    schoolId,
+    role,
+    user?.id ?? null,
+  );
+  const enrollmentReadOnly = role === "TEACHER";
+  const showStaffEnrollmentFilters = !isParent && !enrollmentReadOnly;
+  const allowEnrollmentMutations = isParent || !enrollmentReadOnly;
+  const showEnrollmentRowActions = !isParent && !enrollmentReadOnly;
+  const enrollmentTableColSpan = showEnrollmentRowActions ? 7 : 6;
   const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([]);
   const [students, setStudents] = useState<Opt[]>([]);
   const [classrooms, setClassrooms] = useState<Opt[]>([]);
@@ -56,27 +74,63 @@ const Matriculas = () => {
   const [editing, setEditing] = useState<EnrollmentRow | null>(null);
   const [deleting, setDeleting] = useState<EnrollmentRow | null>(null);
 
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    void (async () => {
+      const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", user.id).maybeSingle();
+      if (!cancelled) setSchoolId(profile?.school_id ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
   const load = async () => {
     setLoading(true);
+    if (enrollmentReadOnly && homeroomLoading) {
+      setLoading(false);
+      return;
+    }
     let enrollmentsQuery = supabase
       .from("enrollments")
       .select("id, student_id, classroom_id, academic_year_id, status, enrolled_at, students(id, full_name, email, avatar_color), classrooms(id, name), academic_years(id, label)")
       .order("enrolled_at", { ascending: false });
     let classroomsQuery = supabase.from("classrooms").select("id, name").order("name");
+    let studentsQuery = supabase.from("students").select("id, full_name").order("full_name");
     if (selectedYearId) {
       enrollmentsQuery = enrollmentsQuery.eq("academic_year_id", selectedYearId);
       classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
     }
     if (isParent) {
       if (childIds.length === 0) {
-        setEnrollments([]); setStudents([]); setClassrooms([]); setYears([]); setLoading(false);
+        setEnrollments([]);
+        setStudents([]);
+        setClassrooms([]);
+        setYears([]);
+        setLoading(false);
         return;
       }
       enrollmentsQuery = enrollmentsQuery.in("student_id", childIds);
+    } else if (enrollmentReadOnly) {
+      if (homeroomStudentIds.length === 0) {
+        const [{ data: cData }, { data: yData }] = await Promise.all([
+          classroomsQuery,
+          supabase.from("academic_years").select("id, label, is_active").order("start_date", { ascending: true }),
+        ]);
+        setEnrollments([]);
+        setStudents([]);
+        setClassrooms((cData ?? []) as Opt[]);
+        setYears((yData ?? []) as YearOpt[]);
+        setLoading(false);
+        return;
+      }
+      enrollmentsQuery = enrollmentsQuery.in("student_id", homeroomStudentIds);
+      studentsQuery = studentsQuery.in("id", homeroomStudentIds);
     }
     const [{ data: eData, error: eErr }, { data: sData }, { data: cData }, { data: yData }] = await Promise.all([
       enrollmentsQuery,
-      supabase.from("students").select("id, full_name").order("full_name"),
+      studentsQuery,
       classroomsQuery,
       supabase.from("academic_years").select("id, label, is_active").order("start_date", { ascending: true }),
     ]);
@@ -92,9 +146,21 @@ const Matriculas = () => {
 
   useEffect(() => {
     setFilterYear(selectedYearId ?? "all");
-    if (parentLoading) return;
-    load();
-  }, [selectedYearId, parentLoading, isParent, childIds.join(",")]);
+    if (parentLoading || roleLoading) return;
+    if (enrollmentReadOnly && homeroomLoading) return;
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    selectedYearId,
+    parentLoading,
+    roleLoading,
+    enrollmentReadOnly,
+    homeroomLoading,
+    isParent,
+    childIds.join(","),
+    homeroomStudentIds.join(","),
+    role,
+  ]);
 
   const filtered = useMemo(() => {
     return enrollments.filter((e) => {
@@ -135,7 +201,8 @@ const Matriculas = () => {
 
   const filtersActive = filterClassroom !== "all" || filterStatus !== "all" || filterYear !== "all";
 
-  if (parentLoading) return <PageLoadingSkeleton />;
+  if (parentLoading || roleLoading || (enrollmentReadOnly && homeroomLoading))
+    return <PageLoadingSkeleton />;
 
   const renderEnrollmentCard = (e: EnrollmentRow) => {
     const isSelected = selected.includes(e.id);
@@ -183,7 +250,7 @@ const Matriculas = () => {
               </span>
             </div>
           </div>
-          {!isParent ? (
+          {showEnrollmentRowActions ? (
             <div className="flex shrink-0 flex-col gap-1">
               <button
                 type="button"
@@ -213,11 +280,23 @@ const Matriculas = () => {
 
   return (
     <>
+      <Tabs defaultValue="lista" className="w-full">
+        <TabsList className="mb-4 w-full max-w-md">
+          <TabsTrigger value="lista">Lista</TabsTrigger>
+          <TabsTrigger value="cobrancas">Cobranças</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="lista" className="mt-0 border-0 bg-transparent p-0 shadow-none">
       <div className={cn("flex flex-col gap-6", native && "relative pb-28")}>
         <div className={cn("flex flex-col gap-4", native ? "" : "sm:flex-row sm:items-center sm:justify-between")}>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Matrículas</h1>
             <p className="text-sm text-muted-foreground">Faça a gestão das matrículas dos alunos da escola.</p>
+            {enrollmentReadOnly ? (
+              <p className="mt-2 text-xs text-muted-foreground rounded-lg border border-border bg-muted/30 px-3 py-2">
+                Como educador de turma, apenas vê matrículas dos alunos das turmas onde está como diretor de turma.
+              </p>
+            ) : null}
           </div>
           <div className={cn("flex flex-wrap items-center gap-3", native && "w-full")}>
             <div className={cn("relative", native ? "min-w-0 flex-1" : "")}>
@@ -233,7 +312,7 @@ const Matriculas = () => {
                 )}
               />
             </div>
-            {!native && (
+            {!native && allowEnrollmentMutations && (
               <button
                 onClick={() => { setEditing(null); setFormOpen(true); }}
                 className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
@@ -245,7 +324,7 @@ const Matriculas = () => {
         </div>
 
         {/* Filters */}
-        {!isParent && (
+        {showStaffEnrollmentFilters && (
         <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card">
           <div className={cn("min-w-[180px] flex-1", native && "min-w-0 w-full")}>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Turma</label>
@@ -292,7 +371,7 @@ const Matriculas = () => {
         </div>
         )}
 
-        {!isParent && showPageKpiCards() && (
+        {showStaffEnrollmentFilters && showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             { label: "Total de Matrículas", value: String(stats.total), color: "bg-pastel-blue text-pastel-blue-foreground" },
@@ -361,19 +440,19 @@ const Matriculas = () => {
                   <th className="py-4 pr-4 font-semibold">Ano Lectivo</th>
                   <th className="py-4 pr-4 font-semibold">Data</th>
                   <th className="py-4 pr-4 font-semibold">Estado</th>
-                  {!isParent && (
+                  {showEnrollmentRowActions && (
                     <th className="py-4 pr-5 font-semibold text-right">Acções</th>
                   )}
                 </tr>
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td colSpan={isParent ? 6 : 7} className="py-10 text-center text-muted-foreground">
+                  <tr><td colSpan={enrollmentTableColSpan} className="py-10 text-center text-muted-foreground">
                     <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                   </td></tr>
                 )}
                 {!loading && filtered.length === 0 && (
-                  <tr><td colSpan={isParent ? 6 : 7} className="py-10 text-center text-muted-foreground">
+                  <tr><td colSpan={enrollmentTableColSpan} className="py-10 text-center text-muted-foreground">
                     Nenhuma matrícula encontrada.
                   </td></tr>
                 )}
@@ -432,7 +511,7 @@ const Matriculas = () => {
                           {statusLabel(st)}
                         </span>
                       </td>
-                      {!isParent && (
+                      {showEnrollmentRowActions && (
                         <td className="py-4 pr-5">
                           <div className="flex items-center justify-end gap-1">
                             <button onClick={() => { setEditing(e); setFormOpen(true); }} title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
@@ -458,9 +537,8 @@ const Matriculas = () => {
             </p>
           </div>
         </div>
-      </div>
 
-      {native && (
+      {native && allowEnrollmentMutations && (
         <NativeMobileFabPortal>
           <Button
             type="button"
@@ -473,6 +551,14 @@ const Matriculas = () => {
           </Button>
         </NativeMobileFabPortal>
       )}
+      </div>
+
+        </TabsContent>
+
+        <TabsContent value="cobrancas" className="mt-0 border-0 bg-transparent p-0 shadow-none">
+          <PagamentosFinanceHub financePage="enrollmentCharges" />
+        </TabsContent>
+      </Tabs>
 
       <EnrollmentFormDialog
         open={formOpen}

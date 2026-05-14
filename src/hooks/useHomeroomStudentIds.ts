@@ -3,17 +3,24 @@ import { supabase } from "@/integrations/supabase/client";
 
 /**
  * Para professores definidos como diretores de turma (`classrooms.homeroom_teacher_id`),
- * devolve os IDs dos alunos dessas turmas (visibilidade de inscrições, etc.).
+ * devolve os IDs dos alunos dessas turmas (visibilidade de inscrições, cobranças, etc.).
  */
-export function useHomeroomStudentIds(schoolId: string | null, role: string | null, userId: string | null): string[] {
+export function useHomeroomStudentIds(
+  schoolId: string | null,
+  role: string | null,
+  userId: string | null,
+): { ids: string[]; loading: boolean } {
   const [ids, setIds] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!schoolId || !userId || role !== "TEACHER") {
       setIds([]);
+      setLoading(false);
       return;
     }
     let cancelled = false;
+    setLoading(true);
 
     void (async () => {
       const { data: rooms, error: rErr } = await supabase
@@ -21,8 +28,10 @@ export function useHomeroomStudentIds(schoolId: string | null, role: string | nu
         .select("id")
         .eq("school_id", schoolId)
         .eq("homeroom_teacher_id", userId);
+      if (cancelled) return;
       if (rErr || !rooms?.length) {
-        if (!cancelled) setIds([]);
+        setIds([]);
+        setLoading(false);
         return;
       }
       const cid = rooms.map((r: { id: string }) => r.id);
@@ -31,9 +40,9 @@ export function useHomeroomStudentIds(schoolId: string | null, role: string | nu
         .select("id")
         .eq("school_id", schoolId)
         .in("classroom_id", cid);
-      if (!cancelled) {
-        setIds(!sErr && studs?.length ? studs.map((s: { id: string }) => s.id) : []);
-      }
+      if (cancelled) return;
+      setIds(!sErr && studs?.length ? studs.map((s: { id: string }) => s.id) : []);
+      setLoading(false);
     })();
 
     return () => {
@@ -41,5 +50,5 @@ export function useHomeroomStudentIds(schoolId: string | null, role: string | nu
     };
   }, [schoolId, role, userId]);
 
-  return ids;
+  return { ids, loading };
 }

@@ -237,15 +237,15 @@ const HistoricoPagamentosEncarregado = () => {
   }
 
   if (!isParent) {
-    return <Navigate to="/pagamentos" replace />;
+    return <Navigate to="/financas" replace />;
   }
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="ghost" size="sm" asChild>
-          <Link to="/pagamentos" className="gap-2">
-            <ArrowLeft className="h-4 w-4" /> Voltar a Pagamentos
+          <Link to="/propinas" className="gap-2">
+            <ArrowLeft className="h-4 w-4" /> Voltar a Propinas
           </Link>
         </Button>
       </div>

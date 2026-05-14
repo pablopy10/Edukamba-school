@@ -35,7 +35,6 @@ import Eventos from "./pages/Eventos.tsx";
 import Extracurriculares from "./pages/Extracurriculares.tsx";
 import Pedidos from "./pages/Pedidos.tsx";
 import Material from "./pages/Material.tsx";
-import Pagamentos from "./pages/Pagamentos.tsx";
 import Propinas from "./pages/Propinas.tsx";
 import HistoricoPagamentosEncarregado from "./pages/HistoricoPagamentosEncarregado.tsx";
 import Financas from "./pages/Financas.tsx";
@@ -86,14 +85,6 @@ function GatedDefinicoesRoute() {
   return <Definicoes />;
 }
 
-function GatedPagamentosRoute() {
-  const { role, loading } = useUserRole();
-  const { isParent, loading: parentLoading } = useParentChildren();
-  if (loading || parentLoading) return <RouteSpinner />;
-  if (!canOpenPagamentosPage(role, isParent)) return <Navigate to="/dashboard" replace />;
-  return <Pagamentos />;
-}
-
 function GatedPropinasRoute() {
   const { role, loading } = useUserRole();
   const { isParent, loading: parentLoading } = useParentChildren();
@@ -107,7 +98,7 @@ function GatedHistoricoPagamentosRoute() {
   const { isParent, loading: parentLoading } = useParentChildren();
   if (loading || parentLoading) return <RouteSpinner />;
   if (!canOpenPagamentosPage(role, isParent)) return <Navigate to="/dashboard" replace />;
-  if (!isParent) return <Navigate to="/pagamentos" replace />;
+  if (!isParent) return <Navigate to="/financas" replace />;
   return <HistoricoPagamentosEncarregado />;
 }
 
@@ -165,8 +156,7 @@ const App = () => (
                         <Route path="/extracurriculares" element={<Extracurriculares />} />
                         <Route path="/pedidos" element={<Pedidos />} />
                         <Route path="/material" element={<Material />} />
-                        <Route path="/pagamentos/historico" element={<GatedHistoricoPagamentosRoute />} />
-                        <Route path="/pagamentos" element={<GatedPagamentosRoute />} />
+                        <Route path="/propinas/historico" element={<GatedHistoricoPagamentosRoute />} />
                         <Route path="/financas" element={<Financas />} />
                         <Route path="/relatorios" element={<Relatorios />} />
                         <Route path="/timesheet" element={<Timesheet />} />

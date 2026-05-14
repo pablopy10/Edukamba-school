@@ -16,12 +16,11 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Users, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap, FileSpreadsheet, FileDown, Utensils } from "lucide-react";
-import { ErpArticleCodesCard } from "@/components/pagamentos/ErpArticleCodesCard";
-import { ErpExportMappingSection } from "@/components/pagamentos/ErpExportMappingSection";
-import { ErpExportPaymentsSection } from "@/components/pagamentos/ErpExportPaymentsSection";
+import { Loader2, Plus, Pencil, Trash2, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap, FileDown, Utensils } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
+import { useAuth } from "@/hooks/useAuth";
+import { useHomeroomStudentIds } from "@/hooks/useHomeroomStudentIds";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
@@ -298,17 +297,26 @@ function chunkBySize<T>(items: readonly T[], size: number): T[][] {
   return out;
 }
 
-export type PagamentosFinancePageMode = "payments" | "tuition" | "activityCharges" | "transportCharges" | "mealCharges";
+export type PagamentosFinancePageMode = "tuition" | "activityCharges" | "transportCharges" | "mealCharges" | "enrollmentCharges";
 
-/** `tuition` = página Propinas (regras + lista). `payments` = outras cobranças em Pagamentos. Modos *_Charges embutidos em extracurricular / transportes / refeições. */
+/** `tuition` = página Propinas. Demais modos: listas de cobrança embutidas em Matrículas, Extracurricular, Transporte ou Refeições. */
 export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosFinancePageMode }) {
   const tuitionOnly = financePage === "tuition";
   const activityChargesOnly = financePage === "activityCharges";
   const transportChargesOnly = financePage === "transportCharges";
   const mealChargesOnly = financePage === "mealCharges";
-  const chargesEmbeddedOnly = activityChargesOnly || transportChargesOnly || mealChargesOnly;
+  const enrollmentChargesOnly = financePage === "enrollmentCharges";
+  const chargesEmbeddedOnly =
+    activityChargesOnly || transportChargesOnly || mealChargesOnly || enrollmentChargesOnly;
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const { role } = useUserRole();
+  const { user } = useAuth();
+  const teacherUserId = user?.id ?? null;
+  const { ids: homeroomStudentIds, loading: homeroomStudentsLoading } = useHomeroomStudentIds(
+    schoolId,
+    role,
+    teacherUserId,
+  );
   const canValidatePaymentProofs = canValidateSchoolPaymentProofs(role);
   const { isParent, childIds, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const { selectedYearId: globalAcademicYearId } = useAcademicYear();
@@ -773,7 +781,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     setGuardianPaymentMode(normalizeGuardianPaymentMode(payPrefsRow?.guardian_payment_mode));
 
     const studentIds = (sRes.data ?? []).map((s) => s.id);
-    const scopedStudentIds = isParent ? studentIds.filter((id) => childIds.includes(id)) : studentIds;
+    const scopedStudentIds =
+      role === "TEACHER" && chargesEmbeddedOnly
+        ? studentIds.filter((id) => homeroomStudentIds.includes(id))
+        : isParent
+          ? studentIds.filter((id) => childIds.includes(id))
+          : studentIds;
+
+    const restrictChargeQueriesToStudents =
+      isParent || (role === "TEACHER" && chargesEmbeddedOnly);
 
     /** Propinas (lista + comprovativos) vs outras cobranças são páginas distintas: evita cargas duplicadas. */
     if (scopedStudentIds.length > 0) {
@@ -821,7 +837,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         setEnrollmentPayments([]);
 
         const [{ data: actFees }, { data: actsList }] = await Promise.all([
-          (isParent
+          (restrictChargeQueriesToStudents
             ? supabase
                 .from("activity_fees")
                 .select("id, amount_due, due_date, is_paid, month_index, student_id, activity_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), activity:extracurricular_activities(id, name, category)")
@@ -861,7 +877,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         setMealPayments([]);
         setMealProgramsList([]);
         const [{ data: trFees }, { data: rtsList }] = await Promise.all([
-          (isParent
+          (restrictChargeQueriesToStudents
             ? supabase
                 .from("transport_fees")
                 .select("id, amount_due, due_date, is_paid, month_index, student_id, route_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), route:transport_routes(id, name)")
@@ -901,7 +917,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         setAllEnrollmentFees([]);
         setEnrollmentPayments([]);
         const [{ data: meFees }, { data: progs }] = await Promise.all([
-          (isParent
+          (restrictChargeQueriesToStudents
             ? supabase
                 .from("meal_fees")
                 .select("id, amount_due, due_date, is_paid, month_index, student_id, meal_program_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), meal_program:meal_programs(id, name)")
@@ -929,73 +945,20 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         } else {
           setMealPayments([]);
         }
-      } else {
+      } else if (enrollmentChargesOnly) {
         setAllFees([]);
         setPayments([]);
+        setAllActivityFees([]);
+        setActivitiesList([]);
+        setActivityPayments([]);
+        setAllTransportFees([]);
+        setTransportPayments([]);
+        setRoutesList([]);
+        setAllMealFees([]);
+        setMealPayments([]);
+        setMealProgramsList([]);
 
-        const [{ data: actFees }, { data: actsList }] = await Promise.all([
-          (isParent
-            ? supabase
-                .from("activity_fees")
-                .select("id, amount_due, due_date, is_paid, month_index, student_id, activity_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), activity:extracurricular_activities(id, name, category)")
-                .eq("school_id", sId)
-                .in("student_id", scopedStudentIds)
-                .order("due_date", { ascending: true })
-            : supabase
-                .from("activity_fees")
-                .select("id, amount_due, due_date, is_paid, month_index, student_id, activity_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), activity:extracurricular_activities(id, name, category)")
-                .eq("school_id", sId)
-                .order("due_date", { ascending: true })
-          ),
-          supabase.from("extracurricular_activities").select("id, name").eq("school_id", sId).order("name"),
-        ]);
-        setAllActivityFees((actFees ?? []) as unknown as ActivityFeeRow[]);
-        setActivitiesList((actsList ?? []) as Array<{ id: string; name: string }>);
-
-        const actFeeIds = (actFees ?? []).map((f: { id: string }) => f.id);
-        if (actFeeIds.length > 0) {
-          const { data: actPayRows } = await supabase
-            .from("payments")
-            .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
-            .in("activity_fee_id", actFeeIds)
-            .order("payment_date", { ascending: false });
-          setActivityPayments((actPayRows ?? []) as PaymentListRow[]);
-        } else {
-          setActivityPayments([]);
-        }
-
-        const [{ data: trFees }, { data: rtsList }] = await Promise.all([
-          (isParent
-            ? supabase
-                .from("transport_fees")
-                .select("id, amount_due, due_date, is_paid, month_index, student_id, route_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), route:transport_routes(id, name)")
-                .eq("school_id", sId)
-                .in("student_id", scopedStudentIds)
-                .order("due_date", { ascending: true })
-            : supabase
-                .from("transport_fees")
-                .select("id, amount_due, due_date, is_paid, month_index, student_id, route_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), route:transport_routes(id, name)")
-                .eq("school_id", sId)
-                .order("due_date", { ascending: true })
-          ),
-          supabase.from("transport_routes").select("id, name").eq("school_id", sId).order("name"),
-        ]);
-        setAllTransportFees((trFees ?? []) as unknown as TransportFeeRow[]);
-        setRoutesList((rtsList ?? []) as Array<{ id: string; name: string }>);
-
-        const trFeeIds = (trFees ?? []).map((f: { id: string }) => f.id);
-        if (trFeeIds.length > 0) {
-          const { data: trPayRows } = await supabase
-            .from("payments")
-            .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
-            .in("transport_fee_id", trFeeIds)
-            .order("payment_date", { ascending: false });
-          setTransportPayments((trPayRows ?? []) as PaymentListRow[]);
-        } else {
-          setTransportPayments([]);
-        }
-
-        const { data: enFees } = await (isParent
+        const { data: enFees } = await (restrictChargeQueriesToStudents
           ? supabase
               .from("enrollment_fees")
               .select("id, amount_due, due_date, is_paid, fee_type, student_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), academic_year:academic_years(id, label)")
@@ -1014,7 +977,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         if (enFeeIds.length > 0) {
           const { data: enPayRows } = await supabase
             .from("payments")
-            .select("id, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+            .select("id, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, meal_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
             .in("enrollment_fee_id", enFeeIds)
             .order("payment_date", { ascending: false });
           setEnrollmentPayments((enPayRows ?? []) as PaymentListRow[]);
@@ -1041,9 +1004,20 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   };
 
   useEffect(() => {
-    if (!parentLoading) void fetchAll();
+    if (parentLoading) return;
+    if (chargesEmbeddedOnly && role === "TEACHER" && homeroomStudentsLoading) return;
+    void fetchAll();
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [parentLoading, isParent, childIds.join(","), tuitionOnly, financePage]);
+  }, [
+    parentLoading,
+    homeroomStudentsLoading,
+    isParent,
+    childIds.join(","),
+    homeroomStudentIds.join(","),
+    role,
+    tuitionOnly,
+    financePage,
+  ]);
 
   /** Ano letivo global (header): alinha filtros aos separadores visíveis. */
   useEffect(() => {
@@ -1062,10 +1036,11 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       setMeYearFilter(globalAcademicYearId);
       return;
     }
-    setActYearFilter(globalAcademicYearId);
-    setTrYearFilter(globalAcademicYearId);
-    setEnYearFilter(globalAcademicYearId);
-  }, [globalAcademicYearId, tuitionOnly, activityChargesOnly, transportChargesOnly, mealChargesOnly]);
+    if (enrollmentChargesOnly) {
+      setEnYearFilter(globalAcademicYearId);
+      return;
+    }
+  }, [globalAcademicYearId, tuitionOnly, activityChargesOnly, transportChargesOnly, mealChargesOnly, enrollmentChargesOnly]);
 
   // Lock classroom filter to parent's child classroom
   useEffect(() => {
@@ -1228,7 +1203,6 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     await fetchAll();
   };
 
-  const totalActiveStudents = students.length;
   const classroomsForRulePicker = useMemo(() => {
     if (!activeYearId) return classrooms;
     return classrooms.filter((c) => c.academic_year_id === activeYearId);
@@ -2580,7 +2554,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     );
   };
 
-  if (parentLoading) return <PageLoadingSkeleton />;
+  if (parentLoading || (chargesEmbeddedOnly && role === "TEACHER" && homeroomStudentsLoading))
+    return <PageLoadingSkeleton />;
 
   return (
     <>
@@ -2590,13 +2565,13 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             <h1 className="text-2xl font-bold tracking-tight">
               {tuitionOnly
                 ? "Propinas"
-                : chargesEmbeddedOnly
-                  ? activityChargesOnly
+                : enrollmentChargesOnly
+                  ? "Matrículas — cobranças"
+                  : activityChargesOnly
                     ? "Extracurriculares — pagamentos"
                     : transportChargesOnly
                       ? "Transporte — pagamentos"
-                      : "Refeições — pagamentos"
-                  : "Pagamentos"}
+                      : "Refeições — pagamentos"}
             </h1>
             <p className="text-sm text-muted-foreground">
               {tuitionOnly
@@ -2605,8 +2580,11 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                     ? "Consulte as propinas do(s) seu(s) educando(s). Pode anexar comprovativos quando aplicável."
                     : "Consulte as propinas. O pagamento é efectuado presencialmente na escola quando assim for comunicado."
                   : "Regras de cobrança, geração anual e lista de propinas (validação, lembretes)."
-                : chargesEmbeddedOnly
-                  ? activityChargesOnly
+                : enrollmentChargesOnly
+                  ? isParent
+                    ? "Custos de matrícula ou renovação dos seus educandos."
+                    : "Custos de matrícula e renovação, lembretes e validação de pagamentos."
+                  : activityChargesOnly
                     ? isParent
                       ? "Cobranças das actividades extracurriculares do(s) seu(s) educando(s)."
                       : "Lista de cobranças extracurriculares, lembretes e registo / validação de pagamentos."
@@ -2616,12 +2594,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                         : "Mensalidades de transporte, lembretes e validação."
                       : isParent
                         ? "Cobranças de refeições do(s) seu(s) educando(s)."
-                        : "Mensalidades de refeições, lembretes e validação."
-                  : isParent
-                  ? usarAnexoEncarregado
-                    ? "Consulte as cobranças do(s) seu(s) educando(s). Pode anexar comprovativos de transferência quando aplicável."
-                    : "Consulte as cobranças. O pagamento é efectuado presencialmente na escola conforme comunicado pela instituição."
-                  : "Matrículas, extracurriculares e transporte. Descontos e cobrança aos encarregados: Definições → Faturação. As propinas estão na área Propinas."}
+                        : "Mensalidades de refeições, lembretes e validação."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -2632,7 +2605,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             )}
             {isParent && (
               <Button variant="outline" size="sm" className="gap-2" asChild>
-                <Link to="/pagamentos/historico">
+                <Link to="/propinas/historico">
                   <FileText className="h-4 w-4" /> Histórico e faturas
                 </Link>
               </Button>
@@ -2640,45 +2613,19 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           </div>
         </div>
 
-        {/* KPI rápido: alunos (gestão cobranças não-propina) */}
-        {!isParent && !tuitionOnly && !chargesEmbeddedOnly && (
-          <div className="grid grid-cols-1 gap-4 md:max-w-sm">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Alunos ativos</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">{totalActiveStudents}</p>
-                <p className="text-xs text-muted-foreground">na escola</p>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        <Tabs defaultValue={tuitionOnly ? "fees" : activityChargesOnly ? "activity-fees" : transportChargesOnly ? "transport-fees" : mealChargesOnly ? "meal-fees" : "enrollment-fees"} className="w-full">
+        <Tabs defaultValue={tuitionOnly ? "fees" : enrollmentChargesOnly ? "enrollment-fees" : activityChargesOnly ? "activity-fees" : transportChargesOnly ? "transport-fees" : "meal-fees"} className="w-full">
           <TabsList className={chargesEmbeddedOnly ? "sr-only" : undefined}>
             {tuitionOnly ? (
               <>
                 {!isParent && <TabsTrigger value="rules">Regras de cobranças</TabsTrigger>}
                 <TabsTrigger value="fees">Propinas</TabsTrigger>
               </>
-            ) : chargesEmbeddedOnly ? (
+            ) : (
               <>
+                {enrollmentChargesOnly ? <TabsTrigger value="enrollment-fees">Lista de cobranças</TabsTrigger> : null}
                 {activityChargesOnly ? <TabsTrigger value="activity-fees">Lista de cobranças</TabsTrigger> : null}
                 {transportChargesOnly ? <TabsTrigger value="transport-fees">Lista de cobranças</TabsTrigger> : null}
                 {mealChargesOnly ? <TabsTrigger value="meal-fees">Lista de cobranças</TabsTrigger> : null}
-              </>
-            ) : (
-              <>
-                <TabsTrigger value="enrollment-fees">Matrículas</TabsTrigger>
-                <TabsTrigger value="activity-fees">Extracurriculares</TabsTrigger>
-                <TabsTrigger value="transport-fees">Transporte</TabsTrigger>
-                {!isParent && (
-                  <TabsTrigger value="erp-export" className="gap-1.5">
-                    <FileSpreadsheet className="h-3.5 w-3.5" /> Exportar para Faturação
-                  </TabsTrigger>
-                )}
               </>
             )}
           </TabsList>
@@ -3054,7 +3001,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           </>
           )}
 
-          {!tuitionOnly && (
+          {activityChargesOnly && (
           <>
           {/* ACTIVITY FEES TAB (extracurriculares) */}
           <TabsContent value="activity-fees" className="space-y-4">
@@ -3399,7 +3346,11 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
               </CardContent>
             </Card>
           </TabsContent>
+          </>
+          )}
 
+          {transportChargesOnly && (
+          <>
           {/* TRANSPORT FEES TAB */}
           <TabsContent value="transport-fees" className="space-y-4">
             {!isParent && (
@@ -3743,7 +3694,11 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
               </CardContent>
             </Card>
           </TabsContent>
+          </>
+          )}
 
+          {mealChargesOnly && (
+          <>
           {/* MEAL FEES TAB */}
           <TabsContent value="meal-fees" className="space-y-4">
             {!isParent && (
@@ -3800,7 +3755,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               }
                               onCheckedChange={(v) => {
                                 const checked = v === true;
-                                setBulkSelectedTransportFeeIds((prev) => {
+                                setBulkSelectedMealFeeIds((prev) => {
                                   const next = new Set(prev);
                                   if (checked) pendingMealValidations.forEach(({ fee }) => next.add(fee.id));
                                   else pendingMealValidations.forEach(({ fee }) => next.delete(fee.id));
@@ -4087,7 +4042,11 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
               </CardContent>
             </Card>
           </TabsContent>
+          </>
+          )}
 
+          {enrollmentChargesOnly && (
+          <>
           {/* ENROLLMENT FEES TAB */}
           <TabsContent value="enrollment-fees" className="space-y-4">
             {!isParent && (
@@ -4496,16 +4455,6 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
               </CardContent>
             </Card>
           </TabsContent>
-          )}
-
-          {!tuitionOnly && (
-          <>
-          <TabsContent value="erp-export" className="space-y-6">
-            <ErpArticleCodesCard schoolId={schoolId} />
-            <ErpExportMappingSection schoolId={schoolId} />
-            <ErpExportPaymentsSection schoolId={schoolId} />
-          </TabsContent>
-          </>
           )}
         </Tabs>
       </div>
@@ -4999,6 +4948,4 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   );
 };
 
-export default function Pagamentos() {
-  return <PagamentosFinanceHub financePage="payments" />;
-}
+

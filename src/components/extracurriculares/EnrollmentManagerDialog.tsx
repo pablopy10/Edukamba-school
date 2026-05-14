@@ -20,9 +20,20 @@ type Props = {
   canEdit: boolean;
   isParent?: boolean;
   childIds?: string[];
+  /** Quando definido (ex.: diretor de turma), restringe alunos a esta lista. */
+  restrictStudentIds?: string[];
 };
 
-export function EnrollmentManagerDialog({ open, onOpenChange, activity, schoolId, canEdit, isParent, childIds }: Props) {
+export function EnrollmentManagerDialog({
+  open,
+  onOpenChange,
+  activity,
+  schoolId,
+  canEdit,
+  isParent,
+  childIds,
+  restrictStudentIds,
+}: Props) {
   const [loading, setLoading] = useState(false);
   const [working, setWorking] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
@@ -39,7 +50,15 @@ export function EnrollmentManagerDialog({ open, onOpenChange, activity, schoolId
       .eq("school_id", schoolId)
       .order("full_name");
       
-    if (isParent) {
+    if (restrictStudentIds !== undefined) {
+      if (restrictStudentIds.length === 0) {
+        setStudents([]);
+        setEnrollments([]);
+        setLoading(false);
+        return;
+      }
+      studentsQuery = studentsQuery.in("id", restrictStudentIds);
+    } else if (isParent) {
       if (!childIds || childIds.length === 0) {
         setStudents([]);
         setEnrollments([]);
@@ -64,7 +83,7 @@ export function EnrollmentManagerDialog({ open, onOpenChange, activity, schoolId
   useEffect(() => {
     if (open) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, activity?.id]);
+  }, [open, activity?.id, restrictStudentIds?.join(","), isParent, childIds?.join(",")]);
 
   const enrolledMap = useMemo(() => {
     const m = new Map<string, Enrollment>();

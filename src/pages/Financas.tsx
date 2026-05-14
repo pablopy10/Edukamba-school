@@ -758,11 +758,7 @@ const Financas = () => {
                       Lista pagamentos validados no ano seleccionado ({year}). Os valores no Excel são números e datas em formato ISO (YYYY-MM-DD), sem formatação extra.
                     </p>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Configure os nomes das colunas em{" "}
-                      <Link to="/pagamentos" className="font-medium text-primary underline-offset-4 hover:underline">
-                        Pagamentos → Exportação ERP
-                      </Link>
-                      .
+                      Configure os nomes das colunas e o mapeamento na secção de integração ERP nesta página de Finanças.
                     </p>
                   </div>
                   <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">

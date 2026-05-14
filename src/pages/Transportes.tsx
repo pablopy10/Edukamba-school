@@ -119,7 +119,7 @@ const Transportes = () => {
   const isParent = role === "PARENT";
   const canEnroll = isAdmin || isParent;
   const { childIds } = useParentChildren();
-  const homeroomStudentIds = useHomeroomStudentIds(schoolId, role, userId);
+  const { ids: homeroomStudentIds } = useHomeroomStudentIds(schoolId, role, userId);
 
   const filteredRoutes = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -140,14 +140,15 @@ const Transportes = () => {
   }, [enrollments, isParent, childIds, role, homeroomStudentIds]);
 
   const enrollmentsByRoute = useMemo(() => {
+    const source = isAdmin ? enrollments : visibleEnrollments;
     const map = new Map<string, Enrollment[]>();
-    enrollments.forEach((e) => {
+    source.forEach((e) => {
       const arr = map.get(e.route_id) ?? [];
       arr.push(e);
       map.set(e.route_id, arr);
     });
     return map;
-  }, [enrollments]);
+  }, [isAdmin, enrollments, visibleEnrollments]);
 
   const stopsByRoute = useMemo(() => {
     const map = new Map<string, StopRow[]>();

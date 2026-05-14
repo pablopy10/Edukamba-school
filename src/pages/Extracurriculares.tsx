@@ -128,7 +128,7 @@ const Extracurriculares = () => {
   const isParent = role === "PARENT";
   const canEnroll = canEdit || isParent;
   const { childIds } = useParentChildren();
-  const homeroomStudentIds = useHomeroomStudentIds(schoolId, role, userId);
+  const { ids: homeroomStudentIds } = useHomeroomStudentIds(schoolId, role, userId);
 
   const loadEnrollmentList = async () => {
     if (!schoolId) return;
@@ -770,6 +770,7 @@ const Extracurriculares = () => {
         canEdit={canEdit}
         isParent={isParent}
         childIds={childIds}
+        restrictStudentIds={role === "TEACHER" ? homeroomStudentIds : undefined}
       />
 
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>

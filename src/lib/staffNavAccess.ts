@@ -29,8 +29,6 @@ const STAFF_NAV: Record<StaffOperationalRole, readonly string[]> = {
     "/refeicoes",
     "/pedidos",
     "/material",
-    "/pagamentos",
-    "/financas",
     "/relatorios",
     "/timesheet",
     "/documentos",
@@ -50,7 +48,7 @@ const STAFF_NAV: Record<StaffOperationalRole, readonly string[]> = {
     "/horarios",
     "/pedidos",
     "/propinas",
-    "/pagamentos",
+    "/financas",
     "/notas",
     "/relatorios",
     "/extracurriculares",
@@ -67,7 +65,6 @@ const STAFF_NAV: Record<StaffOperationalRole, readonly string[]> = {
     "/matriculas",
     "/material",
     "/propinas",
-    "/pagamentos",
     "/financas",
     "/transportes",
     "/refeicoes",
@@ -179,6 +176,9 @@ const TEACHER_NAV_PREFIXES = [
   "/educadores",
   "/documentos",
   "/refeicoes",
+  "/extracurriculares",
+  "/transportes",
+  "/matriculas",
 ] as const;
 
 const PARENT_NAV_PREFIXES = [
@@ -186,7 +186,6 @@ const PARENT_NAV_PREFIXES = [
   "/alunos",
   "/avaliacoes",
   "/notas",
-  "/pagamentos",
   "/horario",
   "/matriculas",
   "/eventos",
@@ -226,7 +225,7 @@ export function isNavPathAllowedForRole(role: UserRole | null, rawPath: string):
   return false;
 }
 
-/** Acesso ao ecrã de pagamentos cobranças (escola); encarregados usam sempre a variante PARENT. Estudantes sem menu de pagamentos. */
+/** Encarregados: propinas e histórico fiscal; staff financeiro: todas as áreas de cobrança nas páginas de domínio. Estudantes sem menu de cobranças. */
 export function canOpenPagamentosPage(role: UserRole | null, isParent: boolean): boolean {
   if (isParent) return true;
   if (role == null) return false;

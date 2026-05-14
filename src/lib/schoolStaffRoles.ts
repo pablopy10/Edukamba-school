@@ -38,7 +38,7 @@ export const SCHOOL_PAYMENT_VALIDATE_ROLES = [
 
 export type SchoolPaymentValidateRole = (typeof SCHOOL_PAYMENT_VALIDATE_ROLES)[number];
 
-/** Quem pode validar/registar cobranças em `/pagamentos` (exclui encarregado/aluno/outros trabalhos não financeiros). */
+/** Quem pode validar/registar comprovativos e cobranças na escola (exclui educador sem função financeira, encarregado e aluno). */
 export function canValidateSchoolPaymentProofs(role: string | null | undefined): boolean {
   return role != null && (SCHOOL_PAYMENT_VALIDATE_ROLES as readonly string[]).includes(role);
 }
