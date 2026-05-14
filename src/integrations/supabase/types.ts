@@ -2182,6 +2182,49 @@ export type Database = {
           },
         ]
       }
+      module_authorization_named_recipients: {
+        Row: {
+          assignee_profile_id: string
+          created_at: string
+          student_id: string
+          template_id: string
+        }
+        Insert: {
+          assignee_profile_id: string
+          created_at?: string
+          student_id: string
+          template_id: string
+        }
+        Update: {
+          assignee_profile_id?: string
+          created_at?: string
+          student_id?: string
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "module_authorization_named_recipients_assignee_profile_id_fkey"
+            columns: ["assignee_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "module_authorization_named_recipients_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "module_authorization_named_recipients_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "module_authorization_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       module_authorization_submissions: {
         Row: {
           attachment_urls: Json
@@ -2256,6 +2299,8 @@ export type Database = {
           id: string
           is_active: boolean
           module: string
+          recipient_classroom_ids: string[]
+          recipient_mode: string
           school_id: string
           title: string
           updated_at: string
@@ -2268,6 +2313,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           module: string
+          recipient_classroom_ids?: string[]
+          recipient_mode?: string
           school_id: string
           title: string
           updated_at?: string
@@ -2280,6 +2327,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           module?: string
+          recipient_classroom_ids?: string[]
+          recipient_mode?: string
           school_id?: string
           title?: string
           updated_at?: string

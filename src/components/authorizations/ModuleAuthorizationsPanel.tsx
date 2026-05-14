@@ -66,6 +66,18 @@ export type AuthorizationFieldDef = {
   helper?: string;
 };
 
+type TemplateRecipientMode = "school_all_teachers" | "classroom_homeroom_teachers" | "named_student_assignee";
+
+type StudentDetailed = {
+  id: string;
+  full_name: string;
+  parent_id: string | null;
+  classroom_id: string | null;
+  classroom: { id: string; name: string; homeroom_teacher_id: string | null } | null;
+};
+
+type NamedDraftRow = { rowKey: string; student_id: string; assignee_pick: "__" | string };
+
 type TemplateRow = {
   id: string;
   school_id: string;
@@ -75,6 +87,8 @@ type TemplateRow = {
   fields: AuthorizationFieldDef[] | unknown;
   is_active: boolean;
   created_at: string;
+  recipient_mode?: TemplateRecipientMode | string;
+  recipient_classroom_ids?: string[] | unknown;
 };
 
 type SubmissionRow = {
@@ -107,6 +121,50 @@ const MODULE_LABEL: Record<AuthorizationModuleKind, string> = {
   transport: "Transporte",
   meal: "Refeições",
 };
+
+const RECIPIENT_MODE_META: Record<TemplateRecipientMode, { title: string; hint: string }> = {
+  school_all_teachers: {
+    title: "Todos os educadores (professorado)",
+    hint: "Professores com turma definida poderão preencher para os alunos em que são directores(as) de turma.",
+  },
+  classroom_homeroom_teachers: {
+    title: "Professores de turmas específicas",
+    hint: "Só é visível aos directores de turma das turmas que seleccionar abaixo.",
+  },
+  named_student_assignee: {
+    title: "Aluno + educador concreto",
+    hint:
+      "Liste pares — encarregado de educação ou director(a) de turma por aluno. Só esse perfil verá este formulário.",
+  },
+};
+
+function parseTemplateClassroomIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((x): x is string => typeof x === "string");
+}
+
+function assigneePickToProfileId(pick: string): string | null {
+  if (!pick || pick === "__") return null;
+  if (pick.startsWith("parent:")) return pick.slice("parent:".length) || null;
+  if (pick.startsWith("homeroom:")) return pick.slice("homeroom:".length) || null;
+  if (pick.startsWith("direct:")) return pick.slice("direct:".length) || null;
+  return null;
+}
+
+function resolveAssigneePick(student: StudentDetailed | undefined, profileId: string): string {
+  if (!student) return `direct:${profileId}`;
+  if (student.parent_id === profileId) return `parent:${profileId}`;
+  if (student.classroom?.homeroom_teacher_id === profileId) return `homeroom:${profileId}`;
+  return `direct:${profileId}`;
+}
+
+function templateRecipientSummary(t: TemplateRow): string {
+  const mode = (t.recipient_mode ?? "school_all_teachers") as TemplateRecipientMode;
+  if (mode === "classroom_homeroom_teachers")
+    return `${parseTemplateClassroomIds(t.recipient_classroom_ids).length} turma(s)`;
+  if (mode === "named_student_assignee") return "Destinatários nomeados";
+  return "Todos os docentes";
+}
 
 const FIELD_TYPE_META: Record<AuthorizationFieldType, { label: string }> = {
   text: { label: "Texto curto" },
@@ -144,7 +202,9 @@ export function ModuleAuthorizationsPanel({
   const [innerTab, setInnerTab] = useState<"preencher" | "historico">("preencher");
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
-  const [students, setStudents] = useState<Array<{ id: string; full_name: string }>>([]);
+  const [studentsDetailed, setStudentsDetailed] = useState<StudentDetailed[]>([]);
+  const [classroomsForSchool, setClassroomsForSchool] = useState<Array<{ id: string; name: string }>>([]);
+  const [myNamedTargeting, setMyNamedTargeting] = useState<Array<{ template_id: string; student_id: string }>>([]);
   const [loading, setLoading] = useState(true);
 
   const [tplDialog, setTplDialog] = useState(false);
@@ -153,6 +213,9 @@ export function ModuleAuthorizationsPanel({
   const [tplDesc, setTplDesc] = useState("");
   const [tplFields, setTplFields] = useState<AuthorizationFieldDef[]>([]);
   const [tplSaving, setTplSaving] = useState(false);
+  const [tplRecipientMode, setTplRecipientMode] = useState<TemplateRecipientMode>("school_all_teachers");
+  const [tplClassroomIds, setTplClassroomIds] = useState<Set<string>>(new Set());
+  const [tplNamedDrafts, setTplNamedDrafts] = useState<NamedDraftRow[]>([{ rowKey: nanoid(), student_id: "", assignee_pick: "__" }]);
   const [deleteTplId, setDeleteTplId] = useState<string | null>(null);
 
   const [fillTemplateId, setFillTemplateId] = useState<string>("");
@@ -167,8 +230,8 @@ export function ModuleAuthorizationsPanel({
     if (!role || role === "STUDENT") return [];
     if (isParent) return childIds;
     if (role === "TEACHER") return homeroomStudentIds;
-    return students.map((s) => s.id);
-  }, [role, isParent, childIds, homeroomStudentIds, students]);
+    return studentsDetailed.map((s) => s.id);
+  }, [role, isParent, childIds, homeroomStudentIds, studentsDetailed]);
 
   const loadAll = useCallback(async () => {
     if (!schoolId) return;
@@ -190,12 +253,35 @@ export function ModuleAuthorizationsPanel({
         setTemplates((tData ?? []) as TemplateRow[]);
       }
 
-      const { data: sData } = await supabase
-        .from("students")
-        .select("id, full_name")
-        .eq("school_id", schoolId)
-        .order("full_name");
-      setStudents((sData ?? []) as typeof students);
+      const [{ data: sData }, classroomsRes, namedMineRes] = await Promise.all([
+        supabase
+          .from("students")
+          .select(
+            `
+            id,
+            full_name,
+            parent_id,
+            classroom_id,
+            classroom:classrooms(id, name, homeroom_teacher_id)
+          `,
+          )
+          .eq("school_id", schoolId)
+          .order("full_name"),
+        canManageTemplates
+          ? supabase.from("classrooms").select("id, name").eq("school_id", schoolId).order("name")
+          : Promise.resolve({ data: [], error: null }),
+        userId
+          ? supabase.from("module_authorization_named_recipients").select("template_id, student_id").eq("assignee_profile_id", userId)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      setStudentsDetailed(((sData ?? []) as StudentDetailed[]) ?? []);
+      if (canManageTemplates) {
+        setClassroomsForSchool((classroomsRes.data as { id: string; name: string }[]) ?? []);
+      } else {
+        setClassroomsForSchool([]);
+      }
+      setMyNamedTargeting(((namedMineRes.data ?? []) as { template_id: string; student_id: string }[]) ?? []);
 
       const { data: subData, error: subErr } = await supabase
         .from("module_authorization_submissions")
@@ -217,7 +303,7 @@ export function ModuleAuthorizationsPanel({
     } finally {
       setLoading(false);
     }
-  }, [schoolId, module]);
+  }, [schoolId, module, canManageTemplates, userId]);
 
   useEffect(() => {
     void loadAll();
@@ -243,15 +329,52 @@ export function ModuleAuthorizationsPanel({
     setTplTitle("");
     setTplDesc("");
     setTplFields([]);
+    setTplRecipientMode("school_all_teachers");
+    setTplClassroomIds(new Set());
+    setTplNamedDrafts([{ rowKey: nanoid(), student_id: "", assignee_pick: "__" }]);
     setTplDialog(true);
   };
 
   const openEditTemplate = (t: TemplateRow) => {
+    if (!schoolId) return;
     setEditingTpl(t);
     setTplTitle(t.title);
     setTplDesc(t.description ?? "");
     setTplFields(parseFields(t.fields));
+    setTplRecipientMode((t.recipient_mode as TemplateRecipientMode) ?? "school_all_teachers");
+    setTplClassroomIds(new Set(parseTemplateClassroomIds(t.recipient_classroom_ids)));
     setTplDialog(true);
+    setTplNamedDrafts([{ rowKey: nanoid(), student_id: "", assignee_pick: "__" }]);
+    void (async () => {
+      const [{ data: namedRows, error: namedErr }, { data: studs }] = await Promise.all([
+        supabase.from("module_authorization_named_recipients").select("student_id, assignee_profile_id").eq("template_id", t.id),
+        supabase
+          .from("students")
+          .select(
+            `
+            id,
+            full_name,
+            parent_id,
+            classroom_id,
+            classroom:classrooms(id, name, homeroom_teacher_id)
+          `,
+          )
+          .eq("school_id", schoolId),
+      ]);
+      if (namedErr?.message?.includes("does not exist") || !namedRows?.length) {
+        setTplNamedDrafts([{ rowKey: nanoid(), student_id: "", assignee_pick: "__" }]);
+        return;
+      }
+      const studentList = (studs ?? []) as StudentDetailed[];
+      const byStudent = new Map(studentList.map((s) => [s.id, s]));
+      setTplNamedDrafts(
+        namedRows.map((row) => ({
+          rowKey: nanoid(),
+          student_id: row.student_id,
+          assignee_pick: resolveAssigneePick(byStudent.get(row.student_id), row.assignee_profile_id),
+        })),
+      );
+    })();
   };
 
   const addField = (type: AuthorizationFieldType) => {
@@ -270,6 +393,29 @@ export function ModuleAuthorizationsPanel({
 
   const removeField = (id: string) => setTplFields((prev) => prev.filter((f) => f.id !== id));
 
+  const persistNamedRecipients = async (
+    templateId: string,
+    pairs: Array<{ student_id: string; assignee_profile_id: string }>,
+  ) => {
+    const { error: delErr } = await supabase.from("module_authorization_named_recipients").delete().eq("template_id", templateId);
+    if (delErr) {
+      toast.error(delErr.message);
+      throw delErr;
+    }
+    if (pairs.length === 0) return;
+    const { error } = await supabase.from("module_authorization_named_recipients").insert(
+      pairs.map((r) => ({
+        template_id: templateId,
+        student_id: r.student_id,
+        assignee_profile_id: r.assignee_profile_id,
+      })),
+    );
+    if (error) {
+      toast.error(error.message);
+      throw error;
+    }
+  };
+
   const saveTemplate = async () => {
     if (!schoolId || !tplTitle.trim()) {
       toast.error("Indique o título.");
@@ -279,6 +425,34 @@ export function ModuleAuthorizationsPanel({
       toast.error("Adicione pelo menos um campo.");
       return;
     }
+    if (tplRecipientMode === "classroom_homeroom_teachers" && tplClassroomIds.size === 0) {
+      toast.error("Seleccione pelo menos uma turma.");
+      return;
+    }
+
+    const namedPairs: Array<{ student_id: string; assignee_profile_id: string }> = [];
+    if (tplRecipientMode === "named_student_assignee") {
+      const seenKeys = new Set<string>();
+      for (const row of tplNamedDrafts) {
+        const pid = assigneePickToProfileId(row.assignee_pick);
+        if (!row.student_id || !pid) continue;
+        const k = `${row.student_id}:${pid}`;
+        if (seenKeys.has(k)) continue;
+        seenKeys.add(k);
+        namedPairs.push({ student_id: row.student_id, assignee_profile_id: pid });
+      }
+      if (namedPairs.length === 0) {
+        toast.error("Adicione pelo menos uma linha com aluno e educador (encarregado ou director de turma).");
+        return;
+      }
+    }
+
+    const recipientPayload = {
+      recipient_mode: tplRecipientMode,
+      recipient_classroom_ids:
+        tplRecipientMode === "classroom_homeroom_teachers" ? Array.from(tplClassroomIds) : ([] as string[]),
+    };
+
     setTplSaving(true);
     try {
       const base = {
@@ -287,25 +461,51 @@ export function ModuleAuthorizationsPanel({
         fields: tplFields as unknown as never,
       };
       if (editingTpl) {
-        const { error } = await supabase.from("module_authorization_templates").update(base).eq("id", editingTpl.id);
+        const { error } = await supabase
+          .from("module_authorization_templates")
+          .update({ ...base, ...recipientPayload } as never)
+          .eq("id", editingTpl.id);
         if (error) toast.error(error.message);
         else {
+          try {
+            await persistNamedRecipients(
+              editingTpl.id,
+              tplRecipientMode === "named_student_assignee" ? namedPairs : [],
+            );
+          } catch {
+            return;
+          }
           toast.success("Formulário actualizado.");
           setTplDialog(false);
           await loadAll();
         }
       } else {
-        const { error } = await supabase.from("module_authorization_templates").insert({
-          school_id: schoolId,
-          module,
-          title: base.title,
-          description: base.description,
-          fields: tplFields as unknown as never,
-          is_active: true,
-          created_by: userId ?? null,
-        });
+        const { data: inserted, error } = await supabase
+          .from("module_authorization_templates")
+          .insert({
+            school_id: schoolId,
+            module,
+            title: base.title,
+            description: base.description,
+            fields: tplFields as unknown as never,
+            is_active: true,
+            created_by: userId ?? null,
+            ...recipientPayload,
+          } as never)
+          .select("id")
+          .single();
+
         if (error) toast.error(error.message);
+        else if (!inserted?.id) toast.error("Não foi possível obter o id do formulário.");
         else {
+          try {
+            await persistNamedRecipients(
+              inserted.id,
+              tplRecipientMode === "named_student_assignee" ? namedPairs : [],
+            );
+          } catch {
+            return;
+          }
           toast.success("Formulário criado.");
           setTplDialog(false);
           await loadAll();
@@ -337,9 +537,22 @@ export function ModuleAuthorizationsPanel({
   };
 
   const filteredStudentsForFill = useMemo(() => {
-    const allow = new Set(allowedStudentIds);
-    return students.filter((s) => allow.has(s.id));
-  }, [students, allowedStudentIds]);
+    if (!selectedTemplate) return [];
+    const mode = (selectedTemplate.recipient_mode ?? "school_all_teachers") as TemplateRecipientMode;
+    const classIds = new Set(parseTemplateClassroomIds(selectedTemplate.recipient_classroom_ids));
+    let pool = studentsDetailed.filter((s) => allowedStudentIds.includes(s.id));
+
+    if (mode === "classroom_homeroom_teachers") {
+      pool = pool.filter((s) => !!(s.classroom_id && classIds.has(s.classroom_id)));
+    }
+    if (mode === "named_student_assignee") {
+      const ok = new Set(
+        myNamedTargeting.filter((n) => n.template_id === selectedTemplate.id).map((n) => n.student_id),
+      );
+      pool = pool.filter((s) => ok.has(s.id));
+    }
+    return [...pool].sort((a, b) => a.full_name.localeCompare(b.full_name));
+  }, [studentsDetailed, allowedStudentIds, selectedTemplate, myNamedTargeting]);
 
   const resetFillForm = () => {
     setFillValues({});
@@ -600,8 +813,9 @@ export function ModuleAuthorizationsPanel({
             Autorizações ({MODULE_LABEL[module]})
           </h2>
           <p className="mt-1 max-w-xl text-xs text-muted-foreground">
-            A escola configura formulários com campos personalizados; educadores ou encarregados preenchem e assinam. As
-            submissões ficam aqui como registo dentro de {MODULE_LABEL[module]}.
+            A escola configura formulários e define para quais educadores (professorado ou encarregados nomeados)
+            ficam disponíveis. Estes utilizadores preenchem e assinam; as submissões ficam registadas aqui dentro de{" "}
+            {MODULE_LABEL[module]}.
           </p>
         </div>
         {canManageTemplates ? (
@@ -632,6 +846,7 @@ export function ModuleAuthorizationsPanel({
                       <Badge variant={t.is_active ? "default" : "secondary"}>{t.is_active ? "Activo" : "Inactivo"}</Badge>
                       <span className="flex-1 font-medium">{t.title}</span>
                       <span className="text-muted-foreground">{parseFields(t.fields).length} campo(s)</span>
+                      <Badge variant="outline" className="border-dashed text-[10px] font-normal sm:text-xs">{templateRecipientSummary(t)}</Badge>
                       <div className="flex gap-1">
                         <Button
                           size="icon"
@@ -773,11 +988,12 @@ export function ModuleAuthorizationsPanel({
       )}
 
       <Dialog open={tplDialog} onOpenChange={setTplDialog}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editingTpl ? "Editar formulário" : "Novo formulário"}</DialogTitle>
             <DialogDescription>
-              Defina o título e os campos. Para dropdown, rádio e várias caixas use uma linha por opção.
+              Defina o título, o envio aos educadores e os campos. Para dropdown, rádio e várias caixas use uma linha por
+              opção.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-2">
@@ -789,6 +1005,177 @@ export function ModuleAuthorizationsPanel({
               <Label>Descrição (opcional)</Label>
               <Textarea rows={3} value={tplDesc} onChange={(e) => setTplDesc(e.target.value)} placeholder="Instruções breves…" />
             </div>
+
+            {canManageTemplates ? (
+              <div className="grid gap-2 rounded-xl border border-border bg-muted/20 p-3">
+                <Label className="text-sm font-semibold">Envio aos educadores</Label>
+                <p className="text-[11px] text-muted-foreground">
+                  Escolha se o formulário aparece para todo o professorado (directores de turma ao preencher), só para algumas turmas ou
+                  para encarregados / directores de turma caso a caso por aluno.
+                </p>
+                <div className="flex flex-col gap-2">
+                  {(Object.keys(RECIPIENT_MODE_META) as TemplateRecipientMode[]).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setTplRecipientMode(m)}
+                      className={cn(
+                        "rounded-lg border px-3 py-2 text-left transition-[var(--transition-smooth)]",
+                        tplRecipientMode === m ? "border-primary bg-primary/10 shadow-sm" : "border-border hover:bg-muted/50",
+                      )}
+                    >
+                      <span className="text-sm font-medium">{RECIPIENT_MODE_META[m].title}</span>
+                      <span className="mt-1 block text-xs leading-snug text-muted-foreground">{RECIPIENT_MODE_META[m].hint}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {tplRecipientMode === "classroom_homeroom_teachers" ? (
+                  <div className="mt-1 max-h-44 space-y-2 overflow-y-auto rounded-lg border border-border bg-background/80 p-2">
+                    {classroomsForSchool.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Sem turmas registadas nesta escola.</p>
+                    ) : (
+                      classroomsForSchool.map((c) => (
+                        <label key={c.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={tplClassroomIds.has(c.id)}
+                            onCheckedChange={(chk) =>
+                              setTplClassroomIds((prev) => {
+                                const next = new Set(prev);
+                                if (chk === true) next.add(c.id);
+                                else next.delete(c.id);
+                                return next;
+                              })
+                            }
+                          />
+                          <span>{c.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                ) : null}
+
+                {tplRecipientMode === "named_student_assignee" ? (
+                  <div className="mt-3 space-y-3">
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1 text-xs"
+                        onClick={() =>
+                          setTplNamedDrafts((prev) => [
+                            ...prev,
+                            { rowKey: nanoid(), student_id: "", assignee_pick: "__" },
+                          ])
+                        }
+                      >
+                        <Plus className="h-3 w-3" /> Destinatário
+                      </Button>
+                    </div>
+                    {tplNamedDrafts.map((row) => {
+                      const st = studentsDetailed.find((s) => s.id === row.student_id);
+                      const opts: Array<{ value: string; label: string }> = [];
+                      if (st?.parent_id) opts.push({ value: `parent:${st.parent_id}`, label: "Encarregado de educação" });
+                      if (st?.classroom?.homeroom_teacher_id) {
+                        opts.push({
+                          value: `homeroom:${st.classroom.homeroom_teacher_id}`,
+                          label: `Director(a) de turma (${st.classroom.name ?? "turma"})`,
+                        });
+                      }
+                      const hasDirectFallback = row.assignee_pick.startsWith("direct:");
+                      const selectValue =
+                        opts.some((o) => o.value === row.assignee_pick) || hasDirectFallback ? row.assignee_pick : "__";
+                      return (
+                        <Card key={row.rowKey} className="border-border bg-card p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
+                            <Badge variant="secondary" className="text-[10px]">
+                              Destinatário nominal
+                            </Badge>
+                            {tplNamedDrafts.length > 1 ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-[11px] text-destructive"
+                                onClick={() =>
+                                  setTplNamedDrafts((prev) =>
+                                    prev.length <= 1 ? prev : prev.filter((x) => x.rowKey !== row.rowKey),
+                                  )
+                                }
+                              >
+                                Remover linha
+                              </Button>
+                            ) : null}
+                          </div>
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <div className="grid gap-2">
+                              <Label className="text-xs">Aluno</Label>
+                              <Select
+                                value={row.student_id || "__"}
+                                onValueChange={(v) => {
+                                  const sid = v === "__" ? "" : v;
+                                  setTplNamedDrafts((prev) =>
+                                    prev.map((x) => (x.rowKey === row.rowKey ? { ...x, student_id: sid, assignee_pick: "__" } : x)),
+                                  );
+                                }}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Escolher aluno" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__">—</SelectItem>
+                                  {studentsDetailed.map((s) => (
+                                    <SelectItem key={s.id} value={s.id}>
+                                      {s.full_name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="grid gap-2">
+                              <Label className="text-xs">Educador (notificado)</Label>
+                              <Select
+                                value={selectValue}
+                                onValueChange={(v) =>
+                                  setTplNamedDrafts((prev) =>
+                                    prev.map((x) => (x.rowKey === row.rowKey ? { ...x, assignee_pick: v } : x)),
+                                  )
+                                }
+                                disabled={!row.student_id || (opts.length === 0 && !hasDirectFallback)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue
+                                    placeholder={
+                                      !row.student_id
+                                        ? "Escolha o aluno"
+                                        : opts.length === 0 && !hasDirectFallback
+                                          ? "Sem encarregado ou director de turma"
+                                          : "Escolher…"
+                                    }
+                                  />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__">—</SelectItem>
+                                  {opts.map((o) => (
+                                    <SelectItem key={o.value} value={o.value}>
+                                      {o.label}
+                                    </SelectItem>
+                                  ))}
+                                  {hasDirectFallback ? (
+                                    <SelectItem value={row.assignee_pick}>Educador já associado (importado)</SelectItem>
+                                  ) : null}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="flex flex-wrap gap-2 pt-2">
               {(Object.keys(FIELD_TYPE_META) as AuthorizationFieldType[]).map((ft) => (
