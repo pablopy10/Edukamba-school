@@ -1,11 +1,11 @@
 /**
  * Envio automático (Brevo) ao emitir FT fiscal — encarregado do aluno.
+ * Anexo: PDF FACTURA RECIBO gerado na função `emit-fiscal-invoices` (mesmo layout que `invoicePdf.ts` na app).
  * Respeita notification_preferences.channel = 'invoice_issued' (default: ligado).
  */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 
-/** Inline (evita import `./appLink.ts`: o bundle da Edge só inclui a pasta da função e resolve paths mal). */
+/** Inline (evita import `appLink.ts` fora da pasta da função no bundle). */
 const WEB_BASE_APP_OPEN = "https://www.edukamba.com";
 
 function appOpenLink(pathOrUrl: string): string {
@@ -53,67 +53,6 @@ function sanitizeFilename(raw: string): string {
   return t.length > 0 ? t : "fatura";
 }
 
-async function buildMinimalInvoicePdf(args: {
-  schoolName: string;
-  documentNumber: string;
-  invoiceDate: string;
-  grossTotal: number;
-  currency: string;
-  lineDescription: string;
-  clienteNome: string;
-  clienteNif: string;
-  studentName: string;
-  hashShort: string;
-}): Promise<Uint8Array> {
-  const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([595.28, 841.89]);
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  let y = 800;
-  const x = 48;
-  const textColor = rgb(0.12, 0.14, 0.18);
-
-  const pushLines = (text: string, size: number, bold = false) => {
-    const f = bold ? fontBold : font;
-    const maxChars = 85;
-    const clean = text.replace(/\r\n/g, "\n");
-    const parts = clean.split("\n");
-    for (const part of parts) {
-      for (let i = 0; i < part.length; i += maxChars) {
-        const slice = part.slice(i, i + maxChars);
-        if (slice.trim()) {
-          page.drawText(slice, { x, y, size, font: f, color: textColor });
-          y -= size + 5;
-        }
-      }
-    }
-  };
-
-  pushLines("FACTURA-RECIBO (resumo)", 13, true);
-  y -= 4;
-  pushLines(args.schoolName, 12, true);
-  y -= 10;
-  pushLines(`Documento: ${args.documentNumber}`, 11, true);
-  pushLines(`Data: ${args.invoiceDate}`, 10);
-  pushLines(`Total: ${fmtMoney(args.grossTotal, args.currency)}`, 11, true);
-  y -= 6;
-  pushLines(`Serviço: ${args.lineDescription}`, 10);
-  y -= 6;
-  pushLines(`Cliente (fiscal): ${args.clienteNome}`, 10);
-  pushLines(`Contribuinte: ${args.clienteNif}`, 10);
-  pushLines(`Aluno: ${args.studentName}`, 10);
-  y -= 8;
-  pushLines("Hash AGT (documento completo na app):", 9, true);
-  pushLines(args.hashShort, 8);
-  y -= 10;
-  pushLines(
-    "PDF resumido. O PDF oficial com layout completo está disponível em Edukamba > Pagamentos após iniciar sessão.",
-    8,
-  );
-
-  return pdfDoc.save();
-}
-
 function buildHtml(opts: {
   schoolName: string;
   recipientFirstName: string;
@@ -141,7 +80,7 @@ function buildHtml(opts: {
   )}) no valor de <strong>${escHtmlBasic(amountLabel)}</strong>.</p>
 <p style="margin:0 0 8px;font-size:13px;color:#475569;"><strong>Serviço:</strong> ${escHtmlBasic(lineDescription)}</p>
 <p style="margin:0 0 20px;font-size:13px;color:#475569;"><strong>Aluno:</strong> ${escHtmlBasic(studentName)}</p>
-<p style="margin:0 0 18px;font-size:13px;color:#64748b;">Segue em anexo um PDF com o resumo desta fatura. Na app pode consultar o documento completo e descarregar o PDF oficial.</p>
+<p style="margin:0 0 18px;font-size:13px;color:#64748b;">Segue em anexo o PDF <strong>FACTURA RECIBO</strong> no mesmo formato que na plataforma Edukamba (Pagamentos → descarregar PDF).</p>
 <div style="text-align:center;margin-bottom:8px;">
 <a href="${openAppUrl}" style="display:inline-block;background:#f59e0b;color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 28px;border-radius:22px;">Abrir Pagamentos</a>
 </div>
@@ -156,7 +95,7 @@ type InvRow = {
   invoice_date: string;
   gross_total: number;
   currency: string;
-  line_description: string;
+  line_description: string | null;
   cliente_nome: string;
   cliente_nif: string;
   document_hash: string | null;
@@ -167,6 +106,7 @@ type InvRow = {
 export async function sendInvoiceIssuedEmailForId(
   admin: SupabaseClient,
   invoiceId: string,
+  pdfBytes: Uint8Array,
 ): Promise<{ ok: boolean; skipped?: string }> {
   const brevoKey = Deno.env.get("BREVO_API_KEY")?.trim();
   if (!brevoKey) {
@@ -237,26 +177,10 @@ export async function sendInvoiceIssuedEmailForId(
     return { ok: true, skipped: "no email" };
   }
 
-  const hash = (inv.document_hash ?? "").trim();
-  const hashShort = hash.length > 180 ? `${hash.slice(0, 90)} … ${hash.slice(-40)}` : hash || "(indisponível)";
-
   const amountLabel = fmtMoney(Number(inv.gross_total), inv.currency);
   const invoiceDatePt = inv.invoice_date?.slice(0, 10) ?? "—";
   const firstName = recipientName.split(/\s+/)[0] || recipientName;
   const openAppUrl = appOpenLink("/pagamentos");
-
-  const pdfBytes = await buildMinimalInvoicePdf({
-    schoolName,
-    documentNumber: inv.document_number,
-    invoiceDate: invoiceDatePt,
-    grossTotal: Number(inv.gross_total),
-    currency: inv.currency || "AOA",
-    lineDescription: inv.line_description?.trim() || "Serviços educativos",
-    clienteNome: inv.cliente_nome?.trim() || studentName,
-    clienteNif: inv.cliente_nif?.trim() || "—",
-    studentName,
-    hashShort,
-  });
 
   const attachmentName = `${sanitizeFilename(inv.document_number)}.pdf`;
   const html = buildHtml({

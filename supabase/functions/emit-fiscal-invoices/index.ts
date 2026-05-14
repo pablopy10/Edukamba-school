@@ -3,6 +3,10 @@
  * JWT do utilizador staff (RLS às tabelas). Secret: AGT_RSA_PRIVATE_KEY_PEM (PKCS#8 RSA, assinatura SHA-1 PKCS#1).
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import {
+  buildOfficialFiscalInvoicePdfBytes,
+  invoiceRowToPdfPayload,
+} from "./fiscalInvoicePdf.ts";
 import { sendInvoiceIssuedEmailForId } from "../_shared/sendInvoiceIssuedEmail.ts";
 
 const corsHeaders = {
@@ -351,7 +355,7 @@ async function emitOne(
       hash_control,
       cliente_nome: ctx.cliente_nome,
       cliente_nif,
-    }).select("id, document_number").single();
+    }).select("*").single();
 
     if (insErr) {
       if (insErr.code === "23505") {
@@ -361,9 +365,17 @@ async function emitOne(
     }
 
     if (inserted?.id && adminSb) {
-      void sendInvoiceIssuedEmailForId(adminSb, String(inserted.id)).catch((e) =>
-        console.error("emit-fiscal-invoices: email encarregado", e),
-      );
+      try {
+        const pdfBytes = await buildOfficialFiscalInvoicePdfBytes(
+          adminSb,
+          invoiceRowToPdfPayload(inserted as Record<string, unknown>),
+        );
+        void sendInvoiceIssuedEmailForId(adminSb, String(inserted.id), pdfBytes).catch((e) =>
+          console.error("emit-fiscal-invoices: email encarregado", e),
+        );
+      } catch (e) {
+        console.error("emit-fiscal-invoices: PDF fiscal para email", e);
+      }
     } else if (inserted?.id && !adminSb) {
       console.warn(
         "emit-fiscal-invoices: SUPABASE_SERVICE_ROLE_KEY ausente no ambiente — email automático da fatura não enviado.",
