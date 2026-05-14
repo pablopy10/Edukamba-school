@@ -2182,6 +2182,125 @@ export type Database = {
           },
         ]
       }
+      module_authorization_submissions: {
+        Row: {
+          attachment_urls: Json
+          created_at: string
+          id: string
+          responses: Json
+          school_id: string
+          signature_data: string | null
+          student_id: string
+          submitted_by: string
+          template_id: string
+        }
+        Insert: {
+          attachment_urls?: Json
+          created_at?: string
+          id?: string
+          responses?: Json
+          school_id: string
+          signature_data?: string | null
+          student_id: string
+          submitted_by: string
+          template_id: string
+        }
+        Update: {
+          attachment_urls?: Json
+          created_at?: string
+          id?: string
+          responses?: Json
+          school_id?: string
+          signature_data?: string | null
+          student_id?: string
+          submitted_by?: string
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "module_authorization_submissions_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "module_authorization_submissions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "module_authorization_submissions_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "module_authorization_submissions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "module_authorization_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      module_authorization_templates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          fields: Json
+          id: string
+          is_active: boolean
+          module: string
+          school_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          fields?: Json
+          id?: string
+          is_active?: boolean
+          module: string
+          school_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          fields?: Json
+          id?: string
+          is_active?: boolean
+          module?: string
+          school_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "module_authorization_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "module_authorization_templates_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_preferences: {
         Row: {
           channel: string

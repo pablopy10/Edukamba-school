@@ -26,17 +26,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Utensils, Plus, Pencil, Trash2, Users, Wallet } from "lucide-react";
+import { Utensils, Plus, Pencil, Trash2, Users, Wallet, FileSignature } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { cn } from "@/lib/utils";
-import { canValidateSchoolPaymentProofs } from "@/lib/schoolStaffRoles";
+import { canValidateSchoolPaymentProofs, isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { PagamentosFinanceHub } from "@/pages/Pagamentos";
 import { DomainChargeRulesPanel } from "@/components/finance/DomainChargeRulesPanel";
 import { useHomeroomStudentIds } from "@/hooks/useHomeroomStudentIds";
+import { ModuleAuthorizationsPanel } from "@/components/authorizations/ModuleAuthorizationsPanel";
 
 type MealProgramRow = {
   id: string;
@@ -71,7 +72,7 @@ const Refeicoes = () => {
   const [enrollments, setEnrollments] = useState<MealEnrollmentRow[]>([]);
   const [students, setStudents] = useState<Array<{ id: string; full_name: string }>>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"regras" | "inscricoes" | "pagamentos">("inscricoes");
+  const [tab, setTab] = useState<"regras" | "inscricoes" | "pagamentos" | "autorizacoes">("inscricoes");
 
   const [progOpen, setProgOpen] = useState(false);
   const [editProg, setEditProg] = useState<MealProgramRow | null>(null);
@@ -140,6 +141,7 @@ const Refeicoes = () => {
   }, [schoolId]);
 
   const canManageMealFinance = canValidateSchoolPaymentProofs(role);
+  const canManageAuthorizations = isSchoolManagementRole(role);
   const canDeleteEnrollment = role === "ADMIN" || role === "SUPER_ADMIN";
   const isParent = role === "PARENT";
   /** Inserção na BD: ADMIN, SUPER_ADMIN, TEACHER, PARENT (política própria). */
@@ -328,6 +330,10 @@ const Refeicoes = () => {
               Inscrições
             </TabsTrigger>
             <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
+            <TabsTrigger value="autorizacoes">
+              <FileSignature className="mr-2 h-4 w-4" />
+              Autorizações
+            </TabsTrigger>
           </TabsList>
 
           {!isParent && (
@@ -458,6 +464,19 @@ const Refeicoes = () => {
 
           <TabsContent value="pagamentos" className="mt-4">
             <PagamentosFinanceHub financePage="mealCharges" />
+          </TabsContent>
+
+          <TabsContent value="autorizacoes" className="mt-4">
+            <ModuleAuthorizationsPanel
+              module="meal"
+              schoolId={schoolId}
+              userId={userId}
+              role={role}
+              isParent={isParent}
+              childIds={childIds}
+              homeroomStudentIds={homeroomStudentIds}
+              canManageTemplates={canManageAuthorizations}
+            />
           </TabsContent>
         </Tabs>
       </div>

@@ -17,7 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Bus, Plus, Pencil, Trash2, MapPin, Users, ListChecks, Printer, Search, Wallet } from "lucide-react";
+import { Bus, Plus, Pencil, Trash2, MapPin, Users, ListChecks, Printer, Search, Wallet, FileSignature } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
@@ -31,6 +31,7 @@ import { useParentChildren } from "@/hooks/useParentChildren";
 import { PagamentosFinanceHub } from "@/pages/Pagamentos";
 import { DomainChargeRulesPanel } from "@/components/finance/DomainChargeRulesPanel";
 import { useHomeroomStudentIds } from "@/hooks/useHomeroomStudentIds";
+import { ModuleAuthorizationsPanel } from "@/components/authorizations/ModuleAuthorizationsPanel";
 
 type Enrollment = TransportEnrollment & {
   student?: { full_name: string; classroom_id: string | null };
@@ -70,7 +71,7 @@ const Transportes = () => {
   // Passenger list
   const [listRouteId, setListRouteId] = useState<string>("");
   const [transportTab, setTransportTab] = useState<
-    "regras" | "rotas" | "inscricoes" | "lista" | "pagamentos"
+    "regras" | "rotas" | "inscricoes" | "lista" | "pagamentos" | "autorizacoes"
   >("rotas");
 
   useEffect(() => {
@@ -220,6 +221,7 @@ const Transportes = () => {
             transportTab !== "lista" &&
             transportTab !== "pagamentos" &&
             transportTab !== "regras" &&
+            transportTab !== "autorizacoes" &&
             "relative pb-28",
         )}
       >
@@ -251,6 +253,10 @@ const Transportes = () => {
             <TabsTrigger value="inscricoes"><Users className="mr-2 h-4 w-4" />Inscrições</TabsTrigger>
             {!isParent && <TabsTrigger value="lista"><ListChecks className="mr-2 h-4 w-4" />Lista de passageiros</TabsTrigger>}
             <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
+            <TabsTrigger value="autorizacoes">
+              <FileSignature className="mr-2 h-4 w-4" />
+              Autorizações
+            </TabsTrigger>
           </TabsList>
 
           {!isParent && (
@@ -477,6 +483,19 @@ const Transportes = () => {
             <PagamentosFinanceHub financePage="transportCharges" />
           </TabsContent>
 
+          <TabsContent value="autorizacoes" className="mt-4">
+            <ModuleAuthorizationsPanel
+              module="transport"
+              schoolId={schoolId}
+              userId={userId}
+              role={role}
+              isParent={isParent}
+              childIds={childIds}
+              homeroomStudentIds={homeroomStudentIds}
+              canManageTemplates={isAdmin}
+            />
+          </TabsContent>
+
           {/* LISTA DE PASSAGEIROS */}
           <TabsContent value="lista" className="mt-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
@@ -573,7 +592,8 @@ const Transportes = () => {
         (isAdmin || (isParent && transportTab === "inscricoes")) &&
         transportTab !== "lista" &&
         transportTab !== "pagamentos" &&
-        transportTab !== "regras" && (
+        transportTab !== "regras" &&
+        transportTab !== "autorizacoes" && (
         <NativeMobileFabPortal>
           <Button
             type="button"

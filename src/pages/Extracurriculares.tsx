@@ -39,7 +39,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { UserPlus, Wallet } from "lucide-react";
+import { UserPlus, Wallet, FileSignature } from "lucide-react";
 import { CheckCircle2 } from "lucide-react";
 import { isSchoolManagementOrTeacher, isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 import { useParentChildren } from "@/hooks/useParentChildren";
@@ -50,7 +50,7 @@ import { Card } from "@/components/ui/card";
 import { PagamentosFinanceHub } from "@/pages/Pagamentos";
 import { DomainChargeRulesPanel } from "@/components/finance/DomainChargeRulesPanel";
 import { useHomeroomStudentIds } from "@/hooks/useHomeroomStudentIds";
-
+import { ModuleAuthorizationsPanel } from "@/components/authorizations/ModuleAuthorizationsPanel";
 type ActivityCategory = "musica" | "desporto" | "arte" | "tecnologia" | "academico" | "teatro";
 
 type EnrollmentListRow = {
@@ -103,7 +103,7 @@ const Extracurriculares = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [academicYear, setAcademicYear] = useState<{ id: string; start_date: string; end_date: string } | null>(null);
   const [hubTab, setHubTab] = useState<
-    "regras" | "atividades" | "inscricoes" | "pagamentos"
+    "regras" | "atividades" | "inscricoes" | "pagamentos" | "autorizacoes"
   >("atividades");
 
   const [activities, setActivities] = useState<ActivityRow[]>([]);
@@ -125,6 +125,7 @@ const Extracurriculares = () => {
 
   const canEdit = isSchoolManagementOrTeacher(role);
   const canDelete = isSchoolManagementRole(role);
+  const canManageAuthorizations = isSchoolManagementRole(role);
   const isParent = role === "PARENT";
   const canEnroll = canEdit || isParent;
   const { childIds } = useParentChildren();
@@ -340,6 +341,10 @@ const Extracurriculares = () => {
             <TabsTrigger value="atividades">Atividades</TabsTrigger>
             <TabsTrigger value="inscricoes">Inscrições</TabsTrigger>
             <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
+            <TabsTrigger value="autorizacoes">
+              <FileSignature className="mr-2 h-4 w-4" />
+              Autorizações
+            </TabsTrigger>
           </TabsList>
 
           {!isParent && (
@@ -729,6 +734,19 @@ const Extracurriculares = () => {
 
           <TabsContent value="pagamentos" className="mt-4">
             <PagamentosFinanceHub financePage="activityCharges" />
+          </TabsContent>
+
+          <TabsContent value="autorizacoes" className="mt-4">
+            <ModuleAuthorizationsPanel
+              module="extracurricular"
+              schoolId={schoolId}
+              userId={userId}
+              role={role}
+              isParent={isParent}
+              childIds={childIds}
+              homeroomStudentIds={homeroomStudentIds}
+              canManageTemplates={canManageAuthorizations}
+            />
           </TabsContent>
         </Tabs>
       </div>
