@@ -30,7 +30,11 @@ export type ModuleAuthorizationPdfInput = {
 
 const MARGIN_MM = 16;
 const PAGE_BOTTOM = 287;
-const LINE_H = 5.5;
+/** Altura entre linhas no corpo — compacto para juntar perguntas. */
+const BODY_LINE_MM = 4;
+/** Folga após blocos `drawParagraph`. */
+const PAR_TAIL_MM = 0.5;
+const TITLE_LINE_MM = 5.2;
 const TITLE_SIZE = 15;
 const H2_SIZE = 11;
 const BODY_SIZE = 9.5;
@@ -101,19 +105,20 @@ function drawParagraph(
   yStartMm: number,
   maxWmm: number,
   fontSize: number,
+  lineMm: number = BODY_LINE_MM,
 ): number {
   doc.setFontSize(fontSize);
   const lines = doc.splitTextToSize(text || "—", maxWmm) as string[];
   let y = yStartMm;
   for (const ln of lines) {
-    if (y + LINE_H > PAGE_BOTTOM - 4) {
+    if (y + lineMm > PAGE_BOTTOM - 4) {
       doc.addPage();
       y = MARGIN_MM;
     }
     doc.text(ln, xMm, y);
-    y += LINE_H;
+    y += lineMm;
   }
-  return y + 2;
+  return y + PAR_TAIL_MM;
 }
 
 export function generateModuleAuthorizationPdf(input: ModuleAuthorizationPdfInput): jsPDF {
@@ -135,9 +140,9 @@ export function generateModuleAuthorizationPdf(input: ModuleAuthorizationPdfInpu
   doc.setFontSize(TITLE_SIZE);
   const titles = doc.splitTextToSize(input.templateTitle.trim() || "Formulário", maxW) as string[];
   for (let ti = 0; ti < titles.length; ti++) {
-    y = advanceY(doc, y, LINE_H * 2);
+    y = advanceY(doc, y, TITLE_LINE_MM + 2);
     doc.text(titles[ti], MARGIN_MM, y);
-    y += LINE_H * 2;
+    y += TITLE_LINE_MM + 1;
   }
 
   doc.setFont("helvetica", "normal");
@@ -149,7 +154,7 @@ export function generateModuleAuthorizationPdf(input: ModuleAuthorizationPdfInpu
     `${modeLabel}` +
     (input.schoolName?.trim() ? ` · Escola: ${input.schoolName.trim()}` : "") +
     ` · Gerado: ${new Intl.DateTimeFormat("pt-PT", { dateStyle: "short", timeStyle: "short" }).format(new Date())}`;
-  y = drawParagraph(doc, meta, MARGIN_MM, y, maxW, BODY_SIZE);
+  y = drawParagraph(doc, meta, MARGIN_MM, y + 2, maxW, BODY_SIZE, BODY_LINE_MM);
 
   if (
     input.mode === "response" &&
@@ -166,20 +171,19 @@ export function generateModuleAuthorizationPdf(input: ModuleAuthorizationPdfInpu
         `Data e hora: ${new Intl.DateTimeFormat("pt-PT", { dateStyle: "short", timeStyle: "short" }).format(new Date(input.submittedAtIso))}`,
       );
     }
-    y = drawParagraph(doc, bits.join(" · "), MARGIN_MM, y, maxW, BODY_SIZE - 0.5);
+    y = drawParagraph(doc, bits.join(" · "), MARGIN_MM, y + 2, maxW, BODY_SIZE - 0.5, BODY_LINE_MM);
   }
 
   if (input.templateDescription?.trim()) {
-    y = advanceY(doc, y, LINE_H);
-    y = drawParagraph(doc, input.templateDescription!.trim(), MARGIN_MM, y, maxW, 9);
+    y = drawParagraph(doc, input.templateDescription!.trim(), MARGIN_MM, y + 2, maxW, 9, BODY_LINE_MM);
   }
 
-  y = advanceY(doc, y + 2, LINE_H);
+  y += 5;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(H2_SIZE);
   doc.setTextColor(...NAVY);
-  doc.text("Campos do formulário", MARGIN_MM, y + 6);
-  y += 12;
+  doc.text("Campos do formulário", MARGIN_MM, y + 5);
+  y += BODY_LINE_MM * 2;
 
   const legacySig =
     typeof input.legacySignatureDataUrl === "string" && input.legacySignatureDataUrl.startsWith("data:image")
@@ -193,14 +197,14 @@ export function generateModuleAuthorizationPdf(input: ModuleAuthorizationPdfInpu
     doc.setFontSize(BODY_SIZE);
     doc.setTextColor(...NAVY);
     const prefix = f.required ? "* " : "";
-    y = advanceY(doc, y, LINE_H * 3);
-    y = drawParagraph(doc, `${prefix}${f.label}`, MARGIN_MM, y + 6, maxW, BODY_SIZE + 0.3);
+    y += 1.5;
+    y = advanceY(doc, y, BODY_LINE_MM);
+    y = drawParagraph(doc, `${prefix}${f.label}`, MARGIN_MM, y + 4.2, maxW, BODY_SIZE + 0.2, BODY_LINE_MM);
 
     if (f.helper?.trim()) {
       doc.setFont("helvetica", "italic");
       doc.setTextColor(...MUTED);
-      y = advanceY(doc, y, LINE_H);
-      y = drawParagraph(doc, f.helper!.trim(), MARGIN_MM, y, maxW, BODY_SIZE - 1);
+      y = drawParagraph(doc, f.helper!.trim(), MARGIN_MM, y + 1, maxW, BODY_SIZE - 1, BODY_LINE_MM - 0.5);
       doc.setFont("helvetica", "normal");
     }
 
@@ -210,126 +214,146 @@ export function generateModuleAuthorizationPdf(input: ModuleAuthorizationPdfInpu
     if (input.mode === "response") {
       if (f.type === "signature") {
         const imgSrc = resolveSignatureDataUrl(f, responses, legacySig);
-        y = advanceY(doc, y + 2, LINE_H);
         y = drawParagraph(
           doc,
           imgSrc ? "Assinatura (imagem digital):" : "Assinatura: (não presente nos dados)",
           MARGIN_MM,
-          y,
+          y + 2,
           maxW,
           BODY_SIZE,
+          BODY_LINE_MM,
         );
         if (imgSrc) {
           try {
             const fmt = imgSrc.includes("image/png") ? "PNG" : "JPEG";
             const boxW = Math.min(maxW - 2, 100);
-            const boxH = 32;
-            y = advanceY(doc, y, boxH + 10);
+            const boxH = 26;
+            y += 2;
+            const top = y + 4;
             doc.setDrawColor(210, 210, 210);
-            doc.rect(MARGIN_MM, y - 28, boxW + 8, boxH);
-            doc.addImage(imgSrc, fmt, MARGIN_MM + 1, y - 26, boxW, boxH - 2);
-            y += 8;
+            doc.rect(MARGIN_MM, top, boxW + 8, boxH);
+            doc.addImage(imgSrc, fmt, MARGIN_MM + 1, top + 1, boxW, boxH - 2);
+            y = top + boxH + 5;
           } catch {
             doc.setFontSize(BODY_SIZE - 1);
             doc.setTextColor(170, 0, 0);
-            y = drawParagraph(doc, "Não foi possível incluir a imagem da assinatura no PDF.", MARGIN_MM, y, maxW, 9);
+            y = drawParagraph(
+              doc,
+              "Não foi possível incluir a imagem da assinatura no PDF.",
+              MARGIN_MM,
+              y + 2,
+              maxW,
+              9,
+              BODY_LINE_MM,
+            );
           }
           doc.setTextColor(30, 30, 30);
           doc.setFont("helvetica", "normal");
         }
       } else {
         const out = formatResponseValue(f, responses) || "—";
-        y = advanceY(doc, y, LINE_H);
-        y = drawParagraph(doc, out, MARGIN_MM, y + 4, maxW, BODY_SIZE);
+        y = drawParagraph(doc, out, MARGIN_MM, y + 3, maxW, BODY_SIZE, BODY_LINE_MM);
       }
     } else {
       switch (f.type) {
         case "textarea": {
-          const hTa = 22;
-          y = advanceY(doc, y, hTa + 8);
+          const hTa = 16;
+          y = advanceY(doc, y, hTa + 6);
+          const top = y + 4;
           doc.setDrawColor(220, 220, 220);
-          doc.rect(MARGIN_MM, y + 6, maxW, hTa);
-          y += hTa + 12;
+          doc.rect(MARGIN_MM, top, maxW, hTa);
+          y = top + hTa + 5;
           break;
         }
-        case "text":
-          y = advanceY(doc, y + 8);
+        case "text": {
+          y += 6;
+          const ly = y + 6;
           doc.setDrawColor(200, 200, 200);
-          doc.line(MARGIN_MM, y + 8, pageW - MARGIN_MM, y + 8);
-          y += 12;
+          doc.line(MARGIN_MM, ly, pageW - MARGIN_MM, ly);
+          y = ly + 4;
           break;
+        }
         case "select":
-        case "radio":
-          y = advanceY(doc, y, (opts.length + 2) * LINE_H);
+        case "radio": {
+          y += 4;
+          let optY = y + 8;
           for (const opt of opts.length ? opts : ["…"]) {
             doc.setTextColor(...MUTED);
-            doc.circle(MARGIN_MM + 2, y + LINE_H * 2, 2);
+            doc.circle(MARGIN_MM + 2, optY + 2, 1.8);
             doc.setTextColor(30, 30, 30);
-            doc.text(opt, MARGIN_MM + 8, y + LINE_H * 2 + 1);
-            y += LINE_H + 2;
+            doc.text(opt, MARGIN_MM + 7, optY + 3);
+            optY += BODY_LINE_MM + 1;
           }
+          y = optY + 2;
+          break;
+        }
+        case "checkbox": {
           y += 4;
-          break;
-        case "checkbox":
-          doc.rect(MARGIN_MM, y + LINE_H + 3, 4, 4);
+          const ly = y + 8;
+          doc.rect(MARGIN_MM, ly, 4, 4);
           doc.setTextColor(50, 50, 50);
-          doc.text("Sim / não", MARGIN_MM + 8, y + LINE_H + 6);
-          y += LINE_H + 12;
+          doc.text("Sim / não", MARGIN_MM + 9, ly + 3.5);
+          y = ly + BODY_LINE_MM + 4;
           break;
+        }
         case "checkbox_group":
           for (const opt of opts.length ? opts : ["—"]) {
-            y = advanceY(doc, y, LINE_H * 3);
-            doc.rect(MARGIN_MM, y + 4, 4, 4);
-            doc.text(opt, MARGIN_MM + 9, y + 7);
-            y += LINE_H + 6;
+            y += 3;
+            const ly = y + 6;
+            doc.rect(MARGIN_MM, ly, 3.8, 3.8);
+            doc.text(opt, MARGIN_MM + 8.5, ly + 3.2);
+            y = ly + BODY_LINE_MM + 1;
           }
+          y += 2;
           break;
         case "signature": {
-          const hS = 30;
-          y = advanceY(doc, y, hS + 12);
+          const hS = 22;
+          y = advanceY(doc, y, hS + 8);
+          const top = y + 4;
           doc.setDrawColor(210, 210, 210);
-          doc.rect(MARGIN_MM, y + 4, maxW, hS);
+          doc.rect(MARGIN_MM, top, maxW, hS);
           doc.setFontSize(8);
           doc.setTextColor(...MUTED);
-          doc.text("Assinatura digital (portal) ou manuscrita", MARGIN_MM + 2, y + hS + 2);
-          y += hS + 14;
+          doc.text("Assinatura (portal ou manuscrita)", MARGIN_MM + 2, top + hS + 3);
+          y = top + hS + 6;
           doc.setFontSize(BODY_SIZE);
           doc.setTextColor(30, 30, 30);
           break;
         }
         case "file":
-          y = advanceY(doc, y, LINE_H * 3);
+          y += BODY_LINE_MM;
           doc.setTextColor(...MUTED);
-          doc.text("(Anexo no portal Edukamba)", MARGIN_MM, y + LINE_H + 8);
-          y += LINE_H * 6;
+          doc.text("(Anexo no portal Edukamba)", MARGIN_MM, y + 8);
+          y += BODY_LINE_MM + 10;
           doc.setTextColor(30, 30, 30);
           break;
         default:
-          y += LINE_H * 4;
+          y += BODY_LINE_MM + 8;
       }
     }
 
     doc.setDrawColor(...MUTED);
-    y = advanceY(doc, y + 2, LINE_H);
+    y += 1;
+    y = advanceY(doc, y, 2);
     doc.line(MARGIN_MM, y, pageW - MARGIN_MM, y);
-    y += LINE_H + 2;
+    y += BODY_LINE_MM + 0.8;
     doc.setFont("helvetica", "normal");
   }
 
   if (input.mode === "response" && Array.isArray(input.attachments) && input.attachments.some((a) => a?.url ?? a?.name)) {
-    y = advanceY(doc, y + 8, LINE_H * 6);
+    y += 6;
+    y = advanceY(doc, y, BODY_LINE_MM * 4);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(H2_SIZE);
     doc.setTextColor(...NAVY);
     doc.text("Anexos submetidos", MARGIN_MM, y + 6);
-    y += LINE_H + 8;
+    y += BODY_LINE_MM + 10;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(BODY_SIZE);
     for (const att of input.attachments) {
       if (!att?.url && !att?.name) continue;
       const line = `${att.name ?? "Anexo"}${att.url?.trim() ? ` — ${att.url.trim()}` : ""}`;
-      y = advanceY(doc, y, LINE_H * 4);
-      y = drawParagraph(doc, line, MARGIN_MM, y + 4, maxW, BODY_SIZE - 0.5);
+      y = drawParagraph(doc, line, MARGIN_MM, y + 3, maxW, BODY_SIZE - 0.5, BODY_LINE_MM - 0.3);
     }
   }
 
