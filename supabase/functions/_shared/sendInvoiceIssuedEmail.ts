@@ -4,7 +4,24 @@
  */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
-import { appOpenLink } from "./appLink.ts";
+
+/** Inline (evita import `./appLink.ts`: o bundle da Edge só inclui a pasta da função e resolve paths mal). */
+const WEB_BASE_APP_OPEN = "https://www.edukamba.com";
+
+function appOpenLink(pathOrUrl: string): string {
+  let path: string;
+  if (pathOrUrl.startsWith("http")) {
+    try {
+      const u = new URL(pathOrUrl);
+      path = u.pathname + (u.search ?? "");
+    } catch {
+      path = "/dashboard";
+    }
+  } else {
+    path = pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`;
+  }
+  return `${WEB_BASE_APP_OPEN}/app-open?path=${encodeURIComponent(path)}`;
+}
 
 const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 const CHANNEL_INVOICE_ISSUED = "invoice_issued";
