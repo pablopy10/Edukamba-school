@@ -46,6 +46,7 @@ import { SignatureCanvas } from "@/components/documents/SignatureCanvas";
 import { DocumentUpload } from "@/components/documents/DocumentUpload";
 import { notifyModuleAuthorizationAssignees } from "@/lib/notifications/notifyModuleAuthorizationAssignees";
 import { downloadModuleAuthorizationPdf } from "@/lib/authorizations/moduleAuthorizationPdf";
+import { isModuleAuthorizationStaffViewerRole } from "@/lib/schoolStaffRoles";
 
 /** Módulos alinhados à coluna SQL `module`. */
 export type AuthorizationModuleKind = "extracurricular" | "transport" | "meal";
@@ -301,10 +302,7 @@ export function ModuleAuthorizationsPanel({
   const [staffEditSigs, setStaffEditSigs] = useState<Record<string, string>>({});
   const [staffEditSaving, setStaffEditSaving] = useState(false);
 
-  const canStaffCorrectSubmittedAuth = useMemo(() => {
-    const r = role ?? "";
-    return ["ADMIN", "SUPER_ADMIN", "DIRECTOR", "SECRETARY", "TREASURER"].includes(r);
-  }, [role]);
+  const canStaffCorrectSubmittedAuth = useMemo(() => isModuleAuthorizationStaffViewerRole(role), [role]);
 
   const allowedStudentIds = useMemo(() => {
     if (!role || role === "STUDENT") return [];
@@ -1330,6 +1328,13 @@ export function ModuleAuthorizationsPanel({
             </TabsContent>
 
             <TabsContent value="historico" className="mt-4">
+              {canManageTemplates && !canStaffCorrectSubmittedAuth && submissions.length > 0 ? (
+                <p className="mb-3 rounded-xl border border-border bg-muted/25 px-4 py-2 text-xs text-muted-foreground">
+                  Para <strong className="font-medium text-foreground">editar respostas já submetidas</strong> é preciso
+                  perfil de Administrador, Super‑administrador, Direcção, Secretariado ou Tesouraria — alinhado às permissões
+                  do sistema.
+                </p>
+              ) : null}
               {submissions.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">Sem submissões ainda dentro do seu acesso.</p>
               ) : (
@@ -1374,10 +1379,10 @@ export function ModuleAuthorizationsPanel({
                                   size="sm"
                                   variant="secondary"
                                   className="h-8 gap-1 text-xs"
-                                  title="Alterar dados submetidos pelo encarregado (registo na auditoria)"
+                                  title="Alterar respostas do encarregado (auditoria)"
                                   onClick={() => openStaffCorrection(s)}
                                 >
-                                  <Pencil className="h-3.5 w-3.5" /> Corrigir
+                                  <Pencil className="h-3.5 w-3.5" /> Editar respostas
                                 </Button>
                               ) : null}
                             </div>
@@ -1768,11 +1773,12 @@ export function ModuleAuthorizationsPanel({
                 type="button"
                 variant="secondary"
                 className="gap-2 sm:mr-auto"
+                title="Alterar como administrador escolar (auditoria)"
                 onClick={() => {
                   openStaffCorrection(viewSub);
                 }}
               >
-                <Pencil className="h-4 w-4" /> Corrigir (administração)
+                <Pencil className="h-4 w-4" /> Editar respostas
               </Button>
             ) : (
               <span />

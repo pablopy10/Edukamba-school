@@ -48,6 +48,16 @@ export function canSchoolHardDeleteRole(role: string | null | undefined): boolea
   return role === "ADMIN" || role === "SUPER_ADMIN" || role === "DIRECTOR";
 }
 
+/**
+ * Perfis que podem corrigir submissões de formulários de autorização por módulo — alinhado a
+ * `auth_is_module_auth_staff_viewer()` nas políticas RLS (Admin, Director, Secretariado e Tesouraria; inclui Super‑admin).
+ */
+export function isModuleAuthorizationStaffViewerRole(role: string | null | undefined): boolean {
+  if (role == null) return false;
+  const normalized = String(role).trim().toUpperCase();
+  return normalized.length > 0 && (SCHOOL_PAYMENT_VALIDATE_ROLES as readonly string[]).includes(normalized);
+}
+
 /** Elegível como diretor de turma (perfil na escola). */
 export const HOMEROOM_ELIGIBLE_PROFILE_ROLES = [
   ...SCHOOL_MANAGEMENT_ROLES,
