@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { nanoid } from "nanoid";
 import {
   FileSignature,
@@ -107,6 +107,74 @@ type SubmissionRow = {
   submitter?: { full_name: string } | null;
   template?: { title: string; module: string; fields?: unknown; description?: string | null } | null;
 };
+
+/** Liga os controlos de preenchimento a um conjunto de estado (formulário novo vs. correção pela escola). */
+type ModuleAuthFieldDraftBindings = {
+  values: Record<string, unknown>;
+  setValues: Dispatch<SetStateAction<Record<string, unknown>>>;
+  signatures: Record<string, string>;
+  setSignatures: Dispatch<SetStateAction<Record<string, string>>>;
+  busy: boolean;
+  domNs: string;
+};
+
+/** Prepara valores e assinaturas para reabrir uma submissão existente como rascunho editável. */
+function buildCorrectionDraftFromSubmission(defs: AuthorizationFieldDef[], sub: SubmissionRow): {
+  values: Record<string, unknown>;
+  signatures: Record<string, string>;
+} {
+  const values: Record<string, unknown> = { ...(sub.responses ?? {}) };
+
+  const pool = [...(sub.attachment_urls ?? [])];
+  const takeAttachmentForField = (fieldId: string) => {
+    const exactIx = pool.findIndex((a) => a.field_id === fieldId);
+    if (exactIx >= 0) {
+      const [picked] = pool.splice(exactIx, 1);
+      return picked ?? null;
+    }
+    const legacyIx = pool.findIndex((a) => !(a.field_id && String(a.field_id).trim().length));
+    if (legacyIx >= 0) {
+      const [picked] = pool.splice(legacyIx, 1);
+      return picked ?? null;
+    }
+    return null;
+  };
+
+  for (const ff of defs.filter((d) => d.type === "file")) {
+    const hasObj =
+      values[ff.id] && typeof values[ff.id] === "object" && "url" in (values[ff.id] as object);
+    const urlFromResp =
+      hasObj && typeof (values[ff.id] as { url?: unknown }).url === "string"
+        ? String((values[ff.id] as { url: string }).url).trim()
+        : "";
+    if (urlFromResp) continue;
+
+    const att = takeAttachmentForField(ff.id);
+    if (!att?.url || !String(att.url).trim()) continue;
+    const idx = defs.filter((d) => d.type === "file").findIndex((d) => d.id === ff.id);
+    values[ff.id] = {
+      url: String(att.url).trim(),
+      name: att.name?.trim()?.length ? att.name!.trim() : `anexo_${idx >= 0 ? idx + 1 : 1}`,
+    };
+  }
+
+  const sigDefs = defs.filter((d) => d.type === "signature");
+  const signatures: Record<string, string> = {};
+  for (const sf of sigDefs) {
+    const raw = values[sf.id];
+    if (typeof raw === "string" && raw.trim().startsWith("data:image")) {
+      signatures[sf.id] = raw.trim();
+    }
+  }
+  if (sigDefs.length > 0 && Object.keys(signatures).length === 0) {
+    const legacy = typeof sub.signature_data === "string" ? sub.signature_data.trim() : "";
+    if (legacy.startsWith("data:image")) {
+      signatures[sigDefs[0]!.id] = legacy;
+    }
+  }
+
+  return { values, signatures };
+}
 
 type Props = {
   module: AuthorizationModuleKind;
@@ -226,6 +294,17 @@ export function ModuleAuthorizationsPanel({
 
   const [viewSub, setViewSub] = useState<SubmissionRow | null>(null);
   const [schoolDisplayName, setSchoolDisplayName] = useState<string | null>(null);
+
+  const [staffEditOpen, setStaffEditOpen] = useState(false);
+  const [staffEditSub, setStaffEditSub] = useState<SubmissionRow | null>(null);
+  const [staffEditVals, setStaffEditVals] = useState<Record<string, unknown>>({});
+  const [staffEditSigs, setStaffEditSigs] = useState<Record<string, string>>({});
+  const [staffEditSaving, setStaffEditSaving] = useState(false);
+
+  const canStaffCorrectSubmittedAuth = useMemo(() => {
+    const r = role ?? "";
+    return ["ADMIN", "SUPER_ADMIN", "DIRECTOR", "SECRETARY", "TREASURER"].includes(r);
+  }, [role]);
 
   const allowedStudentIds = useMemo(() => {
     if (!role || role === "STUDENT") return [];
@@ -790,7 +869,128 @@ export function ModuleAuthorizationsPanel({
     }
   };
 
-  const renderFieldInput = (f: AuthorizationFieldDef) => {
+  const openStaffCorrection = (s: SubmissionRow) => {
+    const defs = parseFields(templates.find((x) => x.id === s.template_id)?.fields ?? s.template?.fields ?? []);
+    if (!defs.length) {
+      toast.error("Não há campos disponíveis para corrigir esta submissão.");
+      return;
+    }
+    const { values: initVals, signatures: initSigs } = buildCorrectionDraftFromSubmission(defs, s);
+    setStaffEditSub(s);
+    setStaffEditVals(initVals);
+    setStaffEditSigs(initSigs);
+    setStaffEditOpen(true);
+    setViewSub(null);
+  };
+
+  const closeStaffCorrection = () => {
+    setStaffEditOpen(false);
+    setStaffEditSub(null);
+    setStaffEditVals({});
+    setStaffEditSigs({});
+  };
+
+  const saveStaffCorrection = async () => {
+    if (!schoolId || !staffEditSub) return;
+    const defs = parseFields(
+      templates.find((x) => x.id === staffEditSub.template_id)?.fields ?? staffEditSub.template?.fields ?? [],
+    );
+    if (!defs.length) {
+      toast.error("Não há campos disponíveis para guardar esta correção.");
+      return;
+    }
+    const errs: string[] = [];
+    const mergedResponses: Record<string, unknown> = { ...staffEditVals };
+    for (const f of defs) {
+      if (f.type === "signature") delete mergedResponses[f.id];
+    }
+
+    for (const f of defs) {
+      if (f.type === "signature") {
+        const sig = staffEditSigs[f.id];
+        if (f.required && (!sig || !sig.trim())) errs.push(`${f.label} (assinatura)`);
+        else if (sig) mergedResponses[f.id] = sig;
+        continue;
+      }
+      if (f.type === "file") {
+        const v = staffEditVals[f.id] as { url?: string } | undefined;
+        if (f.required && (!v?.url || !String(v.url).trim())) errs.push(f.label);
+        continue;
+      }
+      if (f.type === "checkbox") {
+        if (f.required && staffEditVals[f.id] !== true) errs.push(f.label);
+        continue;
+      }
+      if (f.type === "checkbox_group") {
+        const arr = staffEditVals[f.id] as string[] | undefined;
+        if (f.required && (!arr || arr.length === 0)) errs.push(f.label);
+        continue;
+      }
+      const v = staffEditVals[f.id];
+      if (f.required && (v === undefined || v === null || String(v).trim() === "")) errs.push(f.label);
+    }
+
+    if (errs.length > 0) {
+      toast.error(`Preencha: ${errs.join(", ")}`);
+      return;
+    }
+
+    const sigFields = defs.filter((x) => x.type === "signature");
+    let primarySignature: string | null = null;
+    for (const f of sigFields) {
+      const sg = staffEditSigs[f.id];
+      if (sg && !primarySignature) primarySignature = sg;
+    }
+
+    const attachment_urls: { url: string; name: string; field_id: string }[] = [];
+    let attachmentCounter = 0;
+    for (const f of defs) {
+      if (f.type !== "file") continue;
+      const fv = staffEditVals[f.id];
+      const urlRaw =
+        fv && typeof fv === "object" && "url" in fv ? (fv as { url?: unknown }).url : undefined;
+      if (typeof urlRaw !== "string" || !urlRaw.trim()) continue;
+      const nameRaw = fv && typeof fv === "object" && "name" in fv ? (fv as { name?: unknown }).name : undefined;
+      attachmentCounter++;
+      attachment_urls.push({
+        url: urlRaw.trim(),
+        name: typeof nameRaw === "string" && nameRaw.trim() ? nameRaw.trim() : `anexo_${attachmentCounter}`,
+        field_id: f.id,
+      });
+    }
+
+    setStaffEditSaving(true);
+    try {
+      const { error } = await supabase
+        .from("module_authorization_submissions")
+        .update({
+          responses: mergedResponses as never,
+          signature_data: primarySignature,
+          attachment_urls: attachment_urls as unknown as never,
+        })
+        .eq("id", staffEditSub.id);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      toast.success("Submissão corrigida pela administração. A alteração ficou registada para auditoria.");
+      closeStaffCorrection();
+      await loadAll();
+    } finally {
+      setStaffEditSaving(false);
+    }
+  };
+
+  const fillFieldBindings: ModuleAuthFieldDraftBindings = {
+    values: fillValues,
+    setValues: setFillValues,
+    signatures: fillSignatures,
+    setSignatures: setFillSignatures,
+    busy: submitting,
+    domNs: "fill",
+  };
+
+  const renderFieldDraft = (f: AuthorizationFieldDef, bindings: ModuleAuthFieldDraftBindings) => {
     const commonLabel = (
       <Label className="text-sm font-medium">
         {f.label}
@@ -804,8 +1004,8 @@ export function ModuleAuthorizationsPanel({
           <div key={f.id} className="grid gap-2">
             {commonLabel}
             <Input
-              value={(fillValues[f.id] as string) ?? ""}
-              onChange={(e) => setFillValues((prev) => ({ ...prev, [f.id]: e.target.value }))}
+              value={(bindings.values[f.id] as string) ?? ""}
+              onChange={(e) => bindings.setValues((prev) => ({ ...prev, [f.id]: e.target.value }))}
               placeholder={f.helper ?? ""}
             />
           </div>
@@ -816,8 +1016,8 @@ export function ModuleAuthorizationsPanel({
             {commonLabel}
             <Textarea
               rows={4}
-              value={(fillValues[f.id] as string) ?? ""}
-              onChange={(e) => setFillValues((prev) => ({ ...prev, [f.id]: e.target.value }))}
+              value={(bindings.values[f.id] as string) ?? ""}
+              onChange={(e) => bindings.setValues((prev) => ({ ...prev, [f.id]: e.target.value }))}
               placeholder={f.helper ?? ""}
             />
           </div>
@@ -828,8 +1028,8 @@ export function ModuleAuthorizationsPanel({
           <div key={f.id} className="grid gap-2">
             {commonLabel}
             <Select
-              value={(fillValues[f.id] as string) ?? ""}
-              onValueChange={(v) => setFillValues((prev) => ({ ...prev, [f.id]: v }))}
+              value={(bindings.values[f.id] as string) ?? ""}
+              onValueChange={(v) => bindings.setValues((prev) => ({ ...prev, [f.id]: v }))}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Escolha…" />
@@ -855,9 +1055,9 @@ export function ModuleAuthorizationsPanel({
                 <label key={opt} className="flex cursor-pointer items-center gap-2 text-sm">
                   <input
                     type="radio"
-                    name={`radio-${f.id}`}
-                    checked={fillValues[f.id] === opt}
-                    onChange={() => setFillValues((prev) => ({ ...prev, [f.id]: opt }))}
+                    name={`radio-${bindings.domNs}-${f.id}`}
+                    checked={bindings.values[f.id] === opt}
+                    onChange={() => bindings.setValues((prev) => ({ ...prev, [f.id]: opt }))}
                     className="h-4 w-4 accent-primary"
                   />
                   {opt}
@@ -871,11 +1071,11 @@ export function ModuleAuthorizationsPanel({
         return (
           <div key={f.id} className="flex items-center gap-2">
             <Checkbox
-              id={`chk-${f.id}`}
-              checked={fillValues[f.id] === true}
-              onCheckedChange={(c) => setFillValues((prev) => ({ ...prev, [f.id]: c === true }))}
+              id={`chk-${bindings.domNs}-${f.id}`}
+              checked={bindings.values[f.id] === true}
+              onCheckedChange={(c) => bindings.setValues((prev) => ({ ...prev, [f.id]: c === true }))}
             />
-            <Label htmlFor={`chk-${f.id}`} className="text-sm font-medium cursor-pointer">
+            <Label htmlFor={`chk-${bindings.domNs}-${f.id}`} className="text-sm font-medium cursor-pointer">
               {f.label}
               {f.required ? <span className="text-destructive"> *</span> : null}
             </Label>
@@ -888,7 +1088,7 @@ export function ModuleAuthorizationsPanel({
             {commonLabel}
             <div className="flex flex-col gap-2 rounded-xl border border-border bg-muted/20 p-3">
               {choiceOpts.map((opt) => {
-                const set = new Set((fillValues[f.id] as string[] | undefined) ?? []);
+                const set = new Set((bindings.values[f.id] as string[] | undefined) ?? []);
                 const on = set.has(opt);
                 return (
                   <label key={opt} className="flex cursor-pointer items-center gap-2 text-sm">
@@ -898,7 +1098,7 @@ export function ModuleAuthorizationsPanel({
                         const next = new Set(set);
                         if (c === true) next.add(opt);
                         else next.delete(opt);
-                        setFillValues((prev) => ({ ...prev, [f.id]: [...next] }));
+                        bindings.setValues((prev) => ({ ...prev, [f.id]: [...next] }));
                       }}
                     />
                     {opt}
@@ -914,16 +1114,16 @@ export function ModuleAuthorizationsPanel({
           <div key={f.id} className="grid gap-2">
             {commonLabel}
             <SignatureCanvas
-              disabled={submitting}
-              existingDataUrl={fillSignatures[f.id] ?? null}
+              disabled={bindings.busy}
+              existingDataUrl={bindings.signatures[f.id] ?? null}
               onClear={() =>
-                setFillSignatures((prev) => {
+                bindings.setSignatures((prev) => {
                   const next = { ...prev };
                   delete next[f.id];
                   return next;
                 })
               }
-              onSave={(dataUrl) => setFillSignatures((prev) => ({ ...prev, [f.id]: dataUrl }))}
+              onSave={(dataUrl) => bindings.setSignatures((prev) => ({ ...prev, [f.id]: dataUrl }))}
               className={cn("rounded-2xl border border-border bg-card p-3")}
             />
           </div>
@@ -935,11 +1135,11 @@ export function ModuleAuthorizationsPanel({
             <DocumentUpload
               schoolId={schoolId}
               accept="image/*,.pdf,.doc,.docx"
-              currentUrl={(fillValues[f.id] as { url?: string })?.url}
-              currentFileName={(fillValues[f.id] as { name?: string })?.name}
-              onUpload={(url, fileName) => setFillValues((prev) => ({ ...prev, [f.id]: { url, name: fileName } }))}
+              currentUrl={(bindings.values[f.id] as { url?: string })?.url}
+              currentFileName={(bindings.values[f.id] as { name?: string })?.name}
+              onUpload={(url, fileName) => bindings.setValues((prev) => ({ ...prev, [f.id]: { url, name: fileName } }))}
               onClear={() =>
-                setFillValues((prev) => {
+                bindings.setValues((prev) => {
                   const n = { ...prev };
                   delete n[f.id];
                   return n;
@@ -953,6 +1153,25 @@ export function ModuleAuthorizationsPanel({
         return null;
     }
   };
+
+  const staffCorrectionDefs =
+    staffEditOpen && staffEditSub
+      ? parseFields(
+          templates.find((x) => x.id === staffEditSub.template_id)?.fields ?? staffEditSub.template?.fields ?? [],
+        )
+      : [];
+
+  const staffFieldBindings: ModuleAuthFieldDraftBindings | null =
+    staffEditOpen && staffEditSub
+      ? {
+          values: staffEditVals,
+          setValues: setStaffEditVals,
+          signatures: staffEditSigs,
+          setSignatures: setStaffEditSigs,
+          busy: staffEditSaving,
+          domNs: "staff-corr",
+        }
+      : null;
 
   if (!schoolId) return <p className="text-sm text-muted-foreground">A carregar escola…</p>;
 
@@ -1090,7 +1309,7 @@ export function ModuleAuthorizationsPanel({
                     <p className="mt-4 text-xs text-muted-foreground">{selectedTemplate.description}</p>
                   ) : null}
                   <div className="mt-6 space-y-4 border-t border-border pt-6">
-                    {selectedFields.map((f) => renderFieldInput(f))}
+                    {selectedFields.map((f) => renderFieldDraft(f, fillFieldBindings))}
                   </div>
                   <div className="mt-6 flex justify-end gap-2">
                     <Button type="button" variant="outline" onClick={() => resetFillForm()} disabled={submitting}>
@@ -1149,6 +1368,18 @@ export function ModuleAuthorizationsPanel({
                               <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => setViewSub(s)}>
                                 Ver respostas
                               </Button>
+                              {canStaffCorrectSubmittedAuth ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="secondary"
+                                  className="h-8 gap-1 text-xs"
+                                  title="Alterar dados submetidos pelo encarregado (registo na auditoria)"
+                                  onClick={() => openStaffCorrection(s)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" /> Corrigir
+                                </Button>
+                              ) : null}
                             </div>
                           </td>
                         </tr>
@@ -1531,16 +1762,76 @@ export function ModuleAuthorizationsPanel({
                 );
               })()}
           </div>
-          <DialogFooter className="sm:justify-end">
+          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+            {canStaffCorrectSubmittedAuth && viewSub ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="gap-2 sm:mr-auto"
+                onClick={() => {
+                  openStaffCorrection(viewSub);
+                }}
+              >
+                <Pencil className="h-4 w-4" /> Corrigir (administração)
+              </Button>
+            ) : (
+              <span />
+            )}
             <Button
               type="button"
               variant="outline"
-              className="gap-2"
+              className="gap-2 sm:ml-auto"
               onClick={() => {
                 if (viewSub) handleDownloadSubmissionPdf(viewSub);
               }}
             >
               <FileDown className="h-4 w-4" /> PDF com respostas
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={staffEditOpen}
+        onOpenChange={(o) => {
+          if (!o) closeStaffCorrection();
+        }}
+      >
+        <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Correção pela administração</DialogTitle>
+            <DialogDescription>
+              Pode alterar as respostas, assinaturas ou anexos desta submissão. Os campos modelo, aluno e autor original
+              mantêm‑se iguais. A auditoria guarda utilizador escolar, hora e conteúdo anterior/novo (Administrador › Logs de
+              auditoria).
+            </DialogDescription>
+          </DialogHeader>
+          {staffEditSub && staffFieldBindings ? (
+            <div className="space-y-4 text-sm">
+              <div className="rounded-xl border border-border bg-muted/20 p-3 text-xs leading-relaxed">
+                <p className="font-semibold text-foreground">Contexto da submissão</p>
+                <p className="mt-1 text-muted-foreground">
+                  Originalmente por <strong className="text-foreground">{staffEditSub.submitter?.full_name ?? "—"}</strong>
+                  · Aluno/a <strong className="text-foreground">{staffEditSub.student?.full_name ?? "—"}</strong>
+                  · {new Date(staffEditSub.created_at).toLocaleString("pt-PT")}
+                </p>
+              </div>
+              <div className="space-y-4 border-t border-border pt-4">
+                {staffCorrectionDefs.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Sem estrutura de campos disponível neste formulário.</p>
+                ) : (
+                  staffCorrectionDefs.map((f) => renderFieldDraft(f, staffFieldBindings))
+                )}
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" disabled={staffEditSaving} onClick={() => closeStaffCorrection()}>
+              Cancelar
+            </Button>
+            <Button type="button" className="gap-2 bg-pastel-blue text-pastel-blue-foreground" onClick={() => void saveStaffCorrection()} disabled={staffEditSaving || staffCorrectionDefs.length === 0}>
+              {staffEditSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />} Guardar
+              correções
             </Button>
           </DialogFooter>
         </DialogContent>

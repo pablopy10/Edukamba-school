@@ -60,6 +60,7 @@ const TABLE_LABELS: Record<string, string> = {
   transport_enrollments: "Inscrições em transporte",
   school_settings: "Definições da escola",
   schools: "Escola",
+  module_authorization_submissions: "Autorizações (submissões)",
 };
 
 const ACTION_LABELS: Record<string, { label: string; cls: string }> = {
