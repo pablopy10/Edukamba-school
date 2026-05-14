@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { nanoid } from "nanoid";
 import {
   FileSignature,
+  FileDown,
   Loader2,
   Plus,
   Pencil,
@@ -44,6 +45,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SignatureCanvas } from "@/components/documents/SignatureCanvas";
 import { DocumentUpload } from "@/components/documents/DocumentUpload";
 import { notifyModuleAuthorizationAssignees } from "@/lib/notifications/notifyModuleAuthorizationAssignees";
+import { downloadModuleAuthorizationPdf } from "@/lib/authorizations/moduleAuthorizationPdf";
 
 /** Módulos alinhados à coluna SQL `module`. */
 export type AuthorizationModuleKind = "extracurricular" | "transport" | "meal";
@@ -103,7 +105,7 @@ type SubmissionRow = {
   created_at: string;
   student?: { full_name: string } | null;
   submitter?: { full_name: string } | null;
-  template?: { title: string; module: string } | null;
+  template?: { title: string; module: string; fields?: unknown; description?: string | null } | null;
 };
 
 type Props = {
@@ -172,11 +174,20 @@ function parseFields(raw: unknown): AuthorizationFieldDef[] {
   return raw.filter((x) => x && typeof x === "object" && "id" in x && "type" in x) as AuthorizationFieldDef[];
 }
 
-function stringifyOptions(lines: string) {
-  return lines
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
+/** Opções tal como aparecem no editor (uma por linha); mantém entradas vazias para o Enter criar nova linha. */
+function optionsFromMultiline(raw: string): string[] {
+  return raw.split("\n").map((line) => line.trim());
+}
+
+function nonEmptyOptions(f: AuthorizationFieldDef): string[] {
+  return (f.options ?? []).map((o) => String(o).trim()).filter((o) => o.length > 0);
+}
+
+/** Gravação: remove linhas em branco e normaliza texto. */
+function normalizeFieldForPersist(f: AuthorizationFieldDef): AuthorizationFieldDef {
+  if (f.type !== "select" && f.type !== "radio" && f.type !== "checkbox_group") return f;
+  const opts = nonEmptyOptions(f);
+  return { ...f, options: opts };
 }
 
 export function ModuleAuthorizationsPanel({
@@ -214,6 +225,7 @@ export function ModuleAuthorizationsPanel({
   const [submitting, setSubmitting] = useState(false);
 
   const [viewSub, setViewSub] = useState<SubmissionRow | null>(null);
+  const [schoolDisplayName, setSchoolDisplayName] = useState<string | null>(null);
 
   const allowedStudentIds = useMemo(() => {
     if (!role || role === "STUDENT") return [];
@@ -242,7 +254,7 @@ export function ModuleAuthorizationsPanel({
         setTemplates((tData ?? []) as TemplateRow[]);
       }
 
-      const [{ data: sData }, classroomsRes, namedMineRes] = await Promise.all([
+      const [{ data: sData }, classroomsRes, namedMineRes, schoolRes] = await Promise.all([
         supabase
           .from("students")
           .select(
@@ -262,7 +274,11 @@ export function ModuleAuthorizationsPanel({
         userId
           ? supabase.from("module_authorization_named_recipients").select("template_id, student_id").eq("assignee_profile_id", userId)
           : Promise.resolve({ data: [], error: null }),
+        supabase.from("schools").select("name").eq("id", schoolId).maybeSingle(),
       ]);
+
+      const schoolNameRaw = schoolRes?.data?.name;
+      setSchoolDisplayName(typeof schoolNameRaw === "string" && schoolNameRaw.trim() ? schoolNameRaw.trim() : null);
 
       setStudentsDetailed(((sData ?? []) as StudentDetailed[]) ?? []);
       if (canManageTemplates) {
@@ -275,7 +291,7 @@ export function ModuleAuthorizationsPanel({
       const { data: subData, error: subErr } = await supabase
         .from("module_authorization_submissions")
         .select(
-          "id, template_id, student_id, submitted_by, responses, signature_data, attachment_urls, created_at, student:students(full_name), submitter:submitted_by(full_name), template:template_id(title, module)",
+          "id, template_id, student_id, submitted_by, responses, signature_data, attachment_urls, created_at, student:students(full_name), submitter:submitted_by(full_name), template:template_id(title, module, fields, description)",
         )
         .eq("school_id", schoolId)
         .order("created_at", { ascending: false })
@@ -311,6 +327,73 @@ export function ModuleAuthorizationsPanel({
   const selectedFields = useMemo(
     () => parseFields(selectedTemplate?.fields ?? null),
     [selectedTemplate],
+  );
+
+  const handleDownloadBlankTemplatePdf = useCallback(
+    (t: TemplateRow) => {
+      const fds = parseFields(t.fields);
+      if (!fds.length) {
+        toast.error("O formulário não tem campos para exportar.");
+        return;
+      }
+      try {
+        downloadModuleAuthorizationPdf(
+          {
+            mode: "blank",
+            moduleAreaLabel: MODULE_LABEL[module],
+            schoolName: schoolDisplayName,
+            templateTitle: t.title,
+            templateDescription: t.description,
+            fields: fds,
+          },
+          t.title,
+        );
+        toast.success("PDF transferido.");
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Não foi possível gerar o PDF.");
+      }
+    },
+    [module, schoolDisplayName],
+  );
+
+  const handleDownloadSubmissionPdf = useCallback(
+    (s: SubmissionRow) => {
+      const tmplRow = templates.find((x) => x.id === s.template_id);
+      const fieldsDefs = parseFields((tmplRow?.fields ?? s.template?.fields) ?? []);
+      if (!fieldsDefs.length) {
+        toast.error("Não há estrutura de campos disponível para este PDF.");
+        return;
+      }
+      const tmplTitle = tmplRow?.title ?? s.template?.title ?? "Autorização";
+      const tmplDesc = tmplRow?.description ?? s.template?.description ?? null;
+      try {
+        const resp =
+          typeof s.responses === "object" && s.responses !== null && !Array.isArray(s.responses)
+            ? (s.responses as Record<string, unknown>)
+            : {};
+        downloadModuleAuthorizationPdf(
+          {
+            mode: "response",
+            moduleAreaLabel: MODULE_LABEL[module],
+            schoolName: schoolDisplayName,
+            templateTitle: tmplTitle,
+            templateDescription: tmplDesc,
+            fields: fieldsDefs,
+            studentName: s.student?.full_name ?? undefined,
+            submittedByLabel: s.submitter?.full_name ?? undefined,
+            submittedAtIso: s.created_at,
+            responses: resp,
+            legacySignatureDataUrl: s.signature_data,
+            attachments: s.attachment_urls,
+          },
+          tmplTitle,
+        );
+        toast.success("PDF transferido.");
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Não foi possível gerar o PDF.");
+      }
+    },
+    [module, schoolDisplayName, templates],
   );
 
   const openNewTemplate = () => {
@@ -408,6 +491,16 @@ export function ModuleAuthorizationsPanel({
       toast.error("Adicione pelo menos um campo.");
       return;
     }
+    const fieldsToSave = tplFields.map(normalizeFieldForPersist);
+    for (const f of fieldsToSave) {
+      if (f.type === "select" || f.type === "radio" || f.type === "checkbox_group") {
+        const opts = f.options ?? [];
+        if (opts.length < 2) {
+          toast.error(`«${f.label}»: nas listas/rádios/caixas, indique pelo menos duas opções (uma por linha).`);
+          return;
+        }
+      }
+    }
     if (tplRecipientMode === "classroom_homeroom_teachers" && tplClassroomIds.size === 0) {
       toast.error("Seleccione pelo menos uma turma.");
       return;
@@ -450,7 +543,7 @@ export function ModuleAuthorizationsPanel({
       const base = {
         title: tplTitle.trim(),
         description: tplDesc.trim() || null,
-        fields: tplFields as unknown as never,
+        fields: fieldsToSave as unknown as never,
       };
       if (editingTpl) {
         const { error } = await supabase
@@ -496,7 +589,7 @@ export function ModuleAuthorizationsPanel({
             module,
             title: base.title,
             description: base.description,
-            fields: tplFields as unknown as never,
+            fields: fieldsToSave as unknown as never,
             is_active: true,
             created_by: userId ?? null,
             ...recipientPayload,
@@ -723,7 +816,8 @@ export function ModuleAuthorizationsPanel({
             />
           </div>
         );
-      case "select":
+      case "select": {
+        const choiceOpts = nonEmptyOptions(f);
         return (
           <div key={f.id} className="grid gap-2">
             {commonLabel}
@@ -735,7 +829,7 @@ export function ModuleAuthorizationsPanel({
                 <SelectValue placeholder="Escolha…" />
               </SelectTrigger>
               <SelectContent>
-                {(f.options ?? []).map((opt) => (
+                {choiceOpts.map((opt) => (
                   <SelectItem key={opt} value={opt}>
                     {opt}
                   </SelectItem>
@@ -744,12 +838,14 @@ export function ModuleAuthorizationsPanel({
             </Select>
           </div>
         );
-      case "radio":
+      }
+      case "radio": {
+        const choiceOpts = nonEmptyOptions(f);
         return (
           <div key={f.id} className="grid gap-2">
             {commonLabel}
             <div className="flex flex-col gap-2 rounded-xl border border-border bg-muted/20 p-3">
-              {(f.options ?? []).map((opt) => (
+              {choiceOpts.map((opt) => (
                 <label key={opt} className="flex cursor-pointer items-center gap-2 text-sm">
                   <input
                     type="radio"
@@ -764,6 +860,7 @@ export function ModuleAuthorizationsPanel({
             </div>
           </div>
         );
+      }
       case "checkbox":
         return (
           <div key={f.id} className="flex items-center gap-2">
@@ -778,12 +875,13 @@ export function ModuleAuthorizationsPanel({
             </Label>
           </div>
         );
-      case "checkbox_group":
+      case "checkbox_group": {
+        const choiceOpts = nonEmptyOptions(f);
         return (
           <div key={f.id} className="grid gap-2">
             {commonLabel}
             <div className="flex flex-col gap-2 rounded-xl border border-border bg-muted/20 p-3">
-              {(f.options ?? []).map((opt) => {
+              {choiceOpts.map((opt) => {
                 const set = new Set((fillValues[f.id] as string[] | undefined) ?? []);
                 const on = set.has(opt);
                 return (
@@ -804,6 +902,7 @@ export function ModuleAuthorizationsPanel({
             </div>
           </div>
         );
+      }
       case "signature":
         return (
           <div key={f.id} className="grid gap-2">
@@ -895,6 +994,17 @@ export function ModuleAuthorizationsPanel({
                       <span className="text-muted-foreground">{parseFields(t.fields).length} campo(s)</span>
                       <Badge variant="outline" className="border-dashed text-[10px] font-normal sm:text-xs">{templateRecipientSummary(t)}</Badge>
                       <div className="flex gap-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          title="PDF do modelo (sem respostas)"
+                          type="button"
+                          onClick={() => handleDownloadBlankTemplatePdf(t)}
+                          disabled={parseFields(t.fields).length === 0}
+                        >
+                          <FileDown className="h-4 w-4" />
+                        </Button>
                         <Button
                           size="icon"
                           variant="ghost"
@@ -1006,7 +1116,7 @@ export function ModuleAuthorizationsPanel({
                         <th className="px-4 py-3">Formulário</th>
                         <th className="px-4 py-3">Aluno</th>
                         {canManageTemplates ? <th className="px-4 py-3">Por</th> : null}
-                        <th className="px-4 py-3 text-right">—</th>
+                        <th className="px-4 py-3 text-right">Acções</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1018,10 +1128,22 @@ export function ModuleAuthorizationsPanel({
                           <td className="px-4 py-2 font-medium">{s.template?.title ?? "—"}</td>
                           <td className="px-4 py-2">{s.student?.full_name ?? "—"}</td>
                           {canManageTemplates ? <td className="px-4 py-2">{s.submitter?.full_name ?? "—"}</td> : null}
-                          <td className="px-4 py-2 text-right">
-                            <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => setViewSub(s)}>
-                              Ver respostas
-                            </Button>
+                          <td className="whitespace-nowrap px-4 py-2 text-right">
+                            <div className="flex flex-wrap justify-end gap-1">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                className="h-8 gap-1 text-xs"
+                                title="PDF com respostas do encarregado"
+                                onClick={() => handleDownloadSubmissionPdf(s)}
+                              >
+                                <FileDown className="h-3.5 w-3.5" /> PDF
+                              </Button>
+                              <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => setViewSub(s)}>
+                                Ver respostas
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1261,7 +1383,7 @@ export function ModuleAuthorizationsPanel({
                         value={(f.options ?? []).join("\n")}
                         onChange={(e) =>
                           setTplFields((prev) =>
-                            prev.map((x) => (x.id === f.id ? { ...x, options: stringifyOptions(e.target.value) } : x)),
+                            prev.map((x) => (x.id === f.id ? { ...x, options: optionsFromMultiline(e.target.value) } : x)),
                           )
                         }
                       />
@@ -1335,7 +1457,9 @@ export function ModuleAuthorizationsPanel({
           <div className="space-y-3 text-sm">
             {viewSub &&
               (() => {
-                const defs = parseFields(templates.find((x) => x.id === viewSub.template_id)?.fields ?? []);
+                const defs = parseFields(
+                  templates.find((x) => x.id === viewSub.template_id)?.fields ?? viewSub.template?.fields ?? [],
+                );
                 const resp = (viewSub.responses ?? {}) as Record<string, unknown>;
                 const sawSignatureInResponses = defs.some(
                   (f) => f.type === "signature" && typeof resp[f.id] === "string",
@@ -1401,6 +1525,18 @@ export function ModuleAuthorizationsPanel({
                 );
               })()}
           </div>
+          <DialogFooter className="sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={() => {
+                if (viewSub) handleDownloadSubmissionPdf(viewSub);
+              }}
+            >
+              <FileDown className="h-4 w-4" /> PDF com respostas
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
