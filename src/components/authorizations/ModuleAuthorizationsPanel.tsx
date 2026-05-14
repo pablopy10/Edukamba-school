@@ -47,6 +47,7 @@ import { DocumentUpload } from "@/components/documents/DocumentUpload";
 import { notifyModuleAuthorizationAssignees } from "@/lib/notifications/notifyModuleAuthorizationAssignees";
 import { downloadModuleAuthorizationPdf } from "@/lib/authorizations/moduleAuthorizationPdf";
 import { isModuleAuthorizationStaffViewerRole } from "@/lib/schoolStaffRoles";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 /** Módulos alinhados à coluna SQL `module`. */
 export type AuthorizationModuleKind = "extracurricular" | "transport" | "meal";
@@ -268,6 +269,7 @@ export function ModuleAuthorizationsPanel({
   childIds,
   canManageTemplates,
 }: Props) {
+  const { selectedYearId, selectedYear } = useAcademicYear();
   const [innerTab, setInnerTab] = useState<"preencher" | "historico">("preencher");
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
@@ -345,8 +347,13 @@ export function ModuleAuthorizationsPanel({
           )
           .eq("school_id", schoolId)
           .order("full_name"),
-        canManageTemplates
-          ? supabase.from("classrooms").select("id, name").eq("school_id", schoolId).order("name")
+        canManageTemplates && selectedYearId
+          ? supabase
+              .from("classrooms")
+              .select("id, name")
+              .eq("school_id", schoolId)
+              .eq("academic_year_id", selectedYearId)
+              .order("name")
           : Promise.resolve({ data: [], error: null }),
         userId
           ? supabase.from("module_authorization_named_recipients").select("template_id, student_id").eq("assignee_profile_id", userId)
@@ -385,7 +392,7 @@ export function ModuleAuthorizationsPanel({
     } finally {
       setLoading(false);
     }
-  }, [schoolId, module, canManageTemplates, userId]);
+  }, [schoolId, module, canManageTemplates, userId, selectedYearId]);
 
   useEffect(() => {
     void loadAll();
@@ -1443,27 +1450,63 @@ export function ModuleAuthorizationsPanel({
                 </div>
 
                 {tplRecipientMode === "classroom_homeroom_teachers" ? (
-                  <div className="mt-1 max-h-44 space-y-2 overflow-y-auto rounded-lg border border-border bg-background/80 p-2">
-                    {classroomsForSchool.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">Sem turmas registadas nesta escola.</p>
-                    ) : (
-                      classroomsForSchool.map((c) => (
-                        <label key={c.id} className="flex cursor-pointer items-center gap-2 text-sm">
-                          <Checkbox
-                            checked={tplClassroomIds.has(c.id)}
-                            onCheckedChange={(chk) =>
-                              setTplClassroomIds((prev) => {
-                                const next = new Set(prev);
-                                if (chk === true) next.add(c.id);
-                                else next.delete(c.id);
-                                return next;
-                              })
-                            }
-                          />
-                          <span>{c.name}</span>
-                        </label>
-                      ))
-                    )}
+                  <div className="mt-1 space-y-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      Lista limitada ao ano letivo globalmente seleccionado no cabeçalho
+                      {selectedYear?.label ? <span className="font-medium text-foreground"> ({selectedYear.label})</span> : null}.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={classroomsForSchool.length === 0}
+                        onClick={() =>
+                          setTplClassroomIds(new Set(classroomsForSchool.map((c) => c.id)))
+                        }
+                      >
+                        Selecionar todas
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={tplClassroomIds.size === 0}
+                        onClick={() => setTplClassroomIds(new Set())}
+                      >
+                        Limpar seleção
+                      </Button>
+                    </div>
+                    <div className="max-h-44 space-y-2 overflow-y-auto rounded-lg border border-border bg-background/80 p-2">
+                      {!selectedYearId ? (
+                        <p className="text-xs text-muted-foreground">
+                          Seleccione o ano letivo no cabeçalho da aplicação para poder escolher turmas.
+                        </p>
+                      ) : classroomsForSchool.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          Sem turmas registadas nesta escola para {selectedYear.label}.
+                        </p>
+                      ) : (
+                        classroomsForSchool.map((c) => (
+                          <label key={c.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                            <Checkbox
+                              checked={tplClassroomIds.has(c.id)}
+                              onCheckedChange={(chk) =>
+                                setTplClassroomIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (chk === true) next.add(c.id);
+                                  else next.delete(c.id);
+                                  return next;
+                                })
+                              }
+                            />
+                            <span>{c.name}</span>
+                          </label>
+                        ))
+                      )}
+                    </div>
                   </div>
                 ) : null}
 
