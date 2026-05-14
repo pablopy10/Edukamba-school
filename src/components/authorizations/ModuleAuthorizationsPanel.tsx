@@ -194,6 +194,13 @@ const MODULE_LABEL: Record<AuthorizationModuleKind, string> = {
   meal: "Refeições",
 };
 
+/** Um único formulário «público» por área nos separadores Preencher e Histórico (a gestão pode ter mais rascunhos com outro título). */
+const MODULE_PUBLICATION_TEMPLATE_TITLE: Record<AuthorizationModuleKind, string> = {
+  extracurricular: "Formulário de Atividades extracurriculares",
+  transport: "Formulário de Transportes",
+  meal: "Formulário de Refeições",
+};
+
 const RECIPIENT_MODE_META: Record<TemplateRecipientMode, { title: string; hint: string }> = {
   classroom_homeroom_teachers: {
     title: "Encarregados dos alunos de turmas seleccionadas",
@@ -372,12 +379,15 @@ export function ModuleAuthorizationsPanel({
       }
       setMyNamedTargeting(((namedMineRes.data ?? []) as { template_id: string; student_id: string }[]) ?? []);
 
+      const publicationTitle = MODULE_PUBLICATION_TEMPLATE_TITLE[module];
       const { data: subData, error: subErr } = await supabase
         .from("module_authorization_submissions")
         .select(
-          "id, template_id, student_id, submitted_by, responses, signature_data, attachment_urls, created_at, student:students(full_name), submitter:submitted_by(full_name), template:template_id(title, module, fields, description)",
+          "id, template_id, student_id, submitted_by, responses, signature_data, attachment_urls, created_at, student:students(full_name), submitter:submitted_by(full_name), template:module_authorization_templates!module_authorization_submissions_template_id_fkey!inner(title, module, fields, description)",
         )
         .eq("school_id", schoolId)
+        .eq("template.module", module)
+        .eq("template.title", publicationTitle)
         .order("created_at", { ascending: false })
         .limit(200);
 
@@ -398,9 +408,17 @@ export function ModuleAuthorizationsPanel({
     void loadAll();
   }, [loadAll]);
 
+  const publicationTemplateTitle = MODULE_PUBLICATION_TEMPLATE_TITLE[module];
+
   const activeTemplates = useMemo(
-    () => templates.filter((t) => t.is_active && parseFields(t.fields).length > 0),
-    [templates],
+    () =>
+      templates.filter(
+        (t) =>
+          t.title.trim() === publicationTemplateTitle &&
+          t.is_active &&
+          parseFields(t.fields).length > 0,
+      ),
+    [templates, publicationTemplateTitle],
   );
 
   const selectedTemplate = useMemo(
@@ -412,6 +430,16 @@ export function ModuleAuthorizationsPanel({
     () => parseFields(selectedTemplate?.fields ?? null),
     [selectedTemplate],
   );
+
+  useEffect(() => {
+    if (!fillTemplateId) return;
+    if (!activeTemplates.some((t) => t.id === fillTemplateId)) {
+      setFillTemplateId("");
+      setFillStudentId("");
+      setFillValues({});
+      setFillSignatures({});
+    }
+  }, [fillTemplateId, activeTemplates]);
 
   const handleDownloadBlankTemplatePdf = useCallback(
     async (t: TemplateRow) => {
@@ -482,7 +510,7 @@ export function ModuleAuthorizationsPanel({
 
   const openNewTemplate = () => {
     setEditingTpl(null);
-    setTplTitle("");
+    setTplTitle(MODULE_PUBLICATION_TEMPLATE_TITLE[module]);
     setTplDesc("");
     setTplFields([]);
     setTplRecipientMode("classroom_homeroom_teachers");
@@ -1272,9 +1300,18 @@ export function ModuleAuthorizationsPanel({
             <TabsContent value="preencher" className="mt-4 space-y-4">
               {activeTemplates.length === 0 ? (
                 <p className="rounded-2xl border border-dashed border-border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
-                  {canManageTemplates
-                    ? "Ainda não há formulários activos. Crie o primeiro formulário com campos à medida da escola."
-                    : "A escola ainda não configurou formulários para este separador."}
+                  {canManageTemplates ? (
+                    <>
+                      Aqui só aparece o formulário público com o título exacto{" "}
+                      <span className="font-medium text-foreground">«{publicationTemplateTitle}»</span>. Crie ou active esse
+                      modelo em «Formulários da escola» (acima); outros títulos ficam só na gestão.
+                    </>
+                  ) : (
+                    <>
+                      A escola ainda não tem um formulário activo com o título{" "}
+                      <span className="font-medium text-foreground">«{publicationTemplateTitle}»</span> nesta área.
+                    </>
+                  )}
                 </p>
               ) : (
                 <Card className="border-border bg-card p-5 shadow-card">
