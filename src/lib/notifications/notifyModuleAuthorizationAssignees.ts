@@ -39,29 +39,23 @@ async function resolveRecipientIds(args: {
     ids = [...new Set((data ?? []).map((r: { assignee_profile_id?: string }) => r.assignee_profile_id).filter(Boolean))];
   } else if (recipientMode === "classroom_homeroom_teachers") {
     if (recipientClassroomIds.length === 0) return [];
-    const [classroomsRes, schedulesRes] = await Promise.all([
-      supabase
-        .from("classrooms")
-        .select("homeroom_teacher_id")
-        .eq("school_id", schoolId)
-        .in("id", recipientClassroomIds),
-      supabase
-        .from("schedules")
-        .select("teacher_id")
-        .eq("school_id", schoolId)
-        .in("classroom_id", recipientClassroomIds)
-        .not("teacher_id", "is", null),
-    ]);
-    if (classroomsRes.error) throw classroomsRes.error;
-    if (schedulesRes.error) throw schedulesRes.error;
-    const merged = [
-      ...(classroomsRes.data ?? []).map((r: { homeroom_teacher_id?: string | null }) => r.homeroom_teacher_id),
-      ...(schedulesRes.data ?? []).map((r: { teacher_id?: string | null }) => r.teacher_id),
+    const { data, error } = await supabase
+      .from("students")
+      .select("parent_id")
+      .eq("school_id", schoolId)
+      .in("classroom_id", recipientClassroomIds)
+      .not("parent_id", "is", null);
+    if (error) throw error;
+    ids = [
+      ...new Set(
+        (data ?? [])
+          .map((r: { parent_id?: string | null }) => r.parent_id)
+          .filter((x): x is string => typeof x === "string" && x.trim() !== ""),
+      ),
     ];
-    ids = [...new Set(merged.filter((x): x is string => typeof x === "string" && x.trim() !== ""))];
   }
 
-  const selfFiltered = [...new Set(ids.flatMap((u) => (u.trim() ? [u.trim()] : [])))];
+  const selfFiltered = [...new Set(ids.flatMap((u) => (typeof u === "string" && u.trim() ? [u.trim()] : [])))];
   return selfFiltered;
 }
 
@@ -116,9 +110,9 @@ export async function notifyModuleAuthorizationAssignees(args: {
 
   const title = `Nova autorização: ${template.title.trim()}`;
   const description = [
-    `A escola publicou o formulário «${template.title.trim()}» (${area}).`,
+    `A escola publicou o formulário «${template.title.trim()}» (${area}) para preenchimento pelo encarregado de educação.`,
     "",
-    `Abra a área Autorizações neste módulo para avaliar e submeter.`,
+    `Abra a área Autorizações neste módulo para preencher e submeter.`,
   ].join("\n");
 
   const rows = recipientIds.map((recipient_id) => ({

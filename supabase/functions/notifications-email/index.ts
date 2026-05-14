@@ -116,7 +116,7 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
   LOW_STOCK:              { color: "#dc2626", headerIcon: "⚡", label: "Alerta de Stock" },
   DOCUMENT_SIGN_REQUEST:  { color: "#3b82f6", headerIcon: "✍️", label: "Documento para Assinar" },
   DOCUMENT_SIGNED:        { color: "#22c55e", headerIcon: "✅", label: "Documento Assinado" },
-  MODULE_AUTHORIZATION:   { color: "#059669", headerIcon: "📋", label: "Formulário de autorização" },
+  MODULE_AUTHORIZATION:   { color: "#059669", headerIcon: "📋", label: "Autorização para encarregado" },
 };
 
 function buildHtml(opts: {

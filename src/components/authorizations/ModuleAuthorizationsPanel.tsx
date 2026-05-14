@@ -44,7 +44,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SignatureCanvas } from "@/components/documents/SignatureCanvas";
 import { DocumentUpload } from "@/components/documents/DocumentUpload";
 import { notifyModuleAuthorizationAssignees } from "@/lib/notifications/notifyModuleAuthorizationAssignees";
-import { useTeacherModuleAuthStudentIds } from "@/hooks/useHomeroomStudentIds";
 
 /** Módulos alinhados à coluna SQL `module`. */
 export type AuthorizationModuleKind = "extracurricular" | "transport" | "meal";
@@ -125,13 +124,13 @@ const MODULE_LABEL: Record<AuthorizationModuleKind, string> = {
 
 const RECIPIENT_MODE_META: Record<TemplateRecipientMode, { title: string; hint: string }> = {
   classroom_homeroom_teachers: {
-    title: "Educadores das turmas seleccionadas",
+    title: "Encarregados dos alunos de turmas seleccionadas",
     hint:
-      "Todos os directores de turma e todos os professores com aulas dessas turmas no horário recebem notificação e podem responder.",
+      "Todos os encarregados de educação dos alunos inscritos nas turmas que escolher abaixo recebem notificação (email e push) e podem preencher o formulário.",
   },
   named_student_assignee: {
-    title: "Educador de cada aluno (nominal)",
-    hint: "Indique por linha um aluno e o educador (perfil professor) que deve receber e preencher o formulário para esse aluno.",
+    title: "Encarregado nominal por aluno",
+    hint: "Para cada linha, indique o aluno: o formulário será enviado ao encarregado de educação associado a esse aluno.",
   },
 };
 
@@ -146,6 +145,7 @@ function parseTemplateClassroomIds(raw: unknown): string[] {
 
 function assigneePickToProfileId(pick: string): string | null {
   if (!pick || pick === "__") return null;
+  if (pick.startsWith("parent:")) return pick.slice("parent:".length) || null;
   if (pick.startsWith("direct:")) return pick.slice("direct:".length) || null;
   return null;
 }
@@ -193,7 +193,6 @@ export function ModuleAuthorizationsPanel({
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
   const [studentsDetailed, setStudentsDetailed] = useState<StudentDetailed[]>([]);
   const [classroomsForSchool, setClassroomsForSchool] = useState<Array<{ id: string; name: string }>>([]);
-  const [educatorsForSchool, setEducatorsForSchool] = useState<Array<{ id: string; full_name: string | null }>>([]);
   const [myNamedTargeting, setMyNamedTargeting] = useState<Array<{ template_id: string; student_id: string }>>([]);
   const [loading, setLoading] = useState(true);
 
@@ -216,14 +215,12 @@ export function ModuleAuthorizationsPanel({
 
   const [viewSub, setViewSub] = useState<SubmissionRow | null>(null);
 
-  const { ids: teacherModuleAuthStudentIds } = useTeacherModuleAuthStudentIds(schoolId, role, userId);
-
   const allowedStudentIds = useMemo(() => {
     if (!role || role === "STUDENT") return [];
     if (isParent) return childIds;
-    if (role === "TEACHER") return teacherModuleAuthStudentIds;
+    if (role === "TEACHER") return [];
     return studentsDetailed.map((s) => s.id);
-  }, [role, isParent, childIds, teacherModuleAuthStudentIds, studentsDetailed]);
+  }, [role, isParent, childIds, studentsDetailed]);
 
   const loadAll = useCallback(async () => {
     if (!schoolId) return;
@@ -245,7 +242,7 @@ export function ModuleAuthorizationsPanel({
         setTemplates((tData ?? []) as TemplateRow[]);
       }
 
-      const [{ data: sData }, classroomsRes, educatorsRes, namedMineRes] = await Promise.all([
+      const [{ data: sData }, classroomsRes, namedMineRes] = await Promise.all([
         supabase
           .from("students")
           .select(
@@ -262,9 +259,6 @@ export function ModuleAuthorizationsPanel({
         canManageTemplates
           ? supabase.from("classrooms").select("id, name").eq("school_id", schoolId).order("name")
           : Promise.resolve({ data: [], error: null }),
-        canManageTemplates
-          ? supabase.from("profiles").select("id, full_name").eq("school_id", schoolId).eq("role", "TEACHER").order("full_name")
-          : Promise.resolve({ data: [], error: null }),
         userId
           ? supabase.from("module_authorization_named_recipients").select("template_id, student_id").eq("assignee_profile_id", userId)
           : Promise.resolve({ data: [], error: null }),
@@ -273,11 +267,8 @@ export function ModuleAuthorizationsPanel({
       setStudentsDetailed(((sData ?? []) as StudentDetailed[]) ?? []);
       if (canManageTemplates) {
         setClassroomsForSchool((classroomsRes.data as { id: string; name: string }[]) ?? []);
-        if (educatorsRes.error) setEducatorsForSchool([]);
-        else setEducatorsForSchool(((educatorsRes.data ?? []) as { id: string; full_name: string | null }[]) ?? []);
       } else {
         setClassroomsForSchool([]);
-        setEducatorsForSchool([]);
       }
       setMyNamedTargeting(((namedMineRes.data ?? []) as { template_id: string; student_id: string }[]) ?? []);
 
@@ -353,11 +344,18 @@ export function ModuleAuthorizationsPanel({
         return;
       }
       setTplNamedDrafts(
-        namedRows.map((row: { student_id: string; assignee_profile_id: string }) => ({
-          rowKey: nanoid(),
-          student_id: row.student_id,
-          assignee_pick: `direct:${row.assignee_profile_id}`,
-        })),
+        namedRows.map((row: { student_id: string; assignee_profile_id: string }) => {
+          const st = studentsDetailed.find((s) => s.id === row.student_id);
+          const pick =
+            st?.parent_id && st.parent_id === row.assignee_profile_id
+              ? `parent:${row.assignee_profile_id}`
+              : `direct:${row.assignee_profile_id}`;
+          return {
+            rowKey: nanoid(),
+            student_id: row.student_id,
+            assignee_pick: pick,
+          };
+        }),
       );
     })();
   };
@@ -417,17 +415,17 @@ export function ModuleAuthorizationsPanel({
 
     const namedPairs: Array<{ student_id: string; assignee_profile_id: string }> = [];
     if (tplRecipientMode === "named_student_assignee") {
-      const educatorIds = new Set(educatorsForSchool.map((e) => e.id));
-      if (educatorIds.size === 0) {
-        toast.error("Não há educadores (perfil professor) registados nesta escola.");
-        return;
-      }
       const seenKeys = new Set<string>();
       for (const row of tplNamedDrafts) {
         if (!row.student_id) continue;
+        const st = studentsDetailed.find((s) => s.id === row.student_id);
+        if (!st?.parent_id) {
+          toast.error("Cada aluno seleccionado tem de ter encarregado de educação associado no sistema.");
+          return;
+        }
         const pid = assigneePickToProfileId(row.assignee_pick);
-        if (!pid || !educatorIds.has(pid)) {
-          toast.error("Em cada linha com aluno, escolha um educador válido (perfil professor).");
+        if (!pid || pid !== st.parent_id) {
+          toast.error("Em cada linha, confirme o encarregado de educação do aluno seleccionado.");
           return;
         }
         const k = `${row.student_id}:${pid}`;
@@ -436,7 +434,7 @@ export function ModuleAuthorizationsPanel({
         namedPairs.push({ student_id: row.student_id, assignee_profile_id: pid });
       }
       if (namedPairs.length === 0) {
-        toast.error("Adicione pelo menos uma linha com aluno e educador (perfil professor) escolhido.");
+        toast.error("Adicione pelo menos uma linha com aluno e encarregado de educação.");
         return;
       }
     }
@@ -487,7 +485,7 @@ export function ModuleAuthorizationsPanel({
             });
             if (nr.error) toast.warning(`Notificações: ${nr.error}`);
             else if (nr.sent > 0)
-              toast.success(`${nr.sent} notificação(ões) enviadas (email e push segundo preferências dos educadores).`);
+              toast.success(`${nr.sent} notificação(ões) enviadas (email e push segundo preferências dos encarregados).`);
           }
         }
       } else {
@@ -535,7 +533,7 @@ export function ModuleAuthorizationsPanel({
             });
             if (nr.error) toast.warning(`Notificações: ${nr.error}`);
             else if (nr.sent > 0)
-              toast.success(`${nr.sent} notificação(ões) enviadas (email e push segundo preferências dos educadores).`);
+              toast.success(`${nr.sent} notificação(ões) enviadas (email e push segundo preferências dos encarregados).`);
           }
         }
       }
@@ -580,7 +578,7 @@ export function ModuleAuthorizationsPanel({
         });
         if (nr.error) toast.warning(`Notificações: ${nr.error}`);
         else if (nr.sent > 0)
-          toast.success(`${nr.sent} notificação(ões) enviadas (email e push segundo preferências dos educadores).`);
+          toast.success(`${nr.sent} notificação(ões) enviadas (email e push segundo preferências dos encarregados).`);
       }
     }
   };
@@ -862,8 +860,8 @@ export function ModuleAuthorizationsPanel({
             Autorizações ({MODULE_LABEL[module]})
           </h2>
           <p className="mt-1 max-w-xl text-xs text-muted-foreground">
-            A escola configura formulários e define o envio apenas a educadores: por turmas seleccionadas (directores e
-            professorado no horário dessas turmas) ou um educador concreto por aluno. As submissões ficam registadas aqui dentro
+            A escola configura formulários e define o envio aos encarregados de educação: ou todos os responsáveis dos alunos das
+            turmas escolhidas, ou o encarregado associado a cada aluno em modo nominal. As submissões ficam registadas aqui dentro
             de {MODULE_LABEL[module]}.
           </p>
         </div>
@@ -1041,8 +1039,8 @@ export function ModuleAuthorizationsPanel({
           <DialogHeader>
             <DialogTitle>{editingTpl ? "Editar formulário" : "Novo formulário"}</DialogTitle>
             <DialogDescription>
-              Defina o título, o envio aos educadores e os campos. Para dropdown, rádio e várias caixas use uma linha por
-              opção.
+              Defina o título, o envio aos encarregados de educação e os campos. Para dropdown, rádio e várias caixas use uma
+              linha por opção.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-2">
@@ -1057,10 +1055,11 @@ export function ModuleAuthorizationsPanel({
 
             {canManageTemplates ? (
               <div className="grid gap-2 rounded-xl border border-border bg-muted/20 p-3">
-                <Label className="text-sm font-semibold">Envio aos educadores</Label>
+                <Label className="text-sm font-semibold">Envio aos encarregados de educação</Label>
                 <p className="text-[11px] text-muted-foreground">
-                  O formulário notifica apenas educadores (perfil professor). Pode enviar por turmas (directores de turma +
-                  professores com aulas nessas turmas no horário) ou definir linha a linha o educador responsável por cada aluno.
+                  As notificações (email e push) são enviadas aos perfis PARENT dos encarregados. Por turmas, todos os
+                  encarregados dos alunos dessas turmas são notificados; no modo nominal, confirme o encarregado associado ao
+                  aluno em cada linha.
                 </p>
                 <div className="flex flex-col gap-2">
                   {(Object.keys(RECIPIENT_MODE_META) as TemplateRecipientMode[]).map((m) => (
@@ -1123,14 +1122,11 @@ export function ModuleAuthorizationsPanel({
                       </Button>
                     </div>
                     {tplNamedDrafts.map((row) => {
-                      const educatorOpts = educatorsForSchool.map((p) => ({
-                        value: `direct:${p.id}`,
-                        label: (p.full_name ?? "").trim() || "Sem nome",
-                      }));
-                      const selectValue =
-                        row.assignee_pick.startsWith("direct:") && educatorOpts.some((o) => o.value === row.assignee_pick)
-                          ? row.assignee_pick
-                          : "__";
+                      const st = studentsDetailed.find((s) => s.id === row.student_id);
+                      const encOpts: Array<{ value: string; label: string }> = [];
+                      if (st?.parent_id)
+                        encOpts.push({ value: `parent:${st.parent_id}`, label: "Encarregado de educação (associado ao aluno)" });
+                      const selectValue = encOpts.some((o) => o.value === row.assignee_pick) ? row.assignee_pick : "__";
                       return (
                         <Card key={row.rowKey} className="border-border bg-card p-3">
                           <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
@@ -1179,7 +1175,7 @@ export function ModuleAuthorizationsPanel({
                               </Select>
                             </div>
                             <div className="grid gap-2">
-                              <Label className="text-xs">Educador (notificado)</Label>
+                              <Label className="text-xs">Encarregado (notificado)</Label>
                               <Select
                                 value={selectValue}
                                 onValueChange={(v) =>
@@ -1187,22 +1183,22 @@ export function ModuleAuthorizationsPanel({
                                     prev.map((x) => (x.rowKey === row.rowKey ? { ...x, assignee_pick: v } : x)),
                                   )
                                 }
-                                disabled={!row.student_id || educatorOpts.length === 0}
+                                disabled={!row.student_id || encOpts.length === 0}
                               >
                                 <SelectTrigger>
                                   <SelectValue
                                     placeholder={
                                       !row.student_id
                                         ? "Escolha o aluno primeiro"
-                                        : educatorOpts.length === 0
-                                          ? "Sem educadores registados nesta escola"
-                                          : "Escolher educador"
+                                        : encOpts.length === 0
+                                          ? "Sem encarregado associado a este aluno"
+                                          : "Confirmar encarregado"
                                     }
                                   />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="__">—</SelectItem>
-                                  {educatorOpts.map((o) => (
+                                  {encOpts.map((o) => (
                                     <SelectItem key={o.value} value={o.value}>
                                       {o.label}
                                     </SelectItem>
