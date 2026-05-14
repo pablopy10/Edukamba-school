@@ -3,6 +3,7 @@
  * JWT do utilizador staff (RLS às tabelas). Secret: AGT_RSA_PRIVATE_KEY_PEM (PKCS#8 RSA, assinatura SHA-1 PKCS#1).
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { sendInvoiceIssuedEmailForId } from "../_shared/sendInvoiceIssuedEmail.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -240,6 +241,7 @@ function sortPaymentsForChain(rows: PaymentRow[]): PaymentRow[] {
 
 async function emitOne(
   sb: ReturnType<typeof createClient>,
+  adminSb: ReturnType<typeof createClient> | null,
   pem: string,
   payment: PaymentRow,
 ): Promise<EmitResult> {
@@ -358,6 +360,16 @@ async function emitOne(
       return { payment_id, status: "error", detail: insErr.message };
     }
 
+    if (inserted?.id && adminSb) {
+      void sendInvoiceIssuedEmailForId(adminSb, String(inserted.id)).catch((e) =>
+        console.error("emit-fiscal-invoices: email encarregado", e),
+      );
+    } else if (inserted?.id && !adminSb) {
+      console.warn(
+        "emit-fiscal-invoices: SUPABASE_SERVICE_ROLE_KEY ausente no ambiente — email automático da fatura não enviado.",
+      );
+    }
+
     return {
       payment_id,
       status: "emitted",
@@ -380,9 +392,12 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim();
   if (!supabaseUrl || !anonKey) {
     return corsJson({ error: "Variáveis Supabase em falta" }, 500);
   }
+
+  const adminSb = serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : null;
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) return corsJson({ error: "Missing authorization" }, 401);
@@ -430,7 +445,7 @@ Deno.serve(async (req) => {
 
   const chain = sortPaymentsForChain([...foundMap.values()]);
   for (const p of chain) {
-    results.push(await emitOne(userClient, pemRaw, p));
+    results.push(await emitOne(userClient, adminSb, pemRaw, p));
   }
 
   return corsJson({ results });
