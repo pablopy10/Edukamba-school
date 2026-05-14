@@ -56,6 +56,7 @@ const STAFF_NAV: Record<StaffOperationalRole, readonly string[]> = {
     "/extracurriculares",
     "/refeicoes",
     "/documentos",
+    "/definicoes",
     "/chat",
     "/pesquisa",
     "/notificacoes",
@@ -71,6 +72,7 @@ const STAFF_NAV: Record<StaffOperationalRole, readonly string[]> = {
     "/transportes",
     "/refeicoes",
     "/chat",
+    "/definicoes",
     "/pesquisa",
     "/notificacoes",
   ],
@@ -122,11 +124,17 @@ const DIRECTOR_DEFINICOES_TABS = new Set<string>([
   "permissoes",
   "notificacoes",
   "auditoria",
+  "faturacao",
 ]);
 
 export function canOpenDefinicoesPage(role: UserRole | null): boolean {
   if (role == null) return false;
-  return isSchoolSettingsAdmin(role) || role === "DIRECTOR";
+  return (
+    isSchoolSettingsAdmin(role) ||
+    role === "DIRECTOR" ||
+    role === "TREASURER" ||
+    role === "SECRETARY"
+  );
 }
 
 export function canOpenModulosPage(role: UserRole | null): boolean {
@@ -136,6 +144,7 @@ export function canOpenModulosPage(role: UserRole | null): boolean {
 export function isDefinicoesTabAllowed(role: UserRole | null, tabId: string): boolean {
   if (role === "ADMIN" || role === "SUPER_ADMIN") return true;
   if (role === "DIRECTOR") return DIRECTOR_DEFINICOES_TABS.has(tabId);
+  if (role === "TREASURER" || role === "SECRETARY") return tabId === "faturacao";
   return false;
 }
 

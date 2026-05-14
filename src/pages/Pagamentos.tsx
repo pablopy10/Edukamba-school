@@ -16,7 +16,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Users, Percent, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap, FileSpreadsheet, FileDown, Utensils } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Users, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap, FileSpreadsheet, FileDown, Utensils } from "lucide-react";
 import { ErpArticleCodesCard } from "@/components/pagamentos/ErpArticleCodesCard";
 import { ErpExportMappingSection } from "@/components/pagamentos/ErpExportMappingSection";
 import { ErpExportPaymentsSection } from "@/components/pagamentos/ErpExportPaymentsSection";
@@ -29,7 +29,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useUserRole } from "@/hooks/useUserRole";
-import { canValidateSchoolPaymentProofs, isSchoolManagementRole, isSchoolSettingsAdmin } from "@/lib/schoolStaffRoles";
+import { canValidateSchoolPaymentProofs } from "@/lib/schoolStaffRoles";
 import type { GuardianPaymentMode } from "@/lib/guardianPayment";
 import { encarregadosUsamAnexo, normalizeGuardianPaymentMode } from "@/lib/guardianPayment";
 import { invokeEmitFiscalInvoices, type EmitFiscalInvoicesResult } from "@/lib/fiscal/invokeEmitFiscalInvoices";
@@ -94,23 +94,6 @@ function formatRecurrenceLabel(r: string | undefined): string {
   const k = (r as FeeRecurrence) || "monthly";
   return RECURRENCE_LABELS[k] ?? String(r ?? "");
 }
-
-type FamilyRule = {
-  id: string;
-  sibling_position: number;
-  discount_percentage: number;
-};
-
-type StudentDiscount = {
-  id: string;
-  student_id: string;
-  academic_year_id: string | null;
-  discount_percentage: number | null;
-  discount_fixed_amount: number | null;
-  reason: string | null;
-  is_active: boolean;
-  student?: { full_name: string };
-};
 
 type AcademicYear = { id: string; label: string; is_active: boolean | null; start_date?: string | null };
 type StudentLite = { id: string; full_name: string; classroom_id: string | null };
@@ -326,15 +309,12 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   const chargesEmbeddedOnly = activityChargesOnly || transportChargesOnly || mealChargesOnly;
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const { role } = useUserRole();
-  const canEditSchoolPaymentPrefs = isSchoolManagementRole(role) || isSchoolSettingsAdmin(role);
   const canValidatePaymentProofs = canValidateSchoolPaymentProofs(role);
   const { isParent, childIds, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const { selectedYearId: globalAcademicYearId } = useAcademicYear();
   const [years, setYears] = useState<AcademicYear[]>([]);
   const [activeYearId, setActiveYearId] = useState<string | null>(null);
   const [rules, setRules] = useState<FeeRule[]>([]);
-  const [familyRules, setFamilyRules] = useState<FamilyRule[]>([]);
-  const [discounts, setDiscounts] = useState<StudentDiscount[]>([]);
   const [students, setStudents] = useState<StudentLite[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -354,22 +334,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     generate_all_upfront: false,
   });
 
-  const [familyDialog, setFamilyDialog] = useState(false);
-  const [editingFamily, setEditingFamily] = useState<FamilyRule | null>(null);
-  const [familyForm, setFamilyForm] = useState({ sibling_position: "2", discount_percentage: "10" });
-
-  const [discountDialog, setDiscountDialog] = useState(false);
-  const [editingDiscount, setEditingDiscount] = useState<StudentDiscount | null>(null);
-  const [discountForm, setDiscountForm] = useState({
-    student_id: "",
-    discount_percentage: "",
-    discount_fixed_amount: "",
-    reason: "",
-  });
-
   const [deleteRule, setDeleteRule] = useState<string | null>(null);
-  const [deleteFamily, setDeleteFamily] = useState<string | null>(null);
-  const [deleteDiscount, setDeleteDiscount] = useState<string | null>(null);
 
   const [ruleDetailOpen, setRuleDetailOpen] = useState(false);
   const [ruleDetailRule, setRuleDetailRule] = useState<FeeRule | null>(null);
@@ -398,8 +363,6 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   /** Propinas (student_fees): selecção na lista principal e em «Comprovativos a validar». */
   const [bulkSelectedTuitionFeeIds, setBulkSelectedTuitionFeeIds] = useState<Set<string>>(() => new Set());
   const [guardianPaymentMode, setGuardianPaymentMode] = useState<GuardianPaymentMode>("proof_attachment");
-  const [bankIbanDraft, setBankIbanDraft] = useState("");
-  const [savingPaymentPrefs, setSavingPaymentPrefs] = useState(false);
   const [rejectDialog, setRejectDialog] = useState<PaymentListRow | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const usarAnexoEncarregado = encarregadosUsamAnexo(guardianPaymentMode);
@@ -783,20 +746,10 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         .order("created_at", { ascending: false });
       if (rRes.error) toast({ title: "Erro a carregar regras", description: rRes.error.message, variant: "destructive" });
       setRules((rRes.data ?? []) as FeeRule[]);
-      setFamilyRules([]);
-      setDiscounts([]);
     } else if (chargesEmbeddedOnly) {
       setRules([]);
-      setFamilyRules([]);
-      setDiscounts([]);
     } else {
       setRules([]);
-      const [fRes, dRes] = await Promise.all([
-        supabase.from("family_discount_rules").select("*").eq("school_id", sId).order("sibling_position"),
-        supabase.from("student_discounts").select("*, student:students(full_name)").eq("school_id", sId).order("created_at", { ascending: false }),
-      ]);
-      setFamilyRules((fRes.data ?? []) as FamilyRule[]);
-      setDiscounts((dRes.data ?? []) as StudentDiscount[]);
     }
 
     const [sRes, cRes] = await Promise.all([
@@ -814,11 +767,10 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
 
     const { data: payPrefsRow } = await supabase
       .from("school_payment_prefs")
-      .select("guardian_payment_mode, bank_iban")
+      .select("guardian_payment_mode")
       .eq("school_id", sId)
       .maybeSingle();
     setGuardianPaymentMode(normalizeGuardianPaymentMode(payPrefsRow?.guardian_payment_mode));
-    setBankIbanDraft(payPrefsRow?.bank_iban ?? "");
 
     const studentIds = (sRes.data ?? []).map((s) => s.id);
     const scopedStudentIds = isParent ? studentIds.filter((id) => childIds.includes(id)) : studentIds;
@@ -1244,91 +1196,6 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     fetchAll();
   };
 
-  // Family rules
-  const openNewFamily = () => {
-    setEditingFamily(null);
-    setFamilyForm({ sibling_position: "2", discount_percentage: "10" });
-    setFamilyDialog(true);
-  };
-  const openEditFamily = (f: FamilyRule) => {
-    setEditingFamily(f);
-    setFamilyForm({ sibling_position: String(f.sibling_position), discount_percentage: String(f.discount_percentage) });
-    setFamilyDialog(true);
-  };
-  const saveFamily = async () => {
-    if (!schoolId) return;
-    const payload = {
-      school_id: schoolId,
-      sibling_position: Math.max(2, Math.min(10, Number(familyForm.sibling_position) || 2)),
-      discount_percentage: Math.max(0, Math.min(100, Number(familyForm.discount_percentage) || 0)),
-    };
-    const { error } = editingFamily
-      ? await supabase.from("family_discount_rules").update(payload).eq("id", editingFamily.id)
-      : await supabase.from("family_discount_rules").insert(payload);
-    if (error) { toast({ title: "Erro a guardar", description: error.message, variant: "destructive" }); return; }
-    toast({ title: editingFamily ? "Regra atualizada" : "Regra criada" });
-    setFamilyDialog(false);
-    fetchAll();
-  };
-  const confirmDeleteFamily = async () => {
-    if (!deleteFamily) return;
-    const { error } = await supabase.from("family_discount_rules").delete().eq("id", deleteFamily);
-    if (error) toast({ title: "Erro a apagar", description: error.message, variant: "destructive" });
-    else toast({ title: "Regra apagada" });
-    setDeleteFamily(null);
-    fetchAll();
-  };
-
-  // Student discount overrides
-  const openNewDiscount = () => {
-    setEditingDiscount(null);
-    setDiscountForm({ student_id: "", discount_percentage: "", discount_fixed_amount: "", reason: "" });
-    setDiscountDialog(true);
-  };
-  const openEditDiscount = (d: StudentDiscount) => {
-    setEditingDiscount(d);
-    setDiscountForm({
-      student_id: d.student_id,
-      discount_percentage: d.discount_percentage != null ? String(d.discount_percentage) : "",
-      discount_fixed_amount: d.discount_fixed_amount != null ? String(d.discount_fixed_amount) : "",
-      reason: d.reason ?? "",
-    });
-    setDiscountDialog(true);
-  };
-  const saveDiscount = async () => {
-    if (!schoolId) return;
-    if (!discountForm.student_id) { toast({ title: "Seleciona um aluno", variant: "destructive" }); return; }
-    const pct = discountForm.discount_percentage ? Number(discountForm.discount_percentage) : null;
-    const fixed = discountForm.discount_fixed_amount ? Number(discountForm.discount_fixed_amount) : null;
-    if (pct == null && fixed == null) {
-      toast({ title: "Indica uma percentagem ou um valor fixo", variant: "destructive" }); return;
-    }
-    const payload = {
-      school_id: schoolId,
-      student_id: discountForm.student_id,
-      academic_year_id: activeYearId,
-      discount_percentage: pct,
-      discount_fixed_amount: fixed,
-      reason: discountForm.reason.trim() || null,
-      is_active: true,
-    };
-    const { error } = editingDiscount
-      ? await supabase.from("student_discounts").update(payload).eq("id", editingDiscount.id)
-      : await supabase.from("student_discounts").insert(payload);
-    if (error) { toast({ title: "Erro a guardar", description: error.message, variant: "destructive" }); return; }
-    toast({ title: editingDiscount ? "Desconto atualizado" : "Desconto criado" });
-    setDiscountDialog(false);
-    fetchAll();
-  };
-  const confirmDeleteDiscount = async () => {
-    if (!deleteDiscount) return;
-    const { error } = await supabase.from("student_discounts").delete().eq("id", deleteDiscount);
-    if (error) toast({ title: "Erro a apagar", description: error.message, variant: "destructive" });
-    else toast({ title: "Desconto removido" });
-    setDeleteDiscount(null);
-    fetchAll();
-  };
-
   // Generate fees for all students
   const runGeneration = async () => {
     if (!schoolId || !generateYearId) return;
@@ -1557,26 +1424,6 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       .map((f) => ({ fee: f, payment: latestPaymentByFee.get(f.id) }))
       .filter((x) => x.payment && x.payment.status === "pendente") as Array<{ fee: FeeListRow; payment: PaymentListRow }>;
   }, [allFees, latestPaymentByFee]);
-
-  const saveSchoolPaymentPrefs = async () => {
-    if (!schoolId || !canEditSchoolPaymentPrefs) return;
-    setSavingPaymentPrefs(true);
-    const { error } = await supabase.from("school_payment_prefs").upsert(
-      {
-        school_id: schoolId,
-        guardian_payment_mode: guardianPaymentMode,
-        bank_iban: bankIbanDraft.trim() || null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "school_id" },
-    );
-    setSavingPaymentPrefs(false);
-    if (error) {
-      toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
-      return;
-    }
-    toast({ title: "Preferências de cobrança guardadas" });
-  };
 
   /** Gera FT (AGT) após validação; falhas não revertem o pagamento. Devolve resultado da Edge (invoice_id novo quando emitido). */
   const emitFtAfterValidation = async (
@@ -2774,7 +2621,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                   ? usarAnexoEncarregado
                     ? "Consulte as cobranças do(s) seu(s) educando(s). Pode anexar comprovativos de transferência quando aplicável."
                     : "Consulte as cobranças. O pagamento é efectuado presencialmente na escola conforme comunicado pela instituição."
-                  : "Matrículas, extracurriculares, transporte e descontos. As propinas estão na área Propinas."}
+                  : "Matrículas, extracurriculares e transporte. Descontos e cobrança aos encarregados: Definições → Faturação. As propinas estão na área Propinas."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -2793,9 +2640,9 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           </div>
         </div>
 
-        {/* KPIs (só em Pagamentos: alunos e descontos manuais) */}
+        {/* KPI rápido: alunos (gestão cobranças não-propina) */}
         {!isParent && !tuitionOnly && !chargesEmbeddedOnly && (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:max-w-sm">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Alunos ativos</CardTitle>
@@ -2806,65 +2653,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 <p className="text-xs text-muted-foreground">na escola</p>
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Descontos manuais</CardTitle>
-                <Percent className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">{discounts.length}</p>
-                <p className="text-xs text-muted-foreground">overrides ativos</p>
-              </CardContent>
-            </Card>
           </div>
-        )}
-
-        {!isParent && !tuitionOnly && !chargesEmbeddedOnly && canEditSchoolPaymentPrefs && (
-          <Card className="border-muted">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Cobrança aos encarregados</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Defina como os encarregados interagem com os pagamentos na plataforma. Com comprovativo, o IBAN da escola aparece nos emails de lembrete.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-end md:gap-x-4 lg:gap-x-6">
-                <div className="flex min-w-[14rem] max-w-full flex-col gap-2 md:w-auto md:max-w-[20rem]">
-                  <Label htmlFor="pay-mode">Modo de cobrança</Label>
-                  <Select value={guardianPaymentMode} onValueChange={(v) => setGuardianPaymentMode(v as GuardianPaymentMode)}>
-                    <SelectTrigger id="pay-mode"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="proof_attachment">Comprovativo na app / transferência (IBAN + validação pela escola)</SelectItem>
-                      <SelectItem value="in_person">Pagamento presencial na escola (sem envio de ficheiros pelos encarregados)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex min-w-0 flex-1 flex-col gap-2 md:min-w-[12rem]">
-                  <Label htmlFor="school-iban">IBAN da escola</Label>
-                  <Input
-                    id="school-iban"
-                    value={bankIbanDraft}
-                    onChange={(e) => setBankIbanDraft(e.target.value)}
-                    placeholder="Ex.: AO06 ..."
-                    disabled={guardianPaymentMode !== "proof_attachment"}
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="h-10 w-full shrink-0 md:w-auto"
-                  onClick={() => void saveSchoolPaymentPrefs()}
-                  disabled={savingPaymentPrefs || bulkValidating}
-                >
-                  {savingPaymentPrefs ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Guardar definições
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Aparece no email quando está activo o modo com comprovativo. Opcional mas fortemente recomendado.
-              </p>
-            </CardContent>
-          </Card>
         )}
 
         <Tabs defaultValue={tuitionOnly ? "fees" : activityChargesOnly ? "activity-fees" : transportChargesOnly ? "transport-fees" : mealChargesOnly ? "meal-fees" : "enrollment-fees"} className="w-full">
@@ -2885,8 +2674,6 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 <TabsTrigger value="enrollment-fees">Matrículas</TabsTrigger>
                 <TabsTrigger value="activity-fees">Extracurriculares</TabsTrigger>
                 <TabsTrigger value="transport-fees">Transporte</TabsTrigger>
-                <TabsTrigger value="family">Descontos por familiar</TabsTrigger>
-                {!isParent && <TabsTrigger value="overrides">Descontos por aluno</TabsTrigger>}
                 {!isParent && (
                   <TabsTrigger value="erp-export" className="gap-1.5">
                     <FileSpreadsheet className="h-3.5 w-3.5" /> Exportar para Faturação
@@ -4163,7 +3950,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                 }
                                 onCheckedChange={(v) => {
                                   const checked = v === true;
-                                  setBulkSelectedTransportFeeIds((prev) => {
+                                  setBulkSelectedMealFeeIds((prev) => {
                                     const next = new Set(prev);
                                     if (checked) {
                                       filteredUnpaidMealFeesForBulk.forEach((row) =>
@@ -4214,7 +4001,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                 </td>
                               )}
                               <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
-                              <td className="py-2 px-2">{f.route?.name ?? "—"}</td>
+                              <td className="py-2 px-2">{f.meal_program?.name ?? "—"}</td>
                               <td className="py-2 px-2">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
@@ -4713,97 +4500,6 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
 
           {!tuitionOnly && (
           <>
-          {/* FAMILY TAB */}
-          <TabsContent value="family" className="space-y-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>Desconto automático por familiar</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">Quando um educador tem vários filhos na escola, aplica-se um desconto.</p>
-                </div>
-                {!isParent && <Button onClick={openNewFamily} size="sm" className="gap-2"><Plus className="h-4 w-4" /> Nova regra</Button>}
-              </CardHeader>
-              <CardContent>
-                {familyRules.length === 0 ? (
-                  <p className="text-center py-10 text-muted-foreground">Sem regras definidas.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-muted-foreground">
-                          <th className="py-2 px-2">Posição do familiar</th>
-                          <th className="py-2 px-2">Desconto</th>
-                          {!isParent && <th className="py-2 px-2 text-right">Ações</th>}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {familyRules.map((f) => (
-                          <tr key={f.id} className="border-b hover:bg-muted/30">
-                            <td className="py-2 px-2 font-medium">{f.sibling_position}º filho ou superior</td>
-                            <td className="py-2 px-2"><Badge variant="secondary">{f.discount_percentage}%</Badge></td>
-                            {!isParent && (
-                              <td className="py-2 px-2 text-right">
-                                <Button size="icon" variant="ghost" onClick={() => openEditFamily(f)}><Pencil className="h-4 w-4" /></Button>
-                                <Button size="icon" variant="ghost" onClick={() => setDeleteFamily(f.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                              </td>
-                            )}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* OVERRIDES TAB */}
-          <TabsContent value="overrides" className="space-y-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>Descontos manuais por aluno</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">Sobrepõe a regra automática em casos especiais.</p>
-                </div>
-                <Button onClick={openNewDiscount} size="sm" className="gap-2"><Plus className="h-4 w-4" /> Novo desconto</Button>
-              </CardHeader>
-              <CardContent>
-                {discounts.length === 0 ? (
-                  <p className="text-center py-10 text-muted-foreground">Sem descontos manuais.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-muted-foreground">
-                          <th className="py-2 px-2">Aluno</th>
-                          <th className="py-2 px-2">Desconto</th>
-                          <th className="py-2 px-2">Motivo</th>
-                          <th className="py-2 px-2 text-right">Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {discounts.map((d) => (
-                          <tr key={d.id} className="border-b hover:bg-muted/30">
-                            <td className="py-2 px-2 font-medium">{d.student?.full_name ?? "—"}</td>
-                            <td className="py-2 px-2">
-                              {d.discount_percentage != null ? `${d.discount_percentage}%` : null}
-                              {d.discount_fixed_amount != null ? fmtAOA(Number(d.discount_fixed_amount)) : null}
-                            </td>
-                            <td className="py-2 px-2 text-muted-foreground">{d.reason ?? "—"}</td>
-                            <td className="py-2 px-2 text-right">
-                              <Button size="icon" variant="ghost" onClick={() => openEditDiscount(d)}><Pencil className="h-4 w-4" /></Button>
-                              <Button size="icon" variant="ghost" onClick={() => setDeleteDiscount(d.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
           <TabsContent value="erp-export" className="space-y-6">
             <ErpArticleCodesCard schoolId={schoolId} />
             <ErpExportMappingSection schoolId={schoolId} />
@@ -5164,74 +4860,6 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       </>
       )}
 
-      {!tuitionOnly && (
-      <>
-      {/* FAMILY DIALOG */}
-      <Dialog open={familyDialog} onOpenChange={setFamilyDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingFamily ? "Editar regra" : "Nova regra de família"}</DialogTitle>
-            <DialogDescription>Aplica-se a alunos com o mesmo educador.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label>A partir do … familiar</Label>
-              <Input type="number" min="2" max="10" value={familyForm.sibling_position} onChange={(e) => setFamilyForm({ ...familyForm, sibling_position: e.target.value })} />
-              <p className="text-xs text-muted-foreground">2 = aplicar ao 2º filho em diante; 3 = só ao 3º em diante; etc.</p>
-            </div>
-            <div className="grid gap-2">
-              <Label>Desconto (%)</Label>
-              <Input type="number" min="0" max="100" value={familyForm.discount_percentage} onChange={(e) => setFamilyForm({ ...familyForm, discount_percentage: e.target.value })} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setFamilyDialog(false)}>Cancelar</Button>
-            <Button onClick={saveFamily}>Guardar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* DISCOUNT DIALOG */}
-      <Dialog open={discountDialog} onOpenChange={setDiscountDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingDiscount ? "Editar desconto" : "Novo desconto manual"}</DialogTitle>
-            <DialogDescription>Sobrepõe a regra automática para um aluno específico.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label>Aluno</Label>
-              <Select value={discountForm.student_id} onValueChange={(v) => setDiscountForm({ ...discountForm, student_id: v })} disabled={!!editingDiscount}>
-                <SelectTrigger><SelectValue placeholder="Seleciona um aluno" /></SelectTrigger>
-                <SelectContent>
-                  {students.map((s) => <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Desconto %</Label>
-                <Input type="number" min="0" max="100" value={discountForm.discount_percentage} onChange={(e) => setDiscountForm({ ...discountForm, discount_percentage: e.target.value, discount_fixed_amount: "" })} />
-              </div>
-              <div className="grid gap-2">
-                <Label>Ou valor fixo</Label>
-                <Input type="number" min="0" value={discountForm.discount_fixed_amount} onChange={(e) => setDiscountForm({ ...discountForm, discount_fixed_amount: e.target.value, discount_percentage: "" })} />
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label>Motivo</Label>
-              <Input value={discountForm.reason} onChange={(e) => setDiscountForm({ ...discountForm, reason: e.target.value })} placeholder="Ex: bolsa de mérito" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDiscountDialog(false)}>Cancelar</Button>
-            <Button onClick={saveDiscount}>Guardar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      </>
-      )}
-
       {tuitionOnly && (
       <>
       {/* GENERATE DIALOG */}
@@ -5278,36 +4906,6 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      </>
-      )}
-
-      {!tuitionOnly && (
-      <>
-      <AlertDialog open={!!deleteFamily} onOpenChange={(o) => !o && setDeleteFamily(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Apagar regra?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteFamily}>Apagar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <AlertDialog open={!!deleteDiscount} onOpenChange={(o) => !o && setDeleteDiscount(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remover desconto?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteDiscount}>Remover</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       </>
       )}
 

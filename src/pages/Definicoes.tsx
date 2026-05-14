@@ -31,6 +31,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/integrations/supabase/types";
 import { TermsAndHolidaysManager } from "@/components/definicoes/TermsAndHolidaysManager";
 import { NewAcademicYearWizard } from "@/components/definicoes/NewAcademicYearWizard";
+import { BillingEncargadosDiscountsPanel } from "@/components/definicoes/BillingEncargadosDiscountsPanel";
 import { AuditLogsPanel } from "@/components/definicoes/AuditLogsPanel";
 import { InviteStaffUserDialog } from "@/components/definicoes/InviteStaffUserDialog";
 import { isSchoolSettingsAdmin } from "@/lib/schoolStaffRoles";
@@ -371,13 +372,6 @@ const Definicoes = () => {
     billing_cycle: "SEMESTRAL" | "ANNUAL";
   };
   const [sub, setSub] = useState<Subscription>({ id: null, plan_type: "Enterprise", billing_cycle: "ANNUAL" });
-  // Plan change request UI state
-  const [planRequest, setPlanRequest] = useState<{
-    open: boolean;
-    targetPlan: "Essencial" | "Pro" | "Enterprise" | null;
-    message: string;
-    submitting: boolean;
-  }>({ open: false, targetPlan: null, message: "", submitting: false });
   type Invoice = {
     id: string;
     invoice_number: string;
@@ -1004,28 +998,6 @@ const Definicoes = () => {
       .eq("school_id", schoolId)
       .order("issue_date", { ascending: false });
     if (data) setInvoices(data as Invoice[]);
-  };
-
-  const submitPlanRequest = async () => {
-    if (!planRequest.targetPlan) return;
-    setPlanRequest((p) => ({ ...p, submitting: true }));
-    try {
-      const { data, error } = await supabase.functions.invoke("request-plan-change", {
-        body: {
-          requested_plan: planRequest.targetPlan,
-          message: planRequest.message?.trim() || undefined,
-        },
-      });
-      if (error) throw error;
-      const emailNote = (data as { email_sent?: boolean })?.email_sent
-        ? "Pedido enviado para geral@edukamba.com."
-        : "Pedido registado. A nossa equipa entrará em contacto.";
-      showToast("success", emailNote);
-      setPlanRequest({ open: false, targetPlan: null, message: "", submitting: false });
-    } catch (e) {
-      showToast("error", (e as Error).message ?? "Falha ao enviar pedido.");
-      setPlanRequest((p) => ({ ...p, submitting: false }));
-    }
   };
 
   const submitProof = async () => {
@@ -1803,163 +1775,11 @@ const Definicoes = () => {
         {/* FATURAÇÃO */}
         {activeTab === "faturacao" && (
           <div className="flex flex-col gap-6">
-            <SectionCard title="Plano Atual">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Plano</p>
-                  <p className="text-2xl font-bold text-foreground">{sub.plan_type}</p>
-                </div>
-                <span className="rounded-full bg-pastel-green px-4 py-2 text-xs font-semibold text-pastel-green-foreground">
-                  Ativo
-                </span>
-              </div>
-            </SectionCard>
-
             <SectionCard
-              title="Planos & Preços"
-              desc="Compare os planos disponíveis e o que cada um inclui."
+              title="Encarregados e descontos"
+              desc="Modo de cobrança dos encarregados na app, descontos por número de dependentes na família e descontos manuais por aluno (afectam a geração de propinas)."
             >
-              <div className="grid gap-4 lg:grid-cols-3">
-                {[
-                  {
-                    name: "Essencial",
-                    price: "180.000 Kz",
-                    suffix: "/mês",
-                    annual: "2.000.000 Kz/ano",
-                    tagline:
-                      "Organização administrativa básica e digitalização da secretaria.",
-                    features: [
-                      "Alunos ilimitados",
-                      "Gestão Escolar Core: Alunos, Professores, Turmas e Disciplinas",
-                      "Secretaria Digital: Matrículas e Encarregados de Educação",
-                      "Controlo de Presenças: registo de faltas de alunos",
-                      "Horário Escolar: consulta de horários de turmas e professores",
-                      "Avaliações: lançamento de notas e pautas",
-                      "Eventos: calendário escolar básico",
-                      "Pagamentos & Finanças: registo manual e fluxo de caixa simples",
-                      "Relatórios Básicos: listagens de alunos e aproveitamento",
-                      "Permissões: níveis de acesso básicos (Admin, Secretaria, Professor)",
-                    ],
-                    highlight: false,
-                  },
-                  {
-                    name: "Pro",
-                    price: "350.000 Kz",
-                    suffix: "/mês",
-                    annual: "4.000.000 Kz/ano",
-                    tagline:
-                      "Para escolas que querem eliminar o papel e aproximar os pais.",
-                    features: [
-                      "Alunos ilimitados",
-                      "Tudo do plano Essencial",
-                      "Mobile App completa para Pais, Alunos e Professores",
-                      "Notificações Push de notas, faltas e avisos sem custos de SMS",
-                      "Cobranças automáticas de propinas em atraso",
-                      "Chats em tempo real entre encarregados e escola",
-                      "Atividades extracurriculares: inscrições e cobranças",
-                      "Pedidos de ausência de funcionários e professores",
-                      "Timesheet: controlo de horas e assiduidade",
-                    ],
-                    highlight: true,
-                  },
-                  {
-                    name: "Enterprise",
-                    price: "520.000 Kz",
-                    suffix: "/mês",
-                    annual: "6.000.000 Kz/ano",
-                    tagline:
-                      "Gestão 360º com foco em logística, segurança e auditoria total.",
-                    features: [
-                      "Alunos ilimitados",
-                      "Tudo do plano Pro",
-                      "Gestão de Transportes: rotas, passageiros e cobrança de giros",
-                      "Stock & Pedidos de Material: inventário e pedidos aos pais",
-                      "Auditoria avançada (Logs): histórico completo de alterações",
-                      "Relatórios avançados: crescimento, retenção e previsões financeiras",
-                      "Suporte prioritário 24/7",
-                      "Backup personalizado: opções extras de segurança de dados",
-                    ],
-                    highlight: false,
-                  },
-                ].map((p) => {
-                  const isCurrent = sub.plan_type === p.name;
-                  return (
-                    <div
-                      key={p.name}
-                      className={cn(
-                        "relative flex flex-col gap-4 rounded-2xl border-2 p-5",
-                        p.highlight
-                          ? "border-pastel-blue bg-pastel-blue/10"
-                          : "border-border bg-card",
-                      )}
-                    >
-                      {p.highlight && (
-                        <span className="absolute -top-3 left-5 rounded-full bg-pastel-blue px-3 py-1 text-[11px] font-semibold text-pastel-blue-foreground">
-                          Mais popular
-                        </span>
-                      )}
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-bold text-foreground">{p.name}</h3>
-                        {isCurrent && (
-                          <span className="rounded-full bg-pastel-green px-2.5 py-1 text-[11px] font-semibold text-pastel-green-foreground">
-                            Plano atual
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">{p.tagline}</p>
-                      <div className="flex flex-col gap-1 border-y border-border/60 py-3">
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-3xl font-bold tracking-tight text-foreground">
-                            {p.price}
-                          </span>
-                          <span className="text-xs text-muted-foreground">{p.suffix}</span>
-                        </div>
-                        {"annual" in p && (
-                          <span className="text-xs text-muted-foreground">
-                            ou {(p as { annual: string }).annual}
-                          </span>
-                        )}
-                      </div>
-                      <ul className="flex flex-1 flex-col gap-2 text-sm">
-                        {p.features.map((f) => (
-                          <li key={f} className="flex items-start gap-2">
-                            <Check
-                              className="mt-0.5 h-4 w-4 shrink-0 text-pastel-blue-foreground"
-                              strokeWidth={2.5}
-                            />
-                            <span className="leading-snug text-foreground/90">{f}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      <button
-                        type="button"
-                        disabled={!settingsAdmin || isCurrent}
-                        onClick={() =>
-                          setPlanRequest({
-                            open: true,
-                            targetPlan: p.name as "Essencial" | "Pro" | "Enterprise",
-                            message: "",
-                            submitting: false,
-                          })
-                        }
-                        className={cn(
-                          "mt-2 inline-flex h-10 w-full items-center justify-center rounded-xl px-4 text-sm font-semibold transition-[var(--transition-smooth)] disabled:cursor-not-allowed disabled:opacity-50",
-                          isCurrent
-                            ? "bg-muted text-muted-foreground"
-                            : p.highlight
-                              ? "bg-pastel-blue text-pastel-blue-foreground hover:opacity-90"
-                              : "border border-border bg-card text-foreground hover:bg-accent",
-                        )}
-                      >
-                        {isCurrent ? "Plano atual" : `Solicitar plano ${p.name}`}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                A ativação ou alteração do plano é feita pela equipa Edukamba após a assinatura do contrato. Ao solicitar um plano, será enviado um email para <span className="font-medium text-foreground">geral@edukamba.com</span> com o seu pedido.
-              </p>
+              <BillingEncargadosDiscountsPanel schoolId={schoolId} />
             </SectionCard>
 
             <SectionCard title="Ciclo de Pagamento" desc="Escolha como prefere ser cobrado pela plataforma.">
@@ -2319,50 +2139,6 @@ const Definicoes = () => {
           </div>
         )}
 
-        {/* Plan change request modal */}
-        {planRequest.open && planRequest.targetPlan && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-            onClick={() => !planRequest.submitting && setPlanRequest({ open: false, targetPlan: null, message: "", submitting: false })}
-          >
-            <div
-              className="w-full max-w-md rounded-2xl bg-card p-6 shadow-card"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h3 className="text-lg font-bold text-foreground">
-                Solicitar plano {planRequest.targetPlan}
-              </h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Será enviado um email para <span className="font-medium text-foreground">geral@edukamba.com</span> a informar do seu interesse em ativar o plano <span className="font-medium text-foreground">{planRequest.targetPlan}</span>. A nossa equipa entrará em contacto para formalizar o contrato.
-              </p>
-              <label className="mt-4 block text-xs font-medium text-foreground">Mensagem (opcional)</label>
-              <textarea
-                value={planRequest.message}
-                onChange={(e) => setPlanRequest((p) => ({ ...p, message: e.target.value }))}
-                rows={4}
-                placeholder="Indique necessidades específicas, prazos, número de alunos, etc."
-                className="mt-1 w-full rounded-xl border border-border bg-card p-3 text-sm shadow-soft outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-              />
-              <div className="mt-6 flex justify-end gap-2">
-                <button
-                  onClick={() => setPlanRequest({ open: false, targetPlan: null, message: "", submitting: false })}
-                  disabled={planRequest.submitting}
-                  className="h-10 rounded-full border border-border px-4 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={submitPlanRequest}
-                  disabled={planRequest.submitting}
-                  className="inline-flex h-10 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft hover:opacity-90 disabled:opacity-50"
-                >
-                  {planRequest.submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Enviar pedido
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </>
   );

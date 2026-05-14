@@ -239,7 +239,11 @@ const Transportes = () => {
           )}
         </div>
 
-        <Tabs value={transportTab} onValueChange={setTransportTab} className="w-full">
+        <Tabs
+          value={transportTab}
+          onValueChange={(v) => setTransportTab(v as typeof transportTab)}
+          className="w-full"
+        >
           <TabsList className="flex h-auto w-full flex-wrap gap-1">
             {!isParent && <TabsTrigger value="regras">Regras de cobranças</TabsTrigger>}
             <TabsTrigger value="rotas"><Bus className="mr-2 h-4 w-4" />Rotas</TabsTrigger>
