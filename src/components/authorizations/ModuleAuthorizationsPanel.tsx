@@ -330,14 +330,14 @@ export function ModuleAuthorizationsPanel({
   );
 
   const handleDownloadBlankTemplatePdf = useCallback(
-    (t: TemplateRow) => {
+    async (t: TemplateRow) => {
       const fds = parseFields(t.fields);
       if (!fds.length) {
         toast.error("O formulário não tem campos para exportar.");
         return;
       }
       try {
-        downloadModuleAuthorizationPdf(
+        await downloadModuleAuthorizationPdf(
           {
             mode: "blank",
             moduleAreaLabel: MODULE_LABEL[module],
@@ -357,7 +357,7 @@ export function ModuleAuthorizationsPanel({
   );
 
   const handleDownloadSubmissionPdf = useCallback(
-    (s: SubmissionRow) => {
+    async (s: SubmissionRow) => {
       const tmplRow = templates.find((x) => x.id === s.template_id);
       const fieldsDefs = parseFields((tmplRow?.fields ?? s.template?.fields) ?? []);
       if (!fieldsDefs.length) {
@@ -371,7 +371,7 @@ export function ModuleAuthorizationsPanel({
           typeof s.responses === "object" && s.responses !== null && !Array.isArray(s.responses)
             ? (s.responses as Record<string, unknown>)
             : {};
-        downloadModuleAuthorizationPdf(
+        await downloadModuleAuthorizationPdf(
           {
             mode: "response",
             moduleAreaLabel: MODULE_LABEL[module],
@@ -748,17 +748,23 @@ export function ModuleAuthorizationsPanel({
       if (s && !primarySignature) primarySignature = s;
     }
 
-    const attachment_urls = selectedFields
-      .filter((f) => f.type === "file")
-      .map((f) => fillValues[f.id])
-      .filter((v): v is { url: string; name?: string } =>
-        !!(v && typeof v === "object" && "url" in v && typeof (v as { url: unknown }).url === "string"),
-      )
-      .map((v, i) => ({
-        url: v.url,
-        name: v.name ?? `anexo_${i + 1}`,
-      }));
-
+    const attachment_urls: { url: string; name: string; field_id: string }[] = [];
+    let attachmentCounter = 0;
+    for (const f of selectedFields) {
+      if (f.type !== "file") continue;
+      const v = fillValues[f.id];
+      const urlRaw =
+        v && typeof v === "object" && "url" in v ? (v as { url?: unknown }).url : undefined;
+      if (typeof urlRaw !== "string" || !urlRaw.trim()) continue;
+      const nameRaw =
+        v && typeof v === "object" && "name" in v ? (v as { name?: unknown }).name : undefined;
+      attachmentCounter++;
+      attachment_urls.push({
+        url: urlRaw.trim(),
+        name: typeof nameRaw === "string" && nameRaw.trim() ? nameRaw.trim() : `anexo_${attachmentCounter}`,
+        field_id: f.id,
+      });
+    }
     setSubmitting(true);
     try {
       const { error } = await supabase.from("module_authorization_submissions").insert({
