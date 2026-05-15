@@ -1032,6 +1032,120 @@ export type Database = {
           },
         ]
       }
+      enrollment_charge_rule_classrooms: {
+        Row: {
+          charge_rule_id: string
+          classroom_id: string
+        }
+        Insert: {
+          charge_rule_id: string
+          classroom_id: string
+        }
+        Update: {
+          charge_rule_id?: string
+          classroom_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enrollment_charge_rule_classrooms_charge_rule_id_fkey"
+            columns: ["charge_rule_id"]
+            isOneToOne: false
+            referencedRelation: "enrollment_charge_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enrollment_charge_rule_classrooms_classroom_id_fkey"
+            columns: ["classroom_id"]
+            isOneToOne: false
+            referencedRelation: "classrooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enrollment_charge_rule_students: {
+        Row: {
+          charge_rule_id: string
+          student_id: string
+        }
+        Insert: {
+          charge_rule_id: string
+          student_id: string
+        }
+        Update: {
+          charge_rule_id?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enrollment_charge_rule_students_charge_rule_id_fkey"
+            columns: ["charge_rule_id"]
+            isOneToOne: false
+            referencedRelation: "enrollment_charge_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enrollment_charge_rule_students_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enrollment_charge_rules: {
+        Row: {
+          academic_year_id: string | null
+          amount_new: number
+          amount_renewal: number
+          created_at: string
+          due_offset_days: number
+          id: string
+          notes: string | null
+          school_id: string
+          target_scope: string
+          updated_at: string
+        }
+        Insert: {
+          academic_year_id?: string | null
+          amount_new?: number
+          amount_renewal?: number
+          created_at?: string
+          due_offset_days?: number
+          id?: string
+          notes?: string | null
+          school_id: string
+          target_scope?: string
+          updated_at?: string
+        }
+        Update: {
+          academic_year_id?: string | null
+          amount_new?: number
+          amount_renewal?: number
+          created_at?: string
+          due_offset_days?: number
+          id?: string
+          notes?: string | null
+          school_id?: string
+          target_scope?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enrollment_charge_rules_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enrollment_charge_rules_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       enrollment_fees: {
         Row: {
           academic_year_id: string | null

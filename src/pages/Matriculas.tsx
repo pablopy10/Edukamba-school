@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { Search, Plus, Pencil, Trash2, Loader2, CheckCircle2 } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Search, Plus, Pencil, Trash2, Loader2, CheckCircle2, FileSignature } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { EnrollmentFormDialog, EnrollmentRow } from "@/components/matriculas/EnrollmentFormDialog";
@@ -18,6 +18,9 @@ import { isNativeMobileApp, showPageKpiCards, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PagamentosFinanceHub } from "@/pages/Pagamentos";
+import { EnrollmentChargeRulesPanel } from "@/components/finance/EnrollmentChargeRulesPanel";
+import { ModuleAuthorizationsPanel } from "@/components/authorizations/ModuleAuthorizationsPanel";
+import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 
 type Opt = { id: string; name: string };
 type YearOpt = { id: string; label: string; is_active: boolean | null };
@@ -44,6 +47,7 @@ const initialsOf = (name: string) =>
 
 const Matriculas = () => {
   const native = isNativeMobileApp();
+  const [searchParams] = useSearchParams();
   const { selectedYearId } = useAcademicYear();
   const { user } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
@@ -59,6 +63,8 @@ const Matriculas = () => {
   const allowEnrollmentMutations = isParent || !enrollmentReadOnly;
   const showEnrollmentRowActions = !isParent && !enrollmentReadOnly;
   const enrollmentTableColSpan = showEnrollmentRowActions ? 7 : 6;
+  const canManageAuthorizations = isSchoolManagementRole(role);
+  const [matriculasTab, setMatriculasTab] = useState<"lista" | "regras" | "pagamentos" | "autorizacoes">("lista");
   const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([]);
   const [students, setStudents] = useState<Opt[]>([]);
   const [classrooms, setClassrooms] = useState<Opt[]>([]);
@@ -85,6 +91,10 @@ const Matriculas = () => {
       cancelled = true;
     };
   }, [user?.id]);
+
+  useEffect(() => {
+    if (searchParams.get("tab") === "autorizacoes") setMatriculasTab("autorizacoes");
+  }, [searchParams]);
 
   const load = async () => {
     setLoading(true);
@@ -280,285 +290,390 @@ const Matriculas = () => {
 
   return (
     <>
-      <Tabs defaultValue="lista" className="w-full">
-        <TabsList className="mb-4 w-full max-w-md">
-          <TabsTrigger value="lista">Lista</TabsTrigger>
-          <TabsTrigger value="cobrancas">Cobranças</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="lista" className="mt-0 border-0 bg-transparent p-0 shadow-none">
-      <div className={cn("flex flex-col gap-6", native && "relative pb-28")}>
-        <div className={cn("flex flex-col gap-4", native ? "" : "sm:flex-row sm:items-center sm:justify-between")}>
+      <div
+        className={cn(
+          "flex flex-col gap-6",
+          native && allowEnrollmentMutations && matriculasTab === "lista" && "relative pb-28",
+        )}
+      >
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Matrículas</h1>
-            <p className="text-sm text-muted-foreground">Faça a gestão das matrículas dos alunos da escola.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Lista de matrículas e renovações, regras da taxa de matrícula por alvo, cobranças e autorizações dos
+              encarregados.
+            </p>
             {enrollmentReadOnly ? (
-              <p className="mt-2 text-xs text-muted-foreground rounded-lg border border-border bg-muted/30 px-3 py-2">
+              <p className="mt-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                 Como educador de turma, apenas vê matrículas dos alunos das turmas onde está como diretor de turma.
               </p>
             ) : null}
           </div>
-          <div className={cn("flex flex-wrap items-center gap-3", native && "w-full")}>
-            <div className={cn("relative", native ? "min-w-0 flex-1" : "")}>
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                type="text"
-                placeholder="Pesquisar matrícula..."
-                className={cn(
-                  "h-11 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20",
-                  native ? "w-full min-w-0" : "w-72",
-                )}
-              />
-            </div>
-            {!native && allowEnrollmentMutations && (
-              <button
-                onClick={() => { setEditing(null); setFormOpen(true); }}
-                className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
-                <Plus className="h-4 w-4" strokeWidth={2.25} />
-                {isParent ? "Renovar Matrícula" : "Nova Matrícula"}
-              </button>
+        </div>
+
+        <Tabs value={matriculasTab} onValueChange={(v) => setMatriculasTab(v as typeof matriculasTab)} className="w-full">
+          <TabsList className="flex h-auto w-full flex-wrap gap-1">
+            <TabsTrigger value="lista">Lista</TabsTrigger>
+            {!isParent && (
+              <TabsTrigger value="regras">Regras de cobrança</TabsTrigger>
             )}
-          </div>
-        </div>
+            <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
+            <TabsTrigger value="autorizacoes">
+              <FileSignature className="mr-2 h-4 w-4" />
+              Autorizações
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Filters */}
-        {showStaffEnrollmentFilters && (
-        <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card">
-          <div className={cn("min-w-[180px] flex-1", native && "min-w-0 w-full")}>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Turma</label>
-            <Select value={filterClassroom} onValueChange={setFilterClassroom}>
-              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as turmas</SelectItem>
-                {classrooms.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="min-w-[160px]">
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Estado</label>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="ACTIVE">Confirmada</SelectItem>
-                <SelectItem value="PENDING">Pendente</SelectItem>
-                <SelectItem value="CANCELLED">Cancelada</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="min-w-[180px]">
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Ano lectivo</label>
-            <Select value={filterYear} onValueChange={setFilterYear}>
-              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {years.map((y) => (
-                  <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {filtersActive && (
-            <button
-              onClick={() => { setFilterClassroom("all"); setFilterStatus("all"); setFilterYear("all"); }}
-              className="h-10 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground hover:bg-muted"
-            >Limpar filtros</button>
-          )}
-        </div>
-        )}
-
-        {showStaffEnrollmentFilters && showPageKpiCards() && (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {[
-            { label: "Total de Matrículas", value: String(stats.total), color: "bg-pastel-blue text-pastel-blue-foreground" },
-            { label: "Confirmadas", value: String(stats.confirmed), color: "bg-pastel-green text-pastel-green-foreground" },
-            { label: "Pendentes", value: String(stats.pending), color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-            { label: "Canceladas", value: String(stats.cancelled), color: "bg-pastel-pink text-pastel-pink-foreground" },
-          ].map((stat) => (
-            <div key={stat.label} className="rounded-2xl bg-card p-5 shadow-card">
-              <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", stat.color)}>
-                {stat.label}
-              </span>
-              <p className="mt-3 text-3xl font-bold text-foreground">{stat.value}</p>
-            </div>
-          ))}
-        </div>
-        )}
-
-        <div className="rounded-2xl bg-card shadow-card">
-          <div className="flex items-center justify-between border-b border-border p-5">
-            <h2 className="text-lg font-bold text-foreground">{isParent ? "Histórico de Matrículas" : "Lista de Matrículas"}</h2>
-            {selected.length > 0 && (
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">{selected.length} selecionadas</span>
+          <TabsContent value="lista" className="mt-4 border-0 bg-transparent p-0 shadow-none">
+            <div className="flex flex-col gap-6">
+              <div className={cn("flex flex-col gap-4", native ? "" : "sm:flex-row sm:items-center sm:justify-between")}>
+                <div className={cn("flex flex-wrap items-center gap-3", native && "w-full")}>
+                  <div className={cn("relative", native ? "min-w-0 flex-1" : "")}>
+                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      type="text"
+                      placeholder="Pesquisar matrícula..."
+                      className={cn(
+                        "h-11 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20",
+                        native ? "w-full min-w-0" : "w-72",
+                      )}
+                    />
+                  </div>
+                  {!native && allowEnrollmentMutations && (
+                    <button
+                      onClick={() => {
+                        setEditing(null);
+                        setFormOpen(true);
+                      }}
+                      className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
+                    >
+                      <Plus className="h-4 w-4" strokeWidth={2.25} />
+                      {isParent ? "Renovar Matrícula" : "Nova Matrícula"}
+                    </button>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
 
-          {native ? (
-            <div className="flex flex-col gap-3 p-4">
-              {filtered.length > 0 && (
-                <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={toggleAll}
-                    className="h-4 w-4 cursor-pointer rounded border-border accent-pastel-blue-foreground"
-                  />
-                  Seleccionar todos ({filtered.length})
-                </label>
-              )}
-              {loading && (
-                <div className="flex justify-center py-12 text-muted-foreground">
-                  <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
+              {/* Filters */}
+              {showStaffEnrollmentFilters && (
+                <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card">
+                  <div className={cn("min-w-[180px] flex-1", native && "min-w-0 w-full")}>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Turma</label>
+                    <Select value={filterClassroom} onValueChange={setFilterClassroom}>
+                      <SelectTrigger className="h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas as turmas</SelectItem>
+                        {classrooms.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="min-w-[160px]">
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Estado</label>
+                    <Select value={filterStatus} onValueChange={setFilterStatus}>
+                      <SelectTrigger className="h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        <SelectItem value="ACTIVE">Confirmada</SelectItem>
+                        <SelectItem value="PENDING">Pendente</SelectItem>
+                        <SelectItem value="CANCELLED">Cancelada</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="min-w-[180px]">
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Ano lectivo</label>
+                    <Select value={filterYear} onValueChange={setFilterYear}>
+                      <SelectTrigger className="h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        {years.map((y) => (
+                          <SelectItem key={y.id} value={y.id}>
+                            {y.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {filtersActive && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterClassroom("all");
+                        setFilterStatus("all");
+                        setFilterYear("all");
+                      }}
+                      className="h-10 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground hover:bg-muted"
+                    >
+                      Limpar filtros
+                    </button>
+                  )}
                 </div>
               )}
-              {!loading && filtered.length === 0 && (
-                <p className="py-10 text-center text-sm text-muted-foreground">Nenhuma matrícula encontrada.</p>
+
+              {showStaffEnrollmentFilters && showPageKpiCards() && (
+                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                  {[
+                    {
+                      label: "Total de Matrículas",
+                      value: String(stats.total),
+                      color: "bg-pastel-blue text-pastel-blue-foreground",
+                    },
+                    {
+                      label: "Confirmadas",
+                      value: String(stats.confirmed),
+                      color: "bg-pastel-green text-pastel-green-foreground",
+                    },
+                    {
+                      label: "Pendentes",
+                      value: String(stats.pending),
+                      color: "bg-pastel-yellow text-pastel-yellow-foreground",
+                    },
+                    {
+                      label: "Canceladas",
+                      value: String(stats.cancelled),
+                      color: "bg-pastel-pink text-pastel-pink-foreground",
+                    },
+                  ].map((stat) => (
+                    <div key={stat.label} className="rounded-2xl bg-card p-5 shadow-card">
+                      <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", stat.color)}>
+                        {stat.label}
+                      </span>
+                      <p className="mt-3 text-3xl font-bold text-foreground">{stat.value}</p>
+                    </div>
+                  ))}
+                </div>
               )}
-              {!loading && filtered.map(renderEnrollmentCard)}
-            </div>
-          ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-pastel-blue/40 text-left text-xs uppercase tracking-wider text-pastel-blue-foreground">
-                  <th className="w-12 py-4 pl-5">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={toggleAll}
-                      className="h-4 w-4 cursor-pointer rounded border-border accent-pastel-blue-foreground"
-                    />
-                  </th>
-                  <th className="py-4 pr-4 font-semibold">Aluno</th>
-                  <th className="py-4 pr-4 font-semibold">Turma</th>
-                  <th className="py-4 pr-4 font-semibold">Ano Lectivo</th>
-                  <th className="py-4 pr-4 font-semibold">Data</th>
-                  <th className="py-4 pr-4 font-semibold">Estado</th>
-                  {showEnrollmentRowActions && (
-                    <th className="py-4 pr-5 font-semibold text-right">Acções</th>
+
+              <div className="rounded-2xl bg-card shadow-card">
+                <div className="flex items-center justify-between border-b border-border p-5">
+                  <h2 className="text-lg font-bold text-foreground">{isParent ? "Histórico de Matrículas" : "Lista de Matrículas"}</h2>
+                  {selected.length > 0 && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-muted-foreground">{selected.length} selecionadas</span>
+                    </div>
                   )}
-                </tr>
-              </thead>
-              <tbody>
-                {loading && (
-                  <tr><td colSpan={enrollmentTableColSpan} className="py-10 text-center text-muted-foreground">
-                    <Loader2 className="mx-auto h-5 w-5 animate-spin" />
-                  </td></tr>
-                )}
-                {!loading && filtered.length === 0 && (
-                  <tr><td colSpan={enrollmentTableColSpan} className="py-10 text-center text-muted-foreground">
-                    Nenhuma matrícula encontrada.
-                  </td></tr>
-                )}
-                {!loading && filtered.map((e) => {
-                  const isSelected = selected.includes(e.id);
-                  const name = e.students?.full_name ?? "—";
-                  const initials = initialsOf(name) || "??";
-                  const color = (e.students?.avatar_color as string) || "blue";
-                  const st = e.status ?? "ACTIVE";
-                  return (
-                    <tr
-                      key={e.id}
-                      className={cn(
-                        "border-b border-border last:border-0 transition-colors",
-                        isSelected ? "bg-pastel-blue/15" : "hover:bg-muted/40",
-                      )}
-                    >
-                      <td className="py-4 pl-5">
+                </div>
+
+                {native ? (
+                  <div className="flex flex-col gap-3 p-4">
+                    {filtered.length > 0 && (
+                      <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
                         <input
                           type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggle(e.id)}
+                          checked={allSelected}
+                          onChange={toggleAll}
                           className="h-4 w-4 cursor-pointer rounded border-border accent-pastel-blue-foreground"
                         />
-                      </td>
-                      <td className="py-4 pr-4">
-                        <div className="flex items-center gap-3">
-                          <div className={cn("flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold", avatarStyles[color] ?? avatarStyles.blue)}>
-                            {initials}
-                          </div>
-                          <div>
-                            {e.students?.id ? (
-                              <Link
-                                to={`/alunos/${e.students.id}`}
-                                className="font-semibold text-foreground transition-colors hover:text-pastel-blue-foreground hover:underline"
+                        Seleccionar todos ({filtered.length})
+                      </label>
+                    )}
+                    {loading && (
+                      <div className="flex justify-center py-12 text-muted-foreground">
+                        <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
+                      </div>
+                    )}
+                    {!loading && filtered.length === 0 && (
+                      <p className="py-10 text-center text-sm text-muted-foreground">Nenhuma matrícula encontrada.</p>
+                    )}
+                    {!loading && filtered.map(renderEnrollmentCard)}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-pastel-blue/40 text-left text-xs uppercase tracking-wider text-pastel-blue-foreground">
+                          <th className="w-12 py-4 pl-5">
+                            <input
+                              type="checkbox"
+                              checked={allSelected}
+                              onChange={toggleAll}
+                              className="h-4 w-4 cursor-pointer rounded border-border accent-pastel-blue-foreground"
+                            />
+                          </th>
+                          <th className="py-4 pr-4 font-semibold">Aluno</th>
+                          <th className="py-4 pr-4 font-semibold">Turma</th>
+                          <th className="py-4 pr-4 font-semibold">Ano Lectivo</th>
+                          <th className="py-4 pr-4 font-semibold">Data</th>
+                          <th className="py-4 pr-4 font-semibold">Estado</th>
+                          {showEnrollmentRowActions && (
+                            <th className="py-4 pr-5 text-right font-semibold">Acções</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loading && (
+                          <tr>
+                            <td colSpan={enrollmentTableColSpan} className="py-10 text-center text-muted-foreground">
+                              <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                            </td>
+                          </tr>
+                        )}
+                        {!loading && filtered.length === 0 && (
+                          <tr>
+                            <td colSpan={enrollmentTableColSpan} className="py-10 text-center text-muted-foreground">
+                              Nenhuma matrícula encontrada.
+                            </td>
+                          </tr>
+                        )}
+                        {!loading &&
+                          filtered.map((e) => {
+                            const isSelected = selected.includes(e.id);
+                            const name = e.students?.full_name ?? "—";
+                            const initials = initialsOf(name) || "??";
+                            const color = (e.students?.avatar_color as string) || "blue";
+                            const st = e.status ?? "ACTIVE";
+                            return (
+                              <tr
+                                key={e.id}
+                                className={cn(
+                                  "border-b border-border last:border-0 transition-colors",
+                                  isSelected ? "bg-pastel-blue/15" : "hover:bg-muted/40",
+                                )}
                               >
-                                {name}
-                              </Link>
-                            ) : (
-                              <p className="font-semibold text-foreground">{name}</p>
-                            )}
-                            <p className="text-xs text-muted-foreground">{e.students?.email ?? ""}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 pr-4">
-                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{e.classrooms?.name ?? "—"}</span>
-                      </td>
-                      <td className="py-4 pr-4 text-foreground">{e.academic_years?.label ?? "—"}</td>
-                      <td className="py-4 pr-4 text-muted-foreground">
-                        {e.enrolled_at ? new Date(e.enrolled_at).toLocaleDateString("pt-PT") : "—"}
-                      </td>
-                      <td className="py-4 pr-4">
-                        <span className={cn("inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium", statusStyles[st] ?? "bg-muted text-foreground")}>
-                          <CheckCircle2 className="h-3 w-3" strokeWidth={2} />
-                          {statusLabel(st)}
-                        </span>
-                      </td>
-                      {showEnrollmentRowActions && (
-                        <td className="py-4 pr-5">
-                          <div className="flex items-center justify-end gap-1">
-                            <button onClick={() => { setEditing(e); setFormOpen(true); }} title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
-                              <Pencil className="h-4 w-4" strokeWidth={1.75} />
-                            </button>
-                            <button onClick={() => setDeleting(e)} title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
-                              <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                            </button>
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                                <td className="py-4 pl-5">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => toggle(e.id)}
+                                    className="h-4 w-4 cursor-pointer rounded border-border accent-pastel-blue-foreground"
+                                  />
+                                </td>
+                                <td className="py-4 pr-4">
+                                  <div className="flex items-center gap-3">
+                                    <div
+                                      className={cn(
+                                        "flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold",
+                                        avatarStyles[color] ?? avatarStyles.blue,
+                                      )}
+                                    >
+                                      {initials}
+                                    </div>
+                                    <div>
+                                      {e.students?.id ? (
+                                        <Link
+                                          to={`/alunos/${e.students.id}`}
+                                          className="font-semibold text-foreground transition-colors hover:text-pastel-blue-foreground hover:underline"
+                                        >
+                                          {name}
+                                        </Link>
+                                      ) : (
+                                        <p className="font-semibold text-foreground">{name}</p>
+                                      )}
+                                      <p className="text-xs text-muted-foreground">{e.students?.email ?? ""}</p>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-4 pr-4">
+                                  <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
+                                    {e.classrooms?.name ?? "—"}
+                                  </span>
+                                </td>
+                                <td className="py-4 pr-4 text-foreground">{e.academic_years?.label ?? "—"}</td>
+                                <td className="py-4 pr-4 text-muted-foreground">
+                                  {e.enrolled_at ? new Date(e.enrolled_at).toLocaleDateString("pt-PT") : "—"}
+                                </td>
+                                <td className="py-4 pr-4">
+                                  <span
+                                    className={cn(
+                                      "inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium",
+                                      statusStyles[st] ?? "bg-muted text-foreground",
+                                    )}
+                                  >
+                                    <CheckCircle2 className="h-3 w-3" strokeWidth={2} />
+                                    {statusLabel(st)}
+                                  </span>
+                                </td>
+                                {showEnrollmentRowActions && (
+                                  <td className="py-4 pr-5">
+                                    <div className="flex items-center justify-end gap-1">
+                                      <button
+                                        onClick={() => {
+                                          setEditing(e);
+                                          setFormOpen(true);
+                                        }}
+                                        title="Editar"
+                                        className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
+                                      >
+                                        <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                                      </button>
+                                      <button
+                                        onClick={() => setDeleting(e)}
+                                        title="Eliminar"
+                                        className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
+                                      >
+                                        <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                                      </button>
+                                    </div>
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div className="flex flex-col items-center justify-between gap-3 border-t border-border p-5 sm:flex-row">
+                  <p className="text-xs text-muted-foreground">
+                    A mostrar {filtered.length} de {enrollments.length} matrículas
+                  </p>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          {!isParent && (
+            <TabsContent value="regras" className="mt-4 border-0 bg-transparent p-0 shadow-none">
+              <EnrollmentChargeRulesPanel schoolId={schoolId} role={role} />
+            </TabsContent>
           )}
 
-          <div className="flex flex-col items-center justify-between gap-3 border-t border-border p-5 sm:flex-row">
-            <p className="text-xs text-muted-foreground">
-              A mostrar {filtered.length} de {enrollments.length} matrículas
-            </p>
-          </div>
-        </div>
+          <TabsContent value="pagamentos" className="mt-4 border-0 bg-transparent p-0 shadow-none">
+            <PagamentosFinanceHub financePage="enrollmentCharges" />
+          </TabsContent>
 
-      {native && allowEnrollmentMutations && (
-        <NativeMobileFabPortal>
-          <Button
-            type="button"
-            size="icon"
-            className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-            aria-label={isParent ? "Renovar matrícula" : "Nova matrícula"}
-            onClick={() => { setEditing(null); setFormOpen(true); }}
-          >
-            <Plus className="h-6 w-6" />
-          </Button>
-        </NativeMobileFabPortal>
-      )}
+          <TabsContent value="autorizacoes" className="mt-4 border-0 bg-transparent p-0 shadow-none">
+            <ModuleAuthorizationsPanel
+              module="enrollment"
+              schoolId={schoolId}
+              userId={user?.id ?? null}
+              role={role}
+              isParent={isParent}
+              childIds={childIds}
+              canManageTemplates={canManageAuthorizations}
+            />
+          </TabsContent>
+        </Tabs>
+
+        {native && allowEnrollmentMutations && matriculasTab === "lista" && (
+          <NativeMobileFabPortal>
+            <Button
+              type="button"
+              size="icon"
+              className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
+              aria-label={isParent ? "Renovar matrícula" : "Nova matrícula"}
+              onClick={() => {
+                setEditing(null);
+                setFormOpen(true);
+              }}
+            >
+              <Plus className="h-6 w-6" />
+            </Button>
+          </NativeMobileFabPortal>
+        )}
       </div>
-
-        </TabsContent>
-
-        <TabsContent value="cobrancas" className="mt-0 border-0 bg-transparent p-0 shadow-none">
-          <PagamentosFinanceHub financePage="enrollmentCharges" />
-        </TabsContent>
-      </Tabs>
 
       <EnrollmentFormDialog
         open={formOpen}

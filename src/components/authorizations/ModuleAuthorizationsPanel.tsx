@@ -50,7 +50,12 @@ import { isModuleAuthorizationStaffViewerRole } from "@/lib/schoolStaffRoles";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 
 /** Módulos alinhados à coluna SQL `module`. */
-export type AuthorizationModuleKind = "extracurricular" | "transport" | "meal" | "event";
+export type AuthorizationModuleKind =
+  | "extracurricular"
+  | "transport"
+  | "meal"
+  | "event"
+  | "enrollment";
 
 export type AuthorizationFieldType =
   | "text"
@@ -193,6 +198,7 @@ const MODULE_LABEL: Record<AuthorizationModuleKind, string> = {
   transport: "Transporte",
   meal: "Refeições",
   event: "Eventos",
+  enrollment: "Matrículas",
 };
 
 /** Um único formulário «público» por área nos separadores Preencher e Histórico (a gestão pode ter mais rascunhos com outro título). */
@@ -201,6 +207,7 @@ const MODULE_PUBLICATION_TEMPLATE_TITLE: Record<AuthorizationModuleKind, string>
   transport: "Formulário de Transportes",
   meal: "Formulário de Refeições",
   event: "Formulário de Eventos escolares",
+  enrollment: "Formulário de Matrículas",
 };
 
 const RECIPIENT_MODE_META: Record<TemplateRecipientMode, { title: string; hint: string }> = {
