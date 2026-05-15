@@ -4,6 +4,8 @@ import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useModules, ModuleKey } from "@/context/ModulesContext";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useSchoolPermissionMatrix } from "@/hooks/useSchoolPermissionMatrix";
+import type { PermissionModuleKey } from "@/lib/schoolPermissionModules";
 import { isNavPathAllowedForRole } from "@/lib/staffNavAccess";
 
 type NavItem = {
@@ -33,6 +35,7 @@ export const MobileBottomNav = () => {
   const location = useLocation();
   const { modules } = useModules();
   const { role, loading } = useUserRole();
+  const { canReadModule } = useSchoolPermissionMatrix();
 
   if (loading || role === null) {
     return (
@@ -55,7 +58,9 @@ export const MobileBottomNav = () => {
 
   const visible = bottomNavItems.filter((item) => {
     if (item.moduleKey && !modules[item.moduleKey]) return false;
-    return isNavPathAllowedForRole(role, item.to);
+    if (!isNavPathAllowedForRole(role, item.to)) return false;
+    if (item.moduleKey && !canReadModule(item.moduleKey as PermissionModuleKey)) return false;
+    return true;
   });
 
   if (visible.length === 0) return null;

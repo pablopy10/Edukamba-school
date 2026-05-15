@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Building2,
   Image as ImageIcon,
@@ -39,34 +40,14 @@ import { isDefinicoesTabAllowed } from "@/lib/staffNavAccess";
 import { invokeAdminUpdateUserEmail } from "@/lib/admin/invokeAdminUpdateUserEmail";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { moduleMeta, type ModuleKey as AppRouteModuleKey } from "@/context/ModulesContext";
-
-type PermissionModuleKey = AppRouteModuleKey | "modulos" | "definicoes";
-
-const PERMISSION_ROUTE_ORDER: AppRouteModuleKey[] = [
-  "professores",
-  "alunos",
-  "matriculas",
-  "cursos",
-  "turmas",
-  "disciplinas",
-  "educadores",
-  "presencas",
-  "horario",
-  "avaliacoes",
-  "notas",
-  "eventos",
-  "propinas",
-  "extracurriculares",
-  "transportes",
-  "refeicoes",
-  "pedidos",
-  "material",
-  "documentos",
-  "financas",
-  "relatorios",
-  "timesheet",
-];
+import { moduleMeta } from "@/context/ModulesContext";
+import {
+  getDefaultRoleModulePermission,
+  fullAccessMatrix,
+  PERMISSION_ROUTE_ORDER,
+  type PermissionModuleKey,
+} from "@/lib/schoolPermissionModules";
+import { schoolPermissionMatrixQueryRoot } from "@/hooks/useSchoolPermissionMatrix";
 
 const MODULES: { key: PermissionModuleKey; label: string; desc: string }[] = [
   ...PERMISSION_ROUTE_ORDER.map((key) => ({
@@ -257,6 +238,7 @@ const schoolSchema = z.object({
 });
 
 const Definicoes = () => {
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const { years, selectedYearId, setSelectedYearId, refresh: refreshAcademicYears } = useAcademicYear();
   const [activeTab, setActiveTab] = useState<Tab>("escola");
@@ -521,118 +503,70 @@ const Definicoes = () => {
     const map: Record<string, Perm> = {};
     MODULES.forEach((m) => {
       const found = data?.find((d) => d.module === m.key);
+      const dfl = getDefaultRoleModulePermission(role, m.key);
       map[m.key] = {
         module: m.key,
-        can_read: found?.can_read ?? defaultPerm(role, m.key).can_read,
-        can_write: found?.can_write ?? defaultPerm(role, m.key).can_write,
-        can_delete: found?.can_delete ?? defaultPerm(role, m.key).can_delete,
+        can_read: found?.can_read ?? dfl.can_read,
+        can_write: found?.can_write ?? dfl.can_write,
+        can_delete: found?.can_delete ?? dfl.can_delete,
       };
     });
     setRolePerms(map);
   };
 
   const loadUserPerms = async (userId: string) => {
-    const { data } = await supabase
-      .from("user_permissions")
-      .select("module, can_read, can_write, can_delete")
-      .eq("user_id", userId);
+    if (!schoolId) return;
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle();
+    const targetRole = (profile?.role as Role | null) ?? null;
+    if (!targetRole) return;
+
+    if (targetRole === "ADMIN" || targetRole === "SUPER_ADMIN") {
+      const full = fullAccessMatrix();
+      const map: Record<string, Perm> = {};
+      MODULES.forEach((m) => {
+        const f = full[m.key];
+        map[m.key] = {
+          module: m.key,
+          can_read: f.can_read,
+          can_write: f.can_write,
+          can_delete: f.can_delete,
+        };
+      });
+      setUserPerms(map);
+      return;
+    }
+
+    const [{ data: roleData }, { data: userData }] = await Promise.all([
+      supabase
+        .from("role_permissions")
+        .select("module, can_read, can_write, can_delete")
+        .eq("school_id", schoolId)
+        .eq("role", targetRole),
+      supabase.from("user_permissions").select("module, can_read, can_write, can_delete").eq("user_id", userId),
+    ]);
+
     const map: Record<string, Perm> = {};
     MODULES.forEach((m) => {
-      const found = data?.find((d) => d.module === m.key);
+      const uRow = userData?.find((d) => d.module === m.key);
+      if (uRow) {
+        map[m.key] = {
+          module: m.key,
+          can_read: !!uRow.can_read,
+          can_write: !!uRow.can_write,
+          can_delete: !!uRow.can_delete,
+        };
+        return;
+      }
+      const rRow = roleData?.find((d) => d.module === m.key);
+      const dfl = getDefaultRoleModulePermission(targetRole, m.key);
       map[m.key] = {
         module: m.key,
-        can_read: found?.can_read ?? false,
-        can_write: found?.can_write ?? false,
-        can_delete: found?.can_delete ?? false,
+        can_read: rRow?.can_read ?? dfl.can_read,
+        can_write: rRow?.can_write ?? dfl.can_write,
+        can_delete: rRow?.can_delete ?? dfl.can_delete,
       };
     });
     setUserPerms(map);
-  };
-
-  const defaultPerm = (role: Role, mod: PermissionModuleKey): Omit<Perm, "module"> => {
-    const FULL = (): Omit<Perm, "module"> => ({
-      can_read: true,
-      can_write: true,
-      can_delete: true,
-    });
-    const R = (): Omit<Perm, "module"> => ({
-      can_read: true,
-      can_write: false,
-      can_delete: false,
-    });
-    const RW = (): Omit<Perm, "module"> => ({
-      can_read: true,
-      can_write: true,
-      can_delete: false,
-    });
-    const N = (): Omit<Perm, "module"> => ({
-      can_read: false,
-      can_write: false,
-      can_delete: false,
-    });
-
-    if (role === "ADMIN" || role === "SUPER_ADMIN") return FULL();
-
-    if (role === "DIRECTOR") {
-      if (mod === "modulos" || mod === "definicoes") return N();
-      return FULL();
-    }
-
-    if (role === "SECRETARY") {
-      const academicRw = ["alunos", "turmas", "cursos", "disciplinas", "horario", "matriculas", "pedidos"].includes(
-        mod,
-      );
-      if (academicRw) return RW();
-      if (mod === "propinas" || mod === "notas" || mod === "relatorios") return R();
-      if (
-        mod === "modulos" ||
-        mod === "definicoes" ||
-        mod === "financas" ||
-        mod === "transportes" ||
-        mod === "timesheet" ||
-        mod === "educadores"
-      )
-        return N();
-      if (mod === "presencas" || mod === "professores" || mod === "extracurriculares" || mod === "avaliacoes" || mod === "material")
-        return R();
-      return R();
-    }
-
-    if (role === "TREASURER") {
-      if (mod === "propinas" || mod === "financas" || mod === "transportes" || mod === "refeicoes") return RW();
-      if (mod === "alunos" || mod === "matriculas" || mod === "material") return R();
-      if (mod === "notas" || mod === "avaliacoes") return N();
-      return N();
-    }
-
-    if (role === "STOCK_MANAGER" || role === "LIBRARIAN") {
-      if (mod === "material") return RW();
-      if (mod === "alunos" || mod === "professores") return R();
-      if (mod === "financas" || mod === "notas" || mod === "turmas" || mod === "avaliacoes") return N();
-      return N();
-    }
-
-    if (role === "RECEPTIONIST") {
-      if (mod === "horario" || mod === "eventos" || mod === "professores") return R();
-      if (mod === "alunos") return R();
-      if (mod === "pedidos") return RW();
-      if (mod === "propinas" || mod === "financas" || mod === "matriculas" || mod === "notas" || mod === "avaliacoes")
-        return N();
-      return N();
-    }
-
-    if (role === "TEACHER") {
-      const w = ["avaliacoes", "presencas", "eventos", "material"].includes(mod);
-      return { can_read: true, can_write: w, can_delete: false };
-    }
-    if (role === "PARENT" || role === "STUDENT") {
-      return {
-        can_read: ["alunos", "eventos", "avaliacoes", "propinas", "documentos"].includes(mod),
-        can_write: false,
-        can_delete: false,
-      };
-    }
-    return R();
   };
 
   // ===== Notifications: load when tab/role changes =====
@@ -937,23 +871,92 @@ const Definicoes = () => {
     const { error } = await supabase.from("role_permissions").upsert(rows, { onConflict: "school_id,role,module" });
     setSaving(false);
     if (error) return showToast("error", error.message);
+    void queryClient.invalidateQueries({ queryKey: [...schoolPermissionMatrixQueryRoot] });
     showToast("success", "Permissões da função guardadas.");
   };
 
   const saveUserPerms = async () => {
     if (!schoolId || !activeUserId) return;
+    const targetUser = users.find((u) => u.id === activeUserId);
+    const targetRole = targetUser?.role;
+    if (!targetRole) {
+      return showToast("error", "Não foi possível determinar a função deste utilizador.");
+    }
+    if (targetRole === "ADMIN" || targetRole === "SUPER_ADMIN") {
+      return showToast("error", "Administradores têm sempre acesso total à aplicação; não são guardadas permissões granulares.");
+    }
+
     setSaving(true);
-    const rows = MODULES.map((m) => ({
-      school_id: schoolId,
-      user_id: activeUserId,
-      module: m.key,
-      can_read: userPerms[m.key]?.can_read ?? false,
-      can_write: userPerms[m.key]?.can_write ?? false,
-      can_delete: userPerms[m.key]?.can_delete ?? false,
-    }));
-    const { error } = await supabase.from("user_permissions").upsert(rows, { onConflict: "user_id,module" });
+
+    const { data: rp } = await supabase
+      .from("role_permissions")
+      .select("module, can_read, can_write, can_delete")
+      .eq("school_id", schoolId)
+      .eq("role", targetRole);
+
+    type UpsertRow = {
+      school_id: string;
+      user_id: string;
+      module: PermissionModuleKey;
+      can_read: boolean;
+      can_write: boolean;
+      can_delete: boolean;
+    };
+    const toUpsert: UpsertRow[] = [];
+    const toClear: PermissionModuleKey[] = [];
+
+    for (const m of MODULES) {
+      const rRow = rp?.find((d) => d.module === m.key);
+      const dfl = getDefaultRoleModulePermission(targetRole, m.key);
+      const base = {
+        can_read: rRow?.can_read ?? dfl.can_read,
+        can_write: rRow?.can_write ?? dfl.can_write,
+        can_delete: rRow?.can_delete ?? dfl.can_delete,
+      };
+      const cur = userPerms[m.key] ?? {
+        module: m.key,
+        can_read: base.can_read,
+        can_write: base.can_write,
+        can_delete: base.can_delete,
+      };
+      const same =
+        cur.can_read === base.can_read &&
+        cur.can_write === base.can_write &&
+        cur.can_delete === base.can_delete;
+      if (same) toClear.push(m.key);
+      else {
+        toUpsert.push({
+          school_id: schoolId,
+          user_id: activeUserId,
+          module: m.key,
+          can_read: !!cur.can_read,
+          can_write: !!cur.can_write,
+          can_delete: !!cur.can_delete,
+        });
+      }
+    }
+
+    if (toClear.length > 0) {
+      const { error: delErr } = await supabase
+        .from("user_permissions")
+        .delete()
+        .eq("user_id", activeUserId)
+        .in("module", toClear);
+      if (delErr) {
+        setSaving(false);
+        return showToast("error", delErr.message);
+      }
+    }
+    if (toUpsert.length > 0) {
+      const { error } = await supabase.from("user_permissions").upsert(toUpsert, { onConflict: "user_id,module" });
+      if (error) {
+        setSaving(false);
+        return showToast("error", error.message);
+      }
+    }
+
     setSaving(false);
-    if (error) return showToast("error", error.message);
+    void queryClient.invalidateQueries({ queryKey: [...schoolPermissionMatrixQueryRoot] });
     showToast("success", "Permissões personalizadas guardadas.");
   };
 

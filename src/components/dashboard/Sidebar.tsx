@@ -6,6 +6,8 @@ import { useModules, ModuleKey } from "@/context/ModulesContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useSchoolPermissionMatrix } from "@/hooks/useSchoolPermissionMatrix";
+import type { PermissionModuleKey } from "@/lib/schoolPermissionModules";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { EdukambaWordmark } from "@/components/branding/EdukambaWordmark";
 import { isDashboardRouteBlockedOnNative, isNativeMobileApp } from "@/lib/nativeApp";
@@ -65,6 +67,7 @@ function SidebarNavigation({
   const navigate = useNavigate();
   const { modules } = useModules();
   const { role, loading: roleLoading } = useUserRole();
+  const { canReadModule } = useSchoolPermissionMatrix();
 
   const native = isNativeMobileApp();
 
@@ -72,7 +75,9 @@ function SidebarNavigation({
     if (native && isDashboardRouteBlockedOnNative(item.to)) return false;
     if (item.moduleKey && !modules[item.moduleKey]) return false;
     if (roleLoading || role === null) return false;
-    return isNavPathAllowedForRole(role, item.to);
+    if (!isNavPathAllowedForRole(role, item.to)) return false;
+    if (item.moduleKey && !canReadModule(item.moduleKey as PermissionModuleKey)) return false;
+    return true;
   });
 
   const visibleOther = other.filter((item) => {
@@ -80,7 +85,8 @@ function SidebarNavigation({
     if (roleLoading || role === null) return false;
     if (item.to === "/perfil") return isNavPathAllowedForRole(role, "/perfil");
     if (item.to === "/definicoes") return canOpenDefinicoesPage(role);
-    if (item.to === "/modulos") return canOpenModulosPage(role);
+    if (item.to === "/modulos")
+      return canOpenModulosPage(role) && canReadModule("modulos" as PermissionModuleKey);
     return isNavPathAllowedForRole(role, item.to);
   });
 

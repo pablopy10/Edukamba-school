@@ -1,6 +1,7 @@
 import { useOutlet, useLocation, useNavigationType } from "react-router-dom";
 import { isNativeMobileApp } from "@/lib/nativeApp";
 import { cn } from "@/lib/utils";
+import { SchoolModuleAccessGate } from "@/components/SchoolModuleAccessGate";
 
 /**
  * Na app Capacitor: animação tipo push/pop nativo (forward = entra da direita; back = da esquerda).
@@ -13,7 +14,7 @@ export function NativeOutletAnimator() {
   const native = isNativeMobileApp();
 
   if (!native) {
-    return <>{outlet}</>;
+    return <SchoolModuleAccessGate>{outlet}</SchoolModuleAccessGate>;
   }
 
   const isPop = navigationType === "POP";
@@ -27,7 +28,7 @@ export function NativeOutletAnimator() {
           isPop ? "animate-edu-page-enter-back" : "animate-edu-page-enter-forward",
         )}
       >
-        {outlet}
+        <SchoolModuleAccessGate>{outlet}</SchoolModuleAccessGate>
       </div>
     </div>
   );
