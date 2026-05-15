@@ -39,6 +39,52 @@ import { isDefinicoesTabAllowed } from "@/lib/staffNavAccess";
 import { invokeAdminUpdateUserEmail } from "@/lib/admin/invokeAdminUpdateUserEmail";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { moduleMeta, type ModuleKey as AppRouteModuleKey } from "@/context/ModulesContext";
+
+type PermissionModuleKey = AppRouteModuleKey | "modulos" | "definicoes";
+
+const PERMISSION_ROUTE_ORDER: AppRouteModuleKey[] = [
+  "professores",
+  "alunos",
+  "matriculas",
+  "cursos",
+  "turmas",
+  "disciplinas",
+  "educadores",
+  "presencas",
+  "horario",
+  "avaliacoes",
+  "notas",
+  "eventos",
+  "propinas",
+  "extracurriculares",
+  "transportes",
+  "refeicoes",
+  "pedidos",
+  "material",
+  "documentos",
+  "financas",
+  "relatorios",
+  "timesheet",
+];
+
+const MODULES: { key: PermissionModuleKey; label: string; desc: string }[] = [
+  ...PERMISSION_ROUTE_ORDER.map((key) => ({
+    key,
+    label: moduleMeta[key].label,
+    desc: moduleMeta[key].description,
+  })),
+  {
+    key: "modulos",
+    label: "Visibilidade de módulos",
+    desc: "Ativar ou ocultar módulos do menu consoante o plano (administradores).",
+  },
+  {
+    key: "definicoes",
+    label: "Escola na cloud",
+    desc: "Instituição, marca visual e SaaS (exclusivo de administradores).",
+  },
+];
 
 type Tab =
   | "escola"
@@ -191,53 +237,6 @@ const ROLE_LABEL: Record<Role, string> = {
   STUDENT: "Aluno",
 };
 
-type ModuleKey =
-  | "alunos"
-  | "professores"
-  | "turmas"
-  | "cursos"
-  | "disciplinas"
-  | "horarios"
-  | "pedidos"
-  | "matriculas"
-  | "avaliacoes"
-  | "notas"
-  | "presencas"
-  | "eventos"
-  | "extracurriculares"
-  | "material"
-  | "pagamentos"
-  | "financas"
-  | "transportes"
-  | "timesheet"
-  | "relatorios"
-  | "modulos"
-  | "definicoes";
-
-const MODULES: { key: ModuleKey; label: string; desc: string }[] = [
-  { key: "alunos", label: "Alunos", desc: "Fichas, matrículas e contactos." },
-  { key: "professores", label: "Professores", desc: "Equipa pedagógica e atribuições." },
-  { key: "turmas", label: "Turmas", desc: "Turmas e agrupamentos." },
-  { key: "cursos", label: "Cursos", desc: "Catálogo de cursos da escola." },
-  { key: "disciplinas", label: "Disciplinas", desc: "Disciplinas por curso." },
-  { key: "horarios", label: "Horários", desc: "Horários semanais e blocos." },
-  { key: "matriculas", label: "Matrículas", desc: "Inscrições no ano letivo." },
-  { key: "pedidos", label: "Pedidos de Ausência", desc: "Ausências da equipa escolar." },
-  { key: "avaliacoes", label: "Avaliações", desc: "Testes e instrumentos avaliativos." },
-  { key: "notas", label: "Notas", desc: "Lançamento e consulta de notas." },
-  { key: "presencas", label: "Presenças", desc: "Registo diário com alunos." },
-  { key: "eventos", label: "Eventos", desc: "Calendário escolar." },
-  { key: "extracurriculares", label: "Extracurriculares", desc: "Atividades e clubes." },
-  { key: "material", label: "Material", desc: "Inventário e pedidos à escola." },
-  { key: "pagamentos", label: "Pagamentos / Propinas", desc: "Cobranças aos encarregados." },
-  { key: "financas", label: "Finanças da escola", desc: "Receitas internas e despesas." },
-  { key: "transportes", label: "Transportes", desc: "Rotas e taxas escolares." },
-  { key: "timesheet", label: "Timesheet", desc: "Registo horário dos funcionários." },
-  { key: "relatorios", label: "Relatórios", desc: "Exportações e análises." },
-  { key: "modulos", label: "Visibilidade de módulos", desc: "Ativar/ocultar módulos por plano (exclusivo).." },
-  { key: "definicoes", label: "Escola na cloud", desc: "Dados da marca, marca e SaaS (exclusivo)." },
-];
-
 const NOTIFICATION_CHANNELS: { key: string; label: string; desc: string }[] = [
   { key: "welcome_email", label: "Email de boas-vindas", desc: "Enviado quando um utilizador é criado." },
   { key: "enrollment", label: "Confirmação de matrícula", desc: "Enviado ao concluir a matrícula." },
@@ -354,7 +353,7 @@ const Definicoes = () => {
   }, [users, usersSearchQuery]);
 
   // Permissions
-  type Perm = { module: ModuleKey; can_read: boolean; can_write: boolean; can_delete: boolean };
+  type Perm = { module: PermissionModuleKey; can_read: boolean; can_write: boolean; can_delete: boolean };
   const [permTab, setPermTab] = useState<"role" | "user">("role");
   const [activeRole, setActiveRole] = useState<Role>("TEACHER");
   const [rolePerms, setRolePerms] = useState<Record<string, Perm>>({});
@@ -550,7 +549,7 @@ const Definicoes = () => {
     setUserPerms(map);
   };
 
-  const defaultPerm = (role: Role, mod: ModuleKey): Omit<Perm, "module"> => {
+  const defaultPerm = (role: Role, mod: PermissionModuleKey): Omit<Perm, "module"> => {
     const FULL = (): Omit<Perm, "module"> => ({
       can_read: true,
       can_write: true,
@@ -580,16 +579,27 @@ const Definicoes = () => {
     }
 
     if (role === "SECRETARY") {
-      const academicRw = ["alunos", "turmas", "cursos", "disciplinas", "horarios", "matriculas", "pedidos"].includes(mod);
+      const academicRw = ["alunos", "turmas", "cursos", "disciplinas", "horario", "matriculas", "pedidos"].includes(
+        mod,
+      );
       if (academicRw) return RW();
-      if (mod === "pagamentos" || mod === "notas" || mod === "relatorios") return R();
-      if (mod === "modulos" || mod === "definicoes" || mod === "financas" || mod === "transportes" || mod === "timesheet") return N();
-      if (mod === "presencas" || mod === "professores" || mod === "extracurriculares" || mod === "avaliacoes" || mod === "material") return R();
+      if (mod === "propinas" || mod === "notas" || mod === "relatorios") return R();
+      if (
+        mod === "modulos" ||
+        mod === "definicoes" ||
+        mod === "financas" ||
+        mod === "transportes" ||
+        mod === "timesheet" ||
+        mod === "educadores"
+      )
+        return N();
+      if (mod === "presencas" || mod === "professores" || mod === "extracurriculares" || mod === "avaliacoes" || mod === "material")
+        return R();
       return R();
     }
 
     if (role === "TREASURER") {
-      if (mod === "pagamentos" || mod === "financas" || mod === "transportes") return RW();
+      if (mod === "propinas" || mod === "financas" || mod === "transportes" || mod === "refeicoes") return RW();
       if (mod === "alunos" || mod === "matriculas" || mod === "material") return R();
       if (mod === "notas" || mod === "avaliacoes") return N();
       return N();
@@ -603,10 +613,11 @@ const Definicoes = () => {
     }
 
     if (role === "RECEPTIONIST") {
-      if (mod === "horarios" || mod === "eventos" || mod === "professores") return R();
+      if (mod === "horario" || mod === "eventos" || mod === "professores") return R();
       if (mod === "alunos") return R();
       if (mod === "pedidos") return RW();
-      if (mod === "pagamentos" || mod === "financas" || mod === "matriculas" || mod === "notas" || mod === "avaliacoes") return N();
+      if (mod === "propinas" || mod === "financas" || mod === "matriculas" || mod === "notas" || mod === "avaliacoes")
+        return N();
       return N();
     }
 
@@ -615,7 +626,11 @@ const Definicoes = () => {
       return { can_read: true, can_write: w, can_delete: false };
     }
     if (role === "PARENT" || role === "STUDENT") {
-      return { can_read: ["alunos", "eventos", "avaliacoes"].includes(mod), can_write: false, can_delete: false };
+      return {
+        can_read: ["alunos", "eventos", "avaliacoes", "propinas", "documentos"].includes(mod),
+        can_write: false,
+        can_delete: false,
+      };
     }
     return R();
   };
@@ -1053,13 +1068,21 @@ const Definicoes = () => {
     return <span className={cn("rounded-full px-3 py-1 text-xs font-medium", cls)}>{isActive ? "Ativo" : "Inativo"}</span>;
   };
 
-  const setRolePermField = (mod: ModuleKey, key: keyof Omit<Perm, "module">, value: boolean) => {
+  const setRolePermField = (
+    mod: PermissionModuleKey,
+    key: keyof Omit<Perm, "module">,
+    value: boolean,
+  ) => {
     setRolePerms((prev) => ({
       ...prev,
       [mod]: { ...(prev[mod] ?? { module: mod, can_read: false, can_write: false, can_delete: false }), [key]: value },
     }));
   };
-  const setUserPermField = (mod: ModuleKey, key: keyof Omit<Perm, "module">, value: boolean) => {
+  const setUserPermField = (
+    mod: PermissionModuleKey,
+    key: keyof Omit<Perm, "module">,
+    value: boolean,
+  ) => {
     setUserPerms((prev) => ({
       ...prev,
       [mod]: { ...(prev[mod] ?? { module: mod, can_read: false, can_write: false, can_delete: false }), [key]: value },
@@ -2150,7 +2173,7 @@ const PermissionsTable = ({
   disabled,
 }: {
   perms: Record<string, { module: string; can_read: boolean; can_write: boolean; can_delete: boolean }>;
-  onChange: (mod: any, key: "can_read" | "can_write" | "can_delete", value: boolean) => void;
+  onChange: (mod: PermissionModuleKey, key: "can_read" | "can_write" | "can_delete", value: boolean) => void;
   disabled?: boolean;
 }) => (
   <div className="mt-6 overflow-x-auto rounded-xl border border-border">
@@ -2158,8 +2181,8 @@ const PermissionsTable = ({
       <thead>
         <tr className="bg-muted/40 text-left text-xs uppercase tracking-wider text-muted-foreground">
           <th className="py-3 pl-5 pr-4 font-semibold">Módulo</th>
-          <th className="py-3 pr-4 font-semibold text-center">Ler</th>
-          <th className="py-3 pr-4 font-semibold text-center">Escrever</th>
+          <th className="py-3 pr-4 font-semibold text-center">Ver</th>
+          <th className="py-3 pr-4 font-semibold text-center">Editar</th>
           <th className="py-3 pr-5 font-semibold text-center">Apagar</th>
         </tr>
       </thead>
