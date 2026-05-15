@@ -486,6 +486,11 @@ const Eventos = () => {
           <TabsTrigger value="eventos" className="rounded-full px-5">
             Eventos
           </TabsTrigger>
+          {canFinanceChargeRules && (
+            <TabsTrigger value="regras" className="rounded-full px-5">
+              Regras de cobranças
+            </TabsTrigger>
+          )}
           <TabsTrigger value="pagamentos" className="rounded-full px-5">
             <Wallet className="mr-2 hidden h-4 w-4 sm:inline" strokeWidth={1.75} />
             Pagamentos
@@ -494,15 +499,15 @@ const Eventos = () => {
             <FileSignature className="mr-2 hidden h-4 w-4 sm:inline" strokeWidth={1.75} />
             Autorizações
           </TabsTrigger>
-          {canFinanceChargeRules && (
-            <TabsTrigger value="regras" className="rounded-full px-5">
-              Regras de cobranças
-            </TabsTrigger>
-          )}
         </TabsList>
         <TabsContent value="eventos" className="mt-0 space-y-0 focus-visible:outline-none">
           {eventsTabBody}
         </TabsContent>
+        {canFinanceChargeRules && (
+          <TabsContent value="regras" className="mt-0 focus-visible:outline-none">
+            <DomainChargeRulesPanel variant="event" schoolId={schoolId} role={role} />
+          </TabsContent>
+        )}
         <TabsContent value="pagamentos" className="mt-0 space-y-0 focus-visible:outline-none">
           <PagamentosFinanceHub financePage="eventCharges" />
         </TabsContent>
@@ -517,11 +522,6 @@ const Eventos = () => {
             canManageTemplates={role !== null && isSchoolManagementRole(role)}
           />
         </TabsContent>
-        {canFinanceChargeRules && (
-          <TabsContent value="regras" className="mt-0 focus-visible:outline-none">
-            <DomainChargeRulesPanel variant="event" schoolId={schoolId} role={role} />
-          </TabsContent>
-        )}
       </Tabs>
 
       {native && canCreateEvent && hubTab === "eventos" && (
