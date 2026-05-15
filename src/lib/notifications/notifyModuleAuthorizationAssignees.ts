@@ -1,18 +1,20 @@
 import { supabase } from "@/integrations/supabase/client";
 import { moduleMeta, type ModuleKey } from "@/context/ModulesContext";
 
-export type AuthorizationNotifyModule = "extracurricular" | "transport" | "meal";
+export type AuthorizationNotifyModule = "extracurricular" | "transport" | "meal" | "event";
 
 const MODULE_ROUTE_KEY: Record<AuthorizationNotifyModule, ModuleKey> = {
   extracurricular: "extracurriculares",
   transport: "transportes",
   meal: "refeicoes",
+  event: "eventos",
 };
 
 const MODULE_LABEL_PT: Record<AuthorizationNotifyModule, string> = {
   extracurricular: "Extracurriculares",
   transport: "Transporte escolar",
   meal: "Refeições",
+  event: "Eventos",
 };
 
 function normalizeClassIds(raw: unknown): string[] {

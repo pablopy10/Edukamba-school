@@ -16,7 +16,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap, FileDown, Utensils } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap, FileDown, Utensils, CalendarDays } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
 import { useAuth } from "@/hooks/useAuth";
@@ -192,6 +192,7 @@ type PaymentListRow = {
   transport_fee_id: string | null;
   meal_fee_id?: string | null;
   enrollment_fee_id?: string | null;
+  event_fee_id?: string | null;
   amount_paid: number;
   method: string | null;
   status: string;
@@ -262,6 +263,25 @@ type MealFeeRow = {
   meal_program?: { id: string; name: string } | null;
 };
 
+type EventFeeRow = {
+  id: string;
+  amount_due: number;
+  due_date: string;
+  is_paid: boolean | null;
+  month_index: number | null;
+  student_id: string;
+  event_id: string;
+  academic_year_id: string | null;
+  student?: {
+    id: string;
+    full_name: string;
+    parent_id: string | null;
+    classroom_id: string | null;
+    classroom?: { id: string; name: string } | null;
+  } | null;
+  event?: { id: string; title: string; event_date: string } | null;
+};
+
 type EnrollmentFeeRow = {
   id: string;
   amount_due: number;
@@ -297,17 +317,28 @@ function chunkBySize<T>(items: readonly T[], size: number): T[][] {
   return out;
 }
 
-export type PagamentosFinancePageMode = "tuition" | "activityCharges" | "transportCharges" | "mealCharges" | "enrollmentCharges";
+export type PagamentosFinancePageMode =
+  | "tuition"
+  | "activityCharges"
+  | "transportCharges"
+  | "mealCharges"
+  | "eventCharges"
+  | "enrollmentCharges";
 
-/** `tuition` = página Propinas. Demais modos: listas de cobrança embutidas em Matrículas, Extracurricular, Transporte ou Refeições. */
+/** `tuition` = página Propinas. Demais modos: listas de cobrança embutidas em Matrículas, Extracurricular, Transporte, Refeições ou Eventos. */
 export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosFinancePageMode }) {
   const tuitionOnly = financePage === "tuition";
   const activityChargesOnly = financePage === "activityCharges";
   const transportChargesOnly = financePage === "transportCharges";
   const mealChargesOnly = financePage === "mealCharges";
+  const eventChargesOnly = financePage === "eventCharges";
   const enrollmentChargesOnly = financePage === "enrollmentCharges";
   const chargesEmbeddedOnly =
-    activityChargesOnly || transportChargesOnly || mealChargesOnly || enrollmentChargesOnly;
+    activityChargesOnly ||
+    transportChargesOnly ||
+    mealChargesOnly ||
+    eventChargesOnly ||
+    enrollmentChargesOnly;
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const { role } = useUserRole();
   const { user } = useAuth();
@@ -368,6 +399,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   const [bulkSelectedTransportFeeIds, setBulkSelectedTransportFeeIds] = useState<Set<string>>(() => new Set());
   const [bulkSelectedMealFeeIds, setBulkSelectedMealFeeIds] = useState<Set<string>>(() => new Set());
   const [bulkSelectedEnrollmentFeeIds, setBulkSelectedEnrollmentFeeIds] = useState<Set<string>>(() => new Set());
+  const [bulkSelectedEventFeeIds, setBulkSelectedEventFeeIds] = useState<Set<string>>(() => new Set());
   /** Propinas (student_fees): selecção na lista principal e em «Comprovativos a validar». */
   const [bulkSelectedTuitionFeeIds, setBulkSelectedTuitionFeeIds] = useState<Set<string>>(() => new Set());
   const [guardianPaymentMode, setGuardianPaymentMode] = useState<GuardianPaymentMode>("proof_attachment");
@@ -404,6 +436,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   const [mealProgramsList, setMealProgramsList] = useState<Array<{ id: string; name: string }>>([]);
   const [remindingMeFeeId, setRemindingMeFeeId] = useState<string | null>(null);
 
+  const [allEventFees, setAllEventFees] = useState<EventFeeRow[]>([]);
+  const [eventPayments, setEventPayments] = useState<PaymentListRow[]>([]);
+  const [evFilter, setEvFilter] = useState<"all" | "paid" | "pending" | "overdue">("pending");
+  const [evYearFilter, setEvYearFilter] = useState<string>("all");
+  const [evEventFilter, setEvEventFilter] = useState<string>("all");
+  const [evSearch, setEvSearch] = useState("");
+  const [eventsList, setEventsList] = useState<Array<{ id: string; title: string }>>([]);
+  const [remindingEvFeeId, setRemindingEvFeeId] = useState<string | null>(null);
+
   // Enrollment fees (matrículas / renovações)
   const [allEnrollmentFees, setAllEnrollmentFees] = useState<EnrollmentFeeRow[]>([]);
   const [enrollmentPayments, setEnrollmentPayments] = useState<PaymentListRow[]>([]);
@@ -425,6 +466,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     | { kind: "activity"; fee: ActivityFeeRow }
     | { kind: "transport"; fee: TransportFeeRow }
     | { kind: "meal"; fee: MealFeeRow }
+    | { kind: "event"; fee: EventFeeRow }
     | { kind: "enrollment"; fee: EnrollmentFeeRow }
     | null
   >(null);
@@ -462,6 +504,13 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     setRecordMethod("transferencia");
     setRecordNotes("");
   };
+  const openRecordForEvent = (fee: EventFeeRow) => {
+    setRecordDialog({ kind: "event", fee });
+    setRecordFile(null);
+    setRecordAmount(String(fee.amount_due));
+    setRecordMethod("transferencia");
+    setRecordNotes("");
+  };
   const openRecordForEnrollment = (fee: EnrollmentFeeRow) => {
     setRecordDialog({ kind: "enrollment", fee });
     setRecordFile(null);
@@ -492,6 +541,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         ? (fee as TransportFeeRow).student_id
         : kind === "meal"
         ? (fee as MealFeeRow).student_id
+        : kind === "event"
+        ? (fee as EventFeeRow).student_id
         : (fee as EnrollmentFeeRow).student_id;
     setRecordUploading(true);
     let proofPath: string | null = null;
@@ -519,6 +570,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       activity_fee_id: kind === "activity" ? fee.id : null,
       transport_fee_id: kind === "transport" ? fee.id : null,
       meal_fee_id: kind === "meal" ? fee.id : null,
+      event_fee_id: kind === "event" ? fee.id : null,
       enrollment_fee_id: kind === "enrollment" ? fee.id : null,
     } : {
       amount_paid: amount,
@@ -534,6 +586,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       activity_fee_id: kind === "activity" ? fee.id : null,
       transport_fee_id: kind === "transport" ? fee.id : null,
       meal_fee_id: kind === "meal" ? fee.id : null,
+      event_fee_id: kind === "event" ? fee.id : null,
       enrollment_fee_id: kind === "enrollment" ? fee.id : null,
     };
     const { data: payRow, error: insErr } = await supabase.from("payments").insert(insertPayload).select("id").single();
@@ -551,6 +604,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         ? await supabase.from("transport_fees").update({ is_paid: true }).eq("id", fee.id)
         : kind === "meal"
         ? await supabase.from("meal_fees").update({ is_paid: true }).eq("id", fee.id)
+        : kind === "event"
+        ? await supabase.from("event_fees").update({ is_paid: true }).eq("id", fee.id)
         : await supabase.from("enrollment_fees").update({ is_paid: true }).eq("id", fee.id);
     if (feeErr) {
       setRecordUploading(false);
@@ -558,7 +613,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       return;
     }
     const comprovativoMencao = proofPath ? " Pode consultar o comprovativo no portal." : "";
-    const parentId = isParent ? null : (fee as FeeListRow | ActivityFeeRow | TransportFeeRow | MealFeeRow | EnrollmentFeeRow).student?.parent_id;
+    const parentId = isParent ? null : (fee as FeeListRow | ActivityFeeRow | TransportFeeRow | MealFeeRow | EventFeeRow | EnrollmentFeeRow).student?.parent_id;
     if (parentId) {
       if (kind === "fee") {
         const f = fee as FeeListRow;
@@ -603,6 +658,16 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           category: "pagamento",
           link: "https://www.edukamba.com/pagamentos",
         });
+      } else if (kind === "event") {
+        const f = fee as EventFeeRow;
+        await supabase.from("notifications").insert({
+          recipient_id: parentId,
+          school_id: schoolId,
+          title: `Pagamento de evento registado`,
+          description: `A escola registou o pagamento do evento «${f.event?.title ?? "evento"}» de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
+          category: "pagamento",
+          link: "https://www.edukamba.com/eventos?tab=pagamentos",
+        });
       } else {
         const f = fee as EnrollmentFeeRow;
         const label = f.fee_type === "RENEWAL" ? "renovação de matrícula" : "matrícula";
@@ -627,8 +692,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
    * Regista na escola um pagamento já válido quando não há comprovativo pendente (ex.: validação em lote).
    */
   const insertStaffValidatedCharge = async (
-    kind: "fee" | "activity" | "transport" | "meal" | "enrollment",
-    fee: FeeListRow | ActivityFeeRow | TransportFeeRow | MealFeeRow | EnrollmentFeeRow,
+    kind: "fee" | "activity" | "transport" | "meal" | "event" | "enrollment",
+    fee: FeeListRow | ActivityFeeRow | TransportFeeRow | MealFeeRow | EventFeeRow | EnrollmentFeeRow,
     userId: string | null,
   ): Promise<StaffValidatedInsertResult> => {
     if (!schoolId) return { error: "Sem escola" };
@@ -648,6 +713,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       activity_fee_id: kind === "activity" ? fee.id : null,
       transport_fee_id: kind === "transport" ? fee.id : null,
       meal_fee_id: kind === "meal" ? fee.id : null,
+      event_fee_id: kind === "event" ? fee.id : null,
       enrollment_fee_id: kind === "enrollment" ? fee.id : null,
     }).select("id").single();
     if (insErr) return { error: insErr.message };
@@ -661,7 +727,9 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             ? await supabase.from("transport_fees").update({ is_paid: true }).eq("id", fee.id)
             : kind === "meal"
               ? await supabase.from("meal_fees").update({ is_paid: true }).eq("id", fee.id)
-              : await supabase.from("enrollment_fees").update({ is_paid: true }).eq("id", fee.id);
+              : kind === "event"
+                ? await supabase.from("event_fees").update({ is_paid: true }).eq("id", fee.id)
+                : await supabase.from("enrollment_fees").update({ is_paid: true }).eq("id", fee.id);
     if (feeErr) return { error: feeErr.message };
     const parentId = fee.student?.parent_id ?? null;
     const comprovativoMencao = "";
@@ -708,6 +776,16 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           description: `A escola registou o pagamento do plano ${f.meal_program?.name ?? "refeições"} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
           category: "pagamento",
           link: "https://www.edukamba.com/pagamentos",
+        });
+      } else if (kind === "event") {
+        const f = fee as EventFeeRow;
+        await supabase.from("notifications").insert({
+          recipient_id: parentId,
+          school_id: schoolId,
+          title: `Pagamento de evento registado`,
+          description: `A escola registou o pagamento do evento «${f.event?.title ?? "evento"}» de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
+          category: "pagamento",
+          link: "https://www.edukamba.com/eventos?tab=pagamentos",
         });
       } else {
         const f = fee as EnrollmentFeeRow;
@@ -824,6 +902,9 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         setMealProgramsList([]);
         setAllEnrollmentFees([]);
         setEnrollmentPayments([]);
+        setAllEventFees([]);
+        setEventPayments([]);
+        setEventsList([]);
       } else if (activityChargesOnly) {
         setAllFees([]);
         setPayments([]);
@@ -835,6 +916,9 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         setMealProgramsList([]);
         setAllEnrollmentFees([]);
         setEnrollmentPayments([]);
+        setAllEventFees([]);
+        setEventPayments([]);
+        setEventsList([]);
 
         const [{ data: actFees }, { data: actsList }] = await Promise.all([
           (restrictChargeQueriesToStudents
@@ -876,6 +960,9 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         setAllMealFees([]);
         setMealPayments([]);
         setMealProgramsList([]);
+        setAllEventFees([]);
+        setEventPayments([]);
+        setEventsList([]);
         const [{ data: trFees }, { data: rtsList }] = await Promise.all([
           (restrictChargeQueriesToStudents
             ? supabase
@@ -916,6 +1003,9 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         setRoutesList([]);
         setAllEnrollmentFees([]);
         setEnrollmentPayments([]);
+        setAllEventFees([]);
+        setEventPayments([]);
+        setEventsList([]);
         const [{ data: meFees }, { data: progs }] = await Promise.all([
           (restrictChargeQueriesToStudents
             ? supabase
@@ -945,6 +1035,42 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         } else {
           setMealPayments([]);
         }
+      } else if (eventChargesOnly) {
+        setAllFees([]);
+        setPayments([]);
+        setAllActivityFees([]);
+        setActivitiesList([]);
+        setActivityPayments([]);
+        setAllTransportFees([]);
+        setTransportPayments([]);
+        setRoutesList([]);
+        setAllMealFees([]);
+        setMealPayments([]);
+        setMealProgramsList([]);
+        setAllEnrollmentFees([]);
+        setEnrollmentPayments([]);
+
+        const evSelect =
+          "id, amount_due, due_date, is_paid, month_index, student_id, event_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), event:events(id, title, event_date)";
+        const [{ data: evFees }, { data: evtsList }] = await Promise.all([
+          (restrictChargeQueriesToStudents
+            ? supabase.from("event_fees").select(evSelect).eq("school_id", sId).in("student_id", scopedStudentIds).order("due_date", { ascending: true })
+            : supabase.from("event_fees").select(evSelect).eq("school_id", sId).order("due_date", { ascending: true })),
+          supabase.from("events").select("id, title").eq("school_id", sId).order("event_date", { ascending: false }),
+        ]);
+        setAllEventFees((evFees ?? []) as unknown as EventFeeRow[]);
+        setEventsList((evtsList ?? []) as Array<{ id: string; title: string }>);
+        const evFeeIds = (evFees ?? []).map((f: { id: string }) => f.id);
+        if (evFeeIds.length > 0) {
+          const { data: evPayRows } = await supabase
+            .from("payments")
+            .select("id, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, meal_fee_id, event_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+            .in("event_fee_id", evFeeIds)
+            .order("payment_date", { ascending: false });
+          setEventPayments((evPayRows ?? []) as PaymentListRow[]);
+        } else {
+          setEventPayments([]);
+        }
       } else if (enrollmentChargesOnly) {
         setAllFees([]);
         setPayments([]);
@@ -957,6 +1083,9 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         setAllMealFees([]);
         setMealPayments([]);
         setMealProgramsList([]);
+        setAllEventFees([]);
+        setEventPayments([]);
+        setEventsList([]);
 
         const { data: enFees } = await (restrictChargeQueriesToStudents
           ? supabase
@@ -999,6 +1128,9 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       setAllMealFees([]);
       setMealPayments([]);
       setMealProgramsList([]);
+      setAllEventFees([]);
+      setEventPayments([]);
+      setEventsList([]);
     }
     setLoading(false);
   };
@@ -1036,11 +1168,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       setMeYearFilter(globalAcademicYearId);
       return;
     }
+    if (eventChargesOnly) {
+      setEvYearFilter(globalAcademicYearId);
+      return;
+    }
     if (enrollmentChargesOnly) {
       setEnYearFilter(globalAcademicYearId);
       return;
     }
-  }, [globalAcademicYearId, tuitionOnly, activityChargesOnly, transportChargesOnly, mealChargesOnly, enrollmentChargesOnly]);
+  }, [globalAcademicYearId, tuitionOnly, activityChargesOnly, transportChargesOnly, mealChargesOnly, eventChargesOnly, enrollmentChargesOnly]);
 
   // Lock classroom filter to parent's child classroom
   useEffect(() => {
@@ -1339,9 +1475,10 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     for (const p of activityPayments) if (p.status === "validado") ids.add(p.id);
     for (const p of transportPayments) if (p.status === "validado") ids.add(p.id);
     for (const p of mealPayments) if (p.status === "validado") ids.add(p.id);
+    for (const p of eventPayments) if (p.status === "validado") ids.add(p.id);
     for (const p of enrollmentPayments) if (p.status === "validado") ids.add(p.id);
     return [...ids].sort();
-  }, [payments, activityPayments, transportPayments, mealPayments, enrollmentPayments]);
+  }, [payments, activityPayments, transportPayments, mealPayments, eventPayments, enrollmentPayments]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1551,6 +1688,28 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     return null;
   };
 
+  const finalizeEventFeeValidation = async (fee: EventFeeRow, payment: PaymentListRow, userId: string | null): Promise<string | null> => {
+    if (!schoolId) return "Sem escola";
+    const { error: payErr } = await supabase
+      .from("payments")
+      .update({ status: "validado", validated_by: userId, validated_at: new Date().toISOString(), rejection_reason: null })
+      .eq("id", payment.id);
+    if (payErr) return payErr.message;
+    const { error: feeErr } = await supabase.from("event_fees").update({ is_paid: true }).eq("id", fee.id);
+    if (feeErr) return feeErr.message;
+    if (fee.student?.parent_id) {
+      await supabase.from("notifications").insert({
+        recipient_id: fee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento de evento validado`,
+        description: `O pagamento do evento «${fee.event?.title ?? "evento"}» (${fee.student?.full_name ?? "aluno"}, ${fmtAOA(Number(payment.amount_paid))}) foi validado pela escola. Obrigado!`,
+        category: "pagamento",
+        link: "https://www.edukamba.com/eventos?tab=pagamentos",
+      });
+    }
+    return null;
+  };
+
   const finalizeEnrollmentFeeValidation = async (fee: EnrollmentFeeRow, payment: PaymentListRow, userId: string | null): Promise<string | null> => {
     if (!schoolId) return "Sem escola";
     const { error: payErr } = await supabase
@@ -1594,6 +1753,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
 
   const setBulkMealFeeChecked = (feeId: string, checked: boolean) => {
     setBulkSelectedMealFeeIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(feeId);
+      else next.delete(feeId);
+      return next;
+    });
+  };
+
+  const setBulkEventFeeChecked = (feeId: string, checked: boolean) => {
+    setBulkSelectedEventFeeIds((prev) => {
       const next = new Set(prev);
       if (checked) next.add(feeId);
       else next.delete(feeId);
@@ -1700,6 +1868,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     const actFee = payment.activity_fee_id ? allActivityFees.find((f) => f.id === payment.activity_fee_id) : null;
     const trFee = payment.transport_fee_id ? allTransportFees.find((f) => f.id === payment.transport_fee_id) : null;
     const meFee = payment.meal_fee_id ? allMealFees.find((f) => f.id === payment.meal_fee_id) : null;
+    const evFee = payment.event_fee_id ? allEventFees.find((f) => f.id === payment.event_fee_id) : null;
     const enFee = payment.enrollment_fee_id ? allEnrollmentFees.find((f) => f.id === payment.enrollment_fee_id) : null;
     setValidatingId(payment.id);
     const { data: userRes } = await supabase.auth.getUser();
@@ -1758,6 +1927,17 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         description: `O comprovativo de pagamento do plano ${meFee.meal_program?.name ?? "refeições"} de ${meFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}. ` : ""}${followUp}`,
         category: "pagamento",
         link: "https://www.edukamba.com/pagamentos",
+      });
+    }
+    if (evFee?.student?.parent_id) {
+      const followUp = usarAnexoEncarregado ? "Por favor reenvie o comprovativo correto." : "Para regularizar o pagamento, dirija-se à escola.";
+      await supabase.from("notifications").insert({
+        recipient_id: evFee.student.parent_id,
+        school_id: schoolId,
+        title: `Pagamento de evento rejeitado`,
+        description: `O comprovativo do evento «${evFee.event?.title ?? "evento"}» de ${evFee.student.full_name} foi rejeitado. ${rejectReason ? `Motivo: ${rejectReason}. ` : ""}${followUp}`,
+        category: "pagamento",
+        link: "https://www.edukamba.com/eventos?tab=pagamentos",
       });
     }
     if (enFee?.student?.parent_id) {
@@ -2328,6 +2508,160 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     else toast({ title: `${rows.length} lembrete(s) enviado(s)` });
   };
 
+  // ===== Event fees logic =====
+  const filteredEventFees = useMemo(() => {
+    const now = Date.now();
+    const search = evSearch.trim().toLowerCase();
+    return allEventFees.filter((f) => {
+      if (evYearFilter !== "all" && f.academic_year_id !== evYearFilter) return false;
+      if (evEventFilter !== "all" && f.event_id !== evEventFilter) return false;
+      if (evFilter === "paid" && !f.is_paid) return false;
+      if (evFilter === "pending" && f.is_paid) return false;
+      if (evFilter === "overdue" && (f.is_paid || new Date(f.due_date).getTime() >= now)) return false;
+      if (
+        search &&
+        !(f.student?.full_name ?? "").toLowerCase().includes(search) &&
+        !(f.event?.title ?? "").toLowerCase().includes(search)
+      )
+        return false;
+      return true;
+    });
+  }, [allEventFees, evFilter, evYearFilter, evEventFilter, evSearch]);
+
+  const eventFeeStats = useMemo(() => {
+    const now = Date.now();
+    let paid = 0, pending = 0, overdue = 0;
+    allEventFees.forEach((f) => {
+      if (f.is_paid) paid += Number(f.amount_due);
+      else {
+        pending += Number(f.amount_due);
+        if (new Date(f.due_date).getTime() < now) overdue += Number(f.amount_due);
+      }
+    });
+    return { paid, pending, overdue };
+  }, [allEventFees]);
+
+  const latestPaymentByEventFee = useMemo(() => {
+    const map = new Map<string, PaymentListRow>();
+    eventPayments.forEach((p) => {
+      if (!p.event_fee_id) return;
+      if (!map.has(p.event_fee_id)) map.set(p.event_fee_id, p);
+    });
+    return map;
+  }, [eventPayments]);
+
+  const pendingEventValidations = useMemo(() => {
+    return allEventFees
+      .map((f) => ({ fee: f, payment: latestPaymentByEventFee.get(f.id) }))
+      .filter((x) => x.payment && x.payment.status === "pendente") as Array<{ fee: EventFeeRow; payment: PaymentListRow }>;
+  }, [allEventFees, latestPaymentByEventFee]);
+
+  const validateEventPayment = async (fee: EventFeeRow, payment: PaymentListRow) => {
+    if (!schoolId || !canValidatePaymentProofs) return;
+    setValidatingId(payment.id);
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id ?? null;
+    const errMsg = await finalizeEventFeeValidation(fee, payment, userId);
+    setValidatingId(null);
+    if (errMsg) {
+      toast({ title: "Erro a validar", description: errMsg, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Pagamento validado", description: "O encarregado foi notificado." });
+    await emitFtAfterValidation([payment.id]);
+    await fetchAll();
+  };
+
+  const bulkValidateEventFeesList = async () => {
+    if (!canValidatePaymentProofs) return;
+    const targets = [...bulkSelectedEventFeeIds]
+      .map((id) => allEventFees.find((f) => f.id === id))
+      .filter((f): f is EventFeeRow => !!f && !f.is_paid);
+    if (!targets.length) {
+      toast({
+        title: "Nada a validar nas linhas seleccionadas",
+        description: "Seleccione cobranças de eventos não pagas (com ou sem comprovativo).",
+        variant: "destructive",
+      });
+      return;
+    }
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id ?? null;
+    setBulkValidating(true);
+    let failed = 0;
+    const emitIds: string[] = [];
+    for (const fee of targets) {
+      const pay = latestPaymentByEventFee.get(fee.id);
+      if (pay && pay.status === "pendente") {
+        const errMsg = await finalizeEventFeeValidation(fee, pay, userId);
+        if (errMsg) failed++;
+        else emitIds.push(pay.id);
+      } else {
+        const ins = await insertStaffValidatedCharge("event", fee, userId);
+        if (ins.error) failed++;
+        else if (ins.paymentId) emitIds.push(ins.paymentId);
+      }
+    }
+    setBulkValidating(false);
+    setBulkSelectedEventFeeIds(new Set());
+    if (failed)
+      toast({
+        title: "Validação em lote concluída com erros",
+        description: `${targets.length - failed} concluída(s), ${failed} falha(s).`,
+        variant: "destructive",
+      });
+    else toast({ title: "Pagamentos validados", description: `${targets.length} cobrança(s) concluída(s).` });
+    await emitFtAfterValidation(emitIds);
+    await fetchAll();
+  };
+
+  const sendEventReminder = async (fee: EventFeeRow) => {
+    if (!schoolId) return;
+    const parentId = fee.student?.parent_id;
+    if (!parentId) {
+      toast({ title: "Aluno sem encarregado", description: "Não é possível enviar lembrete.", variant: "destructive" });
+      return;
+    }
+    setRemindingEvFeeId(fee.id);
+    const title = `Lembrete — Evento (${fee.event?.title ?? "evento"})`;
+    const description = `A cobrança do evento «${fee.event?.title ?? "evento"}» de ${fee.student?.full_name ?? "o aluno"} (${fmtAOA(Number(fee.amount_due))}) venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`;
+    const { error } = await supabase.from("notifications").insert({
+      recipient_id: parentId,
+      school_id: schoolId,
+      title,
+      description,
+      category: "pagamento",
+      link: "https://www.edukamba.com/eventos?tab=pagamentos",
+    });
+    if (!error) {
+      void supabase.functions.invoke("send-cobrar-email", {
+        body: { student_id: fee.student_id, title, description, link: `https://www.edukamba.com/eventos?tab=pagamentos` },
+      });
+    }
+    setRemindingEvFeeId(null);
+    if (error) toast({ title: "Erro a enviar lembrete", description: error.message, variant: "destructive" });
+    else toast({ title: "Lembrete enviado ao encarregado e ao aluno" });
+  };
+
+  const sendEventBulkReminders = async () => {
+    const targets = filteredEventFees.filter((f) => !f.is_paid && f.student?.parent_id);
+    if (targets.length === 0) {
+      toast({ title: "Sem destinatários", description: "Não há cobranças em dívida com encarregado associado." });
+      return;
+    }
+    const rows = targets.map((f) => ({
+      recipient_id: f.student!.parent_id!,
+      school_id: schoolId!,
+      title: `Lembrete — Evento (${f.event?.title ?? "evento"})`,
+      description: `A cobrança do evento «${f.event?.title ?? "evento"}» de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      category: "pagamento",
+      link: "https://www.edukamba.com/eventos?tab=pagamentos",
+    }));
+    const { error } = await supabase.from("notifications").insert(rows);
+    if (error) toast({ title: "Erro a enviar lembretes", description: error.message, variant: "destructive" });
+    else toast({ title: `${rows.length} lembrete(s) enviado(s)` });
+  };
+
   // ===== Enrollment fees helpers =====
   const filteredEnrollmentFees = useMemo(() => {
     const now = Date.now();
@@ -2445,6 +2779,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
 
   const filteredUnpaidMealFeesForBulk = useMemo(() => filteredMealFees.filter((f) => !f.is_paid), [filteredMealFees]);
 
+  const filteredUnpaidEventFeesForBulk = useMemo(() => filteredEventFees.filter((f) => !f.is_paid), [filteredEventFees]);
+
   const filteredUnpaidEnrollmentFeesForBulk = useMemo(() => filteredEnrollmentFees.filter((f) => !f.is_paid), [filteredEnrollmentFees]);
 
   /** Propinas seleccionadas e não pagas → elegíveis para validação em lote. */
@@ -2471,6 +2807,12 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       .map((id) => allMealFees.find((f) => f.id === id))
       .filter((f): f is MealFeeRow => !!f && !f.is_paid);
   }, [bulkSelectedMealFeeIds, allMealFees]);
+
+  const selectedEventFeesEligibleForBulkValidate = useMemo(() => {
+    return [...bulkSelectedEventFeeIds]
+      .map((id) => allEventFees.find((f) => f.id === id))
+      .filter((f): f is EventFeeRow => !!f && !f.is_paid);
+  }, [bulkSelectedEventFeeIds, allEventFees]);
 
   const selectedEnrollmentFeesEligibleForBulkValidate = useMemo(() => {
     return [...bulkSelectedEnrollmentFeeIds]
@@ -2571,7 +2913,11 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                     ? "Extracurriculares — pagamentos"
                     : transportChargesOnly
                       ? "Transporte — pagamentos"
-                      : "Refeições — pagamentos"}
+                      : mealChargesOnly
+                        ? "Refeições — pagamentos"
+                        : eventChargesOnly
+                          ? "Eventos — pagamentos"
+                          : "Pagamentos"}
             </h1>
             <p className="text-sm text-muted-foreground">
               {tuitionOnly
@@ -2592,9 +2938,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                       ? isParent
                         ? "Cobranças de transporte do(s) seu(s) educando(s)."
                         : "Mensalidades de transporte, lembretes e validação."
-                      : isParent
-                        ? "Cobranças de refeições do(s) seu(s) educando(s)."
-                        : "Mensalidades de refeições, lembretes e validação."}
+                      : mealChargesOnly
+                        ? isParent
+                          ? "Cobranças de refeições do(s) seu(s) educando(s)."
+                          : "Mensalidades de refeições, lembretes e validação."
+                        : eventChargesOnly
+                          ? isParent
+                            ? "Cobranças de participação em eventos do(s) seu(s) educando(s)."
+                            : "Cobranças definidas pelas regras de cada evento, lembretes e validação de pagamentos."
+                          : ""}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -2613,7 +2965,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           </div>
         </div>
 
-        <Tabs defaultValue={tuitionOnly ? "fees" : enrollmentChargesOnly ? "enrollment-fees" : activityChargesOnly ? "activity-fees" : transportChargesOnly ? "transport-fees" : "meal-fees"} className="w-full">
+        <Tabs defaultValue={tuitionOnly ? "fees" : enrollmentChargesOnly ? "enrollment-fees" : activityChargesOnly ? "activity-fees" : transportChargesOnly ? "transport-fees" : eventChargesOnly ? "event-fees" : "meal-fees"} className="w-full">
           <TabsList className={chargesEmbeddedOnly ? "sr-only" : undefined}>
             {tuitionOnly ? (
               <>
@@ -2626,6 +2978,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 {activityChargesOnly ? <TabsTrigger value="activity-fees">Lista de cobranças</TabsTrigger> : null}
                 {transportChargesOnly ? <TabsTrigger value="transport-fees">Lista de cobranças</TabsTrigger> : null}
                 {mealChargesOnly ? <TabsTrigger value="meal-fees">Lista de cobranças</TabsTrigger> : null}
+                {eventChargesOnly ? <TabsTrigger value="event-fees">Lista de cobranças</TabsTrigger> : null}
               </>
             )}
           </TabsList>
@@ -4045,6 +4398,361 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           </>
           )}
 
+          {eventChargesOnly && (
+          <>
+          {/* EVENT FEES TAB */}
+          <TabsContent value="event-fees" className="space-y-4">
+            {!isParent && (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total recebido</CardTitle></CardHeader>
+                <CardContent><p className="text-2xl font-bold text-pastel-green-foreground">{fmtAOA(eventFeeStats.paid)}</p></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em dívida</CardTitle></CardHeader>
+                <CardContent><p className="text-2xl font-bold text-pastel-yellow-foreground">{fmtAOA(eventFeeStats.pending)}</p></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em atraso</CardTitle></CardHeader>
+                <CardContent><p className="text-2xl font-bold text-destructive">{fmtAOA(eventFeeStats.overdue)}</p></CardContent>
+              </Card>
+            </div>
+            )}
+
+            {!isParent && canValidatePaymentProofs && pendingEventValidations.length > 0 && (
+              <Card className="border-pastel-blue/60">
+                <CardHeader className="space-y-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                        <FileText className="h-4 w-4" /> Comprovativos a validar
+                        <Badge variant="secondary">{pendingEventValidations.length}</Badge>
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1">Pagamentos relacionados com cobranças de eventos escolares.</p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80 shrink-0"
+                      disabled={bulkValidating || pendingEventValidations.every((x) => !bulkSelectedEventFeeIds.has(x.fee.id))}
+                      onClick={() => void bulkValidateEventFeesList()}
+                    >
+                      {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                      Validar seleccionados
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="py-2 px-2 w-10 align-middle">
+                            <Checkbox
+                              disabled={bulkValidating}
+                              checked={
+                                pendingEventValidations.length > 0 &&
+                                pendingEventValidations.every(({ fee }) => bulkSelectedEventFeeIds.has(fee.id))
+                              }
+                              onCheckedChange={(v) => {
+                                const checked = v === true;
+                                setBulkSelectedEventFeeIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (checked) pendingEventValidations.forEach(({ fee }) => next.add(fee.id));
+                                  else pendingEventValidations.forEach(({ fee }) => next.delete(fee.id));
+                                  return next;
+                                });
+                              }}
+                              aria-label="Seleccionar todos"
+                            />
+                          </th>
+                          <th className="py-2 px-2">Aluno</th>
+                          <th className="py-2 px-2">Evento</th>
+                          <th className="py-2 px-2">Valor pago</th>
+                          <th className="py-2 px-2">Método</th>
+                          <th className="py-2 px-2">Submetido</th>
+                          <th className="py-2 px-2 text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pendingEventValidations.map(({ fee, payment }) => (
+                          <tr key={payment.id} className="border-b hover:bg-muted/30">
+                            <td className="py-2 px-2 align-middle">
+                              <Checkbox
+                                disabled={bulkValidating || validatingId === payment.id}
+                                checked={bulkSelectedEventFeeIds.has(fee.id)}
+                                onCheckedChange={(v) => setBulkEventFeeChecked(fee.id, v === true)}
+                              />
+                            </td>
+                            <td className="py-2 px-2 font-medium">{fee.student?.full_name ?? "—"}</td>
+                            <td className="py-2 px-2">{fee.event?.title ?? "—"}</td>
+                            <td className="py-2 px-2 font-semibold">{fmtAOA(Number(payment.amount_paid))}</td>
+                            <td className="py-2 px-2 capitalize text-muted-foreground">{payment.method ?? "—"}</td>
+                            <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString("pt-PT") : "—"}</td>
+                            <td className="py-2 px-2">
+                              <div className="flex flex-wrap justify-end gap-2">
+                                {payment.proof_url && (
+                                  <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(payment.proof_url!)}>
+                                    <Eye className="h-3.5 w-3.5" /> Ver
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                                  disabled={bulkValidating || validatingId === payment.id}
+                                  onClick={() => validateEventPayment(fee, payment)}
+                                >
+                                  {validatingId === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                  Validar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1 text-destructive"
+                                  disabled={bulkValidating || validatingId === payment.id}
+                                  onClick={() => { setRejectDialog(payment); setRejectReason(""); }}
+                                >
+                                  <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card>
+              <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2"><CalendarDays className="h-4 w-4" /> Cobranças de eventos</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">Cobranças geradas pelas regras de cada evento; pode enviar lembretes e validar pagamentos.</p>
+                </div>
+                {!isParent && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {canValidatePaymentProofs && filteredUnpaidEventFeesForBulk.length > 0 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="gap-2 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                        disabled={
+                          bulkValidating ||
+                          selectedEventFeesEligibleForBulkValidate.length === 0
+                        }
+                        onClick={() => void bulkValidateEventFeesList()}
+                      >
+                        {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                        Validar seleccionados
+                      </Button>
+                    )}
+                    <Button onClick={sendEventBulkReminders} size="sm" variant="outline" className="gap-2">
+                      <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                    </Button>
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input className="pl-9" placeholder="Pesquisar aluno ou evento..." value={evSearch} onChange={(e) => setEvSearch(e.target.value)} />
+                  </div>
+                  <Select value={evFilter} onValueChange={(v) => setEvFilter(v as typeof evFilter)}>
+                    <SelectTrigger className="md:w-44"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="pending">Não pagas</SelectItem>
+                      <SelectItem value="overdue">Em atraso</SelectItem>
+                      <SelectItem value="paid">Pagas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={evYearFilter} onValueChange={setEvYearFilter}>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Ano letivo" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os anos</SelectItem>
+                      {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={evEventFilter} onValueChange={setEvEventFilter}>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Evento" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os eventos</SelectItem>
+                      {eventsList.map((e) => <SelectItem key={e.id} value={e.id}>{e.title}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {loading ? (
+                  <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                ) : filteredEventFees.length === 0 ? (
+                  <p className="text-center py-10 text-muted-foreground">Sem cobranças a apresentar.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          {!isParent && canValidatePaymentProofs && filteredUnpaidEventFeesForBulk.length > 0 && (
+                            <th className="py-2 px-2 w-10 align-middle">
+                              <Checkbox
+                                disabled={bulkValidating}
+                                checked={
+                                  filteredUnpaidEventFeesForBulk.length > 0 &&
+                                  filteredUnpaidEventFeesForBulk.every((row) =>
+                                    bulkSelectedEventFeeIds.has(row.id),
+                                  )
+                                }
+                                onCheckedChange={(v) => {
+                                  const checked = v === true;
+                                  setBulkSelectedEventFeeIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (checked) {
+                                      filteredUnpaidEventFeesForBulk.forEach((row) =>
+                                        next.add(row.id),
+                                      );
+                                    } else {
+                                      filteredUnpaidEventFeesForBulk.forEach((row) =>
+                                        next.delete(row.id),
+                                      );
+                                    }
+                                    return next;
+                                  });
+                                }}
+                                aria-label="Seleccionar todos (filtro atual)"
+                              />
+                            </th>
+                          )}
+                          <th className="py-2 px-2">Aluno</th>
+                          <th className="py-2 px-2">Evento</th>
+                          <th className="py-2 px-2">Mês</th>
+                          <th className="py-2 px-2">Vencimento</th>
+                          <th className="py-2 px-2">Valor</th>
+                          <th className="py-2 px-2">Estado</th>
+                          <th className="py-2 px-2 text-center w-12" title="Factura-recibo fiscal (FACTURA‑RECIBO AGT)">
+                            FT
+                          </th>
+                          <th className="py-2 px-2 text-right">Acção</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredEventFees.slice(0, 200).map((f) => {
+                          const overdue = !f.is_paid && new Date(f.due_date).getTime() < Date.now();
+                          const pay = latestPaymentByEventFee.get(f.id);
+                          const pendingValidation = !!pay && pay.status === "pendente";
+                          const rejected = !!pay && pay.status === "rejeitado";
+                          return (
+                            <tr key={f.id} className="border-b hover:bg-muted/30">
+                              {!isParent && canValidatePaymentProofs && filteredUnpaidEventFeesForBulk.length > 0 && (
+                                <td className="py-2 px-2 align-middle w-10">
+                                  {!f.is_paid ? (
+                                    <Checkbox
+                                      disabled={bulkValidating || (!!pay && validatingId === pay.id)}
+                                      checked={bulkSelectedEventFeeIds.has(f.id)}
+                                      onCheckedChange={(v) => setBulkEventFeeChecked(f.id, v === true)}
+                                      title="Incluída na validação em lote («Validar seleccionados») para cobranças não pagas."
+                                    />
+                                  ) : null}
+                                </td>
+                              )}
+                              <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
+                              <td className="py-2 px-2">
+                                <span className="font-medium">{f.event?.title ?? "—"}</span>
+                                {f.event?.event_date ? (
+                                  <span className="block text-xs text-muted-foreground">
+                                    {new Date(f.event.event_date + "T12:00:00").toLocaleDateString("pt-PT")}
+                                  </span>
+                                ) : null}
+                              </td>
+                              <td className="py-2 px-2">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
+                              <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
+                              <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
+                              <td className="py-2 px-2">
+                                {f.is_paid ? (
+                                  <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">Pago</Badge>
+                                ) : pendingValidation ? (
+                                  <Badge className="bg-pastel-blue text-pastel-blue-foreground hover:bg-pastel-blue">A validar</Badge>
+                                ) : rejected ? (
+                                  <Badge variant="outline" className="border-destructive text-destructive">Rejeitado</Badge>
+                                ) : overdue ? (
+                                  <Badge variant="destructive">Em atraso</Badge>
+                                ) : (
+                                  <Badge variant="secondary">Pendente</Badge>
+                                )}
+                              </td>
+                              <td className="py-2 px-2 align-middle text-center">{invoiceIconForValidatedPayment(!!f.is_paid, pay)}</td>
+                              <td className="py-2 px-2 text-right">
+                                <div className="flex flex-wrap justify-end gap-2">
+                                  {pendingValidation && pay && !isParent && (
+                                    <>
+                                      {pay.proof_url && (
+                                        <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
+                                          <Eye className="h-3.5 w-3.5" /> Ver
+                                        </Button>
+                                      )}
+                                      {canValidatePaymentProofs && (
+                                        <>
+                                          <Button
+                                            size="sm"
+                                            className="gap-1 bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green/80"
+                                            disabled={bulkValidating || validatingId === pay.id}
+                                            onClick={() => validateEventPayment(f, pay)}
+                                          >
+                                            {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                            Validar
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="gap-1 text-destructive"
+                                            disabled={bulkValidating || validatingId === pay.id}
+                                            onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
+                                          >
+                                            <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                          </Button>
+                                        </>
+                                      )}
+                                    </>
+                                  )}
+                                  {!f.is_paid && !pendingValidation && (
+                                    <>
+                                      {(!isParent || usarAnexoEncarregado) && (
+                                        <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForEvent(f)}>
+                                          <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
+                                        </Button>
+                                      )}
+                                      {isParent && !usarAnexoEncarregado && (
+                                        <span className="rounded-md border border-muted bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
+                                          Pagamento presencial na escola
+                                        </span>
+                                      )}
+                                      {!isParent && (
+                                        <Button size="sm" variant="outline" className="gap-2" onClick={() => sendEventReminder(f)} disabled={remindingEvFeeId === f.id || !f.student?.parent_id}>
+                                          {remindingEvFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+                                          Cobrar
+                                        </Button>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {filteredEventFees.length > 200 && (
+                      <p className="text-xs text-muted-foreground text-center py-3">A mostrar 200 de {filteredEventFees.length}. Refina os filtros para ver as restantes.</p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          </>
+          )}
+
           {enrollmentChargesOnly && (
           <>
           {/* ENROLLMENT FEES TAB */}
@@ -4896,6 +5604,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 ? `Transporte (${recordDialog.fee.route?.name ?? ""}) — ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Fica à espera da validação." : recordNeedsFile ? "Envie imagem apenas se disponível." : "Valor recebido presencialmente."}`
                 : recordDialog?.kind === "meal"
                 ? `Refeições (${recordDialog.fee.meal_program?.name ?? ""}) — ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Fica à espera da validação." : recordNeedsFile ? "Associe um comprovativo se existir." : "Valor recebido presencialmente."}`
+                : recordDialog?.kind === "event"
+                ? `Evento «${recordDialog.fee.event?.title ?? ""}» — ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "Fica à espera da validação." : recordNeedsFile ? "Associe um comprovativo se existir." : "Valor recebido presencialmente."}`
                 : recordDialog?.kind === "enrollment"
                 ? `${recordDialog.fee.fee_type === "RENEWAL" ? "Renovação de matrícula" : "Matrícula"} — ${recordDialog.fee.student?.full_name ?? ""}. ${isParent ? "À espera de validação pela escola." : recordNeedsFile ? "Associe um comprovativo digital se existir." : "Pagamento físico apenas."}`
                 : ""}

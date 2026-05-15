@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Plus,
   Search,
@@ -15,6 +16,8 @@ import {
   MapPin,
   Pencil,
   Trash2,
+  Wallet,
+  FileSignature,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,6 +33,8 @@ import { useParentChildren } from "@/hooks/useParentChildren";
 import { DomainChargeRulesPanel } from "@/components/finance/DomainChargeRulesPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { PagamentosFinanceHub } from "@/pages/Pagamentos";
+import { ModuleAuthorizationsPanel } from "@/components/authorizations/ModuleAuthorizationsPanel";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -73,6 +78,7 @@ const makeRsvpKey = (eventId: string, studentId: string) => `${eventId}::${stude
 
 const Eventos = () => {
   const native = isNativeMobileApp();
+  const [searchParams] = useSearchParams();
   const { selectedYearId } = useAcademicYear();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
@@ -94,14 +100,16 @@ const Eventos = () => {
 
   const [audienceRoomNames, setAudienceRoomNames] = useState<Record<string, string>>({});
 
-  const [hubTab, setHubTab] = useState<"eventos" | "regras">("eventos");
+  const [hubTab, setHubTab] = useState<"eventos" | "pagamentos" | "autorizacoes" | "regras">("eventos");
   const [rsvpMap, setRsvpMap] = useState<Record<string, RsvpResponse>>({});
   const [rsvpSavingKey, setRsvpSavingKey] = useState<string | null>(null);
 
-  const { children: parentChildrenList, allChildIds, loading: parentChildrenLoading } = useParentChildren();
+  const { children: parentChildrenList, childIds, allChildIds, loading: parentChildrenLoading } =
+    useParentChildren();
 
   const canCreateEvent = role === "SUPER_ADMIN" || isSchoolManagementOrTeacher(role);
   const canFinanceChargeRules = canValidateSchoolPaymentProofs(role);
+  const isParentRole = role === "PARENT";
 
   const canMutateEvent = useCallback(
     (e: EventRow) => {
@@ -148,6 +156,11 @@ const Eventos = () => {
     loadEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schoolId]);
+
+  useEffect(() => {
+    if (searchParams.get("tab") === "autorizacoes") setHubTab("autorizacoes");
+    if (searchParams.get("tab") === "pagamentos") setHubTab("pagamentos");
+  }, [searchParams]);
 
   useEffect(() => {
     if (!schoolId || !selectedYearId) {
@@ -304,7 +317,7 @@ const Eventos = () => {
   const showFabSlot =
     native &&
     canCreateEvent &&
-    (!canFinanceChargeRules || hubTab === "eventos");
+    hubTab === "eventos";
 
   const eventsTabBody = (
       <div className={cn("flex flex-col gap-6", showFabSlot && "relative pb-28")}>
@@ -462,32 +475,56 @@ const Eventos = () => {
 
   return (
     <>
-      {canFinanceChargeRules ? (
-        <Tabs
-          value={hubTab}
-          onValueChange={(v) => setHubTab(v as "eventos" | "regras")}
-          className="flex flex-col gap-6"
-        >
-          <TabsList className="h-auto w-full flex-wrap justify-start gap-2 rounded-2xl border border-border bg-card p-2 shadow-soft sm:w-auto">
-            <TabsTrigger value="eventos" className="rounded-full px-5">
-              Eventos
-            </TabsTrigger>
+      <Tabs
+        value={hubTab}
+        onValueChange={(v) =>
+          setHubTab(v as "eventos" | "pagamentos" | "autorizacoes" | "regras")
+        }
+        className="flex flex-col gap-6"
+      >
+        <TabsList className="h-auto w-full flex-wrap justify-start gap-2 rounded-2xl border border-border bg-card p-2 shadow-soft">
+          <TabsTrigger value="eventos" className="rounded-full px-5">
+            Eventos
+          </TabsTrigger>
+          <TabsTrigger value="pagamentos" className="rounded-full px-5">
+            <Wallet className="mr-2 hidden h-4 w-4 sm:inline" strokeWidth={1.75} />
+            Pagamentos
+          </TabsTrigger>
+          <TabsTrigger value="autorizacoes" className="rounded-full px-5">
+            <FileSignature className="mr-2 hidden h-4 w-4 sm:inline" strokeWidth={1.75} />
+            Autorizações
+          </TabsTrigger>
+          {canFinanceChargeRules && (
             <TabsTrigger value="regras" className="rounded-full px-5">
               Regras de cobranças
             </TabsTrigger>
-          </TabsList>
-          <TabsContent value="eventos" className="mt-0 space-y-0 focus-visible:outline-none">
-            {eventsTabBody}
-          </TabsContent>
+          )}
+        </TabsList>
+        <TabsContent value="eventos" className="mt-0 space-y-0 focus-visible:outline-none">
+          {eventsTabBody}
+        </TabsContent>
+        <TabsContent value="pagamentos" className="mt-0 space-y-0 focus-visible:outline-none">
+          <PagamentosFinanceHub financePage="eventCharges" />
+        </TabsContent>
+        <TabsContent value="autorizacoes" className="mt-0 space-y-0 focus-visible:outline-none">
+          <ModuleAuthorizationsPanel
+            module="event"
+            schoolId={schoolId}
+            userId={userId}
+            role={role}
+            isParent={isParentRole}
+            childIds={childIds}
+            canManageTemplates={role !== null && isSchoolManagementRole(role)}
+          />
+        </TabsContent>
+        {canFinanceChargeRules && (
           <TabsContent value="regras" className="mt-0 focus-visible:outline-none">
             <DomainChargeRulesPanel variant="event" schoolId={schoolId} role={role} />
           </TabsContent>
-        </Tabs>
-      ) : (
-        eventsTabBody
-      )}
+        )}
+      </Tabs>
 
-      {native && canCreateEvent && (!canFinanceChargeRules || hubTab === "eventos") && (
+      {native && canCreateEvent && hubTab === "eventos" && (
         <NativeMobileFabPortal>
           <Button
             type="button"
