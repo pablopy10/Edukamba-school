@@ -24,6 +24,7 @@ import {
   Plus,
   History,
   Search,
+  RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
@@ -336,11 +337,14 @@ const Definicoes = () => {
 
   // Permissions
   type Perm = { module: PermissionModuleKey; can_read: boolean; can_write: boolean; can_delete: boolean };
-  const [permTab, setPermTab] = useState<"role" | "user">("role");
+  const [permTab, setPermTab] = useState<"role" | "user" | "personalizadas">("role");
   const [activeRole, setActiveRole] = useState<Role>("TEACHER");
   const [rolePerms, setRolePerms] = useState<Record<string, Perm>>({});
   const [activeUserId, setActiveUserId] = useState<string>("");
   const [userPerms, setUserPerms] = useState<Record<string, Perm>>({});
+  const [storedRolePermRows, setStoredRolePermRows] = useState<number | null>(null);
+  const [storedUserPermRows, setStoredUserPermRows] = useState<number | null>(null);
+  const [storedCountsLoading, setStoredCountsLoading] = useState(false);
 
   // Notifications (admin manages defaults per role)
   const [notifRole, setNotifRole] = useState<Role>("TEACHER");
@@ -487,11 +491,45 @@ const Definicoes = () => {
     if (activeTab !== "permissoes") return;
     if (permTab === "role") {
       void loadRolePerms(activeRole);
-    } else if (activeUserId) {
+    } else if (permTab === "user" && activeUserId) {
       void loadUserPerms(activeUserId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, permTab, activeRole, activeUserId, schoolId]);
+
+  useEffect(() => {
+    if (!schoolId || activeTab !== "permissoes" || permTab !== "personalizadas") return;
+    let cancelled = false;
+    void (async () => {
+      setStoredCountsLoading(true);
+      try {
+        const roleRes = await supabase
+          .from("role_permissions")
+          .select("*", { count: "exact", head: true })
+          .eq("school_id", schoolId)
+          .eq("role", activeRole);
+        const userRes = activeUserId
+          ? await supabase
+              .from("user_permissions")
+              .select("*", { count: "exact", head: true })
+              .eq("user_id", activeUserId)
+              .eq("school_id", schoolId)
+          : null;
+        if (cancelled) return;
+        setStoredRolePermRows(typeof roleRes.count === "number" ? roleRes.count : null);
+        if (activeUserId && userRes) {
+          setStoredUserPermRows(typeof userRes.count === "number" ? userRes.count : null);
+        } else {
+          setStoredUserPermRows(null);
+        }
+      } finally {
+        if (!cancelled) setStoredCountsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [schoolId, activeTab, permTab, activeRole, activeUserId]);
 
   const loadRolePerms = async (role: Role) => {
     if (!schoolId) return;
@@ -958,6 +996,66 @@ const Definicoes = () => {
     setSaving(false);
     void queryClient.invalidateQueries({ queryKey: [...schoolPermissionMatrixQueryRoot] });
     showToast("success", "Permissões personalizadas guardadas.");
+  };
+
+  const clearStoredRolePermissions = async () => {
+    if (!schoolId || !operationsAdmin) return;
+    if (activeRole === "ADMIN") {
+      return showToast(
+        "error",
+        "A função Administrador utiliza sempre acesso total na aplicação; não existem linhas personalizadas a remover.",
+      );
+    }
+    if (
+      !window.confirm(
+        `Remover todas as permissões gravadas na base de dados para a função «${ROLE_LABEL[activeRole]}» nesta escola?\n\n` +
+          "Depois disto, todos os utilizadores com esta função voltam a usar apenas as regras padrão da aplicação para cada módulo.",
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    const { error } = await supabase
+      .from("role_permissions")
+      .delete()
+      .eq("school_id", schoolId)
+      .eq("role", activeRole);
+    setSaving(false);
+    if (error) return showToast("error", error.message);
+    setStoredRolePermRows(0);
+    void loadRolePerms(activeRole);
+    void queryClient.invalidateQueries({ queryKey: [...schoolPermissionMatrixQueryRoot] });
+    showToast("success", "Permissões da função repostas para os valores padrão da aplicação.");
+  };
+
+  const clearStoredUserPermissions = async () => {
+    if (!schoolId || !activeUserId || !operationsAdmin) return;
+    const targetUser = users.find((u) => u.id === activeUserId);
+    const targetRole = targetUser?.role;
+    if (!targetRole) return showToast("error", "Não foi possível determinar a função deste utilizador.");
+    if (targetRole === "ADMIN" || targetRole === "SUPER_ADMIN") {
+      return showToast("error", "Esta conta tem acesso total; não há personalizações por módulo a remover.");
+    }
+    if (
+      !window.confirm(
+        `Remover todas as permissões personalizadas gravadas para ${targetUser.full_name}? ` +
+          "O utilizador voltará a seguir apenas a função (e as regras padrão) para cada módulo.",
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    const { error } = await supabase
+      .from("user_permissions")
+      .delete()
+      .eq("user_id", activeUserId)
+      .eq("school_id", schoolId);
+    setSaving(false);
+    if (error) return showToast("error", error.message);
+    setStoredUserPermRows(0);
+    void loadUserPerms(activeUserId);
+    void queryClient.invalidateQueries({ queryKey: [...schoolPermissionMatrixQueryRoot] });
+    showToast("success", "Personalizações do utilizador removidas; aplicam-se de novo os valores herdados pela função.");
   };
 
   // ===== Save notification prefs =====
@@ -1674,7 +1772,7 @@ const Definicoes = () => {
 
         {/* PERMISSÕES */}
         {activeTab === "permissoes" && (
-          <SectionCard title="Permissões" desc="Defina as permissões por função ou personalize por utilizador.">
+          <SectionCard title="Permissões" desc="Por função ou por utilizador pode editar e gravar. No separador «Permissões personalizadas» pode apagar o que foi gravado e voltar aos padrões herdados.">
             <div className="mb-4 flex flex-wrap gap-2">
               <button
                 onClick={() => setPermTab("role")}
@@ -1693,6 +1791,18 @@ const Definicoes = () => {
                 )}
               >
                 Por Utilizador
+              </button>
+              <button
+                type="button"
+                onClick={() => setPermTab("personalizadas")}
+                className={cn(
+                  "rounded-xl px-4 py-2 text-sm font-medium",
+                  permTab === "personalizadas"
+                    ? "bg-pastel-lilac text-pastel-lilac-foreground shadow-soft"
+                    : "bg-muted text-muted-foreground hover:bg-accent",
+                )}
+              >
+                Permissões personalizadas
               </button>
             </div>
 
@@ -1729,6 +1839,126 @@ const Definicoes = () => {
                   canSave={operationsAdmin && (activeRole !== "ADMIN" || settingsAdmin)}
                 />
               </>
+            ) : permTab === "personalizadas" ? (
+              <div className="flex flex-col gap-10">
+                <p className="rounded-xl bg-muted/50 p-4 text-sm text-muted-foreground">
+                  Aqui pode apagar na base de dados as permissões que foram gravadas anteriormente para uma{" "}
+                  <strong className="text-foreground">função</strong> ou para um <strong className="text-foreground">utilizador</strong>.
+                  Ao remover esses registos, a aplicação volta a usar as <strong className="text-foreground">regras padrão por função</strong> ou a
+                  combinação <strong className="text-foreground">função mais herança do utilizador</strong>, como antes de gravar nos outros separadores.
+                </p>
+
+                <div className="rounded-2xl border border-border bg-card/60 p-5">
+                  <h3 className="text-base font-semibold text-foreground">Permissões personalizadas por função</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Remove todas as linhas guardadas para a função escolhida nesta escola («Por função»). Os valores definidos pela aplicação para cada função voltam a aplicar‑se por omissão.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {ROLES.map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        disabled={saving || !operationsAdmin}
+                        onClick={() => setActiveRole(r)}
+                        className={cn(
+                          "rounded-xl px-4 py-2 text-sm font-medium transition-[var(--transition-smooth)] disabled:opacity-50",
+                          activeRole === r
+                            ? "bg-pastel-blue text-pastel-blue-foreground shadow-soft"
+                            : "bg-muted text-muted-foreground hover:bg-accent",
+                        )}
+                      >
+                        {ROLE_LABEL[r]}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      {storedCountsLoading || storedRolePermRows === null ? (
+                        <span>Registos gravados nesta escola para esta função: a carregar…</span>
+                      ) : activeRole === "ADMIN" ? (
+                        <span>Sem registos aplicáveis: administradores têm sempre acesso total na aplicação.</span>
+                      ) : (
+                        <span>
+                          Registos gravados nesta escola para esta função:{" "}
+                          <strong className="text-foreground">{storedRolePermRows}</strong>.
+                        </span>
+                      )}
+                    </p>
+                    <button
+                      type="button"
+                      disabled={
+                        saving ||
+                        !operationsAdmin ||
+                        storedCountsLoading ||
+                        activeRole === "ADMIN" ||
+                        storedRolePermRows === null ||
+                        storedRolePermRows === 0
+                      }
+                      onClick={() => void clearStoredRolePermissions()}
+                      className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full border-2 border-pastel-pink/60 bg-transparent px-5 text-sm font-semibold text-pastel-pink-foreground hover:bg-pastel-pink/30 disabled:opacity-50"
+                    >
+                      <RotateCcw className="h-4 w-4 shrink-0" strokeWidth={2} />
+                      Remover personalização da função
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border bg-card/60 p-5">
+                  <h3 className="text-base font-semibold text-foreground">Permissões personalizadas por utilizador</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Remove as sobrescritas gravadas para o utilizador («Por utilizador»). Voltam a aplicar‑se apenas a função e as regras padrão, sem sobrescritas por módulo.
+                  </p>
+                  <div className="mt-4 max-w-xl">
+                    <Field label="Utilizador">
+                      <select
+                        className={inputCls(false)}
+                        value={activeUserId}
+                        disabled={!operationsAdmin}
+                        onChange={(e) => setActiveUserId(e.target.value)}
+                      >
+                        <option value="">— Selecione —</option>
+                        {users
+                          .filter((u) => u.role !== "ADMIN" && u.role !== "SUPER_ADMIN" && u.is_active !== false)
+                          .map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.full_name} · {ROLE_LABEL[(u.role ?? "TEACHER") as Role]}
+                            </option>
+                          ))}
+                      </select>
+                    </Field>
+                  </div>
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      {!activeUserId ? (
+                        <span>Selecione um utilizador para ver quantas permissões personalizadas estão gravadas.</span>
+                      ) : storedCountsLoading || storedUserPermRows === null ? (
+                        <span>Registos personalizados para este utilizador: a carregar…</span>
+                      ) : (
+                        <span>
+                          Registos personalizados para este utilizador:{" "}
+                          <strong className="text-foreground">{storedUserPermRows}</strong>.
+                        </span>
+                      )}
+                    </p>
+                    <button
+                      type="button"
+                      disabled={
+                        saving ||
+                        !operationsAdmin ||
+                        !activeUserId ||
+                        storedCountsLoading ||
+                        storedUserPermRows === null ||
+                        storedUserPermRows === 0
+                      }
+                      onClick={() => void clearStoredUserPermissions()}
+                      className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full border-2 border-pastel-pink/60 bg-transparent px-5 text-sm font-semibold text-pastel-pink-foreground hover:bg-pastel-pink/30 disabled:opacity-50"
+                    >
+                      <RotateCcw className="h-4 w-4 shrink-0" strokeWidth={2} />
+                      Remover personalização do utilizador
+                    </button>
+                  </div>
+                </div>
+              </div>
             ) : (
               <>
                 <Field label="Utilizador">
@@ -1740,7 +1970,7 @@ const Definicoes = () => {
                   >
                     <option value="">— Selecione —</option>
                     {users
-                      .filter((u) => u.role !== "ADMIN" && u.is_active !== false)
+                      .filter((u) => u.role !== "ADMIN" && u.role !== "SUPER_ADMIN" && u.is_active !== false)
                       .map((u) => (
                         <option key={u.id} value={u.id}>
                           {u.full_name} · {ROLE_LABEL[(u.role ?? "TEACHER") as Role]}
