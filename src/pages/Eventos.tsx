@@ -23,8 +23,12 @@ import { EventFormDialog, type EventRow } from "@/components/eventos/EventFormDi
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { showPageKpiCards, isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
-import { isSchoolManagementOrTeacher, isSchoolManagementRole } from "@/lib/schoolStaffRoles";
-import { formatEventAudienceSummary } from "@/lib/eventAudience";
+import { isSchoolManagementOrTeacher, isSchoolManagementRole, canValidateSchoolPaymentProofs } from "@/lib/schoolStaffRoles";
+import { formatEventAudienceSummary, decodeEventAudience } from "@/lib/eventAudience";
+import type { ParentChild } from "@/hooks/useParentChildren";
+import { useParentChildren } from "@/hooks/useParentChildren";
+import { DomainChargeRulesPanel } from "@/components/finance/DomainChargeRulesPanel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -63,6 +67,10 @@ const formatDateLong = (iso: string) => {
 
 const formatTime = (t: string | null) => (t ? t.slice(0, 5) : "");
 
+type RsvpResponse = "presente" | "ausente" | "unset";
+
+const makeRsvpKey = (eventId: string, studentId: string) => `${eventId}::${studentId}`;
+
 const Eventos = () => {
   const native = isNativeMobileApp();
   const { selectedYearId } = useAcademicYear();
@@ -86,7 +94,14 @@ const Eventos = () => {
 
   const [audienceRoomNames, setAudienceRoomNames] = useState<Record<string, string>>({});
 
+  const [hubTab, setHubTab] = useState<"eventos" | "regras">("eventos");
+  const [rsvpMap, setRsvpMap] = useState<Record<string, RsvpResponse>>({});
+  const [rsvpSavingKey, setRsvpSavingKey] = useState<string | null>(null);
+
+  const { children: parentChildrenList, allChildIds, loading: parentChildrenLoading } = useParentChildren();
+
   const canCreateEvent = role === "SUPER_ADMIN" || isSchoolManagementOrTeacher(role);
+  const canFinanceChargeRules = canValidateSchoolPaymentProofs(role);
 
   const canMutateEvent = useCallback(
     (e: EventRow) => {
@@ -160,6 +175,84 @@ const Eventos = () => {
     };
   }, [schoolId, selectedYearId]);
 
+  const upsertPresence = useCallback(
+    async (eventId: string, studentId: string, response: RsvpResponse) => {
+      if (!userId) {
+        toast.error("Sessão inválida.");
+        return;
+      }
+      const k = makeRsvpKey(eventId, studentId);
+      setRsvpSavingKey(k);
+      let prev: RsvpResponse = "unset";
+      setRsvpMap((m) => {
+        prev = m[k] ?? "unset";
+        return { ...m, [k]: response };
+      });
+      const { error } = await supabase.from("event_student_rsvp").upsert(
+        {
+          event_id: eventId,
+          student_id: studentId,
+          response,
+          updated_by: userId,
+        },
+        { onConflict: "event_id,student_id" },
+      );
+      if (error) {
+        setRsvpMap((m) => ({ ...m, [k]: prev }));
+        toast.error("Erro ao guardar presença: " + error.message);
+      }
+      setRsvpSavingKey(null);
+    },
+    [userId],
+  );
+
+  useEffect(() => {
+    if (role !== "PARENT" || parentChildrenLoading || !schoolId) return;
+    const eventIds = events.map((e) => e.id);
+    if (eventIds.length === 0 || allChildIds.length === 0) {
+      setRsvpMap({});
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("event_student_rsvp")
+        .select("event_id, student_id, response")
+        .in("event_id", eventIds)
+        .in("student_id", allChildIds);
+      if (cancelled) return;
+      if (error) return;
+      const next: Record<string, RsvpResponse> = {};
+      for (const row of data ?? []) {
+        const r = row.response as RsvpResponse;
+        if (r !== "presente" && r !== "ausente" && r !== "unset") continue;
+        next[makeRsvpKey(row.event_id, row.student_id)] = r;
+      }
+      setRsvpMap(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [role, parentChildrenLoading, schoolId, events, allChildIds]);
+
+  const parentPresenceUi = useMemo(() => {
+    if (role !== "PARENT") return undefined;
+    return {
+      kids: parentChildrenList,
+      loadingKids: parentChildrenLoading,
+      rsvpMap,
+      savingKey: rsvpSavingKey,
+      upsertPresence,
+    };
+  }, [
+    role,
+    parentChildrenList,
+    parentChildrenLoading,
+    rsvpMap,
+    rsvpSavingKey,
+    upsertPresence,
+  ]);
+
   const filtered = useMemo(() => {
     return events.filter((e) => {
       if (native) {
@@ -208,9 +301,13 @@ const Eventos = () => {
     setDeleteId(null);
   };
 
-  return (
-    <>
-      <div className={cn("flex flex-col gap-6", native && canCreateEvent && "relative pb-28")}>
+  const showFabSlot =
+    native &&
+    canCreateEvent &&
+    (!canFinanceChargeRules || hubTab === "eventos");
+
+  const eventsTabBody = (
+      <div className={cn("flex flex-col gap-6", showFabSlot && "relative pb-28")}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Eventos</h1>
@@ -334,6 +431,7 @@ const Eventos = () => {
             canMutateEvent={canMutateEvent}
             onEdit={handleEdit}
             onDelete={(id) => setDeleteId(id)}
+            parentPresence={parentPresenceUi}
           />
         ) : view === "calendario" ? (
           <CalendarView
@@ -346,6 +444,7 @@ const Eventos = () => {
             canMutateEvent={canMutateEvent}
             onEdit={handleEdit}
             onDelete={(id) => setDeleteId(id)}
+            parentPresence={parentPresenceUi}
           />
         ) : (
           <ListView
@@ -355,11 +454,40 @@ const Eventos = () => {
             onEdit={handleEdit}
             onDelete={(id) => setDeleteId(id)}
             hideActionsColumn={role === "PARENT"}
+            parentPresence={parentPresenceUi}
           />
         )}
       </div>
+  );
 
-      {native && canCreateEvent && (
+  return (
+    <>
+      {canFinanceChargeRules ? (
+        <Tabs
+          value={hubTab}
+          onValueChange={(v) => setHubTab(v as "eventos" | "regras")}
+          className="flex flex-col gap-6"
+        >
+          <TabsList className="h-auto w-full flex-wrap justify-start gap-2 rounded-2xl border border-border bg-card p-2 shadow-soft sm:w-auto">
+            <TabsTrigger value="eventos" className="rounded-full px-5">
+              Eventos
+            </TabsTrigger>
+            <TabsTrigger value="regras" className="rounded-full px-5">
+              Regras de cobranças
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="eventos" className="mt-0 space-y-0 focus-visible:outline-none">
+            {eventsTabBody}
+          </TabsContent>
+          <TabsContent value="regras" className="mt-0 focus-visible:outline-none">
+            <DomainChargeRulesPanel variant="event" schoolId={schoolId} role={role} />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        eventsTabBody
+      )}
+
+      {native && canCreateEvent && (!canFinanceChargeRules || hubTab === "eventos") && (
         <NativeMobileFabPortal>
           <Button
             type="button"
@@ -400,6 +528,105 @@ const Eventos = () => {
   );
 };
 
+type ParentPresenceBundle = {
+  kids: ParentChild[];
+  loadingKids: boolean;
+  rsvpMap: Record<string, RsvpResponse>;
+  savingKey: string | null;
+  upsertPresence: (eventId: string, studentId: string, response: RsvpResponse) => Promise<void>;
+};
+
+function EventParentPresence({
+  event,
+  layout,
+  bundle,
+}: {
+  event: EventRow;
+  layout: "card" | "inline";
+  bundle: ParentPresenceBundle;
+}) {
+  const { kids, loadingKids, rsvpMap, savingKey, upsertPresence } = bundle;
+  if (decodeEventAudience(event.audience).preset === "staff") return null;
+
+  const btnBase =
+    layout === "card"
+      ? "rounded-full px-3 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50"
+      : "rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors disabled:opacity-50";
+
+  const wrap =
+    layout === "card"
+      ? "mt-3 space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3"
+      : "max-w-[220px] space-y-2 py-1";
+
+  return (
+    <div className={wrap}>
+      <p
+        className={
+          layout === "card"
+            ? "text-xs font-semibold text-muted-foreground"
+            : "text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+        }
+      >
+        Presença
+      </p>
+      {loadingKids ? (
+        <p className="text-[11px] text-muted-foreground">A carregar…</p>
+      ) : kids.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground">
+          Associe uma criança ao perfil para indicar presença.
+        </p>
+      ) : (
+        kids.map((child) => {
+          const ka = makeRsvpKey(event.id, child.id);
+          const current = rsvpMap[ka] ?? "unset";
+          const busy = savingKey === ka;
+          const labels: Record<RsvpResponse, string> = {
+            presente: "Presente",
+            ausente: "Ausente",
+            unset: "Por definir",
+          };
+          return (
+            <div
+              key={child.id}
+              className={cn(
+                "flex flex-col gap-1.5",
+                layout === "card" ? "sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-2" : "",
+              )}
+            >
+              <span
+                className={cn(
+                  "font-medium text-foreground",
+                  layout === "inline" ? "truncate text-[11px]" : "text-sm",
+                )}
+              >
+                {child.full_name}
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {(["presente", "ausente", "unset"] as const).map((resp) => (
+                  <button
+                    key={resp}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void upsertPresence(event.id, child.id, resp)}
+                    className={cn(
+                      btnBase,
+                      resp === current
+                        ? "bg-pastel-blue text-pastel-blue-foreground"
+                        : "bg-muted text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {labels[resp]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
 const TypeChip = ({
   active,
   onClick,
@@ -428,12 +655,14 @@ const EventsCardsView = ({
   canMutateEvent,
   onEdit,
   onDelete,
+  parentPresence,
 }: {
   events: EventRow[];
   audienceRoomNames: Record<string, string>;
   canMutateEvent: (e: EventRow) => boolean;
   onEdit: (e: EventRow) => void;
   onDelete: (id: string) => void;
+  parentPresence?: ParentPresenceBundle;
 }) => {
   const sorted = [...items].sort((a, b) => b.event_date.localeCompare(a.event_date));
 
@@ -487,6 +716,9 @@ const EventsCardsView = ({
                   Público:{" "}
                   <span className="font-medium text-foreground">{formatEventAudienceSummary(e.audience, audienceRoomNames)}</span>
                 </p>
+                {parentPresence && (
+                  <EventParentPresence event={e} layout="card" bundle={parentPresence} />
+                )}
                 {canMutateEvent(e) && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
@@ -525,6 +757,7 @@ const CalendarView = ({
   canMutateEvent,
   onEdit,
   onDelete,
+  parentPresence,
 }: {
   cursor: Date;
   setCursor: (d: Date) => void;
@@ -535,6 +768,7 @@ const CalendarView = ({
   canMutateEvent: (e: EventRow) => boolean;
   onEdit: (e: EventRow) => void;
   onDelete: (id: string) => void;
+  parentPresence?: ParentPresenceBundle;
 }) => {
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -722,6 +956,9 @@ const CalendarView = ({
                   Público:{" "}
                   <span className="font-medium text-foreground">{formatEventAudienceSummary(e.audience, audienceRoomNames)}</span>
                 </p>
+                {parentPresence && (
+                  <EventParentPresence event={e} layout="card" bundle={parentPresence} />
+                )}
                 {canMutateEvent(e) && (
                   <div className="mt-3 flex gap-2">
                     <button
@@ -755,6 +992,7 @@ const ListView = ({
   onEdit,
   onDelete,
   hideActionsColumn = false,
+  parentPresence,
 }: {
   events: EventRow[];
   audienceRoomNames: Record<string, string>;
@@ -762,8 +1000,11 @@ const ListView = ({
   onEdit: (e: EventRow) => void;
   onDelete: (id: string) => void;
   hideActionsColumn?: boolean;
+  parentPresence?: ParentPresenceBundle;
 }) => {
   const sorted = [...items].sort((a, b) => b.event_date.localeCompare(a.event_date));
+  const presenceCol = !!parentPresence;
+  const emptyColSpan = 6 + (presenceCol ? 1 : 0) + (!hideActionsColumn ? 1 : 0);
 
   return (
     <div className="overflow-hidden rounded-2xl bg-card shadow-card">
@@ -781,6 +1022,7 @@ const ListView = ({
               <th className="px-6 py-3">Local</th>
               <th className="px-6 py-3">Organizador</th>
               <th className="px-6 py-3">Público</th>
+              {presenceCol && <th className="px-6 py-3">Presença</th>}
               {!hideActionsColumn && <th className="px-6 py-3 text-right">Ações</th>}
             </tr>
           </thead>
@@ -816,6 +1058,11 @@ const ListView = ({
                   <td className="px-6 py-4 text-muted-foreground">{e.location ?? "—"}</td>
                   <td className="px-6 py-4 text-muted-foreground">{e.organizer ?? "—"}</td>
                   <td className="px-6 py-4 text-muted-foreground">{formatEventAudienceSummary(e.audience, audienceRoomNames)}</td>
+                  {presenceCol && (
+                    <td className="align-top px-6 py-4 text-muted-foreground">
+                      <EventParentPresence event={e} layout="inline" bundle={parentPresence} />
+                    </td>
+                  )}
                   {!hideActionsColumn && (
                     <td className="px-6 py-4">
                       <div className="flex justify-end gap-1">
@@ -845,7 +1092,7 @@ const ListView = ({
             })}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={hideActionsColumn ? 6 : 7} className="px-6 py-12 text-center text-sm text-muted-foreground">
+                <td colSpan={emptyColSpan} className="px-6 py-12 text-center text-sm text-muted-foreground">
                   Sem eventos para os filtros aplicados.
                 </td>
               </tr>

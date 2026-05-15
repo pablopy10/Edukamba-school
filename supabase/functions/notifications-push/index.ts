@@ -5,6 +5,12 @@
  *   x-notification-push-secret com o mesmo valor (além ou em substituição da verificação por service role).
  * O External ID na app corresponde ao user id Supabase (recipient_id).
  * Respeita notification_preferences.channel = user_push (omitir push se disabled).
+ *
+ * Para category = «evento»: após enviar o push, reencaminha o mesmo INSERT para
+ * `/functions/v1/notifications-email` (service role). Isto garante envio por email mesmo
+ * quando apenas o webhook do push está ligado na BD. Para projectos que já ligam dois
+ * webhooks (push + email), defina SKIP_EVENT_NOTIFICATION_EMAIL_FROM_PUSH=1 nos segredos
+ * das Edge Functions (evita email duplicado).
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -63,6 +69,7 @@ interface NotificationRow {
   description?: string | null;
   link?: string | null;
   category?: string | null;
+  school_id?: string | null;
 }
 
 function extractRecord(body: unknown): NotificationRow | null {
@@ -83,6 +90,7 @@ function extractRecord(body: unknown): NotificationRow | null {
       description: o.description ?? null,
       link: o.link ?? null,
       category: o.category ?? null,
+      school_id: typeof o["school_id"] === "string" ? o["school_id"] as string : null,
     };
   }
 
@@ -211,6 +219,45 @@ Deno.serve(async (req) => {
       JSON.stringify({ ok: false, warning: "OneSignal recusou", status: osRes.status, detail: osText }),
       { status: 200, headers: { "Content-Type": "application/json" } },
     );
+  }
+
+  /** Email de calendário escolar mesmo sem webhook dedicado em `notifications`. */
+  const cat = (record.category ?? "").trim().toLowerCase();
+  const skipEmailDup = (Deno.env.get("SKIP_EVENT_NOTIFICATION_EMAIL_FROM_PUSH") ?? "").trim();
+  const shouldForwardCalendarEmail =
+    cat === "evento" && skipEmailDup !== "1" && skipEmailDup !== "true" &&
+    !!supabaseUrl && !!serviceRole;
+
+  if (shouldForwardCalendarEmail) {
+    const emailPayload = {
+      type: "INSERT",
+      table: "notifications",
+      record: {
+        id,
+        recipient_id: recipientId,
+        title,
+        description: record.description ?? null,
+        link,
+        category: record.category,
+        school_id: record.school_id ?? null,
+      },
+    };
+    try {
+      const emailRes = await fetch(`${supabaseUrl}/functions/v1/notifications-email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${serviceRole}`,
+          apikey: serviceRole,
+        },
+        body: JSON.stringify(emailPayload),
+      });
+      if (!emailRes.ok) {
+        console.error("notifications-push: forward notifications-email falhou", emailRes.status, await emailRes.text());
+      }
+    } catch (e) {
+      console.error("notifications-push: forward notifications-email exceção", e);
+    }
   }
 
   return new Response(JSON.stringify({ ok: true }), {

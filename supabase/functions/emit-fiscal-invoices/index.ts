@@ -37,6 +37,8 @@ type PaymentRow = {
   activity_fee_id: string | null;
   transport_fee_id: string | null;
   enrollment_fee_id: string | null;
+  meal_fee_id: string | null;
+  event_fee_id: string | null;
 };
 
 function corsJson(body: Record<string, unknown>, status = 200) {
@@ -190,8 +192,28 @@ async function resolveFiscalContext(
     studentId = row?.student_id ?? null;
     const ft = (row as { fee_type?: string } | null)?.fee_type;
     lineDescription = ft === "RENEWAL" ? "Renovação de matrícula" : "Taxa de matrícula";
+  } else if (payment.meal_fee_id) {
+    const { data: row, error } = await sb
+      .from("meal_fees")
+      .select("student_id, meal_program:meal_programs(name)")
+      .eq("id", payment.meal_fee_id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    studentId = row?.student_id ?? null;
+    const pname = (row as { meal_program?: { name: string | null } | null })?.meal_program?.name?.trim();
+    lineDescription = pname ? `Refeições escolares (${pname})` : "Refeições escolares";
+  } else if (payment.event_fee_id) {
+    const { data: row, error } = await sb
+      .from("event_fees")
+      .select("student_id, event:events(title)")
+      .eq("id", payment.event_fee_id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    studentId = row?.student_id ?? null;
+    const t = (row as { event?: { title: string | null } | null })?.event?.title?.trim();
+    lineDescription = t ? `Evento escolar (${t})` : "Evento escolar";
   } else {
-    throw new Error("Pagamento sem cobrança associada (propina / atividade / transporte / matrícula).");
+    throw new Error("Pagamento sem cobrança associada (propina / atividade / transporte / matrícula / refeições / evento).");
   }
 
   if (!studentId) throw new Error("Não foi possível resolver o aluno deste pagamento.");
@@ -439,7 +461,7 @@ Deno.serve(async (req) => {
   const { data: rows, error: fetchErr } = await userClient
     .from("payments")
     .select(
-      "id, school_id, status, amount_paid, validated_at, payment_date, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id",
+      "id, school_id, status, amount_paid, validated_at, payment_date, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, meal_fee_id, event_fee_id",
     )
     .in("id", uniqueIds);
 

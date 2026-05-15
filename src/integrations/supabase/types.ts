@@ -1229,6 +1229,259 @@ export type Database = {
           },
         ]
       }
+      event_charge_rule_classrooms: {
+        Row: {
+          charge_rule_id: string
+          classroom_id: string
+        }
+        Insert: {
+          charge_rule_id: string
+          classroom_id: string
+        }
+        Update: {
+          charge_rule_id?: string
+          classroom_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_charge_rule_classrooms_charge_rule_id_fkey"
+            columns: ["charge_rule_id"]
+            isOneToOne: false
+            referencedRelation: "event_charge_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_charge_rule_classrooms_classroom_id_fkey"
+            columns: ["classroom_id"]
+            isOneToOne: false
+            referencedRelation: "classrooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_charge_rule_students: {
+        Row: {
+          charge_rule_id: string
+          student_id: string
+        }
+        Insert: {
+          charge_rule_id: string
+          student_id: string
+        }
+        Update: {
+          charge_rule_id?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_charge_rule_students_charge_rule_id_fkey"
+            columns: ["charge_rule_id"]
+            isOneToOne: false
+            referencedRelation: "event_charge_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_charge_rule_students_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_charge_rules: {
+        Row: {
+          academic_year_id: string | null
+          created_at: string
+          due_day: number
+          end_month: number | null
+          event_id: string
+          generate_all_upfront: boolean
+          id: string
+          monthly_amount: number
+          months_count: number
+          notes: string | null
+          recurrence: string
+          school_id: string
+          start_month: number
+          target_scope: string
+          updated_at: string
+        }
+        Insert: {
+          academic_year_id?: string | null
+          created_at?: string
+          due_day?: number
+          end_month?: number | null
+          event_id: string
+          generate_all_upfront?: boolean
+          id?: string
+          monthly_amount?: number
+          months_count?: number
+          notes?: string | null
+          recurrence?: string
+          school_id: string
+          start_month?: number
+          target_scope?: string
+          updated_at?: string
+        }
+        Update: {
+          academic_year_id?: string | null
+          created_at?: string
+          due_day?: number
+          end_month?: number | null
+          event_id?: string
+          generate_all_upfront?: boolean
+          id?: string
+          monthly_amount?: number
+          months_count?: number
+          notes?: string | null
+          recurrence?: string
+          school_id?: string
+          start_month?: number
+          target_scope?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_charge_rules_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_charge_rules_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: true
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_charge_rules_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_fees: {
+        Row: {
+          academic_year_id: string | null
+          amount_due: number
+          created_at: string
+          due_date: string
+          event_id: string
+          id: string
+          is_paid: boolean
+          month_index: number | null
+          school_id: string
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          academic_year_id?: string | null
+          amount_due?: number
+          created_at?: string
+          due_date: string
+          event_id: string
+          id?: string
+          is_paid?: boolean
+          month_index?: number | null
+          school_id: string
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          academic_year_id?: string | null
+          amount_due?: number
+          created_at?: string
+          due_date?: string
+          event_id?: string
+          id?: string
+          is_paid?: boolean
+          month_index?: number | null
+          school_id?: string
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_fees_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_fees_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_fees_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_fees_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_student_rsvp: {
+        Row: {
+          event_id: string
+          response: string
+          student_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          event_id: string
+          response?: string
+          student_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          event_id?: string
+          response?: string
+          student_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_student_rsvp_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_student_rsvp_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_student_rsvp_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           audience: string | null
@@ -2451,6 +2704,7 @@ export type Database = {
           amount_paid: number
           enrollment_fee_id: string | null
           erp_exported_at: string | null
+          event_fee_id: string | null
           id: string
           meal_fee_id: string | null
           method: string | null
@@ -2471,6 +2725,7 @@ export type Database = {
           amount_paid: number
           enrollment_fee_id?: string | null
           erp_exported_at?: string | null
+          event_fee_id?: string | null
           id?: string
           meal_fee_id?: string | null
           method?: string | null
@@ -2491,6 +2746,7 @@ export type Database = {
           amount_paid?: number
           enrollment_fee_id?: string | null
           erp_exported_at?: string | null
+          event_fee_id?: string | null
           id?: string
           meal_fee_id?: string | null
           method?: string | null
@@ -2526,6 +2782,13 @@ export type Database = {
             columns: ["meal_fee_id"]
             isOneToOne: false
             referencedRelation: "meal_fees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_event_fee_id_fkey"
+            columns: ["event_fee_id"]
+            isOneToOne: false
+            referencedRelation: "event_fees"
             referencedColumns: ["id"]
           },
           {
@@ -4466,6 +4729,10 @@ export type Database = {
       }
       generate_transport_fees: {
         Args: { _enrollment_id: string }
+        Returns: number
+      }
+      generate_event_fees: {
+        Args: { _event_id: string }
         Returns: number
       }
       generate_meal_fees: {

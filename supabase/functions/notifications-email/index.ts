@@ -117,6 +117,7 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
   DOCUMENT_SIGN_REQUEST:  { color: "#3b82f6", headerIcon: "✍️", label: "Documento para Assinar" },
   DOCUMENT_SIGNED:        { color: "#22c55e", headerIcon: "✅", label: "Documento Assinado" },
   MODULE_AUTHORIZATION:   { color: "#059669", headerIcon: "📋", label: "Autorização para encarregado" },
+  EVENTO:                 { color: "#0369a1", headerIcon: "📅", label: "Calendário escolar" },
 };
 
 function buildHtml(opts: {
@@ -128,7 +129,8 @@ function buildHtml(opts: {
   recipientName: string;
 }): string {
   const { title, description, category, link, schoolName, recipientName } = opts;
-  const meta = CATEGORY_META[category] ?? { color: "#3b82f6", headerIcon: "📬", label: "Notificação" };
+  const catKey = category.trim().toUpperCase();
+  const meta = CATEGORY_META[catKey] ?? { color: "#3b82f6", headerIcon: "📬", label: "Notificação" };
   const firstName = recipientName.split(" ")[0] || recipientName;
 
   const linkBtn = link
