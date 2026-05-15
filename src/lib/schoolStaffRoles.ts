@@ -48,6 +48,22 @@ export function canSchoolHardDeleteRole(role: string | null | undefined): boolea
   return role === "ADMIN" || role === "SUPER_ADMIN" || role === "DIRECTOR";
 }
 
+/** Alinhado à política RLS `event_student_rsvp` (lista de presenças declarada pelos encarregados). */
+export function canViewSchoolEventAttendanceRoster(role: string | null | undefined): boolean {
+  if (role == null) return false;
+  switch (role) {
+    case "ADMIN":
+    case "SUPER_ADMIN":
+    case "DIRECTOR":
+    case "SECRETARY":
+    case "TREASURER":
+    case "TEACHER":
+      return true;
+    default:
+      return false;
+  }
+}
+
 /**
  * Perfis que podem corrigir submissões de formulários de autorização por módulo — alinhado a
  * `auth_is_module_auth_staff_viewer()` nas políticas RLS (Admin, Director, Secretariado e Tesouraria; inclui Super‑admin).

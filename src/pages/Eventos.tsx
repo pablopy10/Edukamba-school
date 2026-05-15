@@ -26,7 +26,12 @@ import { EventFormDialog, type EventRow } from "@/components/eventos/EventFormDi
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { showPageKpiCards, isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
-import { isSchoolManagementOrTeacher, isSchoolManagementRole, canValidateSchoolPaymentProofs } from "@/lib/schoolStaffRoles";
+import {
+  isSchoolManagementOrTeacher,
+  isSchoolManagementRole,
+  canValidateSchoolPaymentProofs,
+  canViewSchoolEventAttendanceRoster,
+} from "@/lib/schoolStaffRoles";
 import { formatEventAudienceSummary, decodeEventAudience } from "@/lib/eventAudience";
 import type { ParentChild } from "@/hooks/useParentChildren";
 import { useParentChildren } from "@/hooks/useParentChildren";
@@ -35,6 +40,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { PagamentosFinanceHub } from "@/pages/Pagamentos";
 import { ModuleAuthorizationsPanel } from "@/components/authorizations/ModuleAuthorizationsPanel";
+import { EventStaffAttendanceRoster } from "@/components/eventos/EventStaffAttendanceRoster";
+import type { StaffRosterStudent } from "@/components/eventos/EventStaffAttendanceRoster";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -103,6 +110,8 @@ const Eventos = () => {
   const [hubTab, setHubTab] = useState<"eventos" | "pagamentos" | "autorizacoes" | "regras">("eventos");
   const [rsvpMap, setRsvpMap] = useState<Record<string, RsvpResponse>>({});
   const [rsvpSavingKey, setRsvpSavingKey] = useState<string | null>(null);
+  const [rosterStudentsForSchool, setRosterStudentsForSchool] = useState<StaffRosterStudent[]>([]);
+  const [staffAttendanceRsvpMap, setStaffAttendanceRsvpMap] = useState<Record<string, RsvpResponse>>({});
 
   const { children: parentChildrenList, childIds, allChildIds, loading: parentChildrenLoading } =
     useParentChildren();
@@ -247,6 +256,73 @@ const Eventos = () => {
       cancelled = true;
     };
   }, [role, parentChildrenLoading, schoolId, events, allChildIds]);
+
+  useEffect(() => {
+    if (!canViewSchoolEventAttendanceRoster(role) || !schoolId) {
+      setRosterStudentsForSchool([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("students")
+        .select("id, full_name, classroom_id")
+        .eq("school_id", schoolId)
+        .order("full_name", { ascending: true });
+      if (cancelled) return;
+      if (error) {
+        setRosterStudentsForSchool([]);
+        return;
+      }
+      setRosterStudentsForSchool((data ?? []) as StaffRosterStudent[]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [schoolId, role]);
+
+  useEffect(() => {
+    if (!canViewSchoolEventAttendanceRoster(role) || !schoolId) {
+      setStaffAttendanceRsvpMap({});
+      return;
+    }
+    const eventIds = events.map((e) => e.id);
+    if (eventIds.length === 0) {
+      setStaffAttendanceRsvpMap({});
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("event_student_rsvp")
+        .select("event_id, student_id, response")
+        .in("event_id", eventIds);
+      if (cancelled) return;
+      if (error) {
+        setStaffAttendanceRsvpMap({});
+        return;
+      }
+      const next: Record<string, RsvpResponse> = {};
+      for (const row of data ?? []) {
+        const r = row.response as RsvpResponse;
+        if (r !== "presente" && r !== "ausente" && r !== "unset") continue;
+        next[makeRsvpKey(row.event_id as string, row.student_id as string)] = r;
+      }
+      setStaffAttendanceRsvpMap(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [role, schoolId, events]);
+
+  const staffAttendanceBundle = useMemo(() => {
+    if (!canViewSchoolEventAttendanceRoster(role)) return undefined;
+    return {
+      rosterStudents: rosterStudentsForSchool,
+      rsvpMap: staffAttendanceRsvpMap,
+      classroomNames: audienceRoomNames,
+    };
+  }, [role, rosterStudentsForSchool, staffAttendanceRsvpMap, audienceRoomNames]);
 
   const parentPresenceUi = useMemo(() => {
     if (role !== "PARENT") return undefined;
@@ -445,6 +521,7 @@ const Eventos = () => {
             onEdit={handleEdit}
             onDelete={(id) => setDeleteId(id)}
             parentPresence={parentPresenceUi}
+            staffAttendance={staffAttendanceBundle}
           />
         ) : view === "calendario" ? (
           <CalendarView
@@ -458,6 +535,7 @@ const Eventos = () => {
             onEdit={handleEdit}
             onDelete={(id) => setDeleteId(id)}
             parentPresence={parentPresenceUi}
+            staffAttendance={staffAttendanceBundle}
           />
         ) : (
           <ListView
@@ -468,6 +546,7 @@ const Eventos = () => {
             onDelete={(id) => setDeleteId(id)}
             hideActionsColumn={role === "PARENT"}
             parentPresence={parentPresenceUi}
+            staffAttendance={staffAttendanceBundle}
           />
         )}
       </div>
@@ -571,6 +650,12 @@ type ParentPresenceBundle = {
   rsvpMap: Record<string, RsvpResponse>;
   savingKey: string | null;
   upsertPresence: (eventId: string, studentId: string, response: RsvpResponse) => Promise<void>;
+};
+
+type StaffAttendanceBundle = {
+  rosterStudents: StaffRosterStudent[];
+  rsvpMap: Record<string, RsvpResponse>;
+  classroomNames: Record<string, string>;
 };
 
 function EventParentPresence({
@@ -693,6 +778,7 @@ const EventsCardsView = ({
   onEdit,
   onDelete,
   parentPresence,
+  staffAttendance,
 }: {
   events: EventRow[];
   audienceRoomNames: Record<string, string>;
@@ -700,6 +786,7 @@ const EventsCardsView = ({
   onEdit: (e: EventRow) => void;
   onDelete: (id: string) => void;
   parentPresence?: ParentPresenceBundle;
+  staffAttendance?: StaffAttendanceBundle;
 }) => {
   const sorted = [...items].sort((a, b) => b.event_date.localeCompare(a.event_date));
 
@@ -756,6 +843,15 @@ const EventsCardsView = ({
                 {parentPresence && (
                   <EventParentPresence event={e} layout="card" bundle={parentPresence} />
                 )}
+                {staffAttendance && (
+                  <EventStaffAttendanceRoster
+                    event={e}
+                    rosterStudents={staffAttendance.rosterStudents}
+                    rsvpMap={staffAttendance.rsvpMap}
+                    classroomNames={staffAttendance.classroomNames}
+                    layout="card"
+                  />
+                )}
                 {canMutateEvent(e) && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
@@ -795,6 +891,7 @@ const CalendarView = ({
   onEdit,
   onDelete,
   parentPresence,
+  staffAttendance,
 }: {
   cursor: Date;
   setCursor: (d: Date) => void;
@@ -806,6 +903,7 @@ const CalendarView = ({
   onEdit: (e: EventRow) => void;
   onDelete: (id: string) => void;
   parentPresence?: ParentPresenceBundle;
+  staffAttendance?: StaffAttendanceBundle;
 }) => {
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -996,6 +1094,15 @@ const CalendarView = ({
                 {parentPresence && (
                   <EventParentPresence event={e} layout="card" bundle={parentPresence} />
                 )}
+                {staffAttendance && (
+                  <EventStaffAttendanceRoster
+                    event={e}
+                    rosterStudents={staffAttendance.rosterStudents}
+                    rsvpMap={staffAttendance.rsvpMap}
+                    classroomNames={staffAttendance.classroomNames}
+                    layout="card"
+                  />
+                )}
                 {canMutateEvent(e) && (
                   <div className="mt-3 flex gap-2">
                     <button
@@ -1030,6 +1137,7 @@ const ListView = ({
   onDelete,
   hideActionsColumn = false,
   parentPresence,
+  staffAttendance,
 }: {
   events: EventRow[];
   audienceRoomNames: Record<string, string>;
@@ -1038,10 +1146,12 @@ const ListView = ({
   onDelete: (id: string) => void;
   hideActionsColumn?: boolean;
   parentPresence?: ParentPresenceBundle;
+  staffAttendance?: StaffAttendanceBundle;
 }) => {
   const sorted = [...items].sort((a, b) => b.event_date.localeCompare(a.event_date));
   const presenceCol = !!parentPresence;
-  const emptyColSpan = 6 + (presenceCol ? 1 : 0) + (!hideActionsColumn ? 1 : 0);
+  const staffCol = !!staffAttendance;
+  const emptyColSpan = 6 + (presenceCol ? 1 : 0) + (staffCol ? 1 : 0) + (!hideActionsColumn ? 1 : 0);
 
   return (
     <div className="overflow-hidden rounded-2xl bg-card shadow-card">
@@ -1060,6 +1170,7 @@ const ListView = ({
               <th className="px-6 py-3">Organizador</th>
               <th className="px-6 py-3">Público</th>
               {presenceCol && <th className="px-6 py-3">Presença</th>}
+              {staffCol && <th className="px-6 py-3 whitespace-nowrap">Presença (alunos)</th>}
               {!hideActionsColumn && <th className="px-6 py-3 text-right">Ações</th>}
             </tr>
           </thead>
@@ -1098,6 +1209,17 @@ const ListView = ({
                   {presenceCol && (
                     <td className="align-top px-6 py-4 text-muted-foreground">
                       <EventParentPresence event={e} layout="inline" bundle={parentPresence} />
+                    </td>
+                  )}
+                  {staffCol && staffAttendance && (
+                    <td className="align-top px-6 py-4 text-muted-foreground">
+                      <EventStaffAttendanceRoster
+                        event={e}
+                        rosterStudents={staffAttendance.rosterStudents}
+                        rsvpMap={staffAttendance.rsvpMap}
+                        classroomNames={staffAttendance.classroomNames}
+                        layout="compact"
+                      />
                     </td>
                   )}
                   {!hideActionsColumn && (
