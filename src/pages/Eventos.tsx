@@ -32,7 +32,7 @@ import {
   canValidateSchoolPaymentProofs,
   canViewSchoolEventAttendanceRoster,
 } from "@/lib/schoolStaffRoles";
-import { formatEventAudienceSummary, decodeEventAudience } from "@/lib/eventAudience";
+import { formatEventAudienceSummary, guardianInEducatorsAudience, audienceUsesProfileSelfRsvp, audienceUsesStudentRsvp, parseEventAudience, profileMaySelfRespondToAudience } from "@/lib/eventAudience";
 import type { ParentChild } from "@/hooks/useParentChildren";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { DomainChargeRulesPanel } from "@/components/finance/DomainChargeRulesPanel";
@@ -42,6 +42,7 @@ import { PagamentosFinanceHub } from "@/pages/Pagamentos";
 import { ModuleAuthorizationsPanel } from "@/components/authorizations/ModuleAuthorizationsPanel";
 import { EventStaffAttendanceRoster } from "@/components/eventos/EventStaffAttendanceRoster";
 import type { StaffRosterStudent } from "@/components/eventos/EventStaffAttendanceRoster";
+import { EventProfileAudienceRoster, type ProfileRsvpRow } from "@/components/eventos/EventProfileAudienceRoster";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -112,6 +113,9 @@ const Eventos = () => {
   const [rsvpSavingKey, setRsvpSavingKey] = useState<string | null>(null);
   const [rosterStudentsForSchool, setRosterStudentsForSchool] = useState<StaffRosterStudent[]>([]);
   const [staffAttendanceRsvpMap, setStaffAttendanceRsvpMap] = useState<Record<string, RsvpResponse>>({});
+  const [profileSelfRsvpMap, setProfileSelfRsvpMap] = useState<Record<string, RsvpResponse>>({});
+  const [profileRsvpSavingKey, setProfileRsvpSavingKey] = useState<string | null>(null);
+  const [profileAudienceRowsByEvent, setProfileAudienceRowsByEvent] = useState<Record<string, ProfileRsvpRow[]>>({});
 
   const { children: parentChildrenList, childIds, allChildIds, loading: parentChildrenLoading } =
     useParentChildren();
@@ -228,6 +232,37 @@ const Eventos = () => {
     [userId],
   );
 
+  const upsertProfileSelfRsvp = useCallback(
+    async (eventId: string, response: RsvpResponse) => {
+      if (!userId) {
+        toast.error("Sessão inválida.");
+        return;
+      }
+      const k = `prof::${eventId}`;
+      setProfileRsvpSavingKey(k);
+      let prev: RsvpResponse = "unset";
+      setProfileSelfRsvpMap((m) => {
+        prev = m[eventId] ?? "unset";
+        return { ...m, [eventId]: response };
+      });
+      const { error } = await supabase.from("event_profile_rsvp").upsert(
+        {
+          event_id: eventId,
+          profile_id: userId,
+          response,
+          updated_by: userId,
+        },
+        { onConflict: "event_id,profile_id" },
+      );
+      if (error) {
+        setProfileSelfRsvpMap((m) => ({ ...m, [eventId]: prev }));
+        toast.error("Erro ao guardar presença: " + error.message);
+      }
+      setProfileRsvpSavingKey(null);
+    },
+    [userId],
+  );
+
   useEffect(() => {
     if (role !== "PARENT" || parentChildrenLoading || !schoolId) return;
     const eventIds = events.map((e) => e.id);
@@ -315,14 +350,97 @@ const Eventos = () => {
     };
   }, [role, schoolId, events]);
 
+  useEffect(() => {
+    if (!userId || events.length === 0) {
+      setProfileSelfRsvpMap({});
+      return;
+    }
+    const eventIds = events.map((e) => e.id);
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("event_profile_rsvp")
+        .select("event_id,response")
+        .eq("profile_id", userId)
+        .in("event_id", eventIds);
+      if (cancelled) return;
+      if (error) return;
+      const next: Record<string, RsvpResponse> = {};
+      for (const row of data ?? []) {
+        const r = row.response as RsvpResponse;
+        if (r !== "presente" && r !== "ausente" && r !== "unset") continue;
+        next[row.event_id as string] = r;
+      }
+      setProfileSelfRsvpMap(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, events]);
+
+  useEffect(() => {
+    if (!canViewSchoolEventAttendanceRoster(role)) {
+      setProfileAudienceRowsByEvent({});
+      return;
+    }
+    const eventIds = events.map((e) => e.id);
+    if (eventIds.length === 0) {
+      setProfileAudienceRowsByEvent({});
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("event_profile_rsvp")
+        .select("event_id, profile_id, response, profiles(full_name)")
+        .in("event_id", eventIds);
+      if (cancelled) return;
+      if (error) {
+        setProfileAudienceRowsByEvent({});
+        return;
+      }
+      const byEvent: Record<string, ProfileRsvpRow[]> = {};
+      for (const row of data ?? []) {
+        const rid = row.event_id as string;
+        const prof = row.profiles as unknown as { full_name: string | null } | null;
+        const r = row.response as RsvpResponse;
+        const norm: RsvpResponse =
+          r === "presente" || r === "ausente" || r === "unset" ? r : "unset";
+        if (!byEvent[rid]) byEvent[rid] = [];
+        byEvent[rid].push({
+          profile_id: row.profile_id as string,
+          full_name: prof?.full_name ?? null,
+          response: norm,
+        });
+      }
+      setProfileAudienceRowsByEvent(byEvent);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [role, events]);
+
   const staffAttendanceBundle = useMemo(() => {
     if (!canViewSchoolEventAttendanceRoster(role)) return undefined;
     return {
       rosterStudents: rosterStudentsForSchool,
       rsvpMap: staffAttendanceRsvpMap,
       classroomNames: audienceRoomNames,
+      profileRowsByEvent: profileAudienceRowsByEvent,
     };
-  }, [role, rosterStudentsForSchool, staffAttendanceRsvpMap, audienceRoomNames]);
+  }, [role, rosterStudentsForSchool, staffAttendanceRsvpMap, audienceRoomNames, profileAudienceRowsByEvent]);
+
+  const profileSelfPresenceUi = useMemo(() => {
+    if (!userId) return undefined;
+    return {
+      userId,
+      role,
+      kids: parentChildrenList,
+      responses: profileSelfRsvpMap,
+      savingKey: profileRsvpSavingKey,
+      upsert: upsertProfileSelfRsvp,
+    };
+  }, [userId, role, parentChildrenList, profileSelfRsvpMap, profileRsvpSavingKey, upsertProfileSelfRsvp]);
 
   const parentPresenceUi = useMemo(() => {
     if (role !== "PARENT") return undefined;
@@ -521,6 +639,7 @@ const Eventos = () => {
             onEdit={handleEdit}
             onDelete={(id) => setDeleteId(id)}
             parentPresence={parentPresenceUi}
+            profileSelfPresence={profileSelfPresenceUi}
             staffAttendance={staffAttendanceBundle}
           />
         ) : view === "calendario" ? (
@@ -535,6 +654,7 @@ const Eventos = () => {
             onEdit={handleEdit}
             onDelete={(id) => setDeleteId(id)}
             parentPresence={parentPresenceUi}
+            profileSelfPresence={profileSelfPresenceUi}
             staffAttendance={staffAttendanceBundle}
           />
         ) : (
@@ -546,6 +666,7 @@ const Eventos = () => {
             onDelete={(id) => setDeleteId(id)}
             hideActionsColumn={role === "PARENT"}
             parentPresence={parentPresenceUi}
+            profileSelfPresence={profileSelfPresenceUi}
             staffAttendance={staffAttendanceBundle}
           />
         )}
@@ -656,7 +777,85 @@ type StaffAttendanceBundle = {
   rosterStudents: StaffRosterStudent[];
   rsvpMap: Record<string, RsvpResponse>;
   classroomNames: Record<string, string>;
+  profileRowsByEvent: Record<string, ProfileRsvpRow[]>;
 };
+
+type ProfileSelfPresenceBundle = {
+  role: string | null;
+  kids: ParentChild[];
+  responses: Record<string, RsvpResponse>;
+  savingKey: string | null;
+  upsert: (eventId: string, resp: RsvpResponse) => Promise<void>;
+};
+
+function EventSelfProfilePresence({
+  event,
+  layout,
+  bundle,
+}: {
+  event: EventRow;
+  layout: "card" | "inline";
+  bundle: ProfileSelfPresenceBundle;
+}) {
+  const p = parseEventAudience(event.audience);
+  const inEducScope = guardianInEducatorsAudience(
+    p,
+    bundle.kids.map((k) => k.classroom_id),
+  );
+  if (!profileMaySelfRespondToAudience(p, bundle.role, { guardianInEducatorsScope: inEducScope })) {
+    return null;
+  }
+
+  const btnBase =
+    layout === "card"
+      ? "rounded-full px-3 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50"
+      : "rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors disabled:opacity-50";
+
+  const wrap =
+    layout === "card"
+      ? "mt-3 space-y-2 rounded-lg border border-border/60 bg-muted/15 p-3"
+      : "max-w-[220px] space-y-2 py-1";
+
+  const current = bundle.responses[event.id] ?? "unset";
+  const busy = bundle.savingKey === `prof::${event.id}`;
+  const labels: Record<RsvpResponse, string> = {
+    presente: "Presente",
+    ausente: "Ausente",
+    unset: "Por definir",
+  };
+
+  return (
+    <div className={wrap}>
+      <p
+        className={
+          layout === "card"
+            ? "text-xs font-semibold text-muted-foreground"
+            : "text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+        }
+      >
+        A minha presença
+      </p>
+      <div className="flex flex-wrap gap-1">
+        {(["presente", "ausente", "unset"] as const).map((resp) => (
+          <button
+            key={resp}
+            type="button"
+            disabled={busy}
+            onClick={() => void bundle.upsert(event.id, resp)}
+            className={cn(
+              btnBase,
+              resp === current
+                ? "bg-pastel-lilac text-pastel-lilac-foreground"
+                : "bg-muted text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {labels[resp]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function EventParentPresence({
   event,
@@ -668,7 +867,12 @@ function EventParentPresence({
   bundle: ParentPresenceBundle;
 }) {
   const { kids, loadingKids, rsvpMap, savingKey, upsertPresence } = bundle;
-  if (decodeEventAudience(event.audience).preset === "staff") return null;
+  const aud = parseEventAudience(event.audience);
+  if (!audienceUsesStudentRsvp(aud)) return null;
+
+  const ids = aud.classroomIds;
+  const scopedKids =
+    ids.length === 0 ? [] : kids.filter((k) => !!k.classroom_id && ids.includes(k.classroom_id));
 
   const btnBase =
     layout === "card"
@@ -693,12 +897,12 @@ function EventParentPresence({
       </p>
       {loadingKids ? (
         <p className="text-[11px] text-muted-foreground">A carregar…</p>
-      ) : kids.length === 0 ? (
+      ) : scopedKids.length === 0 ? (
         <p className="text-[11px] text-muted-foreground">
-          Associe uma criança ao perfil para indicar presença.
+          Sem educandos nestas turmas para declarar presença neste evento.
         </p>
       ) : (
-        kids.map((child) => {
+        scopedKids.map((child) => {
           const ka = makeRsvpKey(event.id, child.id);
           const current = rsvpMap[ka] ?? "unset";
           const busy = savingKey === ka;
@@ -778,6 +982,7 @@ const EventsCardsView = ({
   onEdit,
   onDelete,
   parentPresence,
+  profileSelfPresence,
   staffAttendance,
 }: {
   events: EventRow[];
@@ -786,6 +991,7 @@ const EventsCardsView = ({
   onEdit: (e: EventRow) => void;
   onDelete: (id: string) => void;
   parentPresence?: ParentPresenceBundle;
+  profileSelfPresence?: ProfileSelfPresenceBundle;
   staffAttendance?: StaffAttendanceBundle;
 }) => {
   const sorted = [...items].sort((a, b) => b.event_date.localeCompare(a.event_date));
@@ -843,12 +1049,22 @@ const EventsCardsView = ({
                 {parentPresence && (
                   <EventParentPresence event={e} layout="card" bundle={parentPresence} />
                 )}
-                {staffAttendance && (
+                {profileSelfPresence && (
+                  <EventSelfProfilePresence event={e} layout="card" bundle={profileSelfPresence} />
+                )}
+                {staffAttendance && audienceUsesStudentRsvp(parseEventAudience(e.audience)) && (
                   <EventStaffAttendanceRoster
                     event={e}
                     rosterStudents={staffAttendance.rosterStudents}
                     rsvpMap={staffAttendance.rsvpMap}
                     classroomNames={staffAttendance.classroomNames}
+                    layout="card"
+                  />
+                )}
+                {staffAttendance && audienceUsesProfileSelfRsvp(parseEventAudience(e.audience)) && (
+                  <EventProfileAudienceRoster
+                    event={e}
+                    rows={staffAttendance.profileRowsByEvent[e.id] ?? []}
                     layout="card"
                   />
                 )}
@@ -891,6 +1107,7 @@ const CalendarView = ({
   onEdit,
   onDelete,
   parentPresence,
+  profileSelfPresence,
   staffAttendance,
 }: {
   cursor: Date;
@@ -903,6 +1120,7 @@ const CalendarView = ({
   onEdit: (e: EventRow) => void;
   onDelete: (id: string) => void;
   parentPresence?: ParentPresenceBundle;
+  profileSelfPresence?: ProfileSelfPresenceBundle;
   staffAttendance?: StaffAttendanceBundle;
 }) => {
   const year = cursor.getFullYear();
@@ -1094,12 +1312,22 @@ const CalendarView = ({
                 {parentPresence && (
                   <EventParentPresence event={e} layout="card" bundle={parentPresence} />
                 )}
-                {staffAttendance && (
+                {profileSelfPresence && (
+                  <EventSelfProfilePresence event={e} layout="card" bundle={profileSelfPresence} />
+                )}
+                {staffAttendance && audienceUsesStudentRsvp(parseEventAudience(e.audience)) && (
                   <EventStaffAttendanceRoster
                     event={e}
                     rosterStudents={staffAttendance.rosterStudents}
                     rsvpMap={staffAttendance.rsvpMap}
                     classroomNames={staffAttendance.classroomNames}
+                    layout="card"
+                  />
+                )}
+                {staffAttendance && audienceUsesProfileSelfRsvp(parseEventAudience(e.audience)) && (
+                  <EventProfileAudienceRoster
+                    event={e}
+                    rows={staffAttendance.profileRowsByEvent[e.id] ?? []}
                     layout="card"
                   />
                 )}
@@ -1137,6 +1365,7 @@ const ListView = ({
   onDelete,
   hideActionsColumn = false,
   parentPresence,
+  profileSelfPresence,
   staffAttendance,
 }: {
   events: EventRow[];
@@ -1146,12 +1375,14 @@ const ListView = ({
   onDelete: (id: string) => void;
   hideActionsColumn?: boolean;
   parentPresence?: ParentPresenceBundle;
+  profileSelfPresence?: ProfileSelfPresenceBundle;
   staffAttendance?: StaffAttendanceBundle;
 }) => {
   const sorted = [...items].sort((a, b) => b.event_date.localeCompare(a.event_date));
   const presenceCol = !!parentPresence;
+  const selfCol = !!profileSelfPresence;
   const staffCol = !!staffAttendance;
-  const emptyColSpan = 6 + (presenceCol ? 1 : 0) + (staffCol ? 1 : 0) + (!hideActionsColumn ? 1 : 0);
+  const emptyColSpan = 6 + (presenceCol ? 1 : 0) + (selfCol ? 1 : 0) + (staffCol ? 1 : 0) + (!hideActionsColumn ? 1 : 0);
 
   return (
     <div className="overflow-hidden rounded-2xl bg-card shadow-card">
@@ -1169,8 +1400,9 @@ const ListView = ({
               <th className="px-6 py-3">Local</th>
               <th className="px-6 py-3">Organizador</th>
               <th className="px-6 py-3">Público</th>
-              {presenceCol && <th className="px-6 py-3">Presença</th>}
-              {staffCol && <th className="px-6 py-3 whitespace-nowrap">Presença (alunos)</th>}
+              {presenceCol && <th className="px-6 py-3">Presença (alunos)</th>}
+              {selfCol && <th className="px-6 py-3 whitespace-nowrap">A minha presença</th>}
+              {staffCol && <th className="px-6 py-3 whitespace-nowrap">Listas presença</th>}
               {!hideActionsColumn && <th className="px-6 py-3 text-right">Ações</th>}
             </tr>
           </thead>
@@ -1211,15 +1443,31 @@ const ListView = ({
                       <EventParentPresence event={e} layout="inline" bundle={parentPresence} />
                     </td>
                   )}
+                  {selfCol && profileSelfPresence && (
+                    <td className="align-top px-6 py-4 text-muted-foreground">
+                      <EventSelfProfilePresence event={e} layout="inline" bundle={profileSelfPresence} />
+                    </td>
+                  )}
                   {staffCol && staffAttendance && (
                     <td className="align-top px-6 py-4 text-muted-foreground">
-                      <EventStaffAttendanceRoster
-                        event={e}
-                        rosterStudents={staffAttendance.rosterStudents}
-                        rsvpMap={staffAttendance.rsvpMap}
-                        classroomNames={staffAttendance.classroomNames}
-                        layout="compact"
-                      />
+                      <div className="flex flex-col gap-2">
+                        {audienceUsesStudentRsvp(parseEventAudience(e.audience)) && (
+                          <EventStaffAttendanceRoster
+                            event={e}
+                            rosterStudents={staffAttendance.rosterStudents}
+                            rsvpMap={staffAttendance.rsvpMap}
+                            classroomNames={staffAttendance.classroomNames}
+                            layout="compact"
+                          />
+                        )}
+                        {audienceUsesProfileSelfRsvp(parseEventAudience(e.audience)) && (
+                          <EventProfileAudienceRoster
+                            event={e}
+                            rows={staffAttendance.profileRowsByEvent[e.id] ?? []}
+                            layout="compact"
+                          />
+                        )}
+                      </div>
                     </td>
                   )}
                   {!hideActionsColumn && (

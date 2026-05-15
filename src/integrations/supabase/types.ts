@@ -1482,6 +1482,52 @@ export type Database = {
           },
         ]
       }
+      event_profile_rsvp: {
+        Row: {
+          event_id: string
+          profile_id: string
+          response: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          event_id: string
+          profile_id: string
+          response?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          event_id?: string
+          profile_id?: string
+          response?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_profile_rsvp_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_profile_rsvp_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_profile_rsvp_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           audience: string | null

@@ -4,11 +4,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAcademicYear } from "@/context/AcademicYearContext";
-import { decodeEventAudience, encodeEventAudience, type EventAudiencePreset } from "@/lib/eventAudience";
+import {
+  formPresetToParsed,
+  parsedAudienceToFormPreset,
+  parseEventAudience,
+  stringifyEventAudience,
+  type EventAudienceFormPreset,
+} from "@/lib/eventAudience";
 import { cn } from "@/lib/utils";
 import { isNativeMobileApp } from "@/lib/nativeApp";
 
@@ -46,6 +53,13 @@ type Props = {
   onSaved: () => void;
 };
 
+const AUDIENCE_OPTIONS: { value: EventAudienceFormPreset; label: string }[] = [
+  { value: "all", label: "Todos" },
+  { value: "students", label: "Alunos" },
+  { value: "educators", label: "Educadores (Encarregados de educação)" },
+  { value: "staff", label: "Funcionários" },
+];
+
 export function EventFormDialog({ open, onOpenChange, schoolId, event, defaultDate, onSaved }: Props) {
   const native = isNativeMobileApp();
   const { selectedYearId } = useAcademicYear();
@@ -60,14 +74,14 @@ export function EventFormDialog({ open, onOpenChange, schoolId, event, defaultDa
     organizer: "",
     description: "",
   });
-  const [audiencePreset, setAudiencePreset] = useState<EventAudiencePreset>("all");
-  const [audienceClassroomId, setAudienceClassroomId] = useState("");
+  const [audiencePreset, setAudiencePreset] = useState<EventAudienceFormPreset>("all");
+  const [audienceClassroomIds, setAudienceClassroomIds] = useState<string[]>([]);
   const [classrooms, setClassrooms] = useState<ClassroomOpt[]>([]);
 
   useEffect(() => {
     if (!open) return;
     if (event) {
-      const decoded = decodeEventAudience(event.audience);
+      const parsed = parseEventAudience(event.audience);
       setForm({
         title: event.title ?? "",
         type: event.type ?? "academico",
@@ -78,8 +92,15 @@ export function EventFormDialog({ open, onOpenChange, schoolId, event, defaultDa
         organizer: event.organizer ?? "",
         description: event.description ?? "",
       });
-      setAudiencePreset(decoded.preset);
-      setAudienceClassroomId(decoded.classroomId ?? "");
+      if (parsed.mode === "classroom_legacy") {
+        setAudiencePreset("students");
+        setAudienceClassroomIds(parsed.classroomIds);
+      } else {
+        setAudiencePreset(parsedAudienceToFormPreset(parsed));
+        setAudienceClassroomIds(
+          parsed.mode === "students" || parsed.mode === "educators" ? [...parsed.classroomIds] : [],
+        );
+      }
     } else {
       setForm({
         title: "",
@@ -92,7 +113,7 @@ export function EventFormDialog({ open, onOpenChange, schoolId, event, defaultDa
         description: "",
       });
       setAudiencePreset("all");
-      setAudienceClassroomId("");
+      setAudienceClassroomIds([]);
     }
   }, [open, event, defaultDate]);
 
@@ -118,26 +139,33 @@ export function EventFormDialog({ open, onOpenChange, schoolId, event, defaultDa
       }
       let list = (data ?? []).map((c) => ({ id: c.id, name: c.name }));
 
-      const decoded = decodeEventAudience(event?.audience);
-      const extra =
-        decoded.preset === "classroom" && decoded.classroomId && !list.some((c) => c.id === decoded.classroomId)
-          ? decoded.classroomId
-          : null;
-
-      if (extra) {
-        const { data: one } = await supabase.from("classrooms").select("id,name").eq("id", extra).maybeSingle();
-        if (one && !cancelled) {
-          list = [...list, { id: one.id, name: one.name }];
-          list.sort((a, b) => a.name.localeCompare(b.name, "pt"));
+      const parsed = parseEventAudience(event?.audience);
+      const extraIds =
+        parsed.mode === "students" || parsed.mode === "educators" || parsed.mode === "classroom_legacy"
+          ? parsed.classroomIds
+          : [];
+      for (const id of extraIds) {
+        if (id && !list.some((c) => c.id === id)) {
+          const { data: one } = await supabase.from("classrooms").select("id,name").eq("id", id).maybeSingle();
+          if (one && !cancelled) list = [...list, { id: one.id, name: one.name }];
         }
       }
-
-      setClassrooms(list);
+      if (!cancelled) {
+        list.sort((a, b) => a.name.localeCompare(b.name, "pt"));
+        setClassrooms(list);
+      }
     })();
     return () => {
       cancelled = true;
     };
   }, [open, schoolId, selectedYearId, event?.audience]);
+
+  const toggleClassroom = (id: string, checked: boolean) => {
+    setAudienceClassroomIds((prev) => {
+      if (checked) return prev.includes(id) ? prev : [...prev, id];
+      return prev.filter((x) => x !== id);
+    });
+  };
 
   const handleSave = async () => {
     if (!form.title.trim()) {
@@ -152,21 +180,19 @@ export function EventFormDialog({ open, onOpenChange, schoolId, event, defaultDa
       toast.error("Escola não identificada.");
       return;
     }
-    if (audiencePreset === "classroom") {
+    if (audiencePreset === "students" || audiencePreset === "educators") {
       if (!selectedYearId) {
-        toast.error("Selecione o ano letivo no cabeçalho para dirigir o evento a uma turma.");
+        toast.error("Selecione o ano letivo no cabeçalho para associar turmas ao público-alvo.");
         return;
       }
-      if (!audienceClassroomId) {
-        toast.error("Selecione uma turma.");
+      if (audienceClassroomIds.length === 0) {
+        toast.error("Seleccione pelo menos uma turma.");
         return;
       }
     }
 
-    const audienceStored = encodeEventAudience(
-      audiencePreset,
-      audiencePreset === "classroom" ? audienceClassroomId : null,
-    );
+    const parsed = formPresetToParsed(audiencePreset, audienceClassroomIds, null);
+    const audienceStored = stringifyEventAudience(parsed);
 
     setSaving(true);
     const payload = {
@@ -191,10 +217,12 @@ export function EventFormDialog({ open, onOpenChange, schoolId, event, defaultDa
       toast.error(error.message);
       return;
     }
-    toast.success(event ? "Evento atualizado." : "Evento criado.");
+    toast.success(event ? "Evento actualizado." : "Evento criado.");
     onOpenChange(false);
     onSaved();
   };
+
+  const showTurmaPicker = audiencePreset === "students" || audiencePreset === "educators";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -274,50 +302,70 @@ export function EventFormDialog({ open, onOpenChange, schoolId, event, defaultDa
           </div>
 
           <div className="grid gap-2">
-            <Label>Público-alvo</Label>
+            <Label>Público-alvo *</Label>
             <Select
               value={audiencePreset}
               onValueChange={(v) => {
-                const p = v as EventAudiencePreset;
+                const p = v as EventAudienceFormPreset;
                 setAudiencePreset(p);
-                if (p !== "classroom") setAudienceClassroomId("");
+                if (p === "all" || p === "staff") setAudienceClassroomIds([]);
               }}
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos — notificações e email para todos</SelectItem>
-                <SelectItem value="classroom">Turma — alunos com conta e educadores da turma</SelectItem>
-                <SelectItem value="staff">Funcionários — apenas funcionários da escola</SelectItem>
+                {AUDIENCE_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Excepto aniversários, cada opção envia notificação na app e por email ao público indicado (regras de
+              permissões de notificação aplicam‑se por utilizador).
+            </p>
           </div>
 
-          {audiencePreset === "classroom" && (
-            <div className="grid gap-2">
-              <Label>Turma (ano letivo seleccionado) *</Label>
+          {showTurmaPicker && (
+            <div className="grid gap-2 rounded-xl border border-border bg-muted/20 p-3">
+              <Label>Turmas * (pode escolher várias)</Label>
               {!selectedYearId ? (
                 <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
                   Escolha o ano letivo no cabeçalho para listar turmas.
                 </p>
               ) : classrooms.length === 0 ? (
                 <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                  Não há turmas para este ano letivo nesta escola.
+                  Não há turmas neste ano letivo.
                 </p>
               ) : (
-                <Select value={audienceClassroomId} onValueChange={setAudienceClassroomId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a turma" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60 overflow-y-auto">
-                    {classrooms.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
+                  {classrooms.map((c) => (
+                    <label
+                      key={c.id}
+                      className="flex cursor-pointer items-center gap-2 rounded-lg border border-transparent px-2 py-1 hover:bg-muted/40"
+                    >
+                      <Checkbox
+                        checked={audienceClassroomIds.includes(c.id)}
+                        onCheckedChange={(ch) => toggleClassroom(c.id, !!ch)}
+                      />
+                      <span className="text-sm text-foreground">{c.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              {audiencePreset === "students" && (
+                <p className="text-[11px] text-muted-foreground">
+                  São notificados todos os encarregados da escola e todos os directores de turma. A presença regista‑se por
+                  aluno (encarregado, docente ou aluno com conta).
+                </p>
+              )}
+              {audiencePreset === "educators" && (
+                <p className="text-[11px] text-muted-foreground">
+                  São notificados os encarregados com educandos nas turmas escolhidas, os directores dessas turmas e os
+                  docentes associados nas disciplinas horárias. A presença é marcada pelo próprio encarregado.
+                </p>
               )}
             </div>
           )}

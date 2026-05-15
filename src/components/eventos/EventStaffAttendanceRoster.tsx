@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { EventRow } from "@/components/eventos/EventFormDialog";
-import { decodeEventAudience } from "@/lib/eventAudience";
+import { filterStudentsByAudience, parseEventAudience } from "@/lib/eventAudience";
 
 export type StaffRosterRsvpResponse = "presente" | "ausente" | "unset";
 
@@ -15,12 +15,8 @@ export type StaffRosterStudent = {
 const makeKey = (eventId: string, studentId: string) => `${eventId}::${studentId}`;
 
 function eligibleStudentsForEvent(event: EventRow, schoolStudents: StaffRosterStudent[]): StaffRosterStudent[] {
-  const d = decodeEventAudience(event.audience);
-  if (d.preset === "staff") return [];
-  if (d.preset === "classroom" && d.classroomId) {
-    return schoolStudents.filter((s) => s.classroom_id === d.classroomId);
-  }
-  return schoolStudents;
+  const p = parseEventAudience(event.audience);
+  return filterStudentsByAudience(p, schoolStudents);
 }
 
 function normalizeResponse(raw: unknown): StaffRosterRsvpResponse {
@@ -96,7 +92,7 @@ export function EventStaffAttendanceRoster({
   };
 
   if (eligible.length === 0) {
-    const staffOnly = decodeEventAudience(event.audience).preset === "staff";
+    const staffOnly = parseEventAudience(event.audience).mode === "staff";
     return (
       <div
         className={cn(
