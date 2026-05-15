@@ -28,7 +28,7 @@ import {
 import heroImage from "@/assets/landing-hero.jpg";
 
 const demoMailHref =
-  "mailto:contacto@edukamba.ao?subject=" + encodeURIComponent("Agendar demonstração – Edukamba");
+  "mailto:geral@edukamba.com?subject=" + encodeURIComponent("Agendar demonstração – Edukamba");
 const planosMailHref =
   "mailto:contacto@edukamba.ao?subject=" + encodeURIComponent("Informação sobre planos – Edukamba");
 
@@ -256,13 +256,12 @@ const Landing = () => {
               Trabalhamos em conjunto com o seu software actual.
             </h2>
             <p className="max-w-2xl text-muted-foreground leading-relaxed">
-              O mercado em Angola e Portugal continua ligado ao <strong>Inovar</strong> e a outros ERPs herdados — e isso não
-              é um problema: o Edukamba foi desenhado para <strong>coexistir</strong>. Exporte dados de alunos ou propinas em
-              formatos simples ou importe listagens para iniciar sem reescrever anos de história.
+              O Edukamba pode trabalhar lado a lado com o que a sua escola já usa. Comece quando fizer sentido —
+              importações ou exportações em formatos simples, sem necessidade de repetir anos de histórico num único passo.
             </p>
             <p className="max-w-2xl text-muted-foreground leading-relaxed">
-              Mantenha a mesma estrutura de faturação e arquivamento que já dominam os seus colaboradores, enquanto a
-              experiência dos encarregados evolui no telemóvel.
+              A secretaria mantém os processos internos em que a sua equipa já confia; ao mesmo tempo, os encarregados
+              passam a ver avisos e pagamentos com mais clareza no telemóvel.
             </p>
           </div>
           <Card className="relative overflow-hidden rounded-2xl border-pastel-blue-foreground/25 bg-background p-6 shadow-card">
