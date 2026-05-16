@@ -21,6 +21,7 @@ import { PagamentosFinanceHub } from "@/pages/Pagamentos";
 import { EnrollmentChargeRulesPanel } from "@/components/finance/EnrollmentChargeRulesPanel";
 import { ModuleAuthorizationsPanel } from "@/components/authorizations/ModuleAuthorizationsPanel";
 import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
+import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 
 type Opt = { id: string; name: string };
 type YearOpt = { id: string; label: string; is_active: boolean | null };
