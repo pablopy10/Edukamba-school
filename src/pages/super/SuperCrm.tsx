@@ -159,9 +159,10 @@ const SuperCrm = () => {
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">CRM — leads</h1>
-          <p className="max-w-xl text-sm text-muted-foreground">
-            Mini‑kanban com estados; arraste rápido via alteração da coluna ou menu no cartão.
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">CRM — Kanban de leads</h1>
+          <p className="max-w-2xl text-sm text-muted-foreground">
+            Funil por colunas (<em>Novo</em> até <em>Ganho</em>/<em>Perdido</em>); distribua trabalho pela equipa e ligue cada lead às{" "}
+            <strong className="font-medium text-foreground">propostas comerciais</strong> na outra página.
           </p>
         </div>
         <Dialog open={newOpen} onOpenChange={setNewOpen}>

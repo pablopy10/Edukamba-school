@@ -118,7 +118,7 @@ const SuperProposals = () => {
       `${hi}\n\n` +
         (r.summary ? `${r.summary}\n\n` : "") +
         (r.amount_estimate != null ? `Valor estimado: ${r.amount_estimate} ${r.currency}\n` : "") +
-        `\nGerado pela área SaaS Edukamba.`,
+        `\nGerado no dashboard de gestão Edukamba.`,
     );
     return `mailto:${to}?subject=${subject}&body=${body}`;
   };
@@ -134,11 +134,11 @@ const SuperProposals = () => {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Propostas comerciais</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Propostas comerciais (leads)</h1>
         <p className="max-w-xl text-sm text-muted-foreground">
-          <strong className="text-foreground">Enviar (servidor)</strong> usa a Edge Function <code className="text-xs">send-sales-proposal-email</code>{" "}
-          (Brevo, mesmos secrets <code className="text-xs">BREVO_*</code> que outros emails). Podes também descarregar o PDF ou usar o cliente de correio via &quot;
-          Email&quot;.
+          Ligue propostas a leads do CRM, gere valores e PDF. <strong className="text-foreground">Enviar (servidor)</strong> usa a Edge Function{" "}
+          <code className="text-xs">send-sales-proposal-email</code> (Brevo, secrets <code className="text-xs">BREVO_*</code>). Também pode
+          descarregar PDF ou usar o cliente de correio em &quot;Email&quot;.
         </p>
       </div>
 

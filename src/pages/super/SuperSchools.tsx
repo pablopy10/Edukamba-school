@@ -99,7 +99,7 @@ const SuperSchools = () => {
       const { error } = await supabase.rpc("platform_super_set_support_context", { _school_id: schoolId });
       if (error) throw error;
       broadcastTenantChanged();
-      toast.success("Sessão de suporte iniciada.");
+      toast.success("Contexto de escola activo: controlo de administrador nesta instituição.");
       navigate("/dashboard");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Erro ao assumir conta";
@@ -131,11 +131,12 @@ const SuperSchools = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Escolas na plataforma</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Escolas na Edukamba</h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Bloqueios de módulos aplicam-se sempre que a Edukamba desliga um recurso — a equipa escolar não volta a conseguir
-            ligar esse módulo sem o vosso apoio. Use &quot;Entrar&quot; apenas para configurar conta com permissão efectiva de
-            administrador.
+            <strong className="font-medium text-foreground">Assumir controlo</strong> define o contexto dessa escola no seu utilizador —
+            equivale administrativamente ao acesso ADMIN para configurar tudo nesta instituição, sem precisar de convites da direcção (as
+            acções permanecem sujeitas à política habitual de auditoria). Use <strong className="font-medium text-foreground">Bloqueios</strong>
+            quando a Edukamba desliga módulos a nível de plataforma; a escola não consegue reactivá-los sozinha.
           </p>
         </div>
         <Button type="button" variant="outline" className="rounded-full" disabled={busy} onClick={() => loadSchools()}>
@@ -179,8 +180,9 @@ const SuperSchools = () => {
                       className="rounded-full"
                       disabled={busy}
                       onClick={() => void enterSchool(r.school_id)}
+                      title="Define contexto administrativo sobre esta escola e abre o painel da escola"
                     >
-                      Entrar
+                      Assumir controlo
                     </Button>
                   </td>
                 </tr>

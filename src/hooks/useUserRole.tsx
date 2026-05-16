@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -69,14 +69,15 @@ function clearPersistedRole(userId: string) {
   }
 }
 
-// Module-level cache so the role survives unmounts/remounts and is reused
-// across navigations without refetching (eliminates the sidebar flash).
+// Cache em memória + localStorage; o provider confirma sempre com o servidor (force) após identificar utilizador.
 const roleCache = new Map<string, UserRole>();
-const inflight = new Map<string, Promise<UserRole>>();
-
-const fetchRole = (userId: string): Promise<UserRole> => {
-  if (roleCache.has(userId)) return Promise.resolve(roleCache.get(userId) ?? null);
-  const existing = inflight.get(userId);
+const inflight = new Map<string, Promise<UserRole>>();/** Com `force`: ignora cache em memória (novo pedido ao servidor). */
+const fetchRole = (userId: string, opts?: { force?: boolean }): Promise<UserRole> => {
+  if (!opts?.force && roleCache.has(userId)) return Promise.resolve(roleCache.get(userId) ?? null);
+  if (opts?.force) {
+    inflight.delete(userId);
+  }
+  const existing = opts?.force ? undefined : inflight.get(userId);
   if (existing) return existing;
   const p = (async () => {
     const { data } = await supabase
@@ -96,32 +97,27 @@ const fetchRole = (userId: string): Promise<UserRole> => {
 
 export const UserRoleProvider = ({ children }: { children: ReactNode }) => {
   const { user, loading: authLoading } = useAuth();
-  const cached = user ? roleCache.get(user.id) ?? null : null;
-  const [role, setRole] = useState<UserRole>(cached);
-  const [loading, setLoading] = useState<boolean>(user ? !roleCache.has(user.id) : true);
+  const [role, setRole] = useState<UserRole>(() =>
+    user ? roleCache.get(user.id) ?? readPersistedRole(user.id) : null,
+  );
+  /** Sessão já presente antes do primeiro efeito: evita redirect errado antes do refetch (ex.: /super → /dashboard). */
+  const [loading, setLoading] = useState<boolean>(() => Boolean(user?.id));
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (authLoading) return;
     if (!user) {
       setRole(null);
       setLoading(false);
       return;
     }
-    if (roleCache.has(user.id)) {
-      setRole(roleCache.get(user.id) ?? null);
-      setLoading(false);
-      return;
-    }
-    const disk = readPersistedRole(user.id);
-    if (disk !== null) {
-      roleCache.set(user.id, disk);
-      setRole(disk);
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
+    setRole(roleCache.get(user.id) ?? readPersistedRole(user.id));
     setLoading(true);
-    fetchRole(user.id).then((r) => {
+  }, [authLoading, user?.id]);
+
+  useEffect(() => {
+    if (authLoading || !user) return;
+    let cancelled = false;
+    void fetchRole(user.id, { force: true }).then((r) => {
       if (cancelled) return;
       setRole(r);
       setLoading(false);

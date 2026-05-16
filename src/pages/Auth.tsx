@@ -24,9 +24,10 @@ const authPasswordInputClass =
 const iconWrapClass =
   "pointer-events-none absolute left-5 top-1/2 z-[1] -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-pastel-blue-foreground";
 
-/** Destino após sessão válida: SUPER_ADMIN sem deep-link vai para Área SaaS. */
+/** Destino após sessão válida: SUPER_ADMIN sem deep-link vai para o dashboard de gestão da plataforma. */
 function landingAfterAuth(role: string | null | undefined, redirectAfterLogin: string) {
-  const defaultLanding = redirectAfterLogin === "/dashboard" || redirectAfterLogin === "";
+  const pathPart = redirectAfterLogin.split("#")[0].split("?")[0] || "";
+  const defaultLanding = pathPart === "" || pathPart === "/" || pathPart === "/dashboard";
   return role === "SUPER_ADMIN" && defaultLanding ? "/super" : redirectAfterLogin;
 }
 

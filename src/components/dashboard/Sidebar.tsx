@@ -92,7 +92,7 @@ function SidebarNavigation({
 
   const superAdminNav: NavItem[] =
     !roleLoading && role === "SUPER_ADMIN"
-      ? [{ icon: Shield, label: "Área SaaS", to: "/super" }]
+      ? [{ icon: Shield, label: "Dashboard de gestão", to: "/super" }]
       : [];
 
   const bottomNavItems = [...superAdminNav, ...visibleOther];

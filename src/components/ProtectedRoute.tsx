@@ -43,7 +43,7 @@ export const ProtectedRoute = () => {
     const cached = getRouteGuardSnapshot(user.id);
     // Only trust cached "tem escola" snapshots. A primeira leitura do perfil pode falhar por timing
     // do JWT/rede e ficar gravada como hasSchool: false até ao fim da sessão — preso ao onboarding,
-    // em especial SUPER_ADMIN sem school_id efectivo (área SaaS).
+    // em especial SUPER_ADMIN sem escola efectiva (dashboard de gestão vs painel Escola).
     if (cached?.hasSchool && tenantEpoch === 0) {
       setSnapshot(cached);
       return;
