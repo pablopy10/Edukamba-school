@@ -15,9 +15,12 @@ import { TENANT_CHANGED_EVENT } from "@/lib/tenantBroadcast";
 export const ProtectedRoute = () => {
   const { session, user, loading } = useAuth();
   const location = useLocation();
-  const [snapshot, setSnapshot] = useState<RouteGuardSnapshot | null>(() =>
-    user?.id ? getRouteGuardSnapshot(user.id) ?? null : null,
-  );
+  const [snapshot, setSnapshot] = useState<RouteGuardSnapshot | null>(() => {
+    if (!user?.id) return null;
+    const warm = getRouteGuardSnapshot(user.id);
+    /** Não reutilizar cache "sem escola": evita um frame de redirect errado antes do refetch (JWT/rede). */
+    return warm?.hasSchool ? warm : null;
+  });
   const [tenantEpoch, setTenantEpoch] = useState(0);
 
   useEffect(() => {
@@ -38,7 +41,10 @@ export const ProtectedRoute = () => {
     }
 
     const cached = getRouteGuardSnapshot(user.id);
-    if (cached && tenantEpoch === 0) {
+    // Only trust cached "tem escola" snapshots. A primeira leitura do perfil pode falhar por timing
+    // do JWT/rede e ficar gravada como hasSchool: false até ao fim da sessão — preso ao onboarding,
+    // em especial SUPER_ADMIN sem school_id efectivo (área SaaS).
+    if (cached?.hasSchool && tenantEpoch === 0) {
       setSnapshot(cached);
       return;
     }
@@ -138,11 +144,18 @@ export const ProtectedRoute = () => {
     return <Navigate to="/auth" replace />;
   }
 
-  if (!snapshot.hasSchool && location.pathname !== "/onboarding") {
+  const isSuperArea = location.pathname === "/super" || location.pathname.startsWith("/super/");
+
+  if (!snapshot.hasSchool && location.pathname !== "/onboarding" && !isSuperArea) {
     return <Navigate to="/onboarding" replace />;
   }
 
-  if (snapshot.hasSchool && snapshot.trialExpired && location.pathname !== "/onboarding") {
+  if (
+    snapshot.hasSchool &&
+    snapshot.trialExpired &&
+    location.pathname !== "/onboarding" &&
+    !isSuperArea
+  ) {
     return <TrialExpirado schoolName={snapshot.schoolName} trialEndedAt={snapshot.trialEndsAt} />;
   }
 

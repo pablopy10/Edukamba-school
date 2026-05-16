@@ -24,6 +24,12 @@ const authPasswordInputClass =
 const iconWrapClass =
   "pointer-events-none absolute left-5 top-1/2 z-[1] -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-pastel-blue-foreground";
 
+/** Destino após sessão válida: SUPER_ADMIN sem deep-link vai para Área SaaS. */
+function landingAfterAuth(role: string | null | undefined, redirectAfterLogin: string) {
+  const defaultLanding = redirectAfterLogin === "/dashboard" || redirectAfterLogin === "";
+  return role === "SUPER_ADMIN" && defaultLanding ? "/super" : redirectAfterLogin;
+}
+
 const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -55,11 +61,25 @@ const Auth = () => {
   const [signupLoading, setSignupLoading] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) navigate(redirectAfterLogin, { replace: true });
-    });
-  // redirectAfterLogin is derived from location.state on mount — stable
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false;
+    void (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user || cancelled) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", session.user.id)
+        .maybeSingle();
+      if (cancelled) return;
+      navigate(landingAfterAuth(profile?.role, redirectAfterLogin), { replace: true });
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // redirectAfterLogin is derived from location.state on mount — stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
   useEffect(() => {
@@ -159,7 +179,7 @@ const Auth = () => {
       }
 
       toast({ title: "Bem-vindo!", description: "Sessão iniciada com sucesso." });
-      navigate(redirectAfterLogin, { replace: true });
+      navigate(landingAfterAuth(profile?.role, redirectAfterLogin), { replace: true });
     } finally {
       setLoginLoading(false);
       setPreparingEnvironment(false);
