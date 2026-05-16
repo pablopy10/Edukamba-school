@@ -26,6 +26,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 
 type ReportKey =
   | "alunos"
@@ -99,14 +100,13 @@ const Relatorios = () => {
       if (!user) return;
       const { data: profile } = await supabase
         .from("profiles")
-        .select("school_id, role")
+        .select("school_id, support_context_school_id, role")
         .eq("id", user.id)
         .maybeSingle();
-      if (!profile?.school_id) { setLoading(false); return; }
-      setSchoolId(profile.school_id);
-      setRole(profile.role);
-
-      const sid = profile.school_id;
+      const sid = effectiveSchoolIdFromProfile(profile);
+      if (!sid) { setLoading(false); return; }
+      setSchoolId(sid);
+      setRole(profile?.role ?? null);
       const [school, st, cls, crs, prof, att, gr, asm, sub, tch, abs, mr, mat, ev, act] = await Promise.all([
         supabase.from("schools").select("name").eq("id", sid).maybeSingle(),
         supabase.from("students").select("*").eq("school_id", sid),

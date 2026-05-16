@@ -20,7 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PagamentosFinanceHub } from "@/pages/Pagamentos";
 import { EnrollmentChargeRulesPanel } from "@/components/finance/EnrollmentChargeRulesPanel";
 import { ModuleAuthorizationsPanel } from "@/components/authorizations/ModuleAuthorizationsPanel";
-import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 
 type Opt = { id: string; name: string };
 type YearOpt = { id: string; label: string; is_active: boolean | null };
@@ -48,7 +48,7 @@ const initialsOf = (name: string) =>
 const Matriculas = () => {
   const native = isNativeMobileApp();
   const [searchParams] = useSearchParams();
-  const { selectedYearId } = useAcademicYear();
+  const { selectedYearId, schoolId: aySchoolId } = useAcademicYear();
   const { user } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
   const { isParent, childIds, loading: parentLoading } = useParentChildren();
@@ -84,13 +84,21 @@ const Matriculas = () => {
     if (!user?.id) return;
     let cancelled = false;
     void (async () => {
-      const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", user.id).maybeSingle();
-      if (!cancelled) setSchoolId(profile?.school_id ?? null);
+      if (aySchoolId) {
+        if (!cancelled) setSchoolId(aySchoolId);
+        return;
+      }
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("school_id, support_context_school_id")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (!cancelled) setSchoolId(effectiveSchoolIdFromProfile(profile));
     })();
     return () => {
       cancelled = true;
     };
-  }, [user?.id]);
+  }, [user?.id, aySchoolId]);
 
   useEffect(() => {
     if (searchParams.get("tab") === "autorizacoes") setMatriculasTab("autorizacoes");

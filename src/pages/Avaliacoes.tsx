@@ -50,6 +50,7 @@ import {
 } from "@/lib/offline/teacherAvaliacoesQueries";
 import { useUserRole } from "@/hooks/useUserRole";
 import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
 import { useAuth } from "@/hooks/useAuth";
 import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton";
@@ -158,7 +159,7 @@ const Avaliacoes = () => {
   const resolvedSchoolId = useMemo(() => {
     if (isTeacher)
       return ctxSchoolId ?? persistedTeacherSession?.schoolId ?? profileSchoolId;
-    return profileSchoolId ?? ctxSchoolId;
+    return ctxSchoolId ?? profileSchoolId;
   }, [isTeacher, ctxSchoolId, persistedTeacherSession?.schoolId, profileSchoolId]);
 
   const resolvedYearId = useMemo(() => {
@@ -277,8 +278,12 @@ const Avaliacoes = () => {
       setLoading(false);
       return;
     }
-    const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", user.id).maybeSingle();
-    const sid = profile?.school_id ?? null;
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("school_id, support_context_school_id")
+      .eq("id", user.id)
+      .maybeSingle();
+    const sid = effectiveSchoolIdFromProfile(profile);
     setProfileSchoolId(sid);
     if (!sid) {
       setLoading(false);

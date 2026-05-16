@@ -1,11 +1,11 @@
 import { NavLink, Navigate, Outlet, useNavigate } from "react-router-dom";
 import {
-  ArrowLeft,
   Building2,
   FileText,
   Gauge,
   LayoutGrid,
   Loader2,
+  LogOut,
   Shield,
   Workflow,
 } from "lucide-react";
@@ -13,6 +13,8 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 function SidebarNav({
   compact,
@@ -60,6 +62,17 @@ export function SuperAdminPortal() {
   const { role, loading } = useUserRole();
   const navigate = useNavigate();
 
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error("Logout error", e);
+    } finally {
+      navigate("/", { replace: true });
+      toast.success("Sessão terminada");
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -97,21 +110,16 @@ export function SuperAdminPortal() {
 
           <Separator className="opacity-70" />
 
-          <div className="mt-auto space-y-3">
+          <div className="mt-auto">
             <Button
               type="button"
               variant="outline"
               className="w-full justify-start gap-2 rounded-xl"
-              onClick={() => navigate("/dashboard")}
+              onClick={() => void handleLogout()}
             >
-              <ArrowLeft className="h-4 w-4" />
-              Abrir painel da escola
+              <LogOut className="h-4 w-4" />
+              Sair
             </Button>
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Use este atalho para o produto (turmas, alunos, etc.) na escola em contexto ou na sua escola de referência.
-              Para configurar outra escola sem envolver a direcção, use em <strong className="font-medium text-foreground">Escolas</strong> a opção de{" "}
-              <strong className="font-medium text-foreground">assumir controlo</strong>.
-            </p>
           </div>
         </div>
       </aside>
@@ -129,8 +137,9 @@ export function SuperAdminPortal() {
                 <p className="truncate text-sm font-bold">Edukamba</p>
               </div>
             </div>
-            <Button type="button" variant="outline" size="sm" className="shrink-0 rounded-full" onClick={() => navigate("/dashboard")}>
-              Painel escola
+            <Button type="button" variant="outline" size="sm" className="shrink-0 gap-2 rounded-full" onClick={() => void handleLogout()}>
+              <LogOut className="h-4 w-4" />
+              Sair
             </Button>
           </div>
           <div className="border-t border-border/50 px-2">

@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 import { useHorariosDatasetQuery } from "@/hooks/queries/useHorariosDatasetQuery";
 import type { HorariosFetchScope } from "@/lib/api/fetchHorariosDataset";
 import type { ScheduleRow, TimeSlotRow } from "@/lib/api/fetchHorariosDataset";
@@ -107,7 +108,7 @@ const Horarios = () => {
     shift: studentShift,
     loading: studentLoading,
   } = useStudentSelf();
-  const { selectedYearId } = useAcademicYear();
+  const { selectedYearId, schoolId: aySchoolId } = useAcademicYear();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const academicYearId = selectedYearId;
 
@@ -133,19 +134,27 @@ const Horarios = () => {
   const [editing, setEditing] = useState<ScheduleRecord | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Bootstrap school id
+  // Bootstrap school id (escola efectiva: inclui modo suporte SUPER_ADMIN)
   useEffect(() => {
-    if (!user) return;
-    (async () => {
-      const { data } = await supabase.from("profiles").select("school_id").eq("id", user.id).maybeSingle();
-      const sid = data?.school_id ?? null;
+    if (!user?.id) return;
+    void (async () => {
+      if (aySchoolId) {
+        setSchoolId(aySchoolId);
+        await supabase.rpc("seed_default_time_slots", { _school_id: aySchoolId });
+        return;
+      }
+      const { data } = await supabase
+        .from("profiles")
+        .select("school_id, support_context_school_id")
+        .eq("id", user.id)
+        .maybeSingle();
+      const sid = effectiveSchoolIdFromProfile(data);
       setSchoolId(sid);
       if (sid) {
-        // Seed default time slots if none exist
         await supabase.rpc("seed_default_time_slots", { _school_id: sid });
       }
     })();
-  }, [user]);
+  }, [user?.id, aySchoolId]);
 
   const horariosScope = useMemo(
     (): HorariosFetchScope => ({

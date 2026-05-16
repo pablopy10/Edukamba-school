@@ -20,6 +20,7 @@ import {
   FileSignature,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { EventFormDialog, type EventRow } from "@/components/eventos/EventFormDialog";
@@ -157,10 +158,10 @@ const Eventos = () => {
       setUserId(user.id);
       const { data: profile } = await supabase
         .from("profiles")
-        .select("school_id, role")
+        .select("school_id, support_context_school_id, role")
         .eq("id", user.id)
         .maybeSingle();
-      setSchoolId(profile?.school_id ?? null);
+      setSchoolId(effectiveSchoolIdFromProfile(profile));
       setRole(profile?.role ?? null);
     })();
   }, []);

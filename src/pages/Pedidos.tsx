@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { showPageKpiCards, isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 
 type Reason = "doenca" | "ferias" | "pessoal" | "luto" | "formacao" | "outro";
 type StatusDB = "PENDING" | "APPROVED" | "REJECTED";
@@ -101,12 +102,13 @@ const Pedidos = () => {
     setUserId(user.id);
     const { data: profile } = await supabase
       .from("profiles")
-      .select("school_id, role")
+      .select("school_id, support_context_school_id, role")
       .eq("id", user.id)
       .maybeSingle();
-    setSchoolId(profile?.school_id ?? null);
+    const sid = effectiveSchoolIdFromProfile(profile);
+    setSchoolId(sid);
     setRole(profile?.role ?? null);
-    return profile?.school_id ?? null;
+    return sid ?? null;
   };
 
   const loadAll = async () => {

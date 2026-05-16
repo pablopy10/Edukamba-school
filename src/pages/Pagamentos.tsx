@@ -33,6 +33,7 @@ import type { GuardianPaymentMode } from "@/lib/guardianPayment";
 import { encarregadosUsamAnexo, normalizeGuardianPaymentMode } from "@/lib/guardianPayment";
 import { invokeEmitFiscalInvoices, type EmitFiscalInvoicesResult } from "@/lib/fiscal/invokeEmitFiscalInvoices";
 import { downloadFiscalInvoicePdfById } from "@/lib/fiscal/downloadFiscalInvoicePdf";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 
 type StaffValidatedInsertResult = { error: string | null; paymentId?: string };
 
@@ -807,10 +808,10 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     setLoading(true);
     const { data: profile } = await supabase
       .from("profiles")
-      .select("school_id")
+      .select("school_id, support_context_school_id")
       .eq("id", (await supabase.auth.getUser()).data.user?.id ?? "")
       .single();
-    const sId = profile?.school_id ?? null;
+    const sId = effectiveSchoolIdFromProfile(profile);
     setSchoolId(sId);
     if (!sId) { setLoading(false); return; }
 

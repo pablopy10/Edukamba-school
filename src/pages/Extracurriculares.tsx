@@ -52,6 +52,7 @@ import { PagamentosFinanceHub } from "@/pages/Pagamentos";
 import { DomainChargeRulesPanel } from "@/components/finance/DomainChargeRulesPanel";
 import { useHomeroomStudentIds } from "@/hooks/useHomeroomStudentIds";
 import { ModuleAuthorizationsPanel } from "@/components/authorizations/ModuleAuthorizationsPanel";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 type ActivityCategory = "musica" | "desporto" | "arte" | "tecnologia" | "academico" | "teatro";
 
 type EnrollmentListRow = {
@@ -168,10 +169,10 @@ const Extracurriculares = () => {
       setUserId(user.id);
       const { data: profile } = await supabase
         .from("profiles")
-        .select("school_id, role")
+        .select("school_id, support_context_school_id, role")
         .eq("id", user.id)
         .maybeSingle();
-      const sid = profile?.school_id ?? null;
+      const sid = effectiveSchoolIdFromProfile(profile);
       setSchoolId(sid);
       setRole(profile?.role ?? null);
       if (sid) {

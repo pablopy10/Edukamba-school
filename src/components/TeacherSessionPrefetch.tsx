@@ -5,6 +5,7 @@ import { prefetchTeacherData } from "@/lib/prefetchTeacherData";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 
 /**
  * Sessão restaurada ou ano letivo mudou: repõe cache persistido (`alunos`, `turmas`, presenças)
@@ -23,14 +24,19 @@ export function TeacherSessionPrefetch() {
 
     async function run() {
       if (cancelled) return;
-      const { data } = await supabase.from("profiles").select("school_id").eq("id", user.id).maybeSingle();
+      const { data } = await supabase
+        .from("profiles")
+        .select("school_id, support_context_school_id")
+        .eq("id", user.id)
+        .maybeSingle();
 
-      if (cancelled || !data?.school_id) return;
+      const schoolIdPrefetch = effectiveSchoolIdFromProfile(data);
+      if (cancelled || !schoolIdPrefetch) return;
 
       try {
         await prefetchTeacherData(queryClient, {
           userId: user.id,
-          schoolId: data.school_id,
+          schoolId: schoolIdPrefetch,
           academicYearId: selectedYearId,
           profileRole: role,
         });

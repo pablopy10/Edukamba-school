@@ -22,6 +22,7 @@ import {
   teacherAlunosQueryKey,
 } from "@/lib/offline/teacherListQueries";
 import { queryClient } from "@/lib/queryClient";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 
 type ClassroomOpt = { id: string; name: string };
 
@@ -648,10 +649,10 @@ const Alunos = () => {
           if (!row.full_name) throw new Error("Nome em falta");
           const { data: profile } = await supabase
             .from("profiles")
-            .select("school_id")
+            .select("school_id, support_context_school_id")
             .eq("id", (await supabase.auth.getUser()).data.user?.id ?? "")
             .maybeSingle();
-          const schoolId = profile?.school_id;
+          const schoolId = effectiveSchoolIdFromProfile(profile);
           if (!schoolId) throw new Error("Escola não encontrada");
           let classroom_id: string | null = null;
           if (row.classroom) {

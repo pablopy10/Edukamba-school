@@ -27,6 +27,7 @@ import { RouteFormDialog, type RouteRow } from "@/components/transportes/RouteFo
 import { StopFormDialog, type StopRow } from "@/components/transportes/StopFormDialog";
 import { TransportEnrollmentDialog, type TransportEnrollment } from "@/components/transportes/TransportEnrollmentDialog";
 import { cn } from "@/lib/utils";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { PagamentosFinanceHub } from "@/pages/Pagamentos";
@@ -83,12 +84,13 @@ const Transportes = () => {
       setUserId(user.id);
       const { data: profile } = await supabase
         .from("profiles")
-        .select("school_id, role")
+        .select("school_id, support_context_school_id, role")
         .eq("id", user.id)
         .maybeSingle();
-      if (profile?.school_id) {
-        setSchoolId(profile.school_id);
-        setRole(profile.role);
+      const sid = effectiveSchoolIdFromProfile(profile);
+      if (sid) {
+        setSchoolId(sid);
+        setRole(profile?.role ?? null);
       }
     };
     init();

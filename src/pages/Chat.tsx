@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import type { UserRole } from "@/hooks/useUserRole";
 import { ROLE_LABEL_INVITE } from "@/components/definicoes/InviteStaffUserDialog";
 import { isNativeMobileApp } from "@/lib/nativeApp";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 
 type Role = UserRole;
 
@@ -137,10 +138,10 @@ const Chat = () => {
     setLoading(true);
     const { data: me } = await supabase
       .from("profiles")
-      .select("school_id, role")
+      .select("school_id, support_context_school_id, role")
       .eq("id", user.id)
       .maybeSingle();
-    const sId = me?.school_id ?? null;
+    const sId = effectiveSchoolIdFromProfile(me);
     const role = (me?.role ?? null) as Role;
     setSchoolId(sId);
     setMyRole(role);

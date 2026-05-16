@@ -49,6 +49,7 @@ import {
   type PermissionModuleKey,
 } from "@/lib/schoolPermissionModules";
 import { schoolPermissionMatrixQueryRoot } from "@/hooks/useSchoolPermissionMatrix";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 
 const MODULES: { key: PermissionModuleKey; label: string; desc: string }[] = [
   ...PERMISSION_ROUTE_ORDER.map((key) => ({
@@ -387,43 +388,44 @@ const Definicoes = () => {
       setLoading(true);
       const { data: profile } = await supabase
         .from("profiles")
-        .select("school_id, role")
+        .select("school_id, support_context_school_id, role")
         .eq("id", user.id)
         .maybeSingle();
-      if (cancelled || !profile?.school_id) {
+      const effectiveSid = effectiveSchoolIdFromProfile(profile);
+      if (cancelled || !effectiveSid) {
         setLoading(false);
         return;
       }
-      setSchoolId(profile.school_id);
-      setMyRole((profile.role as Role) ?? null);
+      setSchoolId(effectiveSid);
+      setMyRole((profile?.role as Role) ?? null);
 
       const yearQuery = selectedYearId
         ? supabase.from("academic_years").select("*").eq("id", selectedYearId).maybeSingle()
         : supabase
             .from("academic_years")
             .select("*")
-            .eq("school_id", profile.school_id)
+            .eq("school_id", effectiveSid)
             .eq("is_active", true)
             .order("start_date", { ascending: false })
             .limit(1)
             .maybeSingle();
       const [schoolRes, yearRes, usersRes, subRes, invRes] = await Promise.all([
-        supabase.from("schools").select("*").eq("id", profile.school_id).maybeSingle(),
+        supabase.from("schools").select("*").eq("id", effectiveSid).maybeSingle(),
         yearQuery,
         supabase
           .from("profiles")
           .select("id, full_name, email, role, is_active, phone, avatar_url")
-          .eq("school_id", profile.school_id)
+          .eq("school_id", effectiveSid)
           .order("full_name"),
         supabase
           .from("saas_subscriptions")
           .select("*")
-          .eq("school_id", profile.school_id)
+          .eq("school_id", effectiveSid)
           .maybeSingle(),
         supabase
           .from("school_invoices")
           .select("*")
-          .eq("school_id", profile.school_id)
+          .eq("school_id", effectiveSid)
           .order("issue_date", { ascending: false }),
       ]);
 

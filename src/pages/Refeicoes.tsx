@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { cn } from "@/lib/utils";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 import { canValidateSchoolPaymentProofs, isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { PagamentosFinanceHub } from "@/pages/Pagamentos";
@@ -106,12 +107,13 @@ const Refeicoes = () => {
       setUserId(user.id);
       const { data: profile } = await supabase
         .from("profiles")
-        .select("school_id, role")
+        .select("school_id, support_context_school_id, role")
         .eq("id", user.id)
         .maybeSingle();
-      if (profile?.school_id) {
-        setSchoolId(profile.school_id);
-        setRole(profile.role);
+      const sid = effectiveSchoolIdFromProfile(profile);
+      if (sid) {
+        setSchoolId(sid);
+        setRole(profile?.role ?? null);
       }
     };
     void init();

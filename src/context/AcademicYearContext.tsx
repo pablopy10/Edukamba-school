@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState, useCallback, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { TENANT_CHANGED_EVENT } from "@/lib/tenantBroadcast";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 
 export type AcademicYear = {
   id: string;
@@ -14,7 +16,7 @@ type Ctx = {
   years: AcademicYear[];
   selectedYearId: string | null;
   selectedYear: AcademicYear | null;
-  /** `school_id` do perfil (mesmo pedido que carrega os anos letivos) — evita corridas com outros efeitos no painel. */
+  /** Escola efectiva na sessão (inclui `support_context_school_id` — modo suporte SUPER_ADMIN). */
   schoolId: string | null;
   setSelectedYearId: (id: string) => void;
   loading: boolean;
@@ -31,6 +33,13 @@ export const AcademicYearProvider = ({ children }: { children: ReactNode }) => {
   const [selectedYearId, setSelectedYearIdState] = useState<string | null>(null);
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tenantEpoch, setTenantEpoch] = useState(0);
+
+  useEffect(() => {
+    const onTenant = () => setTenantEpoch((e) => e + 1);
+    window.addEventListener(TENANT_CHANGED_EVENT, onTenant);
+    return () => window.removeEventListener(TENANT_CHANGED_EVENT, onTenant);
+  }, []);
 
   const load = useCallback(async () => {
     if (!user?.id) {
@@ -45,7 +54,7 @@ export const AcademicYearProvider = ({ children }: { children: ReactNode }) => {
     try {
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("school_id")
+        .select("school_id, support_context_school_id")
         .eq("id", user.id)
         .maybeSingle();
       if (profileError) {
@@ -54,17 +63,18 @@ export const AcademicYearProvider = ({ children }: { children: ReactNode }) => {
         setSelectedYearIdState(null);
         return;
       }
-      if (!profile?.school_id) {
+      const effectiveSid = effectiveSchoolIdFromProfile(profile);
+      if (!effectiveSid) {
         setYears([]);
         setSelectedYearIdState(null);
         return;
       }
-      setSchoolId(profile.school_id);
+      setSchoolId(effectiveSid);
 
       const { data, error: yearsError } = await supabase
         .from("academic_years")
         .select("id, label, start_date, end_date, is_active")
-        .eq("school_id", profile.school_id)
+        .eq("school_id", effectiveSid)
         .order("start_date", { ascending: true });
       if (yearsError) {
         console.error("AcademicYearContext: academic_years", yearsError);
@@ -75,7 +85,6 @@ export const AcademicYearProvider = ({ children }: { children: ReactNode }) => {
       const list = (data ?? []) as AcademicYear[];
       setYears(list);
 
-      // Default to the school's active academic year; fall back to the last valid manual choice.
       const active = list.find((y) => y.is_active);
       const stored = localStorage.getItem(STORAGE_KEY);
       const initial = active?.id ?? (stored && list.some((y) => y.id === stored) ? stored : list[0]?.id ?? null);
@@ -84,10 +93,10 @@ export const AcademicYearProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, tenantEpoch]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   const setSelectedYearId = useCallback((id: string) => {

@@ -12,6 +12,7 @@ import {
   type ModulePermissionFlags,
   type PermissionModuleKey,
 } from "@/lib/schoolPermissionModules";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 
 export const schoolPermissionMatrixQueryRoot = ["schoolPermissionMatrix"] as const;
 
@@ -60,7 +61,7 @@ async function fetchMatrixInner(schoolId: string, userId: string, role: SchoolUs
 async function fetchMatrixForUser(userId: string): Promise<Record<PermissionModuleKey, ModulePermissionFlags>> {
   const { data: profile, error: pErr } = await supabase
     .from("profiles")
-    .select("school_id, role")
+    .select("school_id, support_context_school_id, role")
     .eq("id", userId)
     .maybeSingle();
   if (pErr) throw pErr;
@@ -68,7 +69,7 @@ async function fetchMatrixForUser(userId: string): Promise<Record<PermissionModu
   const dbRole = (profile?.role ?? null) as SchoolUserRole | null;
   if (!dbRole || dbRole === "ADMIN" || dbRole === "SUPER_ADMIN") return fullAccessMatrix();
 
-  const schoolId = profile?.school_id ?? null;
+  const schoolId = effectiveSchoolIdFromProfile(profile);
   if (!schoolId) return matrixFromDefaultsOnly(dbRole);
 
   return fetchMatrixInner(schoolId, userId, dbRole);

@@ -25,6 +25,7 @@ import {
   teacherTurmasQueryKey,
 } from "@/lib/offline/teacherListQueries";
 import { queryClient } from "@/lib/queryClient";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 
 type ClassroomWithJoins = ClassroomRow & {
   courses?: { id: string; name: string } | null;
@@ -486,10 +487,10 @@ const Turmas = () => {
         onImportRow={async (row) => {
           if (!row.name) throw new Error("Nome da turma em falta");
           const { data: profile } = await supabase
-            .from("profiles").select("school_id")
+            .from("profiles").select("school_id, support_context_school_id")
             .eq("id", (await supabase.auth.getUser()).data.user?.id ?? "")
             .maybeSingle();
-          const schoolId = profile?.school_id;
+          const schoolId = effectiveSchoolIdFromProfile(profile);
           if (!schoolId) throw new Error("Escola não encontrada");
           let academicYearId: string | undefined;
           if (row.academic_year) {

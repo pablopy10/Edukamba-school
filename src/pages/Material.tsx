@@ -21,6 +21,7 @@ import { useAcademicYear } from "@/context/AcademicYearContext";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME, showPageKpiCards } from "@/lib/nativeApp";
 import { isSchoolManagementOrTeacher, isSchoolManagementRole } from "@/lib/schoolStaffRoles";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 
 type Category = "papelaria" | "laboratorio" | "artes" | "desporto" | "tecnologia";
 
@@ -104,27 +105,28 @@ const Material = () => {
     if (!user) return;
     const { data: profile } = await supabase
       .from("profiles")
-      .select("school_id, role, full_name")
+      .select("school_id, support_context_school_id, role, full_name")
       .eq("id", user.id)
       .maybeSingle();
-    if (!profile?.school_id) {
+    const sid = effectiveSchoolIdFromProfile(profile);
+    if (!sid || !profile) {
       setLoading(false);
       return;
     }
-    setSchoolId(profile.school_id);
+    setSchoolId(sid);
     setUserRole(profile.role);
     setUserName(profile.full_name ?? "");
 
-    let classroomsQuery = supabase.from("classrooms").select("id, name").eq("school_id", profile.school_id);
+    let classroomsQuery = supabase.from("classrooms").select("id, name").eq("school_id", sid);
     if (selectedYearId) classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
     classroomsQuery = classroomsQuery.order("name");
 
     const [m, r, c, s, d] = await Promise.all([
-      supabase.from("materials").select("*").eq("school_id", profile.school_id).order("name"),
-      supabase.from("material_requests").select("*").eq("school_id", profile.school_id).order("created_at", { ascending: false }),
+      supabase.from("materials").select("*").eq("school_id", sid).order("name"),
+      supabase.from("material_requests").select("*").eq("school_id", sid).order("created_at", { ascending: false }),
       classroomsQuery,
-      supabase.from("students").select("id, full_name, classroom_id").eq("school_id", profile.school_id).order("full_name"),
-      supabase.from("material_request_deliveries").select("id, request_id, student_id, brought").eq("school_id", profile.school_id),
+      supabase.from("students").select("id, full_name, classroom_id").eq("school_id", sid).order("full_name"),
+      supabase.from("material_request_deliveries").select("id, request_id, student_id, brought").eq("school_id", sid),
     ]);
     setStock((m.data as MaterialRow[]) ?? []);
     setRequests((r.data as RequestRow[]) ?? []);

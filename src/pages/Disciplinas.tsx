@@ -13,6 +13,7 @@ import { ExcelImportDialog, type ImportField } from "@/components/shared/ExcelIm
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { Button } from "@/components/ui/button";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 
 const colorPalette = ["lilac", "blue", "yellow", "green", "pink"] as const;
 const colorStyles: Record<typeof colorPalette[number], string> = {
@@ -89,12 +90,17 @@ const Disciplinas = () => {
     if (!name) throw new Error("Nome é obrigatório");
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Sessão inválida");
-    const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", user.id).maybeSingle();
-    if (!profile?.school_id) throw new Error("Escola não encontrada");
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("school_id, support_context_school_id")
+      .eq("id", user.id)
+      .maybeSingle();
+    const sid = effectiveSchoolIdFromProfile(profile);
+    if (!sid) throw new Error("Escola não encontrada");
     const { error } = await supabase.from("subjects").insert({
       name,
       code: row.code?.trim() || null,
-      school_id: profile.school_id,
+      school_id: sid,
     });
     if (error) throw new Error(error.message);
   };

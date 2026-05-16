@@ -20,6 +20,7 @@ import { Loader2, Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet, AlertC
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 import { isNativeMobileApp } from "@/lib/nativeApp";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -137,10 +138,10 @@ const Financas = () => {
     setLoading(true);
     const { data: profile } = await supabase
       .from("profiles")
-      .select("school_id")
+      .select("school_id, support_context_school_id")
       .eq("id", (await supabase.auth.getUser()).data.user?.id ?? "")
       .single();
-    const sId = profile?.school_id ?? null;
+    const sId = effectiveSchoolIdFromProfile(profile);
     setSchoolId(sId);
     if (!sId) { setLoading(false); return; }
 

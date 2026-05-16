@@ -16,6 +16,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/hooks/useAuth";
 import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 import { showPageKpiCards } from "@/lib/nativeApp";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -166,8 +167,12 @@ export default function Documentos() {
     if (!user?.id) return null;
     const sid = ctxSchoolId ?? null;
     if (sid) { setSchoolId(sid); return sid; }
-    const { data } = await supabase.from("profiles").select("school_id").eq("id", user.id).maybeSingle();
-    const s = data?.school_id ?? null;
+    const { data } = await supabase
+      .from("profiles")
+      .select("school_id, support_context_school_id")
+      .eq("id", user.id)
+      .maybeSingle();
+    const s = effectiveSchoolIdFromProfile(data);
     setSchoolId(s);
     return s;
   }, [user?.id, ctxSchoolId]);

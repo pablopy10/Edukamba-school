@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { showPageKpiCards } from "@/lib/nativeApp";
 import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 import { QUERY_DAY_MS } from "@/lib/queryClient";
 import { PublishResultsDialog } from "@/components/matriculas/PublishResultsDialog";
 import {
@@ -180,7 +181,7 @@ const Notas = () => {
   const resolvedSchoolId = useMemo(() => {
     if (isTeacher)
       return ctxSchoolId ?? persistedTeacherSession?.schoolId ?? profileSchoolId;
-    return profileSchoolId ?? ctxSchoolId;
+    return ctxSchoolId ?? profileSchoolId;
   }, [isTeacher, ctxSchoolId, persistedTeacherSession?.schoolId, profileSchoolId]);
 
   const resolvedYearId = useMemo(() => {
@@ -234,8 +235,12 @@ const Notas = () => {
 
   const loadSchool = useCallback(async () => {
     if (!user?.id) return null;
-    const { data: profile } = await supabase.from("profiles").select("school_id").eq("id", user.id).maybeSingle();
-    const sid = profile?.school_id ?? null;
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("school_id, support_context_school_id")
+      .eq("id", user.id)
+      .maybeSingle();
+    const sid = effectiveSchoolIdFromProfile(profile);
     setProfileSchoolId(sid);
     return sid;
   }, [user?.id]);

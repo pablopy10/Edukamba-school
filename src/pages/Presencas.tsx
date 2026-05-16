@@ -19,6 +19,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { toast } from "sonner";
 import { isSchoolManagementOrTeacher } from "@/lib/schoolStaffRoles";
+import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 import {
   Select,
   SelectContent,
@@ -329,7 +330,7 @@ const Presencas = () => {
     if (isTeacher) {
       return ctxSchoolId ?? persistedTeacherSession?.schoolId ?? profileSchoolId;
     }
-    return profileSchoolId;
+    return ctxSchoolId ?? profileSchoolId;
   }, [isTeacher, ctxSchoolId, persistedTeacherSession?.schoolId, profileSchoolId]);
 
   const resolvedYearId = useMemo(() => {
@@ -366,11 +367,11 @@ const Presencas = () => {
     (async () => {
       const { data } = await supabase
         .from("profiles")
-        .select("school_id, role")
+        .select("school_id, support_context_school_id, role")
         .eq("id", user.id)
         .maybeSingle();
       if (data) {
-        setProfileSchoolId(data.school_id);
+        setProfileSchoolId(effectiveSchoolIdFromProfile(data));
         setUserRole(data.role);
       }
     })();
@@ -425,7 +426,7 @@ const Presencas = () => {
   // Load classrooms (não-professor: consulta Supabase)
   useEffect(() => {
     if (isTeacher) return;
-    if (!profileSchoolId) return;
+    if (!resolvedSchoolId) return;
     if (isParent && parentLoading) return;
     if (isStudent && studentLoading) return;
     if (!ctxYearId) {
@@ -437,7 +438,7 @@ const Presencas = () => {
       let q = supabase
         .from("classrooms")
         .select("id, name")
-        .eq("school_id", profileSchoolId)
+        .eq("school_id", resolvedSchoolId)
         .eq("academic_year_id", ctxYearId)
         .order("name");
       if (isParent) {
@@ -462,7 +463,7 @@ const Presencas = () => {
       setClassroomId(list[0]?.id ?? "all");
     })();
   }, [
-    profileSchoolId,
+    resolvedSchoolId,
     ctxYearId,
     isParent,
     parentLoading,
