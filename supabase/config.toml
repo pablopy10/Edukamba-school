@@ -27,3 +27,7 @@ verify_jwt = false
 # Requer BREVO_API_KEY, BREVO_SENDER_EMAIL e BREVO_SENDER_NAME nos Secrets.
 [functions.notifications-email]
 verify_jwt = false
+
+# Envia PDF de proposta comercial pelo Brevo. Valida SUPER_ADMIN dentro do handler (OPTIONS sem JWT ok).
+[functions.send-sales-proposal-email]
+verify_jwt = false

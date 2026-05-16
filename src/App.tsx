@@ -50,6 +50,11 @@ import Transportes from "./pages/Transportes.tsx";
 import Refeicoes from "./pages/Refeicoes.tsx";
 import Documentos from "./pages/Documentos.tsx";
 import DocumentSign from "./pages/DocumentSign.tsx";
+import SuperAdminPortal from "@/pages/super/SuperAdminPortal.tsx";
+import SuperOverview from "@/pages/super/SuperOverview.tsx";
+import SuperSchools from "@/pages/super/SuperSchools.tsx";
+import SuperCrm from "@/pages/super/SuperCrm.tsx";
+import SuperProposals from "@/pages/super/SuperProposals.tsx";
 import { ModulesProvider } from "./context/ModulesContext";
 import { AcademicYearProvider } from "./context/AcademicYearContext";
 import { UserRoleProvider, useUserRole } from "./hooks/useUserRole";
@@ -132,6 +137,12 @@ const App = () => (
 
                     <Route element={<ProtectedRoute />}>
                       <Route path="/onboarding" element={<Onboarding />} />
+                      <Route path="/super" element={<SuperAdminPortal />}>
+                        <Route index element={<SuperOverview />} />
+                        <Route path="escolas" element={<SuperSchools />} />
+                        <Route path="crm" element={<SuperCrm />} />
+                        <Route path="propostas" element={<SuperProposals />} />
+                      </Route>
                       <Route element={<DashboardShell />}>
                         <Route path="/dashboard" element={<Index />} />
                         <Route path="/alunos" element={<Alunos />} />

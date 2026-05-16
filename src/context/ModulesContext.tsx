@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
+import { TENANT_CHANGED_EVENT } from "@/lib/tenantBroadcast";
 
 export type ModuleKey =
   | "professores"
@@ -53,9 +55,7 @@ export const moduleMeta: Record<ModuleKey, { label: string; description: string;
 
 export type PlanType = "Essencial" | "Pro" | "Enterprise";
 
-// Module → minimum plan required.
 export const modulePlan: Record<ModuleKey, PlanType> = {
-  // Essencial
   professores: "Essencial",
   alunos: "Essencial",
   matriculas: "Essencial",
@@ -71,11 +71,9 @@ export const modulePlan: Record<ModuleKey, PlanType> = {
   propinas: "Essencial",
   financas: "Essencial",
   relatorios: "Essencial",
-  // Pro
   extracurriculares: "Pro",
   pedidos: "Pro",
   timesheet: "Pro",
-  // Enterprise
   material: "Enterprise",
   transportes: "Enterprise",
   refeicoes: "Enterprise",
@@ -89,11 +87,29 @@ export const isModuleAllowedForPlan = (key: ModuleKey, plan: PlanType): boolean 
 
 const STORAGE_KEY = "edukamba.modules";
 
-const defaults: Record<ModuleKey, boolean> = (Object.keys(moduleMeta) as ModuleKey[]).reduce(
+const moduleKeysAll = Object.keys(moduleMeta) as ModuleKey[];
+
+const defaults: Record<ModuleKey, boolean> = moduleKeysAll.reduce(
   (acc, k) => ({ ...acc, [k]: true }),
   {} as Record<ModuleKey, boolean>,
 );
 
+function coerceModuleKey(raw: string): ModuleKey | null {
+  return moduleKeysAll.includes(raw as ModuleKey) ? (raw as ModuleKey) : null;
+}
+
+function buildEffectivePrefs(
+  prefs: Record<ModuleKey, boolean>,
+  plan: PlanType,
+): Record<ModuleKey, boolean> {
+  const next = { ...prefs };
+  moduleKeysAll.forEach((k) => {
+    if (!isModuleAllowedForPlan(k, plan)) next[k] = false;
+  });
+  return next;
+}
+
+/** Preferências guardadas pelo utilizador × plano SaaS × bloqueios da plataforma (Edukamba). */
 type Ctx = {
   modules: Record<ModuleKey, boolean>;
   setModule: (key: ModuleKey, enabled: boolean) => void;
@@ -101,6 +117,7 @@ type Ctx = {
   resetDefaults: () => void;
   plan: PlanType;
   isAllowed: (key: ModuleKey) => boolean;
+  isPlatformForcedOff: (key: ModuleKey) => boolean;
 };
 
 const ModulesContext = createContext<Ctx | undefined>(undefined);
@@ -108,8 +125,10 @@ const ModulesContext = createContext<Ctx | undefined>(undefined);
 export const ModulesProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const [plan, setPlan] = useState<PlanType>("Enterprise");
+  const [tenantEpoch, setTenantEpoch] = useState(0);
+  const [platformForcedOff, setPlatformForcedOff] = useState<Partial<Record<ModuleKey, boolean>>>({});
 
-  const [modules, setModules] = useState<Record<ModuleKey, boolean>>(() => {
+  const [prefs, setPrefs] = useState<Record<ModuleKey, boolean>>(() => {
     if (typeof window === "undefined") return defaults;
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -124,78 +143,103 @@ export const ModulesProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(modules));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
     } catch {
       /* ignore */
     }
-  }, [modules]);
+  }, [prefs]);
 
-  // Load the school's current plan
+  useEffect(() => {
+    const onTenant = () => setTenantEpoch((e) => e + 1);
+    window.addEventListener(TENANT_CHANGED_EVENT, onTenant);
+    return () => window.removeEventListener(TENANT_CHANGED_EVENT, onTenant);
+  }, []);
+
+  // Plano SaaS + bloqueios da plataforma (por escola efectiva — inclui modo suporte SUPER_ADMIN).
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
     (async () => {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("school_id")
+        .select("school_id, support_context_school_id")
         .eq("id", user.id)
         .maybeSingle();
-      if (!profile?.school_id || cancelled) return;
-      const { data: sub } = await supabase
-        .from("saas_subscriptions")
-        .select("plan_type")
-        .eq("school_id", profile.school_id)
-        .maybeSingle();
+      if (cancelled || !profile) return;
+      const sid = profile.support_context_school_id ?? profile.school_id;
+      if (!sid) {
+        setPlatformForcedOff({});
+        return;
+      }
+      const { data: sub } = await supabase.from("saas_subscriptions").select("plan_type").eq("school_id", sid).maybeSingle();
       if (cancelled) return;
       const p = (sub?.plan_type as PlanType) ?? "Enterprise";
       if (p === "Essencial" || p === "Pro" || p === "Enterprise") setPlan(p);
+
+      const { data: locks } = await supabase.from("saas_platform_module_locks").select("module_key").eq("school_id", sid);
+      if (cancelled) return;
+      const off: Partial<Record<ModuleKey, boolean>> = {};
+      (locks ?? []).forEach((row) => {
+        const mk = coerceModuleKey(row.module_key);
+        if (mk) off[mk] = true;
+      });
+      setPlatformForcedOff(off);
     })();
     return () => {
       cancelled = true;
     };
-  }, [user?.id]);
+  }, [user?.id, tenantEpoch]);
 
-  // Auto-disable modules that are not allowed for the current plan
   useEffect(() => {
-    setModules((prev) => {
-      let changed = false;
-      const next = { ...prev };
-      (Object.keys(moduleMeta) as ModuleKey[]).forEach((k) => {
-        if (!isModuleAllowedForPlan(k, plan) && next[k]) {
-          next[k] = false;
-          changed = true;
-        }
-      });
-      return changed ? next : prev;
-    });
+    setPrefs((prev) => buildEffectivePrefs(prev, plan));
   }, [plan]);
+
+  const modules = useMemo(() => {
+    const out = { ...defaults };
+    moduleKeysAll.forEach((k) => {
+      out[k] = prefs[k] && isModuleAllowedForPlan(k, plan) && !platformForcedOff[k];
+    });
+    return out;
+  }, [prefs, platformForcedOff, plan]);
 
   const value = useMemo<Ctx>(
     () => ({
       modules,
       setModule: (key, enabled) => {
-        // Block enabling a module that is not part of the current plan
+        if (platformForcedOff[key]) {
+          toast.error("Este módulo foi desactivado pela Edukamba. Contacte-nos para o reactivar.");
+          return;
+        }
         if (enabled && !isModuleAllowedForPlan(key, plan)) return;
-        setModules((prev) => ({ ...prev, [key]: enabled }));
+        setPrefs((prev) => ({ ...prev, [key]: enabled }));
       },
       setAll: (enabled) =>
-        setModules(() =>
-          (Object.keys(moduleMeta) as ModuleKey[]).reduce(
-            (acc, k) => ({ ...acc, [k]: enabled && isModuleAllowedForPlan(k, plan) }),
-            {} as Record<ModuleKey, boolean>,
+        setPrefs(() =>
+          moduleKeysAll.reduce(
+            (acc, k) => {
+              let next = enabled && isModuleAllowedForPlan(k, plan);
+              if (platformForcedOff[k]) next = false;
+              acc[k] = next;
+              return acc;
+            },
+            { ...defaults },
           ),
         ),
       resetDefaults: () =>
-        setModules(
-          (Object.keys(moduleMeta) as ModuleKey[]).reduce(
-            (acc, k) => ({ ...acc, [k]: isModuleAllowedForPlan(k, plan) }),
+        setPrefs(
+          moduleKeysAll.reduce(
+            (acc, k) => ({
+              ...acc,
+              [k]: isModuleAllowedForPlan(k, plan) && !platformForcedOff[k],
+            }),
             {} as Record<ModuleKey, boolean>,
           ),
         ),
       plan,
       isAllowed: (key) => isModuleAllowedForPlan(key, plan),
+      isPlatformForcedOff: (key) => platformForcedOff[key] === true,
     }),
-    [modules, plan],
+    [modules, platformForcedOff, plan],
   );
 
   return <ModulesContext.Provider value={value}>{children}</ModulesContext.Provider>;
@@ -211,6 +255,7 @@ export const useModules = () => {
       resetDefaults: () => {},
       plan: "Enterprise" as PlanType,
       isAllowed: () => true,
+      isPlatformForcedOff: () => false,
     } as Ctx;
   }
   return ctx;

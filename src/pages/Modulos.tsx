@@ -5,7 +5,7 @@ import { useModules, moduleMeta, ModuleKey, modulePlan, isModuleAllowedForPlan }
 import { showPageKpiCards } from "@/lib/nativeApp";
 
 const Modulos = () => {
-  const { modules, setModule, setAll, resetDefaults, plan } = useModules();
+  const { modules, setModule, setAll, resetDefaults, plan, isPlatformForcedOff } = useModules();
   const [search, setSearch] = useState("");
   const [toast, setToast] = useState<{ kind: "success" | "error"; msg: string } | null>(null);
 
@@ -21,11 +21,12 @@ const Modulos = () => {
           key: k,
           ...moduleMeta[k],
           enabled: modules[k],
+          platformLock: isPlatformForcedOff(k),
           requiredPlan: modulePlan[k],
           allowed: isModuleAllowedForPlan(k, plan),
         }))
         .filter((m) => m.label.toLowerCase().includes(search.toLowerCase()) || m.description.toLowerCase().includes(search.toLowerCase())),
-    [modules, search, plan],
+    [modules, search, plan, isPlatformForcedOff],
   );
 
   const total = (Object.keys(moduleMeta) as ModuleKey[]).length;
@@ -124,7 +125,8 @@ const Modulos = () => {
           {list.map((m) => (
             <div key={m.key} className={cn(
               "flex flex-col gap-3 rounded-2xl border bg-card p-5 shadow-card transition-colors",
-              !m.allowed ? "border-border opacity-60" : m.enabled ? "border-border" : "border-border opacity-70",
+              !m.allowed ? "border-border opacity-60" : m.enabled && !m.platformLock ? "border-border" : "border-border opacity-75",
+              m.platformLock ? "border-amber-500/40 bg-amber-500/5" : "",
             )}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -138,7 +140,19 @@ const Modulos = () => {
                   <p className="mt-2 text-[11px] font-mono text-muted-foreground">{m.path}</p>
                 </div>
                 {m.allowed ? (
-                  <Toggle checked={m.enabled} onChange={(v) => { setModule(m.key, v); showToast("success", `${m.label} ${v ? "activado" : "desactivado"}.`); }} />
+                  m.platformLock ? (
+                    <span className="inline-flex max-w-[140px] items-center gap-1 rounded-full bg-amber-500/25 px-2.5 py-1 text-[10px] font-medium text-amber-900 dark:text-amber-100">
+                      <AlertCircle className="h-3 w-3 shrink-0" /> Bloqueado pela Edukamba
+                    </span>
+                  ) : (
+                    <Toggle
+                      checked={m.enabled}
+                      onChange={(v) => {
+                        setModule(m.key, v);
+                        showToast("success", `${m.label} ${v ? "activado" : "desactivado"}.`);
+                      }}
+                    />
+                  )
                 ) : (
                   <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
                     <Lock className="h-3 w-3" /> {m.requiredPlan}
@@ -151,8 +165,17 @@ const Modulos = () => {
                     Disponível no plano {m.requiredPlan}
                   </span>
                 ) : (
-                  <span className={cn("inline-block rounded-full px-2.5 py-1 text-[11px] font-medium", m.enabled ? "bg-pastel-green text-pastel-green-foreground" : "bg-pastel-pink text-pastel-pink-foreground")}>
-                    {m.enabled ? "Activo" : "Inactivo"}
+                  <span
+                    className={cn(
+                      "inline-block rounded-full px-2.5 py-1 text-[11px] font-medium",
+                      m.platformLock
+                        ? "bg-amber-500/25 text-amber-900 dark:text-amber-100"
+                        : m.enabled
+                          ? "bg-pastel-green text-pastel-green-foreground"
+                          : "bg-pastel-pink text-pastel-pink-foreground",
+                    )}
+                  >
+                    {m.platformLock ? "Bloqueio plataforma" : m.enabled ? "Activo" : "Inactivo"}
                   </span>
                 )}
               </div>

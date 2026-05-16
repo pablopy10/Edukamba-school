@@ -5,22 +5,30 @@ import { supabase } from "@/integrations/supabase/client";
 import TrialExpirado from "@/pages/TrialExpirado";
 import { isDashboardRouteBlockedOnNative } from "@/lib/nativeApp";
 import {
+  clearRouteGuardCache,
   getRouteGuardSnapshot,
   setRouteGuardSnapshot,
   type RouteGuardSnapshot,
 } from "@/lib/routeGuardCache";
+import { TENANT_CHANGED_EVENT } from "@/lib/tenantBroadcast";
 
-/**
- * Portão de sessão + escola + trial. Renderiza `<Outlet />` para rotas filhas.
- * Com rotas aninhadas em App.tsx, o componente mantém-se montado ao navegar
- * entre páginas do dashboard — evita spinner completo a cada troca de rota.
- */
 export const ProtectedRoute = () => {
   const { session, user, loading } = useAuth();
   const location = useLocation();
   const [snapshot, setSnapshot] = useState<RouteGuardSnapshot | null>(() =>
     user?.id ? getRouteGuardSnapshot(user.id) ?? null : null,
   );
+  const [tenantEpoch, setTenantEpoch] = useState(0);
+
+  useEffect(() => {
+    const bump = () => {
+      if (user?.id) clearRouteGuardCache(user.id);
+      setSnapshot(null);
+      setTenantEpoch((e) => e + 1);
+    };
+    window.addEventListener(TENANT_CHANGED_EVENT, bump);
+    return () => window.removeEventListener(TENANT_CHANGED_EVENT, bump);
+  }, [user?.id]);
 
   useEffect(() => {
     if (loading) return;
@@ -30,7 +38,7 @@ export const ProtectedRoute = () => {
     }
 
     const cached = getRouteGuardSnapshot(user.id);
-    if (cached) {
+    if (cached && tenantEpoch === 0) {
       setSnapshot(cached);
       return;
     }
@@ -41,22 +49,26 @@ export const ProtectedRoute = () => {
       for (let i = 0; i < 5; i++) {
         const { data } = await supabase
           .from("profiles")
-          .select("school_id, is_active")
+          .select("school_id, support_context_school_id, role, is_active")
           .eq("id", user.id)
           .maybeSingle();
         if (cancelled) return;
         if (data) {
-          const hasSchool = !!data.school_id;
+          const tenantId = data.support_context_school_id ?? data.school_id ?? null;
+          const isSuperAdmin = data.role === "SUPER_ADMIN";
+          /** SUPER_ADMIN pode aceder ao produto mesmo sem onboarding de escola; é redireccionado pela SuperTenantRedirect. */
+          const hasSchool = !!tenantId || isSuperAdmin;
           const isActive = data.is_active !== false;
+
           let schoolName: string | null = null;
           let trialEndsAt: string | null = null;
           let trialExpired = false;
 
-          if (data.school_id) {
+          if (tenantId && !isSuperAdmin) {
             const { data: school } = await supabase
               .from("schools")
               .select("name, trial_ends_at, subscription_status")
-              .eq("id", data.school_id)
+              .eq("id", tenantId)
               .maybeSingle();
             if (cancelled) return;
             if (school) {
@@ -65,14 +77,14 @@ export const ProtectedRoute = () => {
               trialExpired =
                 school.subscription_status !== "active" &&
                 (school.subscription_status !== "trialing" ||
-                  new Date(school.trial_ends_at).getTime() <= Date.now());
+                  new Date((school.trial_ends_at as string) ?? 0).getTime() <= Date.now());
             }
           }
 
           const snap: RouteGuardSnapshot = {
             hasSchool,
             isActive,
-            trialExpired,
+            trialExpired: !isSuperAdmin && trialExpired,
             schoolName,
             trialEndsAt,
           };
@@ -91,7 +103,7 @@ export const ProtectedRoute = () => {
           trialEndsAt: null,
         };
         setRouteGuardSnapshot(user.id, snap);
-        setSnapshot(snap);
+        if (!cancelled) setSnapshot(snap);
       }
     };
 
@@ -99,7 +111,7 @@ export const ProtectedRoute = () => {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, loading]);
+  }, [user?.id, loading, tenantEpoch]);
 
   if (loading || (session && user && !snapshot)) {
     return (
@@ -131,9 +143,7 @@ export const ProtectedRoute = () => {
   }
 
   if (snapshot.hasSchool && snapshot.trialExpired && location.pathname !== "/onboarding") {
-    return (
-      <TrialExpirado schoolName={snapshot.schoolName} trialEndedAt={snapshot.trialEndsAt} />
-    );
+    return <TrialExpirado schoolName={snapshot.schoolName} trialEndedAt={snapshot.trialEndsAt} />;
   }
 
   if (isDashboardRouteBlockedOnNative(location.pathname)) {

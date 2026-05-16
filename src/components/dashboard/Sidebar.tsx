@@ -1,5 +1,5 @@
 import type { ElementType } from "react";
-import { GraduationCap, Home, Users, Receipt, BookOpen, Presentation, Contact, PersonStanding, UsersRound, CalendarDays, BookMarked, Table2, CalendarCheck, Smartphone, BookOpenCheck, BarChart3, Clock, UserCircle, Settings, Package, LogOut, ChevronRight, Sparkles, TrendingUp, Bus, FolderOpen, Landmark, Utensils } from "lucide-react";
+import { GraduationCap, Home, Users, Receipt, BookOpen, Presentation, Contact, PersonStanding, UsersRound, CalendarDays, BookMarked, Table2, CalendarCheck, Smartphone, BookOpenCheck, BarChart3, Clock, UserCircle, Settings, Package, LogOut, ChevronRight, Sparkles, TrendingUp, Bus, FolderOpen, Landmark, Utensils, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useModules, ModuleKey } from "@/context/ModulesContext";
@@ -81,14 +81,21 @@ function SidebarNavigation({
   });
 
   const visibleOther = other.filter((item) => {
-    if (native && isDashboardRouteBlockedOnNative(item.to)) return false;
-    if (roleLoading || role === null) return false;
-    if (item.to === "/perfil") return isNavPathAllowedForRole(role, "/perfil");
-    if (item.to === "/definicoes") return canOpenDefinicoesPage(role);
-    if (item.to === "/modulos")
-      return canOpenModulosPage(role) && canReadModule("modulos" as PermissionModuleKey);
-    return isNavPathAllowedForRole(role, item.to);
-  });
+      if (native && isDashboardRouteBlockedOnNative(item.to)) return false;
+      if (roleLoading || role === null) return false;
+      if (item.to === "/perfil") return isNavPathAllowedForRole(role, "/perfil");
+      if (item.to === "/definicoes") return canOpenDefinicoesPage(role);
+      if (item.to === "/modulos")
+        return canOpenModulosPage(role) && canReadModule("modulos" as PermissionModuleKey);
+      return isNavPathAllowedForRole(role, item.to);
+    });
+
+  const superAdminNav: NavItem[] =
+    !roleLoading && role === "SUPER_ADMIN"
+      ? [{ icon: Shield, label: "Área SaaS", to: "/super" }]
+      : [];
+
+  const bottomNavItems = [...superAdminNav, ...visibleOther];
 
   const handleLogout = async () => {
     onNavigate?.();
@@ -145,7 +152,7 @@ function SidebarNavigation({
           ? Array.from({ length: 2 }).map((_, i) => (
               <div key={`other-skel-${i}`} className="mx-1 my-1 h-9 animate-pulse rounded-xl bg-sidebar-accent/40" />
             ))
-          : visibleOther.map(renderItem)}
+          : bottomNavItems.map(renderItem)}
         <button
           type="button"
           onClick={handleLogout}

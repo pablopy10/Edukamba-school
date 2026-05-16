@@ -3058,6 +3058,7 @@ export type Database = {
           phone: string | null
           role: Database["public"]["Enums"]["user_role"] | null
           school_id: string | null
+          support_context_school_id: string | null
           tax_id: string | null
         }
         Insert: {
@@ -3071,6 +3072,7 @@ export type Database = {
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"] | null
           school_id?: string | null
+          support_context_school_id?: string | null
           tax_id?: string | null
         }
         Update: {
@@ -3084,12 +3086,20 @@ export type Database = {
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"] | null
           school_id?: string | null
+          support_context_school_id?: string | null
           tax_id?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "profiles_school_id_fkey"
             columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_support_context_school_id_fkey"
+            columns: ["support_context_school_id"]
             isOneToOne: false
             referencedRelation: "schools"
             referencedColumns: ["id"]
@@ -3199,6 +3209,178 @@ export type Database = {
             columns: ["school_id"]
             isOneToOne: false
             referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saas_crm_assignable_profiles: {
+        Row: {
+          created_at: string
+          profile_id: string
+        }
+        Insert: {
+          created_at?: string
+          profile_id: string
+        }
+        Update: {
+          created_at?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_crm_assignable_profiles_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saas_platform_module_locks: {
+        Row: {
+          disabled_at: string
+          disabled_by: string | null
+          module_key: string
+          school_id: string
+        }
+        Insert: {
+          disabled_at?: string
+          disabled_by?: string | null
+          module_key: string
+          school_id: string
+        }
+        Update: {
+          disabled_at?: string
+          disabled_by?: string | null
+          module_key?: string
+          school_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_platform_module_locks_disabled_by_fkey"
+            columns: ["disabled_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_platform_module_locks_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saas_sales_leads: {
+        Row: {
+          assigned_to: string | null
+          contact_email: string | null
+          contact_name: string | null
+          created_at: string
+          estimated_seats: number | null
+          id: string
+          notes: string | null
+          organization_name: string
+          phone: string | null
+          pipeline_stage: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          created_at?: string
+          estimated_seats?: number | null
+          id?: string
+          notes?: string | null
+          organization_name: string
+          phone?: string | null
+          pipeline_stage?: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          created_at?: string
+          estimated_seats?: number | null
+          id?: string
+          notes?: string | null
+          organization_name?: string
+          phone?: string | null
+          pipeline_stage?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_sales_leads_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saas_sales_proposals: {
+        Row: {
+          amount_estimate: number | null
+          body_text: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          lead_id: string | null
+          pdf_storage_url: string | null
+          recipient_email: string | null
+          sent_at: string | null
+          status: string
+          summary: string | null
+          title: string
+        }
+        Insert: {
+          amount_estimate?: number | null
+          body_text?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          lead_id?: string | null
+          pdf_storage_url?: string | null
+          recipient_email?: string | null
+          sent_at?: string | null
+          status?: string
+          summary?: string | null
+          title: string
+        }
+        Update: {
+          amount_estimate?: number | null
+          body_text?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          lead_id?: string | null
+          pdf_storage_url?: string | null
+          recipient_email?: string | null
+          sent_at?: string | null
+          status?: string
+          summary?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_sales_proposals_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_sales_proposals_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "saas_sales_leads"
             referencedColumns: ["id"]
           },
         ]
@@ -4904,6 +5086,36 @@ export type Database = {
         Returns: Database["public"]["Enums"]["user_role"]
       }
       get_my_school: { Args: never; Returns: string }
+      get_identity_role: {
+        Args: never
+        Returns: Database["public"]["Enums"]["user_role"]
+      }
+      auth_is_platform_super_admin: { Args: never; Returns: boolean }
+      platform_super_clear_support_context: { Args: never; Returns: undefined }
+      platform_super_set_support_context: { Args: { _school_id: string | null }; Returns: undefined }
+      platform_saas_dashboard_overview: {
+        Args: never
+        Returns: {
+          total_schools: number
+          active_schools: number
+          total_student_profiles: number
+          total_staff_profiles: number
+        }[]
+      }
+      platform_saas_list_schools_with_counts: {
+        Args: never
+        Returns: {
+          school_id: string
+          school_name: string
+          subscription_status: string
+          student_count: number
+          staff_count: number
+        }[]
+      }
+      platform_set_module_lock: {
+        Args: { _school_id: string; _module_key: string; _locked: boolean }
+        Returns: undefined
+      }
       get_term_for_date: {
         Args: { _date: string; _school_id: string }
         Returns: string
