@@ -32,6 +32,9 @@ const demoMailHref =
 const planosMailHref =
   "mailto:contacto@edukamba.ao?subject=" + encodeURIComponent("Informação sobre planos – Edukamba");
 
+/** Secção logos/parceiros e cards «Escolas e conformidade» — ocultada temporariamente. */
+const showEscolasSection = false;
+
 const pillars = [
   {
     icon: MessagesSquare,
@@ -118,9 +121,11 @@ const Landing = () => {
             <a href="#porque" className="transition-colors hover:text-foreground">
               Porquê Edukamba
             </a>
-            <a href="#escolas" className="transition-colors hover:text-foreground">
-              Escolas
-            </a>
+            {showEscolasSection && (
+              <a href="#escolas" className="transition-colors hover:text-foreground">
+                Escolas
+              </a>
+            )}
             <a href="#faq" className="transition-colors hover:text-foreground">
               FAQ
             </a>
@@ -310,64 +315,69 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Prova social */}
-      <section id="escolas" className="border-t border-border/60 bg-muted/25 py-16 lg:py-24">
-        <div className="container space-y-12">
-          <div className="mx-auto max-w-2xl text-center">
-            <span className="text-sm font-semibold uppercase tracking-wider text-pastel-blue-foreground">Confiança</span>
-            <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Escolas e conformidade</h2>
-            <p className="mt-3 text-muted-foreground">
-              Logótipos de parceiros à medida que fechamos cada escola — o CSFA será o primeiro em destaque.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12">
-            {["CSFA", "Colégio parceiro", "Instituição piloto"].map((label) => (
-              <div
-                key={label}
-                className="flex h-16 min-w-[140px] items-center justify-center rounded-xl border border-dashed border-border bg-card px-6 text-sm font-medium text-muted-foreground"
-              >
-                {label === "CSFA" ? (
-                  <span className="text-foreground">
-                    <span className="font-bold">CSFA</span>
-                    <span className="ml-1 text-xs font-normal text-muted-foreground">(breve)</span>
-                  </span>
-                ) : (
-                  label
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card className="flex flex-col justify-center gap-3 rounded-2xl border-border/60 p-8">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-pastel-blue text-pastel-blue-foreground">
-                  <Shield className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-lg font-semibold">Alinhamento fiscal — AGT</p>
-                  <Badge variant="secondary" className="mt-1 text-xs">
-                    Mercado angolano
-                  </Badge>
-                </div>
-              </div>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                Facturação e recibos conforme as exigências da <strong>Administração Geral Tributária (AGT)</strong>, para
-                reduzir risco e atrito com auditorias e reportes às famílias.
+      {/* Prova social — ver `showEscolasSection` */}
+      {showEscolasSection && (
+        <section id="escolas" className="border-t border-border/60 bg-muted/25 py-16 lg:py-24">
+          <div className="container space-y-12">
+            <div className="mx-auto max-w-2xl text-center">
+              <span className="text-sm font-semibold uppercase tracking-wider text-pastel-blue-foreground">
+                Confiança
+              </span>
+              <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Escolas e conformidade</h2>
+              <p className="mt-3 text-muted-foreground">
+                Logótipos de parceiros à medida que fechamos cada escola — o CSFA será o primeiro em destaque.
               </p>
-            </Card>
+            </div>
 
-            <Card className="relative overflow-hidden rounded-2xl border-pastel-blue-foreground/20 bg-card p-8 shadow-soft">
-              <Quote className="absolute right-6 top-6 h-16 w-16 text-pastel-blue/25" aria-hidden />
-              <p className="text-lg font-medium leading-relaxed text-foreground">
-                “O Edukamba reduziu o fluxo de chamadas na nossa secretaria em <strong>60%</strong> no primeiro mês.”
-              </p>
-              <p className="mt-4 text-sm text-muted-foreground">— Equipa de secretaria, escola piloto</p>
-            </Card>
+            <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12">
+              {["CSFA", "Colégio parceiro", "Instituição piloto"].map((label) => (
+                <div
+                  key={label}
+                  className="flex h-16 min-w-[140px] items-center justify-center rounded-xl border border-dashed border-border bg-card px-6 text-sm font-medium text-muted-foreground"
+                >
+                  {label === "CSFA" ? (
+                    <span className="text-foreground">
+                      <span className="font-bold">CSFA</span>
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">(breve)</span>
+                    </span>
+                  ) : (
+                    label
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Card className="flex flex-col justify-center gap-3 rounded-2xl border-border/60 p-8">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-pastel-blue text-pastel-blue-foreground">
+                    <Shield className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold">Alinhamento fiscal — AGT</p>
+                    <Badge variant="secondary" className="mt-1 text-xs">
+                      Mercado angolano
+                    </Badge>
+                  </div>
+                </div>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  Facturação e recibos conforme as exigências da{" "}
+                  <strong>Administração Geral Tributária (AGT)</strong>, para reduzir risco e atrito com auditorias e
+                  reportes às famílias.
+                </p>
+              </Card>
+
+              <Card className="relative overflow-hidden rounded-2xl border-pastel-blue-foreground/20 bg-card p-8 shadow-soft">
+                <Quote className="absolute right-6 top-6 h-16 w-16 text-pastel-blue/25" aria-hidden />
+                <p className="text-lg font-medium leading-relaxed text-foreground">
+                  “O Edukamba reduziu o fluxo de chamadas na nossa secretaria em <strong>60%</strong> no primeiro mês.”
+                </p>
+                <p className="mt-4 text-sm text-muted-foreground">— Equipa de secretaria, escola piloto</p>
+              </Card>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Comparação */}
       <section id="porque" className="container py-16 lg:py-24">
