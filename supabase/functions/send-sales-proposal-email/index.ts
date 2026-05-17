@@ -184,10 +184,22 @@ Deno.serve(async (req) => {
       return corsJson({ error: `Brevo: ${bRes.status} — ${bText.slice(0, 400)}` }, 502);
     }
 
+    let brevoMessageId: string | null = null;
+    try {
+      const parsed = JSON.parse(bText) as { messageId?: string | number };
+      const mid = parsed?.messageId;
+      if (typeof mid === "string" || typeof mid === "number") {
+        brevoMessageId = String(mid).trim() || null;
+      }
+    } catch {
+      // Resposta textual inesperada — ignorar persistência do id
+    }
+
     const now = new Date().toISOString();
     const { error: upErr } = await admin.from("saas_sales_proposals").update({
       status: "sent",
       sent_at: now,
+      ...(brevoMessageId ? { brevo_message_id: brevoMessageId } : {}),
     }).eq("id", proposalId);
 
     if (upErr) {

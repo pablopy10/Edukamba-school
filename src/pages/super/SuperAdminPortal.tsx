@@ -6,6 +6,7 @@ import {
   LayoutGrid,
   Loader2,
   LogOut,
+  ScrollText,
   Shield,
   Workflow,
 } from "lucide-react";
@@ -48,6 +49,10 @@ function SidebarNav({
       <NavLink to="/super/propostas" className={linkCls}>
         <FileText className="h-4 w-4 shrink-0 opacity-90" />
         {!compact ? <span>Propostas</span> : <span className="pr-2">Propostas</span>}
+      </NavLink>
+      <NavLink to="/super/auditoria" className={linkCls}>
+        <ScrollText className="h-4 w-4 shrink-0 opacity-90" />
+        {!compact ? <span>Auditoria</span> : <span className="pr-2">Audit</span>}
       </NavLink>
     </nav>
   );

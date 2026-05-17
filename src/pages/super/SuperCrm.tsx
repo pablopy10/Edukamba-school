@@ -24,10 +24,10 @@ type LeadRow = {
 };
 
 const STAGES = [
-  { key: "new", label: "Novo" },
-  { key: "contacted", label: "Contactado" },
-  { key: "qualified", label: "Qualificado" },
-  { key: "proposal", label: "Proposta" },
+  { key: "new", label: "Nova lead" },
+  { key: "contacted", label: "Reunião agendada" },
+  { key: "qualified", label: "Proposta enviada" },
+  { key: "proposal", label: "Negociação" },
   { key: "won", label: "Ganho" },
   { key: "lost", label: "Perdido" },
 ] as const;
@@ -161,7 +161,7 @@ const SuperCrm = () => {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">CRM — Kanban de leads</h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Funil por colunas (<em>Novo</em> até <em>Ganho</em>/<em>Perdido</em>); distribua trabalho pela equipa e ligue cada lead às{" "}
+            Funil por colunas (<em>Nova lead</em> até <em>Ganho</em>/<em>Perdido</em>); distribua trabalho pela equipa e ligue cada lead às{" "}
             <strong className="font-medium text-foreground">propostas comerciais</strong> na outra página.
           </p>
         </div>

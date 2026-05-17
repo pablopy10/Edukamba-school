@@ -1,59 +1,45 @@
-import { jsPDF } from "jspdf";
+import jsPDF from "jspdf";
+import {
+  buildProformaProposalPdf,
+  buildProformaRenderInput,
+} from "@/lib/proformaProposal";
 
 export type EdukambaProposalPdfInput = {
+  /** Identificador estável para número de documento (ex.: UUID da linha em `saas_sales_proposals`). */
+  id: string;
   title: string;
   recipientEmail?: string;
   summary?: string;
   body: string;
   amount?: string;
   currency?: string;
+  created_at?: string | null;
+  /** Nome da organização do lead CRM (secção «Dados do Cliente»). */
+  leadOrganizationName?: string | null;
 };
 
+function pdfInputToRender(input: EdukambaProposalPdfInput) {
+  const amountEstimate =
+    input.amount != null && String(input.amount).trim() !== "" && !Number.isNaN(Number(input.amount))
+      ? Number(input.amount)
+      : null;
+  return buildProformaRenderInput({
+    proposal: {
+      id: input.id,
+      title: input.title,
+      summary: input.summary ?? null,
+      body_text: input.body,
+      amount_estimate: amountEstimate,
+      currency: input.currency ?? "AOA",
+      recipient_email: input.recipientEmail ?? null,
+      created_at: input.created_at ?? null,
+    },
+    lead: input.leadOrganizationName ? { organization_name: input.leadOrganizationName } : null,
+  });
+}
+
 function buildProposalPdfDoc(input: EdukambaProposalPdfInput): jsPDF {
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
-  let y = 18;
-  doc.setFontSize(16);
-  doc.setTextColor(32, 64, 120);
-  doc.text("Edukamba · Proposta comercial", 18, y);
-  y += 10;
-  doc.setFontSize(12);
-  doc.setTextColor(40, 40, 40);
-  doc.text(input.title, 18, y);
-  y += 8;
-  if (input.recipientEmail) {
-    doc.setFontSize(10);
-    doc.setTextColor(90, 90, 90);
-    doc.text(`Para: ${input.recipientEmail}`, 18, y);
-    y += 7;
-  }
-  if (input.summary) {
-    doc.setFontSize(10);
-    doc.setTextColor(50, 50, 50);
-    const summaryLines = doc.splitTextToSize(input.summary, 174);
-    doc.text(summaryLines, 18, y);
-    y += summaryLines.length * 5 + 4;
-  }
-  if (input.amount) {
-    doc.setFontSize(11);
-    doc.text(`Valor estimado: ${input.amount} ${input.currency ?? ""}`.trim(), 18, y);
-    y += 8;
-  }
-  doc.setFontSize(10);
-  doc.setTextColor(30, 30, 30);
-  const bodyLines = doc.splitTextToSize(input.body.trim() || "—", 174);
-  let lineY = y;
-  for (const line of bodyLines) {
-    if (lineY > 270) {
-      doc.addPage();
-      lineY = 18;
-    }
-    doc.text(line, 18, lineY);
-    lineY += 5;
-  }
-  doc.setFontSize(8);
-  doc.setTextColor(120, 120, 120);
-  doc.text("Documento gerado na aplicação Edukamba.", 18, 288);
-  return doc;
+  return buildProformaProposalPdf(pdfInputToRender(input));
 }
 
 export function downloadEdukambaProposalPdf(input: EdukambaProposalPdfInput, filename = "proposta-edukamba.pdf") {

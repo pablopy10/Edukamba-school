@@ -3326,9 +3326,11 @@ export type Database = {
         Row: {
           amount_estimate: number | null
           body_text: string
+          brevo_message_id: string | null
           created_at: string
           created_by: string | null
           currency: string
+          email_opened_at: string | null
           id: string
           lead_id: string | null
           pdf_storage_url: string | null
@@ -3341,9 +3343,11 @@ export type Database = {
         Insert: {
           amount_estimate?: number | null
           body_text?: string
+          brevo_message_id?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
+          email_opened_at?: string | null
           id?: string
           lead_id?: string | null
           pdf_storage_url?: string | null
@@ -3356,9 +3360,11 @@ export type Database = {
         Update: {
           amount_estimate?: number | null
           body_text?: string
+          brevo_message_id?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
+          email_opened_at?: string | null
           id?: string
           lead_id?: string | null
           pdf_storage_url?: string | null
@@ -3391,6 +3397,7 @@ export type Database = {
           id: string
           last_billing_date: string | null
           last_generated_cycle_key: string | null
+          monthly_recurring_amount: number
           next_billing_date: string | null
           plan_type: string
           price_per_student: number | null
@@ -3402,6 +3409,7 @@ export type Database = {
           id?: string
           last_billing_date?: string | null
           last_generated_cycle_key?: string | null
+          monthly_recurring_amount?: number
           next_billing_date?: string | null
           plan_type: string
           price_per_student?: number | null
@@ -3413,6 +3421,7 @@ export type Database = {
           id?: string
           last_billing_date?: string | null
           last_generated_cycle_key?: string | null
+          monthly_recurring_amount?: number
           next_billing_date?: string | null
           plan_type?: string
           price_per_student?: number | null
@@ -3721,11 +3730,16 @@ export type Database = {
           name: string
           nif: string | null
           primary_color: string | null
+          saas_billing_email: string | null
+          saas_contract_number: string | null
           secondary_color: string | null
           settings: Json | null
+          subscription_cancelled_at: string | null
           subscription_status: string
           trial_ends_at: string
           trial_started_at: string
+          usage_brevo_emails_sent_mt: number
+          usage_proof_storage_bytes_estimate: number
         }
         Insert: {
           address?: string | null
@@ -3736,11 +3750,16 @@ export type Database = {
           name: string
           nif?: string | null
           primary_color?: string | null
+          saas_billing_email?: string | null
+          saas_contract_number?: string | null
           secondary_color?: string | null
           settings?: Json | null
+          subscription_cancelled_at?: string | null
           subscription_status?: string
           trial_ends_at?: string
           trial_started_at?: string
+          usage_brevo_emails_sent_mt?: number
+          usage_proof_storage_bytes_estimate?: number
         }
         Update: {
           address?: string | null
@@ -3751,11 +3770,16 @@ export type Database = {
           name?: string
           nif?: string | null
           primary_color?: string | null
+          saas_billing_email?: string | null
+          saas_contract_number?: string | null
           secondary_color?: string | null
           settings?: Json | null
+          subscription_cancelled_at?: string | null
           subscription_status?: string
           trial_ends_at?: string
           trial_started_at?: string
+          usage_brevo_emails_sent_mt?: number
+          usage_proof_storage_bytes_estimate?: number
         }
         Relationships: []
       }
@@ -5102,15 +5126,54 @@ export type Database = {
           total_staff_profiles: number
         }[]
       }
+      platform_saas_engagement_metrics: {
+        Args: never
+        Returns: {
+          computed_at: string
+          invoice_proofs_marked_mt: number
+          parents_total: number
+          parent_logins_24h: number
+          proofs_validated_payments_mt: number
+          schools_total: number
+          staff_logins_24h: number
+          students_roster: number
+        }[]
+      }
+      platform_saas_finance_metrics: {
+        Args: never
+        Returns: {
+          arr: number
+          avg_ltv_estimate: number
+          avg_tenure_months: number
+          churn_rate_pct: number | null
+          churn_schools_30d: number
+          computed_at: string
+          mrr: number
+          paying_schools: number
+        }[]
+      }
       platform_saas_list_schools_with_counts: {
         Args: never
         Returns: {
+          address: string | null
+          created_at: string | null
+          monthly_recurring_amount: number
+          nif: string | null
+          saas_billing_email: string | null
+          saas_contract_number: string | null
           school_id: string
           school_name: string
-          subscription_status: string
-          student_count: number
           staff_count: number
+          student_count: number
+          subscription_status: string
+          usage_brevo_emails_sent_mt: number
+          usage_proof_storage_bytes_estimate: number
         }[]
+      }
+      platform_super_patch_school_saas_meta: { Args: { _patch: Json; _school_id: string }; Returns: undefined }
+      platform_super_set_subscription_mrr: {
+        Args: { _monthly_recurring_amount: number; _school_id: string }
+        Returns: undefined
       }
       platform_set_module_lock: {
         Args: { _school_id: string; _module_key: string; _locked: boolean }

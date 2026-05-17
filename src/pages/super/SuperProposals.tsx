@@ -6,6 +6,7 @@ import {
   proposalPdfBase64,
   type EdukambaProposalPdfInput,
 } from "@/lib/pdfProposal";
+import { buildProformaProposalHtml, buildProformaRenderInput } from "@/lib/proformaProposal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,6 +32,10 @@ type ProposalRow = {
   currency: string;
   amount_estimate: number | null;
   lead_id: string | null;
+  created_at?: string | null;
+  sent_at?: string | null;
+  email_opened_at?: string | null;
+  brevo_message_id?: string | null;
 };
 
 type LeadTiny = { id: string; organization_name: string };
@@ -68,14 +73,38 @@ const SuperProposals = () => {
 
   const filteredLeads = useMemo(() => leads, [leads]);
 
+  const draftPreviewHtml = useMemo(() => {
+    const leadOrg =
+      form.lead_id !== "__none" ? leads.find((l) => l.id === form.lead_id)?.organization_name : undefined;
+    const render = buildProformaRenderInput({
+      proposal: {
+        id: "draft-preview",
+        title: form.title.trim() || "Nova proposta",
+        summary: form.summary.trim() || null,
+        body_text: form.body,
+        amount_estimate:
+          form.amount === "" || Number.isNaN(Number(form.amount)) ? null : Number(form.amount),
+        currency: form.currency,
+        recipient_email: form.email.trim() || null,
+        created_at: null,
+      },
+      lead: leadOrg ? { organization_name: leadOrg } : null,
+    });
+    return buildProformaProposalHtml(render);
+  }, [form.title, form.summary, form.body, form.amount, form.currency, form.email, form.lead_id, leads]);
+
   function rowToPdfInput(r: ProposalRow): EdukambaProposalPdfInput {
+    const lead = r.lead_id ? leads.find((l) => l.id === r.lead_id) : null;
     return {
+      id: r.id,
       title: r.title,
       recipientEmail: r.recipient_email ?? undefined,
       summary: r.summary ?? undefined,
       body: r.body_text,
       amount: r.amount_estimate != null ? String(r.amount_estimate) : undefined,
       currency: r.currency,
+      created_at: r.created_at ?? null,
+      leadOrganizationName: lead?.organization_name ?? null,
     };
   }
 
@@ -137,8 +166,8 @@ const SuperProposals = () => {
         <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Propostas comerciais (leads)</h1>
         <p className="max-w-xl text-sm text-muted-foreground">
           Ligue propostas a leads do CRM, gere valores e PDF. <strong className="text-foreground">Enviar (servidor)</strong> usa a Edge Function{" "}
-          <code className="text-xs">send-sales-proposal-email</code> (Brevo, secrets <code className="text-xs">BREVO_*</code>). Também pode
-          descarregar PDF ou usar o cliente de correio em &quot;Email&quot;.
+          <code className="text-xs">send-sales-proposal-email</code> (Brevo, secrets <code className="text-xs">BREVO_*</code>). O histórico
+          regista `sent_at` e o ID Brevo; aberturas de email dependem do tracking/webhook configurado no Brevo (campo `email_opened_at`).
         </p>
       </div>
 
@@ -190,7 +219,12 @@ const SuperProposals = () => {
             </Select>
           </div>
           <div className="space-y-1 sm:col-span-2">
-            <Label>Corpo (texto plano)</Label>
+            <Label>Corpo (texto ou JSON estruturado)</Label>
+            <p className="text-xs text-muted-foreground">
+              O PDF e a pré-visualização seguem o layout «Fatura Proforma». Opcionalmente, comece o corpo por JSON com{" "}
+              <code className="text-[11px]">items[]</code>, <code className="text-[11px]">client_lines[]</code>,{" "}
+              <code className="text-[11px]">bank</code>, etc.; caso contrário, o conteúdo entra numa única linha de serviço.
+            </p>
             <Textarea rows={6} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} />
           </div>
         </div>
@@ -231,35 +265,52 @@ const SuperProposals = () => {
             variant="outline"
             disabled={!form.title.trim() || !form.body.trim()}
             onClick={() => {
+              const leadOrg =
+                form.lead_id !== "__none"
+                  ? leads.find((l) => l.id === form.lead_id)?.organization_name ?? null
+                  : null;
               downloadEdukambaProposalPdf(
                 {
+                  id: "draft-local",
                   title: form.title,
                   recipientEmail: form.email || undefined,
                   summary: form.summary || undefined,
                   body: form.body,
                   amount: form.amount || undefined,
                   currency: form.currency,
+                  leadOrganizationName: leadOrg,
                 },
                 `proposta-${form.title.replace(/\s+/g, "-").slice(0, 40)}.pdf`,
               );
               toast.success("PDF gerado.");
             }}
           >
-            Pré-visualizar PDF
+            Descarregar PDF
           </Button>
         </div>
+      </Card>
+
+      <Card className="overflow-hidden rounded-2xl border-border/70 shadow-soft">
+        <div className="border-b border-border/70 px-5 py-3 text-sm font-semibold text-muted-foreground">
+          Pré-visualização · Fatura Proforma (layout oficial)
+        </div>
+        <iframe
+          title="Pré-visualização da Fatura Proforma"
+          className="h-[min(90vh,920px)] w-full bg-muted/30"
+          srcDoc={draftPreviewHtml}
+        />
       </Card>
 
       <Card className="overflow-hidden rounded-2xl shadow-soft">
         <div className="border-b border-border/70 px-5 py-3 text-sm font-semibold text-muted-foreground">Histórico</div>
         <div className="overflow-x-auto">
-          <table className="min-w-[900px] w-full text-sm">
+          <table className="min-w-[1040px] w-full text-sm">
             <thead className="bg-muted/40 text-muted-foreground">
               <tr>
                 <th className="px-4 py-2 text-left">Título</th>
                 <th className="px-4 py-2 text-left">Email</th>
                 <th className="px-4 py-2 text-left">Valor</th>
-                <th className="px-4 py-2 text-left">Estado</th>
+                <th className="px-4 py-2 text-left">Estado / envios</th>
                 <th className="px-4 py-2 text-right">Acções</th>
               </tr>
             </thead>
@@ -271,7 +322,21 @@ const SuperProposals = () => {
                   <td className="px-4 py-2">
                     {r.amount_estimate != null ? `${r.amount_estimate} ${r.currency}` : "—"}
                   </td>
-                  <td className="px-4 py-2">{r.status}</td>
+                  <td className="px-4 py-2">
+                    <div className="font-medium capitalize">{r.status}</div>
+                    {r.sent_at ? (
+                      <div className="text-[11px] text-muted-foreground">
+                        Enviado: {new Date(r.sent_at).toLocaleString("pt-PT")}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-muted-foreground">Sem envio registado.</div>
+                    )}
+                    <div className="text-[11px] text-muted-foreground">
+                      Open:{" "}
+                      {r.email_opened_at ? new Date(r.email_opened_at).toLocaleString("pt-PT") : "Aguardando tracking"}
+                      {r.brevo_message_id ? ` · Brevo #${String(r.brevo_message_id).slice(0, 10)}…` : ""}
+                    </div>
+                  </td>
                   <td className="space-x-2 px-4 py-2 text-right whitespace-nowrap">
                     <Button
                       type="button"

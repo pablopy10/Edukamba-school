@@ -55,6 +55,7 @@ import SuperOverview from "@/pages/super/SuperOverview.tsx";
 import SuperSchools from "@/pages/super/SuperSchools.tsx";
 import SuperCrm from "@/pages/super/SuperCrm.tsx";
 import SuperProposals from "@/pages/super/SuperProposals.tsx";
+import SuperAudit from "@/pages/super/SuperAudit.tsx";
 import { ModulesProvider } from "./context/ModulesContext";
 import { AcademicYearProvider } from "./context/AcademicYearContext";
 import { UserRoleProvider, useUserRole } from "./hooks/useUserRole";
@@ -142,6 +143,7 @@ const App = () => (
                         <Route path="escolas" element={<SuperSchools />} />
                         <Route path="crm" element={<SuperCrm />} />
                         <Route path="propostas" element={<SuperProposals />} />
+                        <Route path="auditoria" element={<SuperAudit />} />
                       </Route>
                       <Route element={<DashboardShell />}>
                         <Route path="/dashboard" element={<Index />} />
