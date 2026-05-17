@@ -180,13 +180,25 @@ All colors MUST be HSL.
   }
 }
 
-/* iOS safe area — garante que o conteúdo nunca fica por baixo da status bar ou da home indicator */
+/*
+ * Safe area (layout): use `env(safe-area-inset-*)` no WebView.
+ * `html.capacitor-native` (definido em main.tsx): mínimo 28px no topo e em baixo no app iOS/Android,
+ * além dos insetos do dispositivo (notch, home indicator, gestos).
+ */
 :root {
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
   --sar: env(safe-area-inset-right, 0px);
-  /* Layout safe-area: top capped at 16 px on mobile (notch/Dynamic Island → 16 px, desktop → 0 px) */
-  --sat-r: min(16px, env(safe-area-inset-top, 0px));
-  --sab-r: max(0px, calc(env(safe-area-inset-bottom, 0px) - 4px));
+  --sal-r: env(safe-area-inset-left, 0px);
+  --sar-r: env(safe-area-inset-right, 0px);
+  --sat-r: env(safe-area-inset-top, 0px);
+  --sab-r: env(safe-area-inset-bottom, 0px);
+}
+
+html.capacitor-native {
+  --sat-r: max(28px, env(safe-area-inset-top, 0px));
+  --sab-r: max(28px, env(safe-area-inset-bottom, 0px));
+  --sal-r: env(safe-area-inset-left, 0px);
+  --sar-r: env(safe-area-inset-right, 0px);
 }

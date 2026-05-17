@@ -670,14 +670,14 @@ const Chat = () => {
           open={!!activeId}
           onOpenChange={(open) => { if (!open) { setActiveId(null); setShowEmoji(false); } }}
         >
-          <DialogContent className="fixed inset-0 z-[150] flex h-[100dvh] w-full max-w-none flex-col gap-0 rounded-none border-0 p-0 [transform:none]">
+          <DialogContent className="fixed inset-0 z-[150] flex h-[100dvh] w-full max-w-none flex-col gap-0 rounded-none border-0 p-0 [transform:none] pl-[max(0.75rem,var(--sal-r))] pr-[max(0.75rem,var(--sar-r))]">
             <DialogHeader className="sr-only">
               <DialogTitle>{active?.full_name ?? "Conversa"}</DialogTitle>
               <DialogDescription>Conversa com {active?.full_name ?? "utilizador"}</DialogDescription>
             </DialogHeader>
 
             {/* Header */}
-            <div className="flex shrink-0 items-center gap-3 border-b border-border bg-card p-4 [padding-top:max(0.75rem,var(--sat-r))]">
+            <div className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-4 pb-3 pt-[max(0.75rem,var(--sat-r))]">
               <button
                 onClick={() => { setActiveId(null); setShowEmoji(false); }}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground hover:bg-accent"
@@ -699,7 +699,7 @@ const Chat = () => {
             </div>
 
             {/* Messages */}
-            <div ref={mobileScrollRef} className="sidebar-scroll flex-1 overflow-y-auto bg-muted/30 p-4">
+            <div ref={mobileScrollRef} className="sidebar-scroll min-h-0 flex-1 overflow-y-auto bg-muted/30 px-1 py-4 sm:px-4">
               <div className="mx-auto flex max-w-2xl flex-col gap-3">
                 {active && thread.map((m) => {
                   const mine = m.sender_id === user?.id;
@@ -761,7 +761,7 @@ const Chat = () => {
             </div>
 
             {/* Composer */}
-            <div className="shrink-0 border-t border-border bg-card p-3 [padding-bottom:max(0.65rem,var(--sab-r))]">
+            <div className="shrink-0 border-t border-border bg-card px-3 pb-[max(0.75rem,var(--sab-r))] pt-3">
               <div className="flex items-end gap-2">
                 <Popover>
                   <PopoverTrigger asChild>
