@@ -158,7 +158,7 @@ BEGIN
     INTO v_churn
   FROM public.schools s
   WHERE s.subscription_cancelled_at IS NOT NULL
-    AND s.subscription_cancelled_at >= (timezone('utc', now()) - interval '30 days');
+    AND s.subscription_cancelled_at >= (now() - interval '30 days');
 
   v_den := COALESCE(v_paying, 0) + COALESCE(v_churn, 0);
   IF v_den > 0 AND v_churn IS NOT NULL THEN
@@ -172,7 +172,7 @@ BEGIN
     ROUND(COALESCE(
       AVG(
         COALESCE(ss.monthly_recurring_amount, 0) * GREATEST(
-          extract(epoch FROM (timezone('utc', now())::timestamptz - COALESCE(s.created_at, timezone('utc', now())::timestamptz)))
+          extract(epoch FROM (now() - COALESCE(s.created_at, now())))
             / (30.4375::numeric * 86400::numeric),
           1::numeric
         )
@@ -181,7 +181,7 @@ BEGIN
     ), 2),
     ROUND(COALESCE(
       AVG(GREATEST(
-        extract(epoch FROM (timezone('utc', now())::timestamptz - COALESCE(s.created_at, timezone('utc', now())::timestamptz)))
+        extract(epoch FROM (now() - COALESCE(s.created_at, now())))
           / (30.4375::numeric * 86400::numeric),
         1::numeric
       )),
@@ -203,7 +203,7 @@ BEGIN
     COALESCE(v_churn, 0)::bigint AS churn_schools_30d,
     v_pct AS churn_rate_pct,
     COALESCE(v_tenure, 0)::numeric AS avg_tenure_months,
-    timezone('utc', now()) AS computed_at;
+    now() AS computed_at;
 END;
 $$;
 
@@ -226,15 +226,15 @@ SECURITY DEFINER
 SET search_path = public, pg_catalog
 AS $$
 DECLARE
-  v_month_start timestamptz := date_trunc(
-    'month',
-    timezone('utc', now())
-  );
-
+  v_month_start timestamptz;
 BEGIN
   IF NOT public.auth_is_platform_super_admin() THEN
     RAISE EXCEPTION 'Acesso reservado a SUPER_ADMIN';
   END IF;
+
+  -- Início do mês UTC como timestamptz (evita usar timezone('utc', now()) só em sí, que não é timestamptz).
+  v_month_start :=
+    (date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'utc') AT TIME ZONE 'utc');
 
   RETURN QUERY
   SELECT
@@ -247,17 +247,17 @@ BEGIN
               INNER JOIN public.profiles pr ON pr.id = u.id
               WHERE pr.role NOT IN ('STUDENT'::public.user_role, 'PARENT'::public.user_role)
                 AND u.last_sign_in_at IS NOT NULL
-                AND u.last_sign_in_at >= (timezone('utc', now()) - interval '24 hours')), 0::bigint),
+                AND u.last_sign_in_at >= (now() - interval '24 hours')), 0::bigint),
     COALESCE((SELECT COUNT(DISTINCT u.id)::bigint
               FROM auth.users u
               INNER JOIN public.profiles pr ON pr.id = u.id
               WHERE pr.role = 'PARENT'::public.user_role
                 AND u.last_sign_in_at IS NOT NULL
-                AND u.last_sign_in_at >= (timezone('utc', now()) - interval '24 hours')), 0::bigint),
+                AND u.last_sign_in_at >= (now() - interval '24 hours')), 0::bigint),
     COALESCE((SELECT COUNT(*)::bigint
               FROM public.payments pm
               WHERE pm.proof_url IS NOT NULL
-                AND trim(lower(pm.status)) = 'validated'::text
+                AND trim(lower(pm.status::text)) = 'validated'::text
                 AND pm.validated_at IS NOT NULL
                 AND pm.validated_at >= v_month_start), 0::bigint),
     COALESCE((SELECT COUNT(*)::bigint
@@ -265,7 +265,7 @@ BEGIN
               WHERE si.proof_url IS NOT NULL
                 AND si.submitted_at IS NOT NULL
                 AND si.submitted_at >= v_month_start), 0::bigint),
-    timezone('utc', now()) AS computed_at;
+    now() AS computed_at;
 END;
 $$;
 
