@@ -47,6 +47,8 @@ TO authenticated
 USING (public.auth_is_platform_super_admin());
 
 -- --- RPC alargada: lista de escolas com perfil SaaS/consolidado
+-- Postgres não permite CREATE OR REPLACE com OUT/RETURNS TABLE diferente da função já existente.
+DROP FUNCTION IF EXISTS public.platform_saas_list_schools_with_counts();
 
 CREATE OR REPLACE FUNCTION public.platform_saas_list_schools_with_counts()
 RETURNS TABLE (
@@ -331,6 +333,7 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION public.platform_saas_list_schools_with_counts() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.platform_saas_finance_metrics() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.platform_saas_engagement_metrics() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.platform_super_patch_school_saas_meta(uuid, jsonb) TO authenticated;
