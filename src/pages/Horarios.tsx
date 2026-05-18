@@ -25,25 +25,44 @@ import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 import { useHorariosDatasetQuery } from "@/hooks/queries/useHorariosDatasetQuery";
 import type { HorariosFetchScope } from "@/lib/api/fetchHorariosDataset";
 import type { ScheduleRow, TimeSlotRow } from "@/lib/api/fetchHorariosDataset";
+import type { DragEvent as ReactDragEvent } from "react";
+import { useTranslation } from "react-i18next";
 
 type Option = { id: string; name: string; subjectId?: string | null; period?: string | null };
 
-const DAYS = [
-  { value: 1, label: "Segunda" },
-  { value: 2, label: "Terça" },
-  { value: 3, label: "Quarta" },
-  { value: 4, label: "Quinta" },
-  { value: 5, label: "Sexta" },
-] as const;
+/** Monday–Friday column keys (aligned with DB `day_of_week`). */
+const DOW_GRID = [1, 2, 3, 4, 5] as const;
 
-const MONTHS_PT = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+const foldDiacritics = (value: string) =>
+  value.trim().normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
+/** Align classroom.period free-text (mixed locales) with schedule shift buckets. */
+const periodLabelToShift = (period: string | null | undefined): "MORNING" | "AFTERNOON" | "EVENING" | null => {
+  if (!period) return null;
+  const p = foldDiacritics(period);
+  if (/\b(manha|morning|matin)\b/.test(p) || p.includes("manha")) return "MORNING";
+  if (/\b(tarde|afternoon)\b/.test(p) || (p.includes("apres") && (p.includes("midi") || p.includes("midd")))) return "AFTERNOON";
+  if (/\b(noite|evening|night|nuit|soir)\b/.test(p) || p.includes("soire")) return "EVENING";
+  return null;
+};
+
+const SHIFT_SHAPE = {
+  MORNING: { icon: Sun, classes: "bg-pastel-yellow text-pastel-yellow-foreground" },
+  AFTERNOON: { icon: Sunset, classes: "bg-pastel-pink text-pastel-pink-foreground" },
+  EVENING: { icon: Moon, classes: "bg-pastel-lilac text-pastel-lilac-foreground" },
+} as const;
+
+const PASTEL_PALETTE = [
+  "bg-pastel-blue text-pastel-blue-foreground",
+  "bg-pastel-lilac text-pastel-lilac-foreground",
+  "bg-pastel-green text-pastel-green-foreground",
+  "bg-pastel-yellow text-pastel-yellow-foreground",
+  "bg-pastel-pink text-pastel-pink-foreground",
 ];
 
-const WEEKDAY_SHORT_PT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const ALL = "__ALL__";
 
-/** Segunda a domingo da semana que contém `d`. */
+/** Monday–Sunday of the week containing `d`. */
 const getWeekDaysMonSun = (d: Date) => {
   const copy = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const day = copy.getDay();
@@ -65,32 +84,6 @@ const calendarToSchoolDow = (d: Date): number | null => {
   if (day >= 1 && day <= 5) return day;
   return null;
 };
-
-const SHIFT_META = {
-  MORNING: { label: "Manhã", icon: Sun, classes: "bg-pastel-yellow text-pastel-yellow-foreground" },
-  AFTERNOON: { label: "Tarde", icon: Sunset, classes: "bg-pastel-pink text-pastel-pink-foreground" },
-  EVENING: { label: "Noite", icon: Moon, classes: "bg-pastel-lilac text-pastel-lilac-foreground" },
-} as const;
-
-/** Alinha período da turma (ex. «Manhã») com o turno dos blocos horários. */
-const periodLabelToShift = (period: string | null | undefined): "MORNING" | "AFTERNOON" | "EVENING" | null => {
-  if (!period) return null;
-  const p = period.trim().toLowerCase();
-  if (p.includes("manh")) return "MORNING";
-  if (p.includes("tarde")) return "AFTERNOON";
-  if (p.includes("noite")) return "EVENING";
-  return null;
-};
-
-const PASTEL_PALETTE = [
-  "bg-pastel-blue text-pastel-blue-foreground",
-  "bg-pastel-lilac text-pastel-lilac-foreground",
-  "bg-pastel-green text-pastel-green-foreground",
-  "bg-pastel-yellow text-pastel-yellow-foreground",
-  "bg-pastel-pink text-pastel-pink-foreground",
-];
-
-const ALL = "__ALL__";
 
 const Horarios = () => {
   const native = isNativeMobileApp();
@@ -133,6 +126,24 @@ const Horarios = () => {
   const [openSlots, setOpenSlots] = useState(false);
   const [editing, setEditing] = useState<ScheduleRecord | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const { t, i18n } = useTranslation("pages", { keyPrefix: "horarios" });
+
+  const nativeMonthHeading = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language, { month: "long", year: "numeric" }).format(nativeSelectedDate),
+    [nativeSelectedDate, i18n.language],
+  );
+
+  const formatWeekdayShort = useCallback(
+    (d: Date) => new Intl.DateTimeFormat(i18n.language, { weekday: "short" }).format(d),
+    [i18n.language],
+  );
+
+  const shiftNameOf = useCallback(
+    (k: keyof typeof SHIFT_SHAPE) =>
+      k === "MORNING" ? t("shift_morning") : k === "AFTERNOON" ? t("shift_afternoon") : t("shift_evening"),
+    [t],
+  );
 
   // Bootstrap school id (escola efectiva: inclui modo suporte SUPER_ADMIN)
   useEffect(() => {
@@ -421,11 +432,11 @@ const Horarios = () => {
       })
       .eq("id", scheduleId);
     if (error) {
-      toast({ title: "Erro ao mover aula", description: error.message, variant: "destructive" });
+      toast({ title: t("toast_move_error"), description: error.message, variant: "destructive" });
       void refetchHorarios();
       return;
     }
-    toast({ title: "Aula movida" });
+    toast({ title: t("toast_moved") });
     void refetchHorarios();
   };
 
@@ -434,14 +445,14 @@ const Horarios = () => {
     const { error } = await supabase.from("schedules").delete().eq("id", deletingId);
     setDeletingId(null);
     if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
+      toast({ title: t("toast_error"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: "Aula removida" });
+    toast({ title: t("toast_removed") });
     void refetchHorarios();
   };
 
-  const ShiftIcon = SHIFT_META[shiftView].icon;
+  const ShiftIcon = SHIFT_SHAPE[shiftView].icon;
 
   const nativeReadOnly = isParent || isStudent || !isAdmin;
 
@@ -457,10 +468,10 @@ const Horarios = () => {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  Horário
+                  {t("native_kicker")}
                 </span>
                 <h2 className="text-xl font-bold tracking-tight text-foreground">
-                  {MONTHS_PT[nativeSelectedDate.getMonth()]} {nativeSelectedDate.getFullYear()}
+                  {nativeMonthHeading}
                 </h2>
               </div>
               <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
@@ -470,19 +481,19 @@ const Horarios = () => {
                     variant="outline"
                     size="icon"
                     className="h-10 w-10 shrink-0 rounded-full shadow-card"
-                    aria-label="Blocos da escola"
+                    aria-label={t("school_blocks_aria")}
                     onClick={() => setOpenSlots(true)}
                   >
                     <Settings2 className="h-4 w-4" />
                   </Button>
                 )}
                 <Button type="button" variant="ghost" size="sm" className="shrink-0 text-primary" onClick={goNativeToday}>
-                  Hoje
+                  {t("today")}
                 </Button>
                 {showTurmaPickerNative ? (
                   <Select value={classroomFilter} onValueChange={setClassroomFilter}>
                     <SelectTrigger className="h-10 w-[min(42vw,11rem)] shrink-0 rounded-full bg-card shadow-card">
-                      <SelectValue placeholder="Turma" />
+                      <SelectValue placeholder={t("class_placeholder")} />
                     </SelectTrigger>
                     <SelectContent align="end">
                       {classrooms.map((c) => (
@@ -502,7 +513,7 @@ const Horarios = () => {
                 variant="outline"
                 size="icon"
                 className="h-auto min-h-[5rem] w-10 shrink-0 rounded-full border-border/80 shadow-card"
-                aria-label="Semana anterior"
+                aria-label={t("prev_week")}
                 onClick={() => shiftNativeWeek(-1)}
               >
                 <ChevronLeft className="h-5 w-5" />
@@ -524,7 +535,7 @@ const Horarios = () => {
                         isWk && !selected && "opacity-65",
                       )}
                     >
-                      <span className="text-[10px] font-semibold uppercase">{WEEKDAY_SHORT_PT[d.getDay()]}</span>
+                      <span className="text-[10px] font-semibold uppercase">{formatWeekdayShort(d)}</span>
                       <span className="text-lg font-semibold tabular-nums">{d.getDate()}</span>
                     </button>
                   );
@@ -535,7 +546,7 @@ const Horarios = () => {
                 variant="outline"
                 size="icon"
                 className="h-auto min-h-[5rem] w-10 shrink-0 rounded-full border-border/80 shadow-card"
-                aria-label="Semana seguinte"
+                aria-label={t("next_week")}
                 onClick={() => shiftNativeWeek(1)}
               >
                 <ChevronRight className="h-5 w-5" />
@@ -544,7 +555,7 @@ const Horarios = () => {
 
             <div className="flex flex-wrap items-center gap-2">
               {(() => {
-                const Meta = SHIFT_META[effectiveShift];
+                const Meta = SHIFT_SHAPE[effectiveShift];
                 const Icon = Meta.icon;
                 return (
                   <span
@@ -554,7 +565,7 @@ const Horarios = () => {
                     )}
                   >
                     <Icon className="h-3.5 w-3.5" aria-hidden />
-                    {Meta.label}
+                    {shiftNameOf(effectiveShift)}
                   </span>
                 );
               })()}
@@ -565,10 +576,10 @@ const Horarios = () => {
                 <div className="min-w-[9.5rem] flex-1">
                   <Select value={subjectFilter} onValueChange={setSubjectFilter}>
                     <SelectTrigger className="rounded-full bg-card shadow-card">
-                      <SelectValue placeholder="Disciplina" />
+                      <SelectValue placeholder={t("subject_placeholder")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={ALL}>Todas as disciplinas</SelectItem>
+                      <SelectItem value={ALL}>{t("all_subjects")}</SelectItem>
                       {subjects.map((s) => (
                         <SelectItem key={s.id} value={s.id}>
                           {s.name}
@@ -580,13 +591,13 @@ const Horarios = () => {
                 <div className="min-w-[9.5rem] flex-1">
                   <Select value={teacherFilter} onValueChange={setTeacherFilter}>
                     <SelectTrigger className="rounded-full bg-card shadow-card">
-                      <SelectValue placeholder="Professor" />
+                      <SelectValue placeholder={t("teacher_placeholder")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={ALL}>Todos os professores</SelectItem>
-                      {teachers.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.name}
+                      <SelectItem value={ALL}>{t("all_teachers")}</SelectItem>
+                      {teachers.map((tm) => (
+                        <SelectItem key={tm.id} value={tm.id}>
+                          {tm.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -598,7 +609,7 @@ const Horarios = () => {
             {!isParent && conflicts.size > 0 && (
               <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                <span>{conflicts.size} conflito(s) nas aulas desta vista.</span>
+                <span>{t("conflicts_banner_native", { count: conflicts.size })}</span>
               </div>
             )}
 
@@ -609,20 +620,20 @@ const Horarios = () => {
                 </div>
               ) : slotsForShift.length === 0 ? (
                 <div className="rounded-2xl bg-card px-4 py-12 text-center text-sm text-muted-foreground shadow-card">
-                  Nenhum bloco horário configurado para este turno.
+                  {t("no_slots")}
                   {isAdmin && !isStudent ? (
                     <Button variant="link" className="block w-full" onClick={() => setOpenSlots(true)}>
-                      Configurar agora
+                      {t("configure_now")}
                     </Button>
                   ) : null}
                 </div>
               ) : calendarToSchoolDow(nativeSelectedDate) === null ? (
                 <div className="rounded-2xl bg-muted/40 px-4 py-10 text-center text-sm text-muted-foreground">
-                  Fim de semana — não há horário lectivo neste modelo.
+                  {t("weekend_hint")}
                 </div>
               ) : nativeTimeline.length === 0 ? (
                 <div className="rounded-2xl bg-card px-4 py-10 text-center text-sm text-muted-foreground shadow-card">
-                  Sem aulas nem intervalos registados neste dia ({SHIFT_META[effectiveShift].label.toLowerCase()}).
+                  {t("empty_timeline", { shift: shiftNameOf(effectiveShift) })}
                 </div>
               ) : (
                 nativeTimeline.map((row) => {
@@ -640,7 +651,7 @@ const Horarios = () => {
                                 <Moon className="h-4 w-4 text-muted-foreground" aria-hidden />
                               </div>
                               <div className="min-w-0">
-                                <p className="font-semibold text-foreground">{slot.label ?? "Intervalo"}</p>
+                                <p className="font-semibold text-foreground">{slot.label ?? t("break_default")}</p>
                                 <p className="text-xs text-muted-foreground">
                                   {slot.start_time} – {slot.end_time}
                                 </p>
@@ -676,7 +687,7 @@ const Horarios = () => {
                                 <button
                                   type="button"
                                   className="rounded-lg bg-background/35 p-1.5 hover:bg-background/55"
-                                  aria-label="Editar"
+                                  aria-label={t("edit_aria")}
                                   onClick={() => handleEdit(s)}
                                 >
                                   <Pencil className="h-3.5 w-3.5" />
@@ -684,7 +695,7 @@ const Horarios = () => {
                                 <button
                                   type="button"
                                   className="rounded-lg bg-background/35 p-1.5 hover:bg-background/55"
-                                  aria-label="Remover"
+                                  aria-label={t("remove_aria")}
                                   onClick={() => setDeletingId(s.id)}
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
@@ -710,7 +721,7 @@ const Horarios = () => {
                           </p>
                           {conflict ? (
                             <p className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-destructive">
-                              <AlertCircle className="h-3 w-3" /> Conflito
+                              <AlertCircle className="h-3 w-3" /> {t("conflict_short")}
                             </p>
                           ) : null}
                         </div>
@@ -727,7 +738,7 @@ const Horarios = () => {
                   type="button"
                   size="icon"
                   className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-                  aria-label="Nova aula"
+                  aria-label={t("fab_new_lesson")}
                   onClick={handleNew}
                 >
                   <Plus className="h-6 w-6" />
@@ -740,20 +751,20 @@ const Horarios = () => {
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Horários</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("header_title")}</h1>
             <p className="text-sm text-muted-foreground">
               {isParent
-                ? "Consulte o horário semanal do seu educando."
-                : "Gerir horário semanal por turma, professor ou disciplina, com deteção de conflitos."}
+                ? t("subtitle_parent")
+                : t("subtitle_admin")}
             </p>
           </div>
           {!isParent && !isStudent && isAdmin && (
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => setOpenSlots(true)}>
-              <Settings2 className="mr-2 h-4 w-4" /> Blocos da escola
+              <Settings2 className="mr-2 h-4 w-4" /> {t("school_blocks")}
             </Button>
             <Button onClick={handleNew}>
-              <Plus className="mr-2 h-4 w-4" /> Nova aula
+              <Plus className="mr-2 h-4 w-4" /> {t("fab_new_lesson")}
             </Button>
           </div>
           )}
@@ -763,42 +774,42 @@ const Horarios = () => {
         {!isParent && (
         <div className="grid grid-cols-1 gap-3 rounded-2xl bg-card p-4 shadow-card sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <label className="mb-1 block text-xs font-semibold text-muted-foreground">Turma</label>
+            <label className="mb-1 block text-xs font-semibold text-muted-foreground">{t("filter_class")}</label>
             <Select value={classroomFilter} onValueChange={setClassroomFilter} disabled={classrooms.length === 0 || isStudent}>
-              <SelectTrigger><SelectValue placeholder="Selecionar turma" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("select_class_placeholder")} /></SelectTrigger>
               <SelectContent>
                 {classrooms.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-muted-foreground">Disciplina</label>
+            <label className="mb-1 block text-xs font-semibold text-muted-foreground">{t("filter_subject")}</label>
             <Select value={subjectFilter} onValueChange={setSubjectFilter} disabled={isTeacher || isStudent}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL}>Todas as disciplinas</SelectItem>
+                <SelectItem value={ALL}>{t("all_subjects")}</SelectItem>
                 {subjects.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-muted-foreground">Professor</label>
+            <label className="mb-1 block text-xs font-semibold text-muted-foreground">{t("filter_teacher")}</label>
             <Select value={teacherFilter} onValueChange={setTeacherFilter} disabled={isTeacher || isStudent}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL}>Todos os professores</SelectItem>
-                {teachers.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                <SelectItem value={ALL}>{t("all_teachers")}</SelectItem>
+                {teachers.map((tm) => <SelectItem key={tm.id} value={tm.id}>{tm.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-muted-foreground">Turno</label>
+            <label className="mb-1 block text-xs font-semibold text-muted-foreground">{t("filter_shift")}</label>
             <Select value={shiftView} onValueChange={(v) => setShiftView(v as typeof shiftView)} disabled={isStudent}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="MORNING">Manhã</SelectItem>
-                <SelectItem value="AFTERNOON">Tarde</SelectItem>
-                <SelectItem value="EVENING">Noite</SelectItem>
+                <SelectItem value="MORNING">{shiftNameOf("MORNING")}</SelectItem>
+                <SelectItem value="AFTERNOON">{shiftNameOf("AFTERNOON")}</SelectItem>
+                <SelectItem value="EVENING">{shiftNameOf("EVENING")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -808,7 +819,7 @@ const Horarios = () => {
         {!isParent && conflicts.size > 0 && (
           <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
             <AlertCircle className="h-4 w-4" />
-            <span>{conflicts.size} aula(s) com conflitos de turma, professor ou sala — assinaladas a vermelho.</span>
+            <span>{t("conflicts_banner_web", { count: conflicts.size })}</span>
           </div>
         )}
 
@@ -816,14 +827,17 @@ const Horarios = () => {
         <div className="overflow-hidden rounded-2xl bg-card shadow-card">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-4">
             <div className="flex items-center gap-3">
-              <h2 className="text-base font-bold text-foreground">Horário Semanal</h2>
-              <span className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold", SHIFT_META[shiftView].classes)}>
+              <h2 className="text-base font-bold text-foreground">{t("weekly_heading")}</h2>
+              <span className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold", SHIFT_SHAPE[shiftView].classes)}>
                 <ShiftIcon className="h-3.5 w-3.5" />
-                {SHIFT_META[shiftView].label}
+                {shiftNameOf(shiftView)}
               </span>
             </div>
             <span className="text-xs text-muted-foreground">
-              {filteredSchedules.length} aula(s) · {slotsForShift.filter((s) => !s.is_break).length} blocos
+              {t("lessons_and_blocks", {
+                lessons: filteredSchedules.length,
+                blocks: slotsForShift.filter((s) => !s.is_break).length,
+              })}
             </span>
           </div>
 
@@ -833,17 +847,17 @@ const Horarios = () => {
             </div>
           ) : slotsForShift.length === 0 ? (
             <div className="px-6 py-16 text-center text-sm text-muted-foreground">
-              Nenhum bloco horário configurado para este turno.
-              <Button variant="link" onClick={() => setOpenSlots(true)}>Configurar agora</Button>
+              {t("no_slots")}
+              <Button variant="link" onClick={() => setOpenSlots(true)}>{t("configure_now")}</Button>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <div className="min-w-[900px] p-4">
                 <div className="grid gap-2" style={{ gridTemplateColumns: "120px repeat(5, minmax(0, 1fr))" }}>
                   <div />
-                  {DAYS.map((d) => (
-                    <div key={d.value} className="rounded-xl bg-muted px-3 py-2 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {d.label}
+                  {DOW_GRID.map((dow) => (
+                    <div key={dow} className="rounded-xl bg-muted px-3 py-2 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {t(`dow.${dow}`)}
                     </div>
                   ))}
 
@@ -896,12 +910,12 @@ const Horarios = () => {
       <AlertDialog open={!!deletingId} onOpenChange={(o) => !o && setDeletingId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover aula?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação é permanente.</AlertDialogDescription>
+            <AlertDialogTitle>{t("delete_lesson_title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("delete_lesson_desc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete}>Remover</AlertDialogAction>
+            <AlertDialogCancel>{t("btn_cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>{t("delete_lesson_action")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -937,16 +951,17 @@ const SlotRow = ({
   onDropMove: (scheduleId: string, day: number, slot: TimeSlotRow) => void;
   readOnly?: boolean;
 }) => {
+  const { t } = useTranslation("pages", { keyPrefix: "horarios" });
   const [dragOver, setDragOver] = useState<number | null>(null);
 
-  const handleDragOver = (e: React.DragEvent, day: number) => {
+  const handleDragOver = (e: ReactDragEvent<HTMLElement>, day: number) => {
     if (e.dataTransfer.types.includes("application/x-schedule-id")) {
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
       setDragOver(day);
     }
   };
-  const handleDrop = (e: React.DragEvent, day: number) => {
+  const handleDrop = (e: ReactDragEvent<HTMLElement>, day: number) => {
     const id = e.dataTransfer.getData("application/x-schedule-id");
     setDragOver(null);
     if (id) onDropMove(id, day, slot);
@@ -965,7 +980,7 @@ const SlotRow = ({
           <span className="text-muted-foreground">{slot.end_time}</span>
         </div>
         <div className="col-span-5 flex items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 py-2 text-xs font-medium text-muted-foreground">
-          {slot.label ?? "Intervalo"}
+          {slot.label ?? t("break_default")}
         </div>
       </>
     );
@@ -977,31 +992,31 @@ const SlotRow = ({
         <span className="font-semibold text-foreground">{slot.start_time}</span>
         <span className="text-muted-foreground">{slot.end_time}</span>
       </div>
-      {DAYS.map((d) => {
-        const cells = cellsByDay(d.value);
-        const isOver = dragOver === d.value;
+      {DOW_GRID.map((dow) => {
+        const cells = cellsByDay(dow);
+        const isOver = dragOver === dow;
         if (cells.length === 0) {
           if (readOnly) {
             return (
               <div
-                key={d.value}
+                key={dow}
                 className="flex min-h-[100px] items-center justify-center rounded-xl border border-dashed border-border bg-muted/10 text-xs text-muted-foreground/60"
               />
             );
           }
           return (
             <button
-              key={d.value}
+              key={dow}
               type="button"
-              onClick={() => onCreate(d.value, slot)}
-              onDragOver={(e) => handleDragOver(e, d.value)}
+              onClick={() => onCreate(dow, slot)}
+              onDragOver={(e) => handleDragOver(e, dow)}
               onDragLeave={() => setDragOver(null)}
-              onDrop={(e) => handleDrop(e, d.value)}
+              onDrop={(e) => handleDrop(e, dow)}
               className={cn(
                 "group flex min-h-[100px] items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary",
                 isOver && "border-primary bg-primary/10 text-primary",
               )}
-              aria-label="Adicionar aula"
+              aria-label={t("add_lesson_aria")}
             >
               <Plus className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" />
             </button>
@@ -1009,10 +1024,10 @@ const SlotRow = ({
         }
         return (
           <div
-            key={d.value}
-            onDragOver={readOnly ? undefined : (e) => handleDragOver(e, d.value)}
+            key={dow}
+            onDragOver={readOnly ? undefined : (e) => handleDragOver(e, dow)}
             onDragLeave={readOnly ? undefined : () => setDragOver(null)}
-            onDrop={readOnly ? undefined : (e) => handleDrop(e, d.value)}
+            onDrop={readOnly ? undefined : (e) => handleDrop(e, dow)}
             className={cn(
               "flex min-h-[100px] flex-col gap-1 rounded-xl transition-colors",
               !readOnly && isOver && "bg-primary/10 ring-2 ring-primary/40",
@@ -1060,6 +1075,7 @@ const ScheduleCell = ({
   onDelete: () => void;
   readOnly?: boolean;
 }) => {
+  const { t } = useTranslation("pages", { keyPrefix: "horarios" });
   return (
     <div
       draggable={!readOnly}
@@ -1081,10 +1097,10 @@ const ScheduleCell = ({
         </div>
         {!readOnly && (
         <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <button onClick={onEdit} className="rounded-md bg-background/40 p-1 hover:bg-background/70" aria-label="Editar">
+          <button onClick={onEdit} className="rounded-md bg-background/40 p-1 hover:bg-background/70" aria-label={t("edit_aria")}>
             <Pencil className="h-3 w-3" />
           </button>
-          <button onClick={onDelete} className="rounded-md bg-background/40 p-1 hover:bg-background/70" aria-label="Remover">
+          <button onClick={onDelete} className="rounded-md bg-background/40 p-1 hover:bg-background/70" aria-label={t("remove_aria")}>
             <Trash2 className="h-3 w-3" />
           </button>
         </div>
@@ -1102,7 +1118,7 @@ const ScheduleCell = ({
       </div>
       {hasConflict && (
         <span className="absolute -top-2 -right-2 inline-flex items-center gap-1 rounded-full bg-destructive px-2 py-0.5 text-[10px] font-bold text-destructive-foreground">
-          <AlertCircle className="h-2.5 w-2.5" /> Conflito
+          <AlertCircle className="h-2.5 w-2.5" /> {t("conflict_short")}
         </span>
       )}
     </div>

@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Trash2, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 export type TimeSlot = {
   id?: string;
@@ -19,12 +20,6 @@ export type TimeSlot = {
   is_break: boolean;
   label: string | null;
 };
-
-const SHIFTS: { value: TimeSlot["shift"]; label: string }[] = [
-  { value: "MORNING", label: "Manhã" },
-  { value: "AFTERNOON", label: "Tarde" },
-  { value: "EVENING", label: "Noite" },
-];
 
 const trim5 = (t: string) => t?.slice(0, 5) ?? "";
 
@@ -38,6 +33,9 @@ type Props = {
 };
 
 export const TimeSlotsDialog = ({ open, onOpenChange, schoolId, onSaved, fullScreen }: Props) => {
+  const { t } = useTranslation("pages", { keyPrefix: "horarios.time_slots" });
+  const { t: th } = useTranslation("pages", { keyPrefix: "horarios" });
+
   const [tab, setTab] = useState<TimeSlot["shift"]>("MORNING");
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [loading, setLoading] = useState(false);
@@ -56,7 +54,7 @@ export const TimeSlotsDialog = ({ open, onOpenChange, schoolId, onSaved, fullScr
         .order("position");
       if (cancelled) return;
       if (error) {
-        toast({ title: "Erro", description: error.message, variant: "destructive" });
+        toast({ title: th("toast_error"), description: error.message, variant: "destructive" });
       } else {
         setSlots(
           (data ?? []).map((s) => ({
@@ -113,7 +111,7 @@ export const TimeSlotsDialog = ({ open, onOpenChange, schoolId, onSaved, fullScr
       end_time: end,
       position: (last?.position ?? 0) + 1,
       is_break: false,
-      label: `Bloco ${shiftSlots.filter((s) => !s.is_break).length + 1}`,
+      label: t("block_auto", { count: shiftSlots.filter((s) => !s.is_break).length + 1 }),
     };
     setSlots((prev) => [...prev, next]);
   };
@@ -122,7 +120,7 @@ export const TimeSlotsDialog = ({ open, onOpenChange, schoolId, onSaved, fullScr
     if (!schoolId) return;
     for (const s of slots) {
       if (s.start_time >= s.end_time) {
-        toast({ title: "Hora inválida", description: "A hora de fim deve ser depois do início.", variant: "destructive" });
+        toast({ title: t("toast_bad_time_title"), description: t("toast_bad_time_desc"), variant: "destructive" });
         return;
       }
     }
@@ -131,7 +129,7 @@ export const TimeSlotsDialog = ({ open, onOpenChange, schoolId, onSaved, fullScr
     const { error: delError } = await supabase.from("school_time_slots").delete().eq("school_id", schoolId);
     if (delError) {
       setSaving(false);
-      toast({ title: "Erro", description: delError.message, variant: "destructive" });
+      toast({ title: th("toast_error"), description: delError.message, variant: "destructive" });
       return;
     }
     if (slots.length > 0) {
@@ -147,12 +145,12 @@ export const TimeSlotsDialog = ({ open, onOpenChange, schoolId, onSaved, fullScr
       const { error } = await supabase.from("school_time_slots").insert(payload);
       if (error) {
         setSaving(false);
-        toast({ title: "Erro", description: error.message, variant: "destructive" });
+        toast({ title: th("toast_error"), description: error.message, variant: "destructive" });
         return;
       }
     }
     setSaving(false);
-    toast({ title: "Blocos atualizados", description: "Configuração de horários guardada." });
+    toast({ title: t("toast_updated_title"), description: t("toast_updated_desc") });
     onOpenChange(false);
     onSaved();
   };
@@ -168,40 +166,44 @@ export const TimeSlotsDialog = ({ open, onOpenChange, schoolId, onSaved, fullScr
         )}
       >
         <DialogHeader>
-          <DialogTitle>Configurar blocos horários da escola</DialogTitle>
+          <DialogTitle>{t("title")}</DialogTitle>
         </DialogHeader>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as TimeSlot["shift"])} className="flex min-h-0 flex-1 flex-col">
           <TabsList className="grid w-full shrink-0 grid-cols-3">
-            {SHIFTS.map((s) => <TabsTrigger key={s.value} value={s.value}>{s.label}</TabsTrigger>)}
+            {(["MORNING", "AFTERNOON", "EVENING"] as const).map((s) => (
+              <TabsTrigger key={s} value={s}>
+                {s === "MORNING" ? th("shift_morning") : s === "AFTERNOON" ? th("shift_afternoon") : th("shift_evening")}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
-          {SHIFTS.map((s) => (
-            <TabsContent key={s.value} value={s.value} className="mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+          {(["MORNING", "AFTERNOON", "EVENING"] as const).map((s) => (
+            <TabsContent key={s} value={s} className="mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
               {loading ? (
                 <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin" /></div>
               ) : (
                 <>
                   {shiftSlots.length === 0 && (
-                    <p className="py-6 text-center text-sm text-muted-foreground">Nenhum bloco definido para este turno.</p>
+                    <p className="py-6 text-center text-sm text-muted-foreground">{t("empty_shift")}</p>
                   )}
                   {shiftSlots.map((slot, idx) => (
                     <div key={`${slot.id ?? "new"}-${idx}`} className="grid grid-cols-12 items-end gap-2 rounded-lg border border-border p-3">
                       <div className="col-span-12 sm:col-span-4">
-                        <Label className="text-xs">Etiqueta</Label>
-                        <Input value={slot.label ?? ""} onChange={(e) => updateSlot(idx, { label: e.target.value })} placeholder="Bloco 1" />
+                        <Label className="text-xs">{t("label_field")}</Label>
+                        <Input value={slot.label ?? ""} onChange={(e) => updateSlot(idx, { label: e.target.value })} placeholder={t("label_placeholder")} />
                       </div>
                       <div className="col-span-5 sm:col-span-2">
-                        <Label className="text-xs">Início</Label>
+                        <Label className="text-xs">{t("start")}</Label>
                         <Input type="time" value={slot.start_time} onChange={(e) => updateSlot(idx, { start_time: e.target.value })} />
                       </div>
                       <div className="col-span-5 sm:col-span-2">
-                        <Label className="text-xs">Fim</Label>
+                        <Label className="text-xs">{t("end")}</Label>
                         <Input type="time" value={slot.end_time} onChange={(e) => updateSlot(idx, { end_time: e.target.value })} />
                       </div>
                       <div className="col-span-2 sm:col-span-2 flex items-center gap-2">
                         <Switch checked={slot.is_break} onCheckedChange={(v) => updateSlot(idx, { is_break: v })} />
-                        <Label className="text-xs">Intervalo</Label>
+                        <Label className="text-xs">{t("break_toggle")}</Label>
                       </div>
                       <div className="col-span-12 sm:col-span-2 flex justify-end">
                         <Button variant="ghost" size="sm" onClick={() => removeSlot(idx)}>
@@ -211,7 +213,7 @@ export const TimeSlotsDialog = ({ open, onOpenChange, schoolId, onSaved, fullScr
                     </div>
                   ))}
                   <Button variant="outline" onClick={addSlot} className="w-full">
-                    <Plus className="mr-2 h-4 w-4" /> Adicionar bloco
+                    <Plus className="mr-2 h-4 w-4" /> {t("add_block")}
                   </Button>
                 </>
               )}
@@ -220,10 +222,10 @@ export const TimeSlotsDialog = ({ open, onOpenChange, schoolId, onSaved, fullScr
         </Tabs>
 
         <DialogFooter className="shrink-0 gap-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>{th("btn_cancel")}</Button>
           <Button onClick={handleSave} disabled={saving || loading}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Guardar configuração
+            {t("save")}
           </Button>
         </DialogFooter>
       </DialogContent>

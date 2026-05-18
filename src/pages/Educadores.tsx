@@ -38,6 +38,7 @@ const Educadores = () => {
   const native = isNativeMobileApp();
   const navigate = useNavigate();
   const { t } = useTranslation("pages", { keyPrefix: "educadores" });
+  const { t: tf } = useTranslation("pages", { keyPrefix: "educadores.form" });
   const { t: navT } = useTranslation("common", { keyPrefix: "nav" });
   const { selectedYearId } = useAcademicYear();
   const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
@@ -220,7 +221,7 @@ const Educadores = () => {
             checked={isSelected}
             onChange={() => toggle(g.profile_id)}
             className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-border accent-pastel-blue-foreground"
-            aria-label={`Seleccionar ${g.full_name}`}
+            aria-label={t("select_row_aria", { name: g.full_name })}
           />
           <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold", avatarStyles[color])}>
             {initials}
@@ -230,11 +231,11 @@ const Educadores = () => {
             <p className="mt-0.5 text-sm text-muted-foreground">{g.phone ?? "—"}</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground" title={g.student_names.join(", ")}>
-                Aluno(s): {studentLine(g)}
+                {t("tag_students", { line: studentLine(g) })}
               </span>
               <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
                 {g.classroom_ids.length === 0
-                  ? "Turma: —"
+                  ? `${t("tag_class_prefix")} —`
                   : g.classroom_ids.length <= 2
                     ? g.classroom_ids.map((cid) => classroomName(cid)).join(" · ")
                     : `${classroomName(g.classroom_ids[0])} +${g.classroom_ids.length - 1}`}
@@ -245,7 +246,7 @@ const Educadores = () => {
             <button
               type="button"
               onClick={() => setViewing(g)}
-              title="Ver detalhes"
+              title={t("title_view_details")}
               className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-lilac/50 hover:text-pastel-lilac-foreground"
             >
               <Eye className="h-4 w-4" strokeWidth={1.75} />
@@ -253,7 +254,7 @@ const Educadores = () => {
             <button
               type="button"
               onClick={() => openChat(g.profile_id)}
-              title="Conversar"
+              title={t("title_chat")}
               className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/40 hover:text-pastel-blue-foreground"
             >
               <Mail className="h-4 w-4" strokeWidth={1.75} />
@@ -266,7 +267,7 @@ const Educadores = () => {
                     setEditing(g);
                     setFormOpen(true);
                   }}
-                  title="Editar"
+                  title={t("title_edit")}
                   className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
                 >
                   <Pencil className="h-4 w-4" strokeWidth={1.75} />
@@ -274,7 +275,7 @@ const Educadores = () => {
                 <button
                   type="button"
                   onClick={() => setDeleting(g)}
-                  title="Eliminar"
+                  title={t("title_delete")}
                   className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
                 >
                   <Trash2 className="h-4 w-4" strokeWidth={1.75} />
@@ -323,11 +324,11 @@ const Educadores = () => {
         {/* Filters */}
         <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card">
           <div className={cn("min-w-[220px] flex-1", native && "min-w-0 w-full")}>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Turma</label>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">{t("filter_class_label")}</label>
             <Select value={filterClassroom} onValueChange={setFilterClassroom}>
               <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas as turmas</SelectItem>
+                <SelectItem value="all">{t("filter_all_classes")}</SelectItem>
                 {classrooms.map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                 ))}
@@ -338,17 +339,17 @@ const Educadores = () => {
             <button
               onClick={() => setFilterClassroom("all")}
               className="h-10 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground hover:bg-muted"
-            >Limpar filtros</button>
+            >{t("clear_filters")}</button>
           )}
         </div>
 
         {showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
-            { label: "Total de Educadores", value: String(stats.total), color: "bg-pastel-blue text-pastel-blue-foreground" },
-            { label: "Com aluno associado", value: String(stats.withStudent), color: "bg-pastel-green text-pastel-green-foreground" },
-            { label: "Sem aluno", value: String(stats.withoutStudent), color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-            { label: "Turmas representadas", value: String(stats.classes), color: "bg-pastel-lilac text-pastel-lilac-foreground" },
+            { label: t("kpi_total"), value: String(stats.total), color: "bg-pastel-blue text-pastel-blue-foreground" },
+            { label: t("kpi_linked"), value: String(stats.withStudent), color: "bg-pastel-green text-pastel-green-foreground" },
+            { label: t("kpi_unlinked"), value: String(stats.withoutStudent), color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+            { label: t("kpi_classes"), value: String(stats.classes), color: "bg-pastel-lilac text-pastel-lilac-foreground" },
           ].map((stat) => (
             <div key={stat.label} className="rounded-2xl bg-card p-5 shadow-card">
               <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", stat.color)}>
@@ -362,10 +363,10 @@ const Educadores = () => {
 
         <div className="rounded-2xl bg-card shadow-card">
           <div className="flex items-center justify-between border-b border-border p-5">
-            <h2 className="text-lg font-bold text-foreground">Lista de Educadores</h2>
+            <h2 className="text-lg font-bold text-foreground">{t("list_title")}</h2>
             {selected.length > 0 && (
               <div className="flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">{selected.length} selecionados</span>
+                <span className="text-muted-foreground">{t("selected_indicator", { count: selected.length })}</span>
               </div>
             )}
           </div>
@@ -380,7 +381,7 @@ const Educadores = () => {
                     onChange={toggleAll}
                     className="h-4 w-4 cursor-pointer rounded border-border accent-pastel-blue-foreground"
                   />
-                  Seleccionar todos ({filtered.length})
+                  {t("select_all", { count: filtered.length })}
                 </label>
               )}
               {loading && (
@@ -389,7 +390,7 @@ const Educadores = () => {
                 </div>
               )}
               {!loading && filtered.length === 0 && (
-                <p className="py-10 text-center text-sm text-muted-foreground">Nenhum educador encontrado.</p>
+                <p className="py-10 text-center text-sm text-muted-foreground">{t("empty_list")}</p>
               )}
               {!loading && filtered.map(renderGuardianCard)}
             </div>
@@ -406,11 +407,11 @@ const Educadores = () => {
                       className="h-4 w-4 cursor-pointer rounded border-border accent-pastel-blue-foreground"
                     />
                   </th>
-                  <th className="py-4 pr-4 font-semibold">Nome do Educador</th>
-                  <th className="py-4 pr-4 font-semibold">Aluno</th>
-                  <th className="py-4 pr-4 font-semibold">Turma</th>
-                  <th className="py-4 pr-4 font-semibold">Telefone</th>
-                  <th className="py-4 pr-5 font-semibold text-right">Acções</th>
+                  <th className="py-4 pr-4 font-semibold">{t("col_name")}</th>
+                  <th className="py-4 pr-4 font-semibold">{t("col_student")}</th>
+                  <th className="py-4 pr-4 font-semibold">{t("col_class")}</th>
+                  <th className="py-4 pr-4 font-semibold">{t("col_phone")}</th>
+                  <th className="py-4 pr-5 font-semibold text-right">{t("col_actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -421,7 +422,7 @@ const Educadores = () => {
                 )}
                 {!loading && filtered.length === 0 && (
                   <tr><td colSpan={6} className="py-10 text-center text-muted-foreground">
-                    Nenhum educador encontrado.
+                    {t("empty_list")}
                   </td></tr>
                 )}
                 {!loading && filtered.map((g) => {
@@ -492,18 +493,18 @@ const Educadores = () => {
                       </td>
                       <td className="py-4 pr-5">
                         <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => setViewing(g)} title="Ver detalhes" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-lilac/50 hover:text-pastel-lilac-foreground">
+                          <button onClick={() => setViewing(g)} title={t("title_view_details")} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-lilac/50 hover:text-pastel-lilac-foreground">
                             <Eye className="h-4 w-4" strokeWidth={1.75} />
                           </button>
-                          <button onClick={() => openChat(g.profile_id)} title="Conversar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/40 hover:text-pastel-blue-foreground">
+                          <button onClick={() => openChat(g.profile_id)} title={t("title_chat")} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/40 hover:text-pastel-blue-foreground">
                             <Mail className="h-4 w-4" strokeWidth={1.75} />
                           </button>
                           {!isTeacher && (
                             <>
-                              <button onClick={() => { setEditing(g); setFormOpen(true); }} title="Editar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
+                              <button onClick={() => { setEditing(g); setFormOpen(true); }} title={t("title_edit")} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground">
                                 <Pencil className="h-4 w-4" strokeWidth={1.75} />
                               </button>
-                              <button onClick={() => setDeleting(g)} title="Eliminar" className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
+                              <button onClick={() => setDeleting(g)} title={t("title_delete")} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground">
                                 <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                               </button>
                             </>
@@ -520,7 +521,7 @@ const Educadores = () => {
 
           <div className="flex flex-col items-center justify-between gap-3 border-t border-border p-5 sm:flex-row">
             <p className="text-xs text-muted-foreground">
-              A mostrar {filtered.length} de {guardians.length} educadores
+              {t("pagination", { filtered: filtered.length, total: guardians.length })}
             </p>
           </div>
         </div>
@@ -532,7 +533,7 @@ const Educadores = () => {
             type="button"
             size="icon"
             className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-            aria-label="Novo educador"
+            aria-label={t("fab_aria")}
             onClick={() => { setEditing(null); setFormOpen(true); }}
           >
             <Plus className="h-6 w-6" />
@@ -551,16 +552,23 @@ const Educadores = () => {
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover educador?</AlertDialogTitle>
+            <AlertDialogTitle>{t("dialog_delete_title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem a certeza que quer remover <strong>{deleting?.full_name}</strong>?
-              A conta será desactivada e desassociada do aluno.
+              {deleting?.full_name
+                ? (
+                  <>
+                    {t("dialog_delete_intro", { name: deleting.full_name })}
+                    {" "}
+                    {t("dialog_delete_rest")}
+                  </>
+                )
+                : t("dialog_delete_rest")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel>{tf("cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Remover
+              {t("dialog_remove_action")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -569,8 +577,8 @@ const Educadores = () => {
       <Dialog open={!!viewing} onOpenChange={(o) => !o && setViewing(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Detalhes do Educador</DialogTitle>
-            <DialogDescription>Informações de contacto e alunos associados.</DialogDescription>
+            <DialogTitle>{t("dialog_view_title")}</DialogTitle>
+            <DialogDescription>{t("dialog_view_desc")}</DialogDescription>
           </DialogHeader>
           {viewing && (
             <div className="flex flex-col gap-5">
@@ -587,13 +595,13 @@ const Educadores = () => {
                 </div>
               </div>
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Email</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("dialog_email_label")}</p>
                 <div className="space-y-2">
                   <div className="flex items-start gap-2">
                     <Mail className="mt-2.5 h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
                     <div className="flex-1 space-y-1.5">
                       <Label htmlFor="viw-email" className="sr-only">
-                        Email
+                        {t("dialog_email_sr")}
                       </Label>
                       <Input
                         id="viw-email"
@@ -602,11 +610,12 @@ const Educadores = () => {
                         value={viewEmailDraft}
                         onChange={(e) => setViewEmailDraft(e.target.value)}
                         disabled={isTeacher}
-                        placeholder="email@dominio.com"
+                        placeholder={t("dialog_email_placeholder")}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        O mesmo utilizado para <strong className="font-medium text-foreground">início de sessão</strong> na Edukamba.
-                      </p>
+                      <p
+                        className="text-xs text-muted-foreground [&_strong]:font-medium [&_strong]:text-foreground"
+                        dangerouslySetInnerHTML={{ __html: t("dialog_email_hint_html") }}
+                      />
                     </div>
                   </div>
                   {!isTeacher && (
@@ -618,15 +627,15 @@ const Educadores = () => {
                       onClick={() => void saveEducadorViewEmail()}
                     >
                       {savingViewEmail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Guardar email
+                      {t("dialog_save_email")}
                     </Button>
                   )}
                 </div>
               </div>
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Alunos</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("dialog_students_heading")}</p>
                 {viewing.student_names.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Sem alunos associados.</p>
+                  <p className="text-sm text-muted-foreground">{t("dialog_no_students")}</p>
                 ) : (
                   <ul className="flex flex-col gap-2">
                     {viewing.student_names.map((name, idx) => {

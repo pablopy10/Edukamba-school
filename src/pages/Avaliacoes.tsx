@@ -57,6 +57,7 @@ import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton"
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
 import { showPageKpiCards, isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
 
 type EvalType = "teste" | "exame" | "trabalho" | "oral";
 
@@ -70,28 +71,34 @@ type TeacherOption = AvaliacoesTeacherOption;
 
 type Option = { id: string; name: string };
 
-const typeMeta: Record<string, { label: string; color: string; icon: typeof FileText }> = {
-  teste: { label: "Teste", color: "bg-pastel-blue text-pastel-blue-foreground", icon: PencilLine },
-  exame: { label: "Exame", color: "bg-pastel-pink text-pastel-pink-foreground", icon: GraduationCap },
-  trabalho: { label: "Trabalho", color: "bg-pastel-green text-pastel-green-foreground", icon: Users },
-  oral: { label: "Oral", color: "bg-pastel-yellow text-pastel-yellow-foreground", icon: FileText },
+const TYPE_VISUAL: Record<
+  EvalType,
+  {
+    color: string;
+    icon: typeof FileText;
+  }
+> = {
+  teste: { color: "bg-pastel-blue text-pastel-blue-foreground", icon: PencilLine },
+  exame: { color: "bg-pastel-pink text-pastel-pink-foreground", icon: GraduationCap },
+  trabalho: { color: "bg-pastel-green text-pastel-green-foreground", icon: Users },
+  oral: { color: "bg-pastel-yellow text-pastel-yellow-foreground", icon: FileText },
 };
 
-const meta = (t: string) => typeMeta[t] ?? typeMeta.teste;
+/** Monday → Sunday weekday headers matching calendar grid. */
+const weekdayHeadersMonSun = (locale: string) =>
+  Array.from({ length: 7 }, (_, i) =>
+    new Intl.DateTimeFormat(locale, { weekday: "short" }).format(new Date(2024, 0, 1 + i)),
+  );
+
+const formatAssessmentDateLong = (locale: string, iso: string) => {
+  const d = new Date(iso + "T12:00:00");
+  return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "short", year: "numeric" }).format(d);
+};
+
+const typeVisualFor = (type: string) => TYPE_VISUAL[type as EvalType] ?? TYPE_VISUAL.teste;
 
 type View = "calendario" | "lista";
 type TypeFilter = EvalType | "all";
-
-const monthNames = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
-];
-const weekdayLabels = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
-
-const formatDateLong = (iso: string) => {
-  const d = new Date(iso + "T00:00:00");
-  return `${d.getDate().toString().padStart(2, "0")} ${monthNames[d.getMonth()].slice(0, 3)} ${d.getFullYear()}`;
-};
 const tt = (t?: string | null) => (t ? t.slice(0, 5) : "");
 
 const todayIsoLocal = () => {
@@ -133,6 +140,7 @@ const Avaliacoes = () => {
     loading: studentLoading,
   } = useStudentSelf();
   const studentReadOnly = isParent || isStudent;
+  const { t, i18n } = useTranslation("pages", { keyPrefix: "avaliacoes" });
   const [view, setView] = useState<View>("calendario");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
@@ -227,7 +235,7 @@ const Avaliacoes = () => {
       const label =
         (isStudent ? studentClassroomName : null) ||
         (isParent ? selectedChild?.classroom_name : null) ||
-        "Turma";
+        t("class_fallback");
       return [{ id: lockedClassroomId, name: label }];
     }
     return sortByName(displayClassrooms);
@@ -239,6 +247,7 @@ const Avaliacoes = () => {
     studentClassroomName,
     isParent,
     selectedChild?.classroom_name,
+    t,
   ]);
 
   const teachersInSubjectFilter = useMemo(() => {
@@ -364,13 +373,13 @@ const Avaliacoes = () => {
     {
       let subjectList = sRes.data ?? [];
       let teacherList = (tRes.data ?? [])
-        .filter((t: { profile_id?: string | null }) => !!t.profile_id)
-        .map((t: { profile_id: string; subject_id?: string | null; profiles?: { full_name?: string | null } | null }) => ({
-          id: t.profile_id,
-          name: t.profiles?.full_name?.trim() || "Sem nome",
-          subject_id: t.subject_id ?? null,
+        .filter((row: { profile_id?: string | null }) => !!row.profile_id)
+        .map((row: { profile_id: string; subject_id?: string | null; profiles?: { full_name?: string | null } | null }) => ({
+          id: row.profile_id,
+          name: row.profiles?.full_name?.trim() || t("no_name"),
+          subject_id: row.subject_id ?? null,
         }))
-        .sort((a, b) => a.name.localeCompare(b.name, "pt"));
+        .sort((a, b) => a.name.localeCompare(b.name, i18n.language));
       if (isStudent) {
         const subjSet = new Set(studentSubjectIds);
         const teachSet = new Set(studentTeacherIds);
@@ -561,10 +570,10 @@ const Avaliacoes = () => {
     setDeleteId(null);
     const { error } = await supabase.from("assessments").delete().eq("id", id);
     if (error) {
-      toast({ title: "Erro ao eliminar", description: error.message, variant: "destructive" });
+      toast({ title: t("toast_delete_fail"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: "Avaliação eliminada" });
+    toast({ title: t("toast_deleted_ok") });
     if (isTeacher) {
       invalidateTeacherAvalPack();
     } else {
@@ -589,8 +598,8 @@ const Avaliacoes = () => {
       <div className={cn("flex flex-col gap-6", native && !studentReadOnly && "relative pb-28")}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Avaliações</h1>
-            <p className="text-sm text-muted-foreground">Gerir testes, exames, trabalhos de grupo e provas orais.</p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("header_title")}</h1>
+            <p className="text-sm text-muted-foreground">{t("header_subtitle")}</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {!native && (
@@ -603,7 +612,7 @@ const Avaliacoes = () => {
                 )}
               >
                 <CalendarDays className="h-4 w-4" strokeWidth={1.75} />
-                Calendário
+                {t("view_calendar")}
               </button>
               <button
                 onClick={() => setView("lista")}
@@ -613,7 +622,7 @@ const Avaliacoes = () => {
                 )}
               >
                 <List className="h-4 w-4" strokeWidth={1.75} />
-                Lista
+                {t("view_list")}
               </button>
             </div>
             )}
@@ -623,7 +632,7 @@ const Avaliacoes = () => {
                 className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
               >
                 <Plus className="h-4 w-4" strokeWidth={2.25} />
-                Nova Avaliação
+                {t("new_btn")}
               </button>
             )}
           </div>
@@ -633,10 +642,10 @@ const Avaliacoes = () => {
         {!studentReadOnly && showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
-            { label: "Total", value: stats.total, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
-            { label: "Testes", value: stats.testes, color: "bg-pastel-blue text-pastel-blue-foreground" },
-            { label: "Exames", value: stats.exames, color: "bg-pastel-pink text-pastel-pink-foreground" },
-            { label: "Trabalhos", value: stats.trabalhos, color: "bg-pastel-green text-pastel-green-foreground" },
+            { label: t("kpi_total"), value: stats.total, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
+            { label: t("kpi_tests"), value: stats.testes, color: "bg-pastel-blue text-pastel-blue-foreground" },
+            { label: t("kpi_exams"), value: stats.exames, color: "bg-pastel-pink text-pastel-pink-foreground" },
+            { label: t("kpi_work"), value: stats.trabalhos, color: "bg-pastel-green text-pastel-green-foreground" },
           ].map((s) => (
             <div key={s.label} className="rounded-2xl bg-card p-5 shadow-card">
               <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", s.color)}>{s.label}</span>
@@ -654,24 +663,33 @@ const Avaliacoes = () => {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Pesquisar avaliação, turma ou professor..."
+                placeholder={t("search_placeholder")}
                 className="h-10 w-full rounded-full border border-border bg-background pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-pastel-blue/40"
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <TypeChip active={typeFilter === "all"} onClick={() => setTypeFilter("all")} className="bg-muted text-foreground">Todas</TypeChip>
-              {(Object.keys(typeMeta) as EvalType[]).map((t) => (
-                <TypeChip key={t} active={typeFilter === t} onClick={() => setTypeFilter(t)} className={typeMeta[t].color}>
-                  {typeMeta[t].label}
+              <TypeChip active={typeFilter === "all"} onClick={() => setTypeFilter("all")} className="bg-muted text-foreground">
+                {t("type_all")}
+              </TypeChip>
+              {(Object.keys(TYPE_VISUAL) as EvalType[]).map((ty) => (
+                <TypeChip
+                  key={ty}
+                  active={typeFilter === ty}
+                  onClick={() => setTypeFilter(ty)}
+                  className={typeVisualFor(ty).color}
+                >
+                  {t(`types.${ty}`)}
                 </TypeChip>
               ))}
             </div>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Select value={subjectFilter} onValueChange={setSubjectFilter} disabled={isStudent}>
-              <SelectTrigger className="h-10 rounded-full"><SelectValue placeholder="Disciplina" /></SelectTrigger>
+              <SelectTrigger className="h-10 rounded-full">
+                <SelectValue placeholder={t("filter_subject_placeholder")} />
+              </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas as disciplinas</SelectItem>
+                <SelectItem value="all">{t("all_subjects")}</SelectItem>
                 {displaySubjects.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.name}
@@ -702,10 +720,10 @@ const Avaliacoes = () => {
               disabled={classroomFilterLocked || isStudent}
             >
               <SelectTrigger className="h-10 rounded-full">
-                <SelectValue placeholder="Turma" />
+                <SelectValue placeholder={t("filter_class_placeholder")} />
               </SelectTrigger>
               <SelectContent>
-                {!classroomFilterLocked && <SelectItem value="all">Todas as turmas</SelectItem>}
+                {!classroomFilterLocked && <SelectItem value="all">{t("all_classes")}</SelectItem>}
                 {classroomsForSelect.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.name}
@@ -715,10 +733,10 @@ const Avaliacoes = () => {
             </Select>
             <Select value={effectiveTermFilterValue} onValueChange={setTermFilter}>
               <SelectTrigger className="h-10 rounded-full">
-                <SelectValue placeholder="Trimestre" />
+                <SelectValue placeholder={t("filter_term_placeholder")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos os trimestres</SelectItem>
+                <SelectItem value="all">{t("all_terms")}</SelectItem>
                 {displayTerms.map((t) => (
                   <SelectItem key={t.id} value={t.id}>
                     {t.name}
@@ -784,7 +802,7 @@ const Avaliacoes = () => {
             type="button"
             size="icon"
             className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-            aria-label="Nova avaliação"
+            aria-label={t("fab_aria_new")}
             onClick={openCreate}
           >
             <Plus className="h-6 w-6" />
@@ -811,12 +829,12 @@ const Avaliacoes = () => {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar avaliação?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+            <AlertDialogTitle>{t("dialog_delete_title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("dialog_delete_desc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>Eliminar</AlertDialogAction>
+            <AlertDialogCancel>{t("btn_cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>{t("delete")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -862,6 +880,7 @@ const AssessmentsCardsView = ({
   onOpen: (id: string) => void;
   canMutateAssessment: (a: Assessment) => boolean;
 }) => {
+  const { t, i18n } = useTranslation("pages", { keyPrefix: "avaliacoes" });
   const sorted = [...evaluations].sort((a, b) => {
     const d = b.date.localeCompare(a.date);
     if (d !== 0) return d;
@@ -871,15 +890,15 @@ const AssessmentsCardsView = ({
   return (
     <div className="overflow-hidden rounded-2xl bg-card shadow-card">
       <div className="flex items-center justify-between border-b border-border px-4 py-4 sm:px-6">
-        <h2 className="text-base font-bold text-foreground">Avaliações</h2>
-        <span className="text-xs text-muted-foreground">{sorted.length} resultado(s)</span>
+        <h2 className="text-base font-bold text-foreground">{t("list_heading")}</h2>
+        <span className="text-xs text-muted-foreground">{t("results_count", { count: sorted.length })}</span>
       </div>
       <div className="flex flex-col gap-3 p-4">
         {sorted.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">Sem avaliações para os filtros aplicados.</p>
+          <p className="py-10 text-center text-sm text-muted-foreground">{t("empty_filtered")}</p>
         ) : (
           sorted.map((e) => {
-            const Icon = meta(e.type).icon;
+            const Icon = typeVisualFor(e.type).icon;
             const turma = e.classroom_id ? classroomMap.get(e.classroom_id) : "";
             const subj = e.subject_id ? subjectMap.get(e.subject_id) : "";
             const teacher = e.teacher_id ? teacherMap.get(e.teacher_id) : "";
@@ -896,12 +915,12 @@ const AssessmentsCardsView = ({
                 )}
               >
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  {formatDateLong(e.date)}
+                  {formatAssessmentDateLong(i18n.language, e.date)}
                   {teacher ? ` · ${teacher}` : ""}
                 </p>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span className={cn("flex h-8 w-8 items-center justify-center rounded-full", meta(e.type).color)}>
+                    <span className={cn("flex h-8 w-8 items-center justify-center rounded-full", typeVisualFor(e.type).color)}>
                       <Icon className="h-4 w-4" strokeWidth={2} />
                     </span>
                     <div>
@@ -909,7 +928,7 @@ const AssessmentsCardsView = ({
                       <p className="text-xs text-muted-foreground">{subj}{turma ? ` · ${turma}` : ""}</p>
                     </div>
                   </div>
-                  <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold", meta(e.type).color)}>{meta(e.type).label}</span>
+                  <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold", typeVisualFor(e.type).color)}>{t(`types.${e.type}`)}</span>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" strokeWidth={1.75} />{tt(e.start_time)} – {tt(e.end_time)}</span>
@@ -918,25 +937,25 @@ const AssessmentsCardsView = ({
                 </div>
                 {conflictIds.has(e.id) && (
                   <div className="mt-2 flex items-center gap-1 text-[11px] font-medium text-destructive">
-                    <AlertTriangle className="h-3 w-3" /> Conflito detetado
+                    <AlertTriangle className="h-3 w-3" /> {t("conflict_detected")}
                   </div>
                 )}
                 {holidayConflicts.has(e.id) && (
                   <div className="mt-2 flex items-center gap-1 text-[11px] font-medium text-pastel-yellow-foreground">
-                    <AlertTriangle className="h-3 w-3" /> Marcada em férias: {holidayConflicts.get(e.id)}
+                    <AlertTriangle className="h-3 w-3" /> {t("on_holiday_named", { name: holidayConflicts.get(e.id) })}
                   </div>
                 )}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button type="button" onClick={(ev) => { ev.stopPropagation(); onOpen(e.id); }} className="inline-flex items-center gap-1 rounded-full bg-pastel-blue px-3 py-1 text-xs font-medium text-pastel-blue-foreground hover:opacity-90">
-                    <GraduationCap className="h-3 w-3" /> Notas
+                    <GraduationCap className="h-3 w-3" /> {t("grades")}
                   </button>
                   {canMutateAssessment(e) && (
                     <>
                       <button type="button" onClick={(ev) => { ev.stopPropagation(); onEdit(e); }} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground hover:bg-accent">
-                        <Pencil className="h-3 w-3" /> Editar
+                        <Pencil className="h-3 w-3" /> {t("edit")}
                       </button>
                       <button type="button" onClick={(ev) => { ev.stopPropagation(); onDelete(e.id); }} className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/20">
-                        <Trash2 className="h-3 w-3" /> Eliminar
+                        <Trash2 className="h-3 w-3" /> {t("delete")}
                       </button>
                     </>
                   )}
@@ -970,6 +989,7 @@ const CalendarView = ({
   onOpen: (id: string) => void;
   canMutateAssessment: (a: Assessment) => boolean;
 }) => {
+  const { t, i18n } = useTranslation("pages", { keyPrefix: "avaliacoes" });
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
   const firstOfMonth = new Date(year, month, 1);
@@ -995,6 +1015,12 @@ const CalendarView = ({
     return map;
   }, [evaluations]);
 
+  const weekdays = useMemo(() => weekdayHeadersMonSun(i18n.language), [i18n.language]);
+  const monthYearTitle = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language, { month: "long", year: "numeric" }).format(new Date(year, month, 1)),
+    [i18n.language, year, month],
+  );
+
   const todayIso = new Date().toISOString().slice(0, 10);
   const selectedEvents = selectedDate ? eventsByDate.get(selectedDate) ?? [] : [];
 
@@ -1010,7 +1036,7 @@ const CalendarView = ({
             <button onClick={() => setCursor(new Date(year, month - 1, 1))} className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-foreground transition-colors hover:bg-accent">
               <ChevronLeft className="h-4 w-4" strokeWidth={1.75} />
             </button>
-            <h2 className="text-base font-bold text-foreground">{monthNames[month]} {year}</h2>
+            <h2 className="text-base font-bold text-foreground">{monthYearTitle}</h2>
             <button onClick={() => setCursor(new Date(year, month + 1, 1))} className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-foreground transition-colors hover:bg-accent">
               <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
             </button>
@@ -1018,12 +1044,12 @@ const CalendarView = ({
           <button
             onClick={() => { setCursor(new Date()); setSelectedDate(todayIso); }}
             className="rounded-full bg-muted px-4 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-accent"
-          >Hoje</button>
+          >{t("calendar_today")}</button>
         </div>
 
         <div className="p-4">
           <div className="mb-2 grid grid-cols-7 gap-2">
-            {weekdayLabels.map((d) => (
+            {weekdays.map((d) => (
               <div key={d} className="rounded-xl bg-muted py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{d}</div>
             ))}
           </div>
@@ -1060,12 +1086,12 @@ const CalendarView = ({
                       </span>
                     )}
                     {events.slice(0, 2).map((e) => (
-                      <span key={e.id} className={cn("truncate rounded-md px-1.5 py-0.5 text-[10px] font-semibold", meta(e.type).color, conflictIds.has(e.id) && "ring-1 ring-destructive")}>
+                      <span key={e.id} className={cn("truncate rounded-md px-1.5 py-0.5 text-[10px] font-semibold", typeVisualFor(e.type).color, conflictIds.has(e.id) && "ring-1 ring-destructive")}>
                         {e.title}
                       </span>
                     ))}
                     {events.length > 2 && (
-                      <span className="text-[10px] font-medium text-muted-foreground">+{events.length - 2} mais</span>
+                      <span className="text-[10px] font-medium text-muted-foreground">{t("more_count", { count: events.length - 2 })}</span>
                     )}
                   </div>
                 </button>
@@ -1079,16 +1105,16 @@ const CalendarView = ({
       <div className="rounded-2xl bg-card p-5 shadow-card">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Detalhe do dia</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("day_detail")}</p>
             <h3 className="mt-1 text-base font-bold text-foreground">
-              {selectedDate ? formatDateLong(selectedDate) : "Selecione uma data"}
+              {selectedDate ? formatAssessmentDateLong(i18n.language, selectedDate) : t("pick_date")}
             </h3>
           </div>
         </div>
 
         {selectedDate && selectedEvents.length === 0 && (
           <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
-            Sem avaliações neste dia.
+            {t("none_this_day")}
           </div>
         )}
 
@@ -1097,13 +1123,13 @@ const CalendarView = ({
             <p className="flex items-center gap-2 font-semibold text-pastel-yellow-foreground">
               <span>🌴</span> {selectedHoliday.name}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">Período de férias dos alunos.</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{t("holiday_student_period")}</p>
           </div>
         )}
 
         <div className="flex flex-col gap-3">
           {selectedEvents.map((e) => {
-            const Icon = meta(e.type).icon;
+            const Icon = typeVisualFor(e.type).icon;
             const turma = e.classroom_id ? classroomMap.get(e.classroom_id) : "";
             const subj = e.subject_id ? subjectMap.get(e.subject_id) : "";
             return (
@@ -1120,7 +1146,7 @@ const CalendarView = ({
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span className={cn("flex h-8 w-8 items-center justify-center rounded-full", meta(e.type).color)}>
+                    <span className={cn("flex h-8 w-8 items-center justify-center rounded-full", typeVisualFor(e.type).color)}>
                       <Icon className="h-4 w-4" strokeWidth={2} />
                     </span>
                     <div>
@@ -1128,7 +1154,7 @@ const CalendarView = ({
                       <p className="text-xs text-muted-foreground">{subj}{turma ? ` · ${turma}` : ""}</p>
                     </div>
                   </div>
-                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", meta(e.type).color)}>{meta(e.type).label}</span>
+                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", typeVisualFor(e.type).color)}>{t(`types.${e.type}`)}</span>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" strokeWidth={1.75} />{tt(e.start_time)} – {tt(e.end_time)}</span>
@@ -1137,25 +1163,25 @@ const CalendarView = ({
                 </div>
                 {conflictIds.has(e.id) && (
                   <div className="mt-2 flex items-center gap-1 text-[11px] font-medium text-destructive">
-                    <AlertTriangle className="h-3 w-3" /> Conflito detetado
+                    <AlertTriangle className="h-3 w-3" /> {t("conflict_detected")}
                   </div>
                 )}
                 {holidayConflicts.has(e.id) && (
                   <div className="mt-2 flex items-center gap-1 text-[11px] font-medium text-pastel-yellow-foreground">
-                    <AlertTriangle className="h-3 w-3" /> Marcada em férias: {holidayConflicts.get(e.id)}
+                    <AlertTriangle className="h-3 w-3" /> {t("on_holiday_named", { name: holidayConflicts.get(e.id) })}
                   </div>
                 )}
                 <div className="mt-3 flex gap-2">
                   <button onClick={(ev) => { ev.stopPropagation(); onOpen(e.id); }} className="inline-flex items-center gap-1 rounded-full bg-pastel-blue px-3 py-1 text-xs font-medium text-pastel-blue-foreground hover:opacity-90">
-                    <GraduationCap className="h-3 w-3" /> Notas
+                    <GraduationCap className="h-3 w-3" /> {t("grades")}
                   </button>
                   {canMutateAssessment(e) && (
                     <>
                       <button onClick={(ev) => { ev.stopPropagation(); onEdit(e); }} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground hover:bg-accent">
-                        <Pencil className="h-3 w-3" /> Editar
+                        <Pencil className="h-3 w-3" /> {t("edit")}
                       </button>
                       <button onClick={(ev) => { ev.stopPropagation(); onDelete(e.id); }} className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/20">
-                        <Trash2 className="h-3 w-3" /> Eliminar
+                        <Trash2 className="h-3 w-3" /> {t("delete")}
                       </button>
                     </>
                   )}
@@ -1184,31 +1210,32 @@ const ListView = ({
   onOpen: (id: string) => void;
   canMutateAssessment: (a: Assessment) => boolean;
 }) => {
+  const { t, i18n } = useTranslation("pages", { keyPrefix: "avaliacoes" });
   const sorted = [...evaluations].sort((a, b) => b.date.localeCompare(a.date));
 
   return (
     <div className="overflow-hidden rounded-2xl bg-card shadow-card">
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
-        <h2 className="text-base font-bold text-foreground">Lista de Avaliações</h2>
-        <span className="text-xs text-muted-foreground">{sorted.length} resultado(s)</span>
+        <h2 className="text-base font-bold text-foreground">{t("table_title")}</h2>
+        <span className="text-xs text-muted-foreground">{t("results_count", { count: sorted.length })}</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[900px]">
           <thead>
             <tr className="border-b border-border bg-muted/30 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <th className="px-6 py-3">Data</th>
-              <th className="px-6 py-3">Avaliação</th>
-              <th className="px-6 py-3">Tipo</th>
-              <th className="px-6 py-3">Turma</th>
-              <th className="px-6 py-3">Professor</th>
-              <th className="px-6 py-3">Local</th>
-              <th className="px-6 py-3 text-right">Peso</th>
+              <th className="px-6 py-3">{t("col_date")}</th>
+              <th className="px-6 py-3">{t("col_title")}</th>
+              <th className="px-6 py-3">{t("col_type")}</th>
+              <th className="px-6 py-3">{t("col_class")}</th>
+              <th className="px-6 py-3">{t("col_teacher")}</th>
+              <th className="px-6 py-3">{t("col_place")}</th>
+              <th className="px-6 py-3 text-right">{t("col_weight")}</th>
               <th className="px-6 py-3" />
             </tr>
           </thead>
           <tbody>
             {sorted.map((e) => {
-              const Icon = meta(e.type).icon;
+              const Icon = typeVisualFor(e.type).icon;
               const turma = e.classroom_id ? classroomMap.get(e.classroom_id) : "—";
               const subj = e.subject_id ? subjectMap.get(e.subject_id) : "";
               const teacher = e.teacher_id ? teacherMap.get(e.teacher_id) : "—";
@@ -1224,13 +1251,13 @@ const ListView = ({
                 >
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
-                      <span className="font-semibold text-foreground">{formatDateLong(e.date)}</span>
+                      <span className="font-semibold text-foreground">{formatAssessmentDateLong(i18n.language, e.date)}</span>
                       <span className="text-xs text-muted-foreground">{tt(e.start_time)} – {tt(e.end_time)}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <span className={cn("flex h-9 w-9 items-center justify-center rounded-full", meta(e.type).color)}>
+                      <span className={cn("flex h-9 w-9 items-center justify-center rounded-full", typeVisualFor(e.type).color)}>
                         <Icon className="h-4 w-4" strokeWidth={2} />
                       </span>
                       <div>
@@ -1238,8 +1265,11 @@ const ListView = ({
                           {e.title}
                           {isConflict && <AlertTriangle className="h-3.5 w-3.5 text-destructive" />}
                           {holidayConflicts.has(e.id) && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-pastel-yellow/40 px-2 py-0.5 text-[10px] font-semibold text-pastel-yellow-foreground" title={`Marcada em férias: ${holidayConflicts.get(e.id)}`}>
-                              🌴 Férias
+                            <span
+                              className="inline-flex items-center gap-1 rounded-full bg-pastel-yellow/40 px-2 py-0.5 text-[10px] font-semibold text-pastel-yellow-foreground"
+                              title={t("on_holiday_named", { name: holidayConflicts.get(e.id) })}
+                            >
+                              🌴 {t("holiday_chip")}
                             </span>
                           )}
                         </p>
@@ -1248,7 +1278,7 @@ const ListView = ({
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={cn("rounded-full px-3 py-1 text-xs font-medium", meta(e.type).color)}>{meta(e.type).label}</span>
+                    <span className={cn("rounded-full px-3 py-1 text-xs font-medium", typeVisualFor(e.type).color)}>{t(`types.${e.type}`)}</span>
                   </td>
                   <td className="px-6 py-4 font-medium text-foreground">{turma}</td>
                   <td className="px-6 py-4 text-muted-foreground">{teacher}</td>
@@ -1256,15 +1286,15 @@ const ListView = ({
                   <td className="px-6 py-4 text-right font-semibold text-foreground">{(e.weight ?? 0)}%</td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-1">
-                      <button onClick={(ev) => { ev.stopPropagation(); onOpen(e.id); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/30 hover:text-foreground" title="Atribuir notas">
+                      <button onClick={(ev) => { ev.stopPropagation(); onOpen(e.id); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/30 hover:text-foreground" title={t("title_grades")}>
                         <GraduationCap className="h-4 w-4" strokeWidth={1.75} />
                       </button>
                       {canMutateAssessment(e) && (
                         <>
-                          <button onClick={(ev) => { ev.stopPropagation(); onEdit(e); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
+                          <button onClick={(ev) => { ev.stopPropagation(); onEdit(e); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title={t("title_edit_row")}>
                             <Pencil className="h-4 w-4" strokeWidth={1.75} />
                           </button>
-                          <button onClick={(ev) => { ev.stopPropagation(); onDelete(e.id); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Eliminar">
+                          <button onClick={(ev) => { ev.stopPropagation(); onDelete(e.id); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title={t("title_delete_row")}>
                             <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                           </button>
                         </>
@@ -1277,7 +1307,7 @@ const ListView = ({
             {sorted.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-6 py-12 text-center text-sm text-muted-foreground">
-                  Sem avaliações para os filtros aplicados.
+                  {t("empty_filtered")}
                 </td>
               </tr>
             )}

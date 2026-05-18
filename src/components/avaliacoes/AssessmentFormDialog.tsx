@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,16 +31,13 @@ export type AssessmentRecord = {
 type Option = { id: string; name: string };
 type TeacherOption = { id: string; name: string; subject_id?: string | null };
 
-const TYPES = [
-  { value: "teste", label: "Teste" },
-  { value: "exame", label: "Exame" },
-  { value: "trabalho", label: "Trabalho de Grupo" },
-  { value: "oral", label: "Oral" },
-];
+const TYPE_VALUES = ["teste", "exame", "trabalho", "oral"] as const;
 
 const trimTime = (t: string) => (t ? t.slice(0, 5) : "");
 
-type Conflict = { id: string; title: string; reason: string };
+type ConflictCode = "classroom" | "room";
+
+type Conflict = { id: string; title: string; codes: ConflictCode[] };
 
 type Term = { id: string; term_number: number; name: string; start_date: string; end_date: string };
 type Holiday = { id: string; name: string; start_date: string; end_date: string };
@@ -86,6 +84,8 @@ export const AssessmentFormDialog = ({
   lockTeacherId,
   lockSubjectId,
 }: Props) => {
+  const { t } = useTranslation("pages", { keyPrefix: "avaliacoes.form" });
+  const { t: tp } = useTranslation("pages", { keyPrefix: "avaliacoes" });
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<AssessmentRecord>(empty);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
@@ -143,7 +143,7 @@ export const AssessmentFormDialog = ({
   // Auto-derive term from date unless user manually overrode it
   useEffect(() => {
     if (!form.date || terms.length === 0 || termManuallyOverridden) return;
-    const matched = terms.find((t) => form.date >= t.start_date && form.date <= t.end_date);
+    const matched = terms.find((term) => form.date >= term.start_date && form.date <= term.end_date);
     setForm((f) => ({ ...f, term_id: matched?.id ?? null }));
   }, [form.date, terms, termManuallyOverridden]);
 
@@ -217,13 +217,13 @@ export const AssessmentFormDialog = ({
         const overlaps = aStart < form.end_time && aEnd > form.start_time;
         if (!overlaps) continue;
 
-        const reasons: string[] = [];
-        if (form.classroom_id && a.classroom_id === form.classroom_id) reasons.push("turma");
+        const codes: ConflictCode[] = [];
+        if (form.classroom_id && a.classroom_id === form.classroom_id) codes.push("classroom");
         const formRoom = (form.room ?? "").trim().toLowerCase();
         const aRoom = ((a.room as any) ?? "").trim().toLowerCase();
-        if (formRoom && aRoom && formRoom === aRoom) reasons.push("sala");
-        if (reasons.length > 0) {
-          found.push({ id: a.id, title: a.title, reason: reasons.join(", ") });
+        if (formRoom && aRoom && formRoom === aRoom) codes.push("room");
+        if (codes.length > 0) {
+          found.push({ id: a.id, title: a.title, codes });
         }
       }
       setConflicts(found);
@@ -245,23 +245,23 @@ export const AssessmentFormDialog = ({
 
   const handleSave = async () => {
     if (!schoolId) {
-      toast({ title: "Erro", description: "Escola não encontrada.", variant: "destructive" });
+      toast({ title: t("toast_error"), description: t("toast_school_missing"), variant: "destructive" });
       return;
     }
     if (!form.title.trim()) {
-      toast({ title: "Campos obrigatórios", description: "Indique um título.", variant: "destructive" });
+      toast({ title: t("toast_title_required"), description: t("toast_title_ph"), variant: "destructive" });
       return;
     }
     if (!form.classroom_id || !form.subject_id || !form.teacher_id) {
-      toast({ title: "Campos obrigatórios", description: "Selecione turma, disciplina e professor.", variant: "destructive" });
+      toast({ title: t("toast_title_required"), description: t("toast_select_required_desc"), variant: "destructive" });
       return;
     }
     if (form.start_time >= form.end_time) {
-      toast({ title: "Hora inválida", description: "A hora de fim deve ser depois do início.", variant: "destructive" });
+      toast({ title: t("toast_bad_time"), description: t("toast_bad_time_desc"), variant: "destructive" });
       return;
     }
     if (teacherSubjectMismatch) {
-      toast({ title: "Combinação inválida", description: "O professor seleccionado não lecciona a disciplina escolhida.", variant: "destructive" });
+      toast({ title: t("toast_subject_mismatch"), description: t("toast_subject_mismatch_desc"), variant: "destructive" });
       return;
     }
 
@@ -289,13 +289,13 @@ export const AssessmentFormDialog = ({
     setSaving(false);
 
     if (error) {
-      toast({ title: "Erro ao guardar", description: error.message, variant: "destructive" });
+      toast({ title: t("toast_save_error"), description: error.message, variant: "destructive" });
       return;
     }
 
     toast({
-      title: form.id ? "Avaliação atualizada" : "Avaliação criada",
-      description: conflicts.length > 0 ? "Guardado com conflitos detetados." : "Guardado com sucesso.",
+      title: form.id ? t("toast_updated") : t("toast_created"),
+      description: conflicts.length > 0 ? t("toast_saved_with_conflicts") : t("toast_saved_ok"),
     });
     onOpenChange(false);
     onSaved();
@@ -305,29 +305,33 @@ export const AssessmentFormDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col">
         <DialogHeader>
-          <DialogTitle>{form.id ? "Editar avaliação" : "Nova avaliação"}</DialogTitle>
+          <DialogTitle>{form.id ? t("title_edit") : t("title_create")}</DialogTitle>
         </DialogHeader>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto pr-1 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2">
-            <Label>Título *</Label>
-            <Input value={form.title} onChange={(e) => update("title", e.target.value)} placeholder="Ex: Teste de Funções" />
+            <Label>{t("title_label")}</Label>
+            <Input value={form.title} onChange={(e) => update("title", e.target.value)} placeholder={t("title_placeholder")} />
           </div>
 
           <div className="space-y-2">
-            <Label>Tipo *</Label>
+            <Label>{t("type_label")}</Label>
             <Select value={form.type} onValueChange={(v) => update("type", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                {TYPE_VALUES.map((v) => (
+                  <SelectItem key={v} value={v}>
+                    {tp(`types.${v}`)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label>Turma *</Label>
+            <Label>{t("class_label")}</Label>
             <Select value={form.classroom_id ?? ""} onValueChange={(v) => update("classroom_id", v)}>
-              <SelectTrigger><SelectValue placeholder="Escolher turma" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("class_ph")} /></SelectTrigger>
               <SelectContent>
                 {sortByName(classrooms).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
@@ -335,14 +339,14 @@ export const AssessmentFormDialog = ({
           </div>
 
           <div className="space-y-2">
-            <Label>Disciplina *</Label>
+            <Label>{t("subject_label")}</Label>
             <Select
               value={form.subject_id ?? ""}
               onValueChange={handleSubjectChange}
               disabled={!!lockSubjectId}
             >
               <SelectTrigger className={teacherSubjectMismatch ? "border-destructive" : ""}>
-                <SelectValue placeholder="Escolher disciplina" />
+                <SelectValue placeholder={t("subject_ph")} />
               </SelectTrigger>
               <SelectContent>
                 {filteredSubjects.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
@@ -351,21 +355,25 @@ export const AssessmentFormDialog = ({
           </div>
 
           <div className="space-y-2">
-            <Label>Professor *</Label>
+            <Label>{t("teacher_label")}</Label>
             <Select
               value={form.teacher_id ?? ""}
               onValueChange={handleTeacherChange}
               disabled={!!lockTeacherId}
             >
               <SelectTrigger className={teacherSubjectMismatch ? "border-destructive" : ""}>
-                <SelectValue placeholder="Escolher professor" />
+                <SelectValue placeholder={t("teacher_ph")} />
               </SelectTrigger>
               <SelectContent>
                 {filteredTeachers.length > 0 ? (
-                  filteredTeachers.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)
+                  filteredTeachers.map((tch) => (
+                    <SelectItem key={tch.id} value={tch.id}>
+                      {tch.name}
+                    </SelectItem>
+                  ))
                 ) : (
                   <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                    Nenhum professor atribuído a esta disciplina.
+                    {t("teacher_empty_for_subject")}
                   </div>
                 )}
               </SelectContent>
@@ -373,38 +381,39 @@ export const AssessmentFormDialog = ({
           </div>
 
           <div className="space-y-2">
-            <Label>Data *</Label>
+            <Label>{t("date_label")}</Label>
             <Input type="date" value={form.date} onChange={(e) => update("date", e.target.value)} />
           </div>
 
           <div className="space-y-2">
-            <Label>Início *</Label>
+            <Label>{t("start_label")}</Label>
             <Input type="time" value={form.start_time} onChange={(e) => update("start_time", e.target.value)} />
           </div>
 
           <div className="space-y-2">
-            <Label>Fim *</Label>
+            <Label>{t("end_label")}</Label>
             <Input type="time" value={form.end_time} onChange={(e) => update("end_time", e.target.value)} />
           </div>
 
           <div className="space-y-2">
-            <Label>Sala</Label>
-            <Input value={form.room ?? ""} onChange={(e) => update("room", e.target.value)} placeholder="Ex: Sala 12" />
+            <Label>{t("room_label")}</Label>
+            <Input value={form.room ?? ""} onChange={(e) => update("room", e.target.value)} placeholder={t("room_placeholder")} />
           </div>
 
           <div className="space-y-2">
-            <Label>Peso (%)</Label>
+            <Label>{t("weight_label")}</Label>
             <Input type="number" min={0} max={100} value={form.weight} onChange={(e) => update("weight", Number(e.target.value))} />
           </div>
 
           <div className="space-y-2 sm:col-span-2">
             <Label>
-              Trimestre {!termManuallyOverridden && <span className="text-xs font-normal text-muted-foreground">(automático pela data)</span>}
+              {t("term_label")}{" "}
+              {!termManuallyOverridden && (
+                <span className="text-xs font-normal text-muted-foreground">{t("term_auto_suffix")}</span>
+              )}
             </Label>
             {terms.length === 0 ? (
-              <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
-                Configure os trimestres em Definições → Académico para ativar este campo.
-              </p>
+              <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">{t("term_hint_settings")}</p>
             ) : (
               <div className="flex items-center gap-2">
                 <Select
@@ -412,7 +421,7 @@ export const AssessmentFormDialog = ({
                   onValueChange={(v) => {
                     if (v === "auto") {
                       setTermManuallyOverridden(false);
-                      const matched = terms.find((t) => form.date >= t.start_date && form.date <= t.end_date);
+                      const matched = terms.find((term) => form.date >= term.start_date && form.date <= term.end_date);
                       update("term_id", matched?.id ?? null);
                     } else {
                       setTermManuallyOverridden(true);
@@ -420,17 +429,17 @@ export const AssessmentFormDialog = ({
                     }
                   }}
                 >
-                  <SelectTrigger><SelectValue placeholder="Sem trimestre" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("term_none_ph")} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="auto">Automático pela data</SelectItem>
-                    {terms.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    <SelectItem value="auto">{t("term_auto_opt")}</SelectItem>
+                    {terms.map((tr) => (
+                      <SelectItem key={tr.id} value={tr.id}>{tr.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {termManuallyOverridden && (
                   <span className="rounded-full bg-pastel-yellow/40 px-2 py-1 text-[10px] font-semibold text-pastel-yellow-foreground">
-                    Manual
+                    {t("manual_badge")}
                   </span>
                 )}
               </div>
@@ -438,7 +447,7 @@ export const AssessmentFormDialog = ({
           </div>
 
           <div className="space-y-2 sm:col-span-2">
-            <Label>Descrição</Label>
+            <Label>{t("description_label")}</Label>
             <Textarea value={form.description ?? ""} onChange={(e) => update("description", e.target.value)} rows={2} />
           </div>
 
@@ -446,7 +455,7 @@ export const AssessmentFormDialog = ({
             <div className="sm:col-span-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs">
               <div className="flex items-center gap-2 font-semibold text-destructive">
                 <AlertTriangle className="h-4 w-4" />
-                O professor seleccionado não lecciona esta disciplina. Corrija antes de guardar.
+                {t("mismatch_banner")}
               </div>
             </div>
           )}
@@ -455,16 +464,21 @@ export const AssessmentFormDialog = ({
             <div className="sm:col-span-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs">
               <div className="mb-2 flex items-center gap-2 font-semibold text-destructive">
                 <AlertTriangle className="h-4 w-4" />
-                Conflito(s) detetado(s) ({conflicts.length})
+                {t("conflicts_title", { count: conflicts.length })}
               </div>
               <ul className="space-y-1 text-foreground">
-                {conflicts.map((c) => (
-                  <li key={c.id}>
-                    • <span className="font-medium">{c.title}</span> — mesmo(a) {c.reason}
-                  </li>
-                ))}
+                {conflicts.map((c) => {
+                  const pieces = c.codes
+                    .map((code) =>
+                      code === "classroom" ? t("conflict_piece_classroom") : t("conflict_piece_room"),
+                    )
+                    .join(t("conflict_list_join"));
+                  return (
+                    <li key={c.id}>{t("conflict_li", { title: c.title, pieces })}</li>
+                  );
+                })}
               </ul>
-              <p className="mt-2 text-muted-foreground">Pode guardar mesmo assim.</p>
+              <p className="mt-2 text-muted-foreground">{t("can_save_anyway")}</p>
             </div>
           )}
 
@@ -472,18 +486,20 @@ export const AssessmentFormDialog = ({
             <div className="sm:col-span-2 rounded-lg border border-pastel-yellow-foreground/30 bg-pastel-yellow/30 p-3 text-xs">
               <div className="mb-1 flex items-center gap-2 font-semibold text-pastel-yellow-foreground">
                 <AlertTriangle className="h-4 w-4" />
-                Esta data está em período de férias: {holidayMatch.name}
+                {t("holiday_warn_title", { name: holidayMatch.name })}
               </div>
-              <p className="text-muted-foreground">Pode guardar mesmo assim — a avaliação ficará marcada com aviso.</p>
+              <p className="text-muted-foreground">{t("holiday_warn_hint")}</p>
             </div>
           )}
         </div>
 
         <DialogFooter className="shrink-0 gap-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
+            {t("btn_cancel")}
+          </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {form.id ? "Guardar alterações" : "Criar avaliação"}
+            {form.id ? t("submit_edit") : t("submit_create")}
           </Button>
         </DialogFooter>
       </DialogContent>

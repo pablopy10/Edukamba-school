@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { sortByName } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 export type ScheduleRecord = {
   id?: string;
@@ -26,21 +27,7 @@ export type ScheduleRecord = {
 type Option = { id: string; name: string; subjectId?: string | null };
 type TimeSlotOption = { start_time: string; end_time: string; label: string | null; is_break: boolean; shift: string };
 
-const DAYS = [
-  { value: 1, label: "Segunda" },
-  { value: 2, label: "Terça" },
-  { value: 3, label: "Quarta" },
-  { value: 4, label: "Quinta" },
-  { value: 5, label: "Sexta" },
-  { value: 6, label: "Sábado" },
-  { value: 0, label: "Domingo" },
-];
-
-const SHIFTS: { value: ScheduleRecord["shift"]; label: string }[] = [
-  { value: "MORNING", label: "Manhã" },
-  { value: "AFTERNOON", label: "Tarde" },
-  { value: "EVENING", label: "Noite" },
-];
+const FORM_DOW_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
 
 const trimTime = (t: string) => t?.slice(0, 5) ?? "";
 
@@ -69,6 +56,9 @@ export const ScheduleFormDialog = ({
   initial,
   onSaved,
 }: Props) => {
+  const { t } = useTranslation("pages", { keyPrefix: "horarios.schedule_form" });
+  const { t: th } = useTranslation("pages", { keyPrefix: "horarios" });
+
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<ScheduleRecord>({
     classroom_id: null,
@@ -127,15 +117,15 @@ export const ScheduleFormDialog = ({
 
   const handleSave = async () => {
     if (!schoolId) {
-      toast({ title: "Erro", description: "Escola não encontrada.", variant: "destructive" });
+      toast({ title: th("toast_error"), description: t("toast_school_missing"), variant: "destructive" });
       return;
     }
     if (!form.classroom_id || !form.subject_id || !form.teacher_id) {
-      toast({ title: "Campos obrigatórios", description: "Selecione turma, disciplina e professor.", variant: "destructive" });
+      toast({ title: t("toast_required"), description: t("toast_required_desc"), variant: "destructive" });
       return;
     }
     if (form.start_time >= form.end_time) {
-      toast({ title: "Hora inválida", description: "A hora de fim deve ser depois do início.", variant: "destructive" });
+      toast({ title: t("toast_bad_time"), description: t("toast_bad_time_desc"), variant: "destructive" });
       return;
     }
 
@@ -161,14 +151,20 @@ export const ScheduleFormDialog = ({
     setSaving(false);
 
     if (error) {
-      const msg = error.message?.includes("Conflito")
-        ? error.message
-        : `Erro ao guardar: ${error.message}`;
-      toast({ title: "Conflito de horário", description: msg, variant: "destructive" });
+      const raw = error.message ?? "";
+      const looksConflict = /\b(conflito|conflict)\b/i.test(raw);
+      toast({
+        title: looksConflict ? t("toast_conflict_title") : t("toast_saved_error"),
+        description: looksConflict ? raw : t("error_save_prefix", { message: raw }),
+        variant: "destructive",
+      });
       return;
     }
 
-    toast({ title: form.id ? "Aula atualizada" : "Aula criada", description: "Horário guardado com sucesso." });
+    toast({
+      title: form.id ? t("toast_updated") : t("toast_created"),
+      description: t("toast_saved_hint"),
+    });
     onOpenChange(false);
     onSaved();
   };
@@ -177,14 +173,14 @@ export const ScheduleFormDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col">
         <DialogHeader>
-          <DialogTitle>{form.id ? "Editar aula" : "Nova aula"}</DialogTitle>
+          <DialogTitle>{form.id ? t("title_edit") : t("title_create")}</DialogTitle>
         </DialogHeader>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto pr-1 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label>Turma *</Label>
+            <Label>{t("class_label")}</Label>
             <Select value={form.classroom_id ?? ""} onValueChange={(v) => update("classroom_id", v)}>
-              <SelectTrigger><SelectValue placeholder="Escolher turma" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("class_ph")} /></SelectTrigger>
               <SelectContent>
                 {sortByName(classrooms).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
@@ -192,9 +188,9 @@ export const ScheduleFormDialog = ({
           </div>
 
           <div className="space-y-2">
-            <Label>Disciplina *</Label>
+            <Label>{t("subject_label")}</Label>
             <Select value={form.subject_id ?? ""} onValueChange={(v) => update("subject_id", v)}>
-              <SelectTrigger><SelectValue placeholder="Escolher disciplina" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("subject_ph")} /></SelectTrigger>
               <SelectContent>
                 {subjects.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
               </SelectContent>
@@ -202,7 +198,7 @@ export const ScheduleFormDialog = ({
           </div>
 
           <div className="space-y-2">
-            <Label>Professor *</Label>
+            <Label>{t("teacher_label")}</Label>
             <Select
               value={form.teacher_id ?? ""}
               onValueChange={(v) => update("teacher_id", v)}
@@ -212,10 +208,10 @@ export const ScheduleFormDialog = ({
                 <SelectValue
                   placeholder={
                     !form.subject_id
-                      ? "Selecione a disciplina primeiro"
+                      ? t("teacher_ph_select_subject")
                       : filteredTeachers.length === 0
-                        ? "Sem professores para esta disciplina"
-                        : "Escolher professor"
+                        ? t("teacher_ph_none")
+                        : t("teacher_ph")
                   }
                 />
               </SelectTrigger>
@@ -226,33 +222,39 @@ export const ScheduleFormDialog = ({
           </div>
 
           <div className="space-y-2">
-            <Label>Dia da semana *</Label>
+            <Label>{t("dow_label")}</Label>
             <Select value={String(form.day_of_week)} onValueChange={(v) => update("day_of_week", Number(v))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {DAYS.map((d) => <SelectItem key={d.value} value={String(d.value)}>{d.label}</SelectItem>)}
+                {FORM_DOW_ORDER.map((dow) => (
+                  <SelectItem key={dow} value={String(dow)}>{th(`dow.${dow}`)}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label>Turno</Label>
+            <Label>{t("shift_label")}</Label>
             <Select value={form.shift ?? "MORNING"} onValueChange={(v) => update("shift", v as ScheduleRecord["shift"])}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {SHIFTS.map((s) => <SelectItem key={s.value} value={s.value!}>{s.label}</SelectItem>)}
+                {(["MORNING", "AFTERNOON", "EVENING"] as const).map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s === "MORNING" ? th("shift_morning") : s === "AFTERNOON" ? th("shift_afternoon") : th("shift_evening")}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label>Sala</Label>
-            <Input value={form.room ?? ""} onChange={(e) => update("room", e.target.value)} placeholder="Ex: Sala 12" />
+            <Label>{t("room_label")}</Label>
+            <Input value={form.room ?? ""} onChange={(e) => update("room", e.target.value)} placeholder={t("room_placeholder")} />
           </div>
 
           {slotsForShift.length > 0 && (
             <div className="space-y-2 sm:col-span-2">
-              <Label>Bloco horário (rápido)</Label>
+              <Label>{t("slots_quick_label")}</Label>
               <div className="flex flex-wrap gap-2">
                 {slotsForShift.map((s, i) => {
                   const start = trimTime(s.start_time);
@@ -278,31 +280,31 @@ export const ScheduleFormDialog = ({
           )}
 
           <div className="space-y-2">
-            <Label>Início *</Label>
+            <Label>{t("start_label")}</Label>
             <Input type="time" value={form.start_time} onChange={(e) => update("start_time", e.target.value)} />
           </div>
 
           <div className="space-y-2">
-            <Label>Fim *</Label>
+            <Label>{t("end_label")}</Label>
             <Input type="time" value={form.end_time} onChange={(e) => update("end_time", e.target.value)} />
           </div>
 
           <div className="space-y-2 sm:col-span-2">
-            <Label>Notas</Label>
+            <Label>{t("notes_label")}</Label>
             <Textarea value={form.notes ?? ""} onChange={(e) => update("notes", e.target.value)} rows={2} />
           </div>
         </div>
 
         <div className="flex shrink-0 items-start gap-2 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>O sistema deteta automaticamente conflitos de turma, professor e sala.</span>
+          <span>{t("hint_conflicts")}</span>
         </div>
 
         <DialogFooter className="shrink-0 gap-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>{th("btn_cancel")}</Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {form.id ? "Guardar alterações" : "Criar aula"}
+            {form.id ? t("submit_edit") : t("submit_create")}
           </Button>
         </DialogFooter>
       </DialogContent>

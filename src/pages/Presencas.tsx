@@ -66,6 +66,7 @@ import {
 } from "@/lib/offline/presencasQueries";
 import { supabaseRestTable } from "@/lib/supabaseRestUrls";
 import { isNativeMobileApp, showPageKpiCards } from "@/lib/nativeApp";
+import { useTranslation } from "react-i18next";
 
 type Status = AttendanceStatus;
 
@@ -91,20 +92,27 @@ interface AttendanceRow {
   notes: string | null;
 }
 
-const MONTHS_PT = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
-];
-
-const STATUS_CONFIG: Record<Status, { bg: string; Icon: typeof Check; label: string }> = {
-  PRESENT: { bg: "bg-pastel-blue text-pastel-blue-foreground", Icon: Check, label: "Presente" },
-  ABSENT: { bg: "bg-destructive text-white", Icon: X, label: "Falta" },
-  LATE: { bg: "bg-pastel-yellow text-pastel-yellow-foreground", Icon: Clock, label: "Atrasado" },
-  JUSTIFIED: { bg: "bg-pastel-orange text-pastel-orange-foreground", Icon: Check, label: "Justificado" },
-  DISCIPLINARY: { bg: "bg-pastel-lilac text-pastel-lilac-foreground", Icon: AlertTriangle, label: "Falta disciplinar" },
+const STATUS_VISUAL: Record<Status, { bg: string; Icon: typeof Check }> = {
+  PRESENT: { bg: "bg-pastel-blue text-pastel-blue-foreground", Icon: Check },
+  ABSENT: { bg: "bg-destructive text-white", Icon: X },
+  LATE: { bg: "bg-pastel-yellow text-pastel-yellow-foreground", Icon: Clock },
+  JUSTIFIED: { bg: "bg-pastel-orange text-pastel-orange-foreground", Icon: Check },
+  DISCIPLINARY: { bg: "bg-pastel-lilac text-pastel-lilac-foreground", Icon: AlertTriangle },
 };
 
-// Build days range for a given month/year and a chosen "week" (1..n)
+/** Monday–Sunday week range formatted for UI (locale-aware). */
+const formatWeekRangeLocale = (locale: string, weekDays: Date[]) => {
+  const a = weekDays[0];
+  const b = weekDays[6];
+  const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" };
+  return `${new Intl.DateTimeFormat(locale, opts).format(a)} – ${new Intl.DateTimeFormat(locale, opts).format(b)}`;
+};
+
+/** Long month label for selectors (January, …). */
+const monthLabelLocale = (locale: string, monthIndex0: number) =>
+  new Intl.DateTimeFormat(locale, { month: "long" }).format(new Date(2020, monthIndex0, 1));
+
+const MONTH_INDEX_LIST = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as const;
 const getMonthDays = (year: number, month0: number) => {
   const totalDays = new Date(year, month0 + 1, 0).getDate();
   return Array.from({ length: totalDays }, (_, i) => new Date(year, month0, i + 1));
@@ -117,8 +125,6 @@ const fmtISO = (d: Date) => {
   return `${y}-${m}-${day}`;
 };
 
-const WEEKDAY_SHORT_PT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-
 /** Segunda a domingo da semana que contém `d`. */
 const getWeekDaysMonSun = (d: Date) => {
   const copy = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -130,15 +136,6 @@ const getWeekDaysMonSun = (d: Date) => {
     x.setDate(copy.getDate() + i);
     return x;
   });
-};
-
-const formatWeekRangePt = (weekDays: Date[]) => {
-  const a = weekDays[0];
-  const b = weekDays[6];
-  if (a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()) {
-    return `${a.getDate()}–${b.getDate()} ${MONTHS_PT[a.getMonth()]} ${a.getFullYear()}`;
-  }
-  return `${a.getDate()} ${MONTHS_PT[a.getMonth()].slice(0, 3)} – ${b.getDate()} ${MONTHS_PT[b.getMonth()].slice(0, 3)} ${b.getFullYear()}`;
 };
 
 const sameCalendarDay = (a: Date, b: Date) =>
@@ -186,7 +183,7 @@ const StatusCell = ({ status, isWeekend }: { status: Status | null; isWeekend: b
       </span>
     );
   }
-  const { Icon, bg } = STATUS_CONFIG[status];
+  const { Icon, bg } = STATUS_VISUAL[status];
   return (
     <span className={cn("flex h-5 w-5 items-center justify-center rounded-full shadow-soft", bg)}>
       <Icon className="h-3 w-3" strokeWidth={3} />
@@ -211,6 +208,7 @@ const AttendancePopover = ({
   onSelect: (next: Status | null) => void | Promise<void>;
   onJustify: () => void;
 }) => {
+  const { t } = useTranslation("pages", { keyPrefix: "presencas" });
   const [open, setOpen] = useState(false);
   const handle = (next: Status | null) => {
     setOpen(false);
@@ -222,7 +220,7 @@ const AttendancePopover = ({
         <button
           type="button"
           className="flex w-full justify-center rounded-md py-1 transition-colors hover:bg-accent"
-          aria-label="Alterar presença"
+          aria-label={t("popover_change_aria")}
         >
           {cellInner}
         </button>
@@ -234,30 +232,30 @@ const AttendancePopover = ({
         <div className="flex flex-col gap-1">
           <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={() => handle("PRESENT")}>
             <span className="flex h-4 w-4 items-center justify-center rounded-full bg-pastel-blue text-pastel-blue-foreground"><Check className="h-3 w-3" strokeWidth={3} /></span>
-            Presente
+            {t("status.PRESENT")}
           </Button>
           <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={() => handle("LATE")}>
             <span className="flex h-4 w-4 items-center justify-center rounded-full bg-pastel-yellow text-pastel-yellow-foreground"><Clock className="h-3 w-3" strokeWidth={3} /></span>
-            Atrasado
+            {t("status.LATE")}
           </Button>
           <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={() => handle("ABSENT")}>
             <span className="flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-white"><X className="h-3 w-3" strokeWidth={3} /></span>
-            Falta
+            {t("status.ABSENT")}
           </Button>
           <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={() => handle("DISCIPLINARY")}>
             <span className="flex h-4 w-4 items-center justify-center rounded-full bg-pastel-lilac text-pastel-lilac-foreground"><AlertTriangle className="h-3 w-3" strokeWidth={3} /></span>
-            Falta disciplinar
+            {t("status.DISCIPLINARY")}
           </Button>
           {(status === "ABSENT" || status === "LATE" || status === "JUSTIFIED" || status === "DISCIPLINARY") && (
             <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={() => { setOpen(false); onJustify(); }}>
               <FileText className="h-4 w-4" />
-              {hasNotes ? "Ver justificação" : "Justificar"}
+              {hasNotes ? t("view_justification") : t("justify")}
             </Button>
           )}
           {status && (
             <Button variant="ghost" size="sm" className="justify-start gap-2 text-muted-foreground" onClick={() => handle(null)}>
               <MinusCircle className="h-4 w-4" />
-              Remover
+              {t("popover_remove_short")}
             </Button>
           )}
         </div>
@@ -279,13 +277,14 @@ const NativeQuickStatusButton = ({
   disabled?: boolean;
   onClick: () => void;
 }) => {
-  const { Icon, bg, label } = STATUS_CONFIG[statusKey];
+  const { t } = useTranslation("pages", { keyPrefix: "presencas" });
+  const { Icon, bg } = STATUS_VISUAL[statusKey];
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
-      aria-label={label}
+      aria-label={t(`status.${statusKey}`)}
       aria-pressed={active}
       className={cn(
         "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-transparent transition-all active:scale-[0.97]",
@@ -325,6 +324,14 @@ const Presencas = () => {
     return t;
   });
   const [studentFilterNative, setStudentFilterNative] = useState("");
+
+  const { t, i18n } = useTranslation("pages", { keyPrefix: "presencas" });
+  const { t: navT } = useTranslation("common", { keyPrefix: "nav" });
+
+  const formatWeekdayShort = useCallback(
+    (d: Date) => new Intl.DateTimeFormat(i18n.language, { weekday: "short" }).format(d),
+    [i18n.language],
+  );
 
   const resolvedSchoolId = useMemo(() => {
     if (isTeacher) {
@@ -697,8 +704,8 @@ const Presencas = () => {
       const existing = vars.existingBefore;
 
       const offlineToast = () => {
-        toast.message("Pendente para envio", {
-          description: "Alteração guardada neste telemóvel — será sincronizada quando voltar a haver rede.",
+        toast.message(t("toast_pending_send_title"), {
+          description: t("toast_pending_send_desc"),
         });
       };
 
@@ -742,7 +749,7 @@ const Presencas = () => {
         if (!existing) return "online";
         const { error } = await supabase.from("attendance").delete().eq("id", existing.id);
         if (error) throw error;
-        toast.success("Presença removida");
+        toast.success(t("toast_success_removed"));
         return "online";
       }
 
@@ -819,7 +826,7 @@ const Presencas = () => {
       if (ctx?.previousSnapshot !== undefined) {
         queryClient.setQueryData(attendanceQueryKeyResolved, ctx.previousSnapshot);
       }
-      toast.error("Erro ao guardar presença", {
+      toast.error(t("toast_save_failed"), {
         description: e instanceof Error ? e.message : String(e),
       });
     },
@@ -895,7 +902,7 @@ const Presencas = () => {
     const { student, date, row } = justifyTarget;
     const text = justifyText.trim();
     if (!text) {
-      toast.error("Escreva uma justificação");
+      toast.error(t("toast_justify_required_text"));
       return;
     }
     setJustifySaving(true);
@@ -917,7 +924,7 @@ const Presencas = () => {
           }));
         } else {
           if (!canEdit) {
-            toast.error("Sem registo para justificar.");
+            toast.error(t("toast_justify_no_record"));
             return;
           }
           enqueuePendingSync({
@@ -945,8 +952,8 @@ const Presencas = () => {
             },
           }));
         }
-        toast.message("Pendente para envio", {
-          description: "Justificação na fila — será enviada com rede.",
+        toast.message(t("toast_pending_send_title"), {
+          description: t("toast_offline_justify_pending_desc"),
         });
         setJustifyTarget(null);
         setJustifyText("");
@@ -968,7 +975,7 @@ const Presencas = () => {
       } else {
         // Only staff can create rows from scratch
         if (!canEdit) {
-          toast.error("Sem registo para justificar.");
+          toast.error(t("toast_justify_no_record"));
           return;
         }
         const { data, error } = await supabase
@@ -987,11 +994,11 @@ const Presencas = () => {
         if (error) throw error;
         patchAttendanceMap((prev) => ({ ...prev, [mapKey]: data as AttendanceRow }));
       }
-      toast.success("Justificação guardada");
+      toast.success(t("toast_justify_saved"));
       setJustifyTarget(null);
       setJustifyText("");
     } catch (e: any) {
-      toast.error("Erro ao guardar justificação", { description: e.message });
+      toast.error(t("toast_justify_save_error"), { description: e.message });
     } finally {
       setJustifySaving(false);
     }
@@ -1006,24 +1013,22 @@ const Presencas = () => {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1 pr-2">
                   <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                    Presenças
+                    {navT("attendance")}
                   </span>
                   <h2 className="text-xl font-semibold tracking-tight text-foreground">
-                    {formatWeekRangePt(nativeWeekDays)}
+                    {formatWeekRangeLocale(i18n.language, nativeWeekDays)}
                   </h2>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {canEdit
-                      ? "Escolha o dia e marque presença, atraso ou falta."
-                      : "Acompanhe a frequência por dia."}
+                    {canEdit ? t("subtitle_native_editor") : t("subtitle_native_viewer")}
                   </p>
                 </div>
                 {!isParent && !isStudent ? (
                   <Select value={classroomId} onValueChange={setClassroomId} disabled={classrooms.length === 0}>
                     <SelectTrigger className="h-10 w-[min(46vw,11.5rem)] shrink-0 rounded-full border-border/80 bg-card px-3 text-left text-sm shadow-card">
-                      <SelectValue placeholder="Turma" />
+                      <SelectValue placeholder={t("pick_class_placeholder")} />
                     </SelectTrigger>
                     <SelectContent align="end">
-                      {roleForAcl !== "TEACHER" && <SelectItem value="all">Todas as turmas</SelectItem>}
+                      {roleForAcl !== "TEACHER" && <SelectItem value="all">{t("all_classes")}</SelectItem>}
                       {classrooms.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
                           {c.name}
@@ -1040,7 +1045,7 @@ const Presencas = () => {
                   variant="outline"
                   size="icon"
                   className="h-auto min-h-[5.25rem] w-10 shrink-0 rounded-2xl border-border/80 shadow-card"
-                  aria-label="Semana anterior"
+                  aria-label={t("week_prev_aria")}
                   onClick={() => shiftNativeWeek(-1)}
                 >
                   <ChevronLeft className="h-5 w-5" />
@@ -1063,7 +1068,7 @@ const Presencas = () => {
                         )}
                       >
                         <span className={cn("truncate text-[10px] font-semibold uppercase leading-tight sm:text-[11px]", selected ? "text-primary-foreground/85" : "text-muted-foreground")}>
-                          {WEEKDAY_SHORT_PT[d.getDay()]}
+                          {formatWeekdayShort(d)}
                         </span>
                         <span className="mt-0.5 text-base font-semibold tabular-nums sm:text-lg">{d.getDate()}</span>
                       </button>
@@ -1075,7 +1080,7 @@ const Presencas = () => {
                   variant="outline"
                   size="icon"
                   className="h-auto min-h-[5.25rem] w-10 shrink-0 rounded-2xl border-border/80 shadow-card"
-                  aria-label="Semana seguinte"
+                  aria-label={t("week_next_aria")}
                   onClick={() => shiftNativeWeek(1)}
                 >
                   <ChevronRight className="h-5 w-5" />
@@ -1088,7 +1093,7 @@ const Presencas = () => {
               <Input
                 value={studentFilterNative}
                 onChange={(e) => setStudentFilterNative(e.target.value)}
-                placeholder="Pesquisar alunos…"
+                placeholder={t("student_search_placeholder")}
                 className="h-12 rounded-full border-0 bg-card pl-11 shadow-card placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/25"
                 autoComplete="off"
                 autoCorrect="off"
@@ -1104,11 +1109,11 @@ const Presencas = () => {
             <div className="space-y-3">
               {studentsLoading ? (
                 <div className="flex h-48 items-center justify-center rounded-2xl bg-card text-muted-foreground shadow-card">
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> A carregar…
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> {t("loading")}
                 </div>
               ) : filteredStudentsNative.length === 0 ? (
                 <div className="flex h-48 items-center justify-center rounded-2xl bg-card text-muted-foreground shadow-card">
-                  Sem alunos para mostrar.
+                  {t("no_students")}
                 </div>
               ) : (
                 filteredStudentsNative.map((s) => {
@@ -1142,7 +1147,7 @@ const Presencas = () => {
                       <div className="min-w-0 flex-1">
                         <h3 className="truncate text-base font-semibold text-foreground">{s.full_name}</h3>
                         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                          Nº {s.enrollment_number?.trim() ? s.enrollment_number : "—"}
+                          {t("enrollment_prefix")} {s.enrollment_number?.trim() ? s.enrollment_number : "—"}
                         </p>
 
                         {canEdit ? (
@@ -1168,7 +1173,7 @@ const Presencas = () => {
                                     className="h-11 w-11 shrink-0 rounded-xl text-muted-foreground"
                                     disabled={isNativeDayWeekend}
                                     onClick={() => void applyStatus(s, nativeSelectedDay, null)}
-                                    aria-label="Remover registo"
+                                    aria-label={t("aria_remove_record")}
                                   >
                                     <MinusCircle className="h-5 w-5" />
                                   </Button>
@@ -1183,7 +1188,7 @@ const Presencas = () => {
                                     onClick={() => openJustify(s, nativeSelectedDay)}
                                   >
                                     <FileText className="h-3.5 w-3.5" />
-                                    {hasNotes ? "Ver justificação" : "Justificar"}
+                                    {hasNotes ? t("view_justification") : t("justify")}
                                   </Button>
                                 )}
                               </>
@@ -1191,7 +1196,7 @@ const Presencas = () => {
                             {!isSaving && row && attendanceRowQueuedOffline(row) && (
                               <p className="mt-2 flex w-full shrink-0 basis-full items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
                                 <Cloud className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                                Pendente para envio
+                                {t("pending_send_label")}
                               </p>
                             )}
                           </div>
@@ -1204,7 +1209,7 @@ const Presencas = () => {
                                 <StatusCell status={status} isWeekend={isNativeDayWeekend} />
                               )}
                               {hasNotes && (
-                                <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-pastel-orange" title="Tem justificação" />
+                                <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-pastel-orange" title={t("tooltip_has_justification")} />
                               )}
                             </div>
                             {!isNativeDayWeekend && showJustifyTrigger ? (
@@ -1216,7 +1221,7 @@ const Presencas = () => {
                                 onClick={() => openJustify(s, nativeSelectedDay)}
                               >
                                 <FileText className="h-3.5 w-3.5" />
-                                {hasNotes ? "Ver justificação" : "Justificar"}
+                                {hasNotes ? t("view_justification") : t("justify")}
                               </Button>
                             ) : null}
                             {!isNativeDayWeekend && row && hasNotes && !showJustifyTrigger ? (
@@ -1228,7 +1233,7 @@ const Presencas = () => {
                                 onClick={() => openJustify(s, nativeSelectedDay)}
                               >
                                 <FileText className="h-3.5 w-3.5" />
-                                Ver nota
+                                {t("view_note")}
                               </Button>
                             ) : null}
                           </div>
@@ -1245,25 +1250,25 @@ const Presencas = () => {
                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-pastel-blue text-pastel-blue-foreground">
                   <Check className="h-2.5 w-2.5" strokeWidth={3} />
                 </span>
-                Presente
+                {t("native_legend_present")}
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-pastel-yellow text-pastel-yellow-foreground">
                   <Clock className="h-2.5 w-2.5" strokeWidth={3} />
                 </span>
-                Atraso
+                {t("native_legend_late_compact")}
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-white">
                   <X className="h-2.5 w-2.5" strokeWidth={3} />
                 </span>
-                Falta
+                {t("native_legend_absent_short")}
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-pastel-lilac text-pastel-lilac-foreground">
                   <AlertTriangle className="h-2.5 w-2.5" strokeWidth={3} />
                 </span>
-                Falta disciplinar
+                {t("native_legend_disciplinary_short")}
               </span>
             </div>
           </div>
@@ -1272,11 +1277,9 @@ const Presencas = () => {
             {/* Header */}
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-bold tracking-tight text-foreground">Presenças</h1>
+                <h1 className="text-3xl font-bold tracking-tight text-foreground">{navT("attendance")}</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {canEdit
-                    ? "Clique numa célula para marcar Presente, Atrasado ou Falta."
-                    : "Acompanhe a frequência diária dos alunos."}
+                  {canEdit ? t("header_subtitle_can_edit") : t("header_subtitle_read_only")}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
@@ -1286,8 +1289,10 @@ const Presencas = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {MONTHS_PT.map((m, i) => (
-                      <SelectItem key={m} value={String(i)}>{m}</SelectItem>
+                    {MONTH_INDEX_LIST.map((i) => (
+                      <SelectItem key={i} value={String(i)}>
+                        {monthLabelLocale(i18n.language, i)}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1307,10 +1312,10 @@ const Presencas = () => {
                 {/* Classroom */}
                 <Select value={classroomId} onValueChange={setClassroomId} disabled={isParent || isStudent}>
                   <SelectTrigger className="w-[180px] rounded-full bg-card">
-                    <SelectValue placeholder="Turma" />
+                    <SelectValue placeholder={t("pick_class_placeholder")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {!isParent && !isStudent && <SelectItem value="all">Todas as turmas</SelectItem>}
+                    {!isParent && !isStudent && <SelectItem value="all">{t("all_classes")}</SelectItem>}
                     {classrooms.map((c) => (
                       <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                     ))}
@@ -1323,27 +1328,27 @@ const Presencas = () => {
             {!isParent && showPageKpiCards() && (
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
               <div className="rounded-2xl bg-pastel-blue p-5 shadow-card">
-                <p className="text-xs font-semibold uppercase tracking-wider text-pastel-blue-foreground/80">Total de Alunos</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-pastel-blue-foreground/80">{t("kpi_total_students")}</p>
                 <p className="mt-2 text-3xl font-bold text-pastel-blue-foreground">{students.length}</p>
               </div>
               <div className="rounded-2xl bg-pastel-green p-5 shadow-card">
-                <p className="text-xs font-semibold uppercase tracking-wider text-pastel-green-foreground/80">Presenças</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-pastel-green-foreground/80">{t("kpi_present")}</p>
                 <p className="mt-2 text-3xl font-bold text-pastel-green-foreground">{stats.present}</p>
               </div>
               <div className="rounded-2xl bg-pastel-yellow p-5 shadow-card">
-                <p className="text-xs font-semibold uppercase tracking-wider text-pastel-yellow-foreground/80">Atrasos</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-pastel-yellow-foreground/80">{t("kpi_late")}</p>
                 <p className="mt-2 text-3xl font-bold text-pastel-yellow-foreground">{stats.late}</p>
               </div>
               <div className="rounded-2xl bg-pastel-pink p-5 shadow-card">
-                <p className="text-xs font-semibold uppercase tracking-wider text-pastel-pink-foreground/80">Faltas</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-pastel-pink-foreground/80">{t("kpi_absent")}</p>
                 <p className="mt-2 text-3xl font-bold text-pastel-pink-foreground">{stats.absent}</p>
               </div>
               <div className="rounded-2xl bg-pastel-lilac p-5 shadow-card">
-                <p className="text-xs font-semibold uppercase tracking-wider text-pastel-lilac-foreground/80">Indisciplinares</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-pastel-lilac-foreground/80">{t("kpi_disciplinary")}</p>
                 <p className="mt-2 text-3xl font-bold text-pastel-lilac-foreground">{stats.disciplinary}</p>
               </div>
               <div className="rounded-2xl bg-pastel-lilac p-5 shadow-card">
-                <p className="text-xs font-semibold uppercase tracking-wider text-pastel-lilac-foreground/80">Taxa Presença</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-pastel-lilac-foreground/80">{t("kpi_rate")}</p>
                 <p className="mt-2 text-3xl font-bold text-pastel-lilac-foreground">{stats.rate}%</p>
               </div>
             </div>
@@ -1353,11 +1358,11 @@ const Presencas = () => {
             <div className="overflow-hidden rounded-2xl bg-card shadow-card">
               {studentsLoading ? (
                 <div className="flex h-60 items-center justify-center text-muted-foreground">
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> A carregar…
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> {t("loading")}
                 </div>
               ) : students.length === 0 ? (
                 <div className="flex h-60 items-center justify-center text-muted-foreground">
-                  Sem alunos para mostrar.
+                  {t("no_students")}
                 </div>
               ) : (
                 <div className="table-scroll overflow-x-auto">
@@ -1365,7 +1370,7 @@ const Presencas = () => {
                     <thead>
                       <tr className="bg-pastel-blue/30">
                         <th className="sticky left-0 z-10 min-w-[200px] bg-pastel-blue/30 px-6 py-4 text-left text-sm font-semibold text-foreground">
-                          Nome do Aluno
+                          {t("col_student_name")}
                         </th>
                         {visibleDays.map((d) => {
                           const isWk = d.getDay() === 0 || d.getDay() === 6;
@@ -1377,7 +1382,10 @@ const Presencas = () => {
                                 isWk ? "text-muted-foreground/60" : "text-foreground",
                               )}
                             >
-                              {String(d.getDate()).padStart(2, "0")}
+                              <span className="block text-[10px] font-medium uppercase tracking-wide opacity-90">
+                                {formatWeekdayShort(d)}
+                              </span>
+                              <span className="tabular-nums">{String(d.getDate()).padStart(2, "0")}</span>
                             </th>
                           );
                         })}
@@ -1418,7 +1426,7 @@ const Presencas = () => {
                                       "absolute -top-1 h-2 w-2 rounded-full bg-primary",
                                       queuedOffline ? "left-5" : "-right-1",
                                     )}
-                                    title="Tem justificação"
+                                    title={t("tooltip_has_justification")}
                                   />
                                 )}
                               </div>
@@ -1447,8 +1455,8 @@ const Presencas = () => {
                                     type="button"
                                     onClick={() => openJustify(s, d)}
                                     className="flex w-full justify-center rounded-md py-1 transition-colors hover:bg-accent"
-                                    aria-label={hasNotes ? "Ver justificação" : "Justificar falta"}
-                                    title={hasNotes ? "Ver justificação" : "Justificar falta"}
+                                    aria-label={hasNotes ? t("view_justification") : t("justify")}
+                                    title={hasNotes ? t("view_justification") : t("justify")}
                                   >
                                     {cellInner}
                                   </button>
@@ -1457,7 +1465,7 @@ const Presencas = () => {
                                     type="button"
                                     onClick={() => openJustify(s, d)}
                                     className="flex w-full justify-center rounded-md py-1 transition-colors hover:bg-accent"
-                                    title="Ver justificação"
+                                    title={t("view_justification")}
                                   >
                                     {cellInner}
                                   </button>
@@ -1481,29 +1489,29 @@ const Presencas = () => {
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-pastel-blue text-pastel-blue-foreground">
                   <Check className="h-3 w-3" strokeWidth={3} />
                 </span>
-                Presente
+                {t("legend_present")}
               </div>
               <div className="flex items-center gap-2">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-pastel-yellow text-pastel-yellow-foreground">
                   <Clock className="h-3 w-3" strokeWidth={3} />
                 </span>
-                Atrasado
+                {t("legend_late")}
               </div>
               <div className="flex items-center gap-2">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-white">
                   <X className="h-3 w-3" strokeWidth={3} />
                 </span>
-                Falta
+                {t("legend_absent")}
               </div>
               <div className="flex items-center gap-2">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-pastel-lilac text-pastel-lilac-foreground">
                   <AlertTriangle className="h-3 w-3" strokeWidth={3} />
                 </span>
-                Falta disciplinar
+                {t("legend_disciplinary")}
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-base">—</span>
-                Sem registo / Fim de semana
+                {t("legend_no_weekend")}
               </div>
             </div>
           </div>
@@ -1513,7 +1521,7 @@ const Presencas = () => {
         <Dialog open={!!justifyTarget} onOpenChange={(o) => { if (!o) { setJustifyTarget(null); setJustifyText(""); } }}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Justificação de falta</DialogTitle>
+              <DialogTitle>{t("dialog_justify_title")}</DialogTitle>
               <DialogDescription>
                 {justifyTarget && (
                   <>
@@ -1528,18 +1536,18 @@ const Presencas = () => {
             <Textarea
               value={justifyText}
               onChange={(e) => setJustifyText(e.target.value)}
-              placeholder="Descreva o motivo da falta..."
+              placeholder={t("dialog_justify_placeholder")}
               rows={5}
               readOnly={justifyReadOnly}
             />
             <DialogFooter>
               <Button variant="outline" onClick={() => { setJustifyTarget(null); setJustifyText(""); }}>
-                Fechar
+                {t("dialog_close")}
               </Button>
               {!justifyReadOnly && (
                 <Button onClick={submitJustification} disabled={justifySaving}>
                   {justifySaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Guardar
+                  {t("dialog_save")}
                 </Button>
               )}
             </DialogFooter>
