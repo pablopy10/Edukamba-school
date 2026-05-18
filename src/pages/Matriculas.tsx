@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 import { Search, Plus, Pencil, Trash2, Loader2, CheckCircle2, FileSignature } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ import { EnrollmentChargeRulesPanel } from "@/components/finance/EnrollmentCharg
 import { ModuleAuthorizationsPanel } from "@/components/authorizations/ModuleAuthorizationsPanel";
 import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
+import { intlLocaleTagFromLng } from "@/lib/intlLocale";
 
 type Opt = { id: string; name: string };
 type YearOpt = { id: string; label: string; is_active: boolean | null };
@@ -40,13 +42,13 @@ const statusStyles: Record<string, string> = {
   CANCELLED: "bg-pastel-pink text-pastel-pink-foreground",
 };
 
-const statusLabel = (s: string | null) =>
-  s === "ACTIVE" ? "Confirmada" : s === "PENDING" ? "Pendente" : s === "CANCELLED" ? "Cancelada" : (s ?? "—");
-
 const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 
 const Matriculas = () => {
+  const { t, i18n } = useTranslation("pages");
+  const { t: tCommon } = useTranslation("common");
+  const localeTag = intlLocaleTagFromLng(i18n.language);
   const native = isNativeMobileApp();
   const [searchParams] = useSearchParams();
   const { selectedYearId, schoolId: aySchoolId } = useAcademicYear();
@@ -80,6 +82,12 @@ const Matriculas = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<EnrollmentRow | null>(null);
   const [deleting, setDeleting] = useState<EnrollmentRow | null>(null);
+
+  const statusLabel = (status: string | null) => {
+    const key = status ?? "";
+    if (key === "ACTIVE" || key === "PENDING" || key === "CANCELLED") return t(`matriculas.status.${key}`);
+    return status ?? "—";
+  };
 
   useEffect(() => {
     if (!user?.id) return;
@@ -154,7 +162,11 @@ const Matriculas = () => {
       supabase.from("academic_years").select("id, label, is_active").order("start_date", { ascending: true }),
     ]);
     if (eErr) {
-      toast({ title: "Erro a carregar matrículas", description: eErr.message, variant: "destructive" });
+      toast({
+        title: t("matriculas.toast_load_error"),
+        description: eErr.message,
+        variant: "destructive",
+      });
     }
     setEnrollments((eData ?? []) as unknown as EnrollmentRow[]);
     setStudents(((sData ?? []) as { id: string; full_name: string }[]).map((s) => ({ id: s.id, name: s.full_name })));
@@ -203,9 +215,9 @@ const Matriculas = () => {
     if (!deleting) return;
     const { error } = await supabase.from("enrollments").delete().eq("id", deleting.id);
     if (error) {
-      toast({ title: "Erro a eliminar", description: error.message, variant: "destructive" });
+      toast({ title: t("matriculas.toast_delete_error"), description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Matrícula removida" });
+      toast({ title: t("matriculas.toast_removed_title") });
       setDeleting(null);
       load();
     }
@@ -243,7 +255,7 @@ const Matriculas = () => {
             checked={isSelected}
             onChange={() => toggle(e.id)}
             className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-border accent-pastel-blue-foreground"
-            aria-label={`Seleccionar matrícula ${name}`}
+            aria-label={t("matriculas.aria_select_row", { name })}
           />
           <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold", avatarStyles[color] ?? avatarStyles.blue)}>
             {initials}
@@ -258,10 +270,15 @@ const Matriculas = () => {
             )}
             <p className="mt-0.5 text-sm text-muted-foreground">{e.students?.email ?? ""}</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">Turma: {e.classrooms?.name ?? "—"}</span>
-              <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">Ano: {e.academic_years?.label ?? "—"}</span>
               <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
-                Data: {e.enrolled_at ? new Date(e.enrolled_at).toLocaleDateString("pt-PT") : "—"}
+                {t("matriculas.tag_classroom")} {e.classrooms?.name ?? "—"}
+              </span>
+              <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
+                {t("matriculas.tag_year_label")} {e.academic_years?.label ?? "—"}
+              </span>
+              <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
+                {t("matriculas.tag_enrolled_date")}{" "}
+                {e.enrolled_at ? new Date(e.enrolled_at).toLocaleDateString(localeTag) : "—"}
               </span>
               <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold", statusStyles[st] ?? "bg-muted text-foreground")}>
                 <CheckCircle2 className="h-3 w-3" strokeWidth={2} />
@@ -277,7 +294,7 @@ const Matriculas = () => {
                   setEditing(e);
                   setFormOpen(true);
                 }}
-                title="Editar"
+                title={t("shared.edit")}
                 className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
               >
                 <Pencil className="h-4 w-4" strokeWidth={1.75} />
@@ -285,7 +302,7 @@ const Matriculas = () => {
               <button
                 type="button"
                 onClick={() => setDeleting(e)}
-                title="Eliminar"
+                title={t("shared.delete")}
                 className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
               >
                 <Trash2 className="h-4 w-4" strokeWidth={1.75} />
@@ -307,14 +324,11 @@ const Matriculas = () => {
       >
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Matrículas</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Lista de matrículas e renovações, regras da taxa de matrícula por alvo, cobranças e autorizações dos
-              encarregados.
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{tCommon("nav.enrollments")}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{t("matriculas.page_subtitle")}</p>
             {enrollmentReadOnly ? (
               <p className="mt-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                Como educador de turma, apenas vê matrículas dos alunos das turmas onde está como diretor de turma.
+                {t("matriculas.banner_homeroom_teacher")}
               </p>
             ) : null}
           </div>
@@ -322,14 +336,14 @@ const Matriculas = () => {
 
         <Tabs value={matriculasTab} onValueChange={(v) => setMatriculasTab(v as typeof matriculasTab)} className="w-full">
           <TabsList className="flex h-auto w-full flex-wrap gap-1">
-            <TabsTrigger value="lista">Lista</TabsTrigger>
+            <TabsTrigger value="lista">{t("matriculas.tab_list")}</TabsTrigger>
             {!isParent && (
-              <TabsTrigger value="regras">Regras de cobrança</TabsTrigger>
+              <TabsTrigger value="regras">{t("matriculas.tab_charge_rules")}</TabsTrigger>
             )}
-            <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
+            <TabsTrigger value="pagamentos">{t("matriculas.tab_payments")}</TabsTrigger>
             <TabsTrigger value="autorizacoes">
               <FileSignature className="mr-2 h-4 w-4" />
-              Autorizações
+              {t("matriculas.tab_authorisations")}
             </TabsTrigger>
           </TabsList>
 
@@ -343,7 +357,7 @@ const Matriculas = () => {
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       type="text"
-                      placeholder="Pesquisar matrícula..."
+                      placeholder={t("matriculas.search_placeholder")}
                       className={cn(
                         "h-11 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20",
                         native ? "w-full min-w-0" : "w-72",
@@ -359,7 +373,7 @@ const Matriculas = () => {
                       className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
                     >
                       <Plus className="h-4 w-4" strokeWidth={2.25} />
-                      {isParent ? "Renovar Matrícula" : "Nova Matrícula"}
+                      {isParent ? t("matriculas.btn_renew_guardian") : t("matriculas.btn_new")}
                     </button>
                   )}
                 </div>
@@ -369,13 +383,13 @@ const Matriculas = () => {
               {showStaffEnrollmentFilters && (
                 <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card">
                   <div className={cn("min-w-[180px] flex-1", native && "min-w-0 w-full")}>
-                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Turma</label>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">{t("matriculas.filter_class")}</label>
                     <Select value={filterClassroom} onValueChange={setFilterClassroom}>
                       <SelectTrigger className="h-10">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Todas as turmas</SelectItem>
+                        <SelectItem value="all">{t("matriculas.all_option")}</SelectItem>
                         {classrooms.map((c) => (
                           <SelectItem key={c.id} value={c.id}>
                             {c.name}
@@ -385,27 +399,27 @@ const Matriculas = () => {
                     </Select>
                   </div>
                   <div className="min-w-[160px]">
-                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Estado</label>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">{t("matriculas.filter_status")}</label>
                     <Select value={filterStatus} onValueChange={setFilterStatus}>
                       <SelectTrigger className="h-10">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Todos</SelectItem>
-                        <SelectItem value="ACTIVE">Confirmada</SelectItem>
-                        <SelectItem value="PENDING">Pendente</SelectItem>
-                        <SelectItem value="CANCELLED">Cancelada</SelectItem>
+                        <SelectItem value="all">{t("matriculas.all_option")}</SelectItem>
+                        <SelectItem value="ACTIVE">{t("matriculas.status.ACTIVE")}</SelectItem>
+                        <SelectItem value="PENDING">{t("matriculas.status.PENDING")}</SelectItem>
+                        <SelectItem value="CANCELLED">{t("matriculas.status.CANCELLED")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="min-w-[180px]">
-                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Ano lectivo</label>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">{t("matriculas.filter_academic_year")}</label>
                     <Select value={filterYear} onValueChange={setFilterYear}>
                       <SelectTrigger className="h-10">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Todos</SelectItem>
+                        <SelectItem value="all">{t("matriculas.all_option")}</SelectItem>
                         {years.map((y) => (
                           <SelectItem key={y.id} value={y.id}>
                             {y.label}
@@ -424,7 +438,7 @@ const Matriculas = () => {
                       }}
                       className="h-10 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground hover:bg-muted"
                     >
-                      Limpar filtros
+                      {t("matriculas.clear_filters")}
                     </button>
                   )}
                 </div>
@@ -434,22 +448,22 @@ const Matriculas = () => {
                 <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                   {[
                     {
-                      label: "Total de Matrículas",
+                      label: t("matriculas.kpi_total"),
                       value: String(stats.total),
                       color: "bg-pastel-blue text-pastel-blue-foreground",
                     },
                     {
-                      label: "Confirmadas",
+                      label: t("matriculas.kpi_confirmed"),
                       value: String(stats.confirmed),
                       color: "bg-pastel-green text-pastel-green-foreground",
                     },
                     {
-                      label: "Pendentes",
+                      label: t("matriculas.kpi_pending"),
                       value: String(stats.pending),
                       color: "bg-pastel-yellow text-pastel-yellow-foreground",
                     },
                     {
-                      label: "Canceladas",
+                      label: t("matriculas.kpi_cancelled"),
                       value: String(stats.cancelled),
                       color: "bg-pastel-pink text-pastel-pink-foreground",
                     },
@@ -466,10 +480,12 @@ const Matriculas = () => {
 
               <div className="rounded-2xl bg-card shadow-card">
                 <div className="flex items-center justify-between border-b border-border p-5">
-                  <h2 className="text-lg font-bold text-foreground">{isParent ? "Histórico de Matrículas" : "Lista de Matrículas"}</h2>
+                  <h2 className="text-lg font-bold text-foreground">
+                    {isParent ? t("matriculas.list_parent_history") : t("matriculas.list_staff")}
+                  </h2>
                   {selected.length > 0 && (
                     <div className="flex items-center gap-2 text-sm">
-                      <span className="text-muted-foreground">{selected.length} selecionadas</span>
+                      <span className="text-muted-foreground">{t("matriculas.selected_count", { count: selected.length })}</span>
                     </div>
                   )}
                 </div>
@@ -484,7 +500,7 @@ const Matriculas = () => {
                           onChange={toggleAll}
                           className="h-4 w-4 cursor-pointer rounded border-border accent-pastel-blue-foreground"
                         />
-                        Seleccionar todos ({filtered.length})
+                        {t("matriculas.select_all", { count: filtered.length })}
                       </label>
                     )}
                     {loading && (
@@ -493,7 +509,7 @@ const Matriculas = () => {
                       </div>
                     )}
                     {!loading && filtered.length === 0 && (
-                      <p className="py-10 text-center text-sm text-muted-foreground">Nenhuma matrícula encontrada.</p>
+                      <p className="py-10 text-center text-sm text-muted-foreground">{t("matriculas.empty_list")}</p>
                     )}
                     {!loading && filtered.map(renderEnrollmentCard)}
                   </div>
@@ -510,13 +526,13 @@ const Matriculas = () => {
                               className="h-4 w-4 cursor-pointer rounded border-border accent-pastel-blue-foreground"
                             />
                           </th>
-                          <th className="py-4 pr-4 font-semibold">Aluno</th>
-                          <th className="py-4 pr-4 font-semibold">Turma</th>
-                          <th className="py-4 pr-4 font-semibold">Ano Lectivo</th>
-                          <th className="py-4 pr-4 font-semibold">Data</th>
-                          <th className="py-4 pr-4 font-semibold">Estado</th>
+                          <th className="py-4 pr-4 font-semibold">{tCommon("nav.students")}</th>
+                          <th className="py-4 pr-4 font-semibold">{t("matriculas.col_class")}</th>
+                          <th className="py-4 pr-4 font-semibold">{t("matriculas.col_year")}</th>
+                          <th className="py-4 pr-4 font-semibold">{t("matriculas.col_date")}</th>
+                          <th className="py-4 pr-4 font-semibold">{t("matriculas.col_status")}</th>
                           {showEnrollmentRowActions && (
-                            <th className="py-4 pr-5 text-right font-semibold">Acções</th>
+                            <th className="py-4 pr-5 text-right font-semibold">{t("shared.actions")}</th>
                           )}
                         </tr>
                       </thead>
@@ -531,7 +547,7 @@ const Matriculas = () => {
                         {!loading && filtered.length === 0 && (
                           <tr>
                             <td colSpan={enrollmentTableColSpan} className="py-10 text-center text-muted-foreground">
-                              Nenhuma matrícula encontrada.
+                              {t("matriculas.empty_list")}
                             </td>
                           </tr>
                         )}
@@ -590,7 +606,7 @@ const Matriculas = () => {
                                 </td>
                                 <td className="py-4 pr-4 text-foreground">{e.academic_years?.label ?? "—"}</td>
                                 <td className="py-4 pr-4 text-muted-foreground">
-                                  {e.enrolled_at ? new Date(e.enrolled_at).toLocaleDateString("pt-PT") : "—"}
+                                  {e.enrolled_at ? new Date(e.enrolled_at).toLocaleDateString(localeTag) : "—"}
                                 </td>
                                 <td className="py-4 pr-4">
                                   <span
@@ -611,14 +627,14 @@ const Matriculas = () => {
                                           setEditing(e);
                                           setFormOpen(true);
                                         }}
-                                        title="Editar"
+                                        title={t("shared.edit")}
                                         className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
                                       >
                                         <Pencil className="h-4 w-4" strokeWidth={1.75} />
                                       </button>
                                       <button
                                         onClick={() => setDeleting(e)}
-                                        title="Eliminar"
+                                        title={t("shared.delete")}
                                         className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
                                       >
                                         <Trash2 className="h-4 w-4" strokeWidth={1.75} />
@@ -636,7 +652,7 @@ const Matriculas = () => {
 
                 <div className="flex flex-col items-center justify-between gap-3 border-t border-border p-5 sm:flex-row">
                   <p className="text-xs text-muted-foreground">
-                    A mostrar {filtered.length} de {enrollments.length} matrículas
+                    {t("matriculas.pagination_showing", { shown: filtered.length, total: enrollments.length })}
                   </p>
                 </div>
               </div>
@@ -672,7 +688,7 @@ const Matriculas = () => {
               type="button"
               size="icon"
               className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-              aria-label={isParent ? "Renovar matrícula" : "Nova matrícula"}
+              aria-label={isParent ? t("matriculas.fab_renew") : t("matriculas.fab_new")}
               onClick={() => {
                 setEditing(null);
                 setFormOpen(true);
@@ -697,16 +713,17 @@ const Matriculas = () => {
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover matrícula?</AlertDialogTitle>
+            <AlertDialogTitle>{t("matriculas.delete_dialog_title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem a certeza que quer remover a matrícula de <strong>{deleting?.students?.full_name}</strong>?
-              Esta acção não pode ser desfeita.
+              {t("matriculas.delete_intro")}{" "}
+              <strong>{deleting?.students?.full_name}</strong>
+              {t("matriculas.delete_suffix")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel>{t("shared.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Remover
+              {t("matriculas.delete_confirm_action")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

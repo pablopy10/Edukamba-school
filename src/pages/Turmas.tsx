@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, Navigate } from "react-router-dom";
 import { useIsRestoring, useQuery } from "@tanstack/react-query";
 import { Search, Plus, Users, Presentation, Pencil, Trash2, Loader2, Upload, UserCog } from "lucide-react";
@@ -12,7 +13,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ClassroomFormDialog, ClassroomRow } from "@/components/turmas/ClassroomFormDialog";
 import { useAcademicYear } from "@/context/AcademicYearContext";
-import { ExcelImportDialog } from "@/components/shared/ExcelImportDialog";
+import { ExcelImportDialog, type ImportField } from "@/components/shared/ExcelImportDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
@@ -26,6 +27,7 @@ import {
 } from "@/lib/offline/teacherListQueries";
 import { queryClient } from "@/lib/queryClient";
 import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
+import { GRADE_LEVELS, type GradeLevel } from "@/lib/grade-levels";
 
 type ClassroomWithJoins = ClassroomRow & {
   courses?: { id: string; name: string } | null;
@@ -48,8 +50,32 @@ const periodStyles: Record<string, string> = {
   "Noite": "bg-pastel-lilac text-pastel-lilac-foreground",
 };
 
+const PERIOD_DB_VALUES = ["Manhã", "Tarde", "Noite"] as const;
+
+function resolveImportedGradeLevel(raw: string | undefined, translateGrade: (g: GradeLevel) => string): string {
+  if (!raw?.trim()) return "";
+  const n = raw.trim();
+  const lower = n.toLowerCase();
+  for (const g of GRADE_LEVELS) {
+    if (g.toLowerCase() === lower || translateGrade(g).toLowerCase() === lower) return g;
+  }
+  return n;
+}
+
+function resolveImportedPeriod(raw: string | undefined, tPeriod: (key: string) => string): string | null {
+  if (!raw?.trim()) return null;
+  const p = raw.trim().toLowerCase();
+  for (const db of PERIOD_DB_VALUES) {
+    if (db.toLowerCase() === p || tPeriod(`turmas.period.${db}`).toLowerCase() === p) return db;
+  }
+  const first = raw.trim().charAt(0).toLowerCase();
+  return first === "m" ? "Manhã" : first === "t" ? "Tarde" : first === "n" ? "Noite" : null;
+}
+
 const Turmas = () => {
   const persistRestoring = useIsRestoring();
+  const { t } = useTranslation("pages");
+  const { t: tCommon } = useTranslation("common");
   const native = isNativeMobileApp();
   const { selectedYearId } = useAcademicYear();
   const { user } = useAuth();
@@ -57,6 +83,8 @@ const Turmas = () => {
   const isTeacher = role === "TEACHER";
   const isParent = role === "PARENT";
   const { classroomIds: teacherClassroomIds, loading: teacherClassesLoading } = useTeacherClassrooms();
+
+  const translateGradeLevel = useCallback((g: GradeLevel) => t(`turmas.grade_levels.${g}`), [t]);
 
   const teacherTurmasQuery = useQuery({
     queryKey: teacherTurmasQueryKey(
@@ -103,6 +131,43 @@ const Turmas = () => {
   const listClassrooms = isTeacher ? (teacherTurmasQuery.data?.classrooms ?? []) : classrooms;
   const listCourses = isTeacher ? (teacherTurmasQuery.data?.courses ?? []) : courses;
   const listYears = isTeacher ? (teacherTurmasQuery.data?.years ?? []) : years;
+
+  const excelImportFields = useMemo((): ImportField[] => [
+    {
+      key: "name",
+      label: t("turmas.import.fields.name"),
+      required: true,
+      aliases: ["turma", "classe", "name"],
+      example: t("turmas.import.examples.name"),
+    },
+    {
+      key: "grade_level",
+      label: t("turmas.import.fields.grade_level"),
+      required: true,
+      aliases: ["ano", "ano de escolaridade", "grade", "nivel", "escolaridade"],
+      example: t("turmas.import.examples.grade_level"),
+    },
+    {
+      key: "period",
+      label: t("turmas.import.fields.period"),
+      required: true,
+      aliases: ["periodo", "turno"],
+      example: t("turmas.import.examples.period"),
+    },
+    {
+      key: "course",
+      label: t("turmas.import.fields.course"),
+      required: true,
+      aliases: ["curso", "course"],
+      example: t("turmas.import.examples.course"),
+    },
+    {
+      key: "academic_year",
+      label: t("turmas.import.fields.academic_year"),
+      aliases: ["ano letivo", "ano lectivo", "academic year", "ano_letivo"],
+      example: t("turmas.import.examples.academic_year"),
+    },
+  ], [t]);
 
   const adminTurmasFetching = !isTeacher && loading;
 
@@ -157,11 +222,11 @@ const Turmas = () => {
       setYears(ys ?? []);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      toast({ title: "Erro a carregar turmas", description: msg, variant: "destructive" });
+      toast({ title: t("turmas.toast_load_error"), description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
     }
-  }, [isTeacher, selectedYearId]);
+  }, [isTeacher, selectedYearId, t]);
 
   useEffect(() => {
     if (roleLoading || isTeacher) return;
@@ -195,9 +260,9 @@ const Turmas = () => {
     if (!deleteId) return;
     const { error } = await supabase.from("classrooms").delete().eq("id", deleteId);
     if (error) {
-      toast({ title: "Erro a eliminar", description: error.message, variant: "destructive" });
+      toast({ title: t("turmas.toast_delete_error"), description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Turma eliminada" });
+      toast({ title: t("turmas.toast_deleted") });
       await refreshAfterMutation();
     }
     setDeleteId(null);
@@ -215,6 +280,27 @@ const Turmas = () => {
     [listClassrooms],
   );
 
+  const kpiDefs = useMemo(
+    () => [
+      { label: t("turmas.kpi_total"), value: stats.total, color: "bg-pastel-blue text-pastel-blue-foreground" },
+      { label: t("turmas.kpi_morning"), value: stats.manha, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+      { label: t("turmas.kpi_afternoon"), value: stats.tarde, color: "bg-pastel-green text-pastel-green-foreground" },
+      { label: t("turmas.kpi_evening"), value: stats.noite, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
+    ],
+    [t, stats],
+  );
+
+  const periodLabel = useCallback((db: string | null | undefined) => {
+    if (!db) return "";
+    return t(`turmas.period.${db}`, { defaultValue: db });
+  }, [t]);
+
+  const gradeLabel = useCallback((db: string | null | undefined) => {
+    if (!db) return "";
+    const key = `turmas.grade_levels.${db}` as const;
+    return t(key, { defaultValue: db });
+  }, [t]);
+
   if (roleLoading || teacherAwaitingHydration) {
     return <PageLoadingSkeleton />;
   }
@@ -228,11 +314,11 @@ const Turmas = () => {
       <div className={cn("flex flex-col gap-6", native && !isTeacher && "relative pb-28")}>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Turmas</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{tCommon("nav.classes")}</h1>
             <p className="text-sm text-muted-foreground">
               {isTeacher
-                ? "Turmas em que tem aulas no horário do ano letivo seleccionado."
-                : "Faça a gestão de todas as turmas da escola."}
+                ? t("turmas.header_subtitle_teacher")
+                : t("turmas.header_subtitle_admin")}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -242,7 +328,7 @@ const Turmas = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 type="text"
-                placeholder="Pesquisar turma..."
+                placeholder={t("turmas.search_placeholder")}
                 className="h-11 w-72 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             </div>
@@ -255,14 +341,14 @@ const Turmas = () => {
                   className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
                 >
                   <Plus className="h-4 w-4" strokeWidth={2.25} />
-                  Nova Turma
+                  {t("turmas.new_class")}
                 </button>
                 <button
                   onClick={() => setImportOpen(true)}
                   className="flex h-11 items-center gap-2 rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
                 >
                   <Upload className="h-4 w-4" strokeWidth={2.25} />
-                  Importar Excel
+                  {t("turmas.import_excel")}
                 </button>
                 </>
                 )}
@@ -273,25 +359,25 @@ const Turmas = () => {
 
         <div className="rounded-2xl bg-card p-5 shadow-card">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm font-semibold text-foreground">Filtros</p>
+            <p className="text-sm font-semibold text-foreground">{t("turmas.filters_title")}</p>
             <div className="flex flex-wrap items-center gap-3">
               <Select value={periodFilter} onValueChange={setPeriodFilter}>
                 <SelectTrigger className="h-11 w-44 rounded-full border-border bg-background shadow-soft">
-                  <SelectValue placeholder="Período" />
+                  <SelectValue placeholder={t("turmas.period_placeholder")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos os períodos</SelectItem>
-                  <SelectItem value="Manhã">Manhã</SelectItem>
-                  <SelectItem value="Tarde">Tarde</SelectItem>
-                  <SelectItem value="Noite">Noite</SelectItem>
+                  <SelectItem value="all">{t("turmas.all_periods")}</SelectItem>
+                  {PERIOD_DB_VALUES.map((p) => (
+                    <SelectItem key={p} value={p}>{t(`turmas.period.${p}`)}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Select value={courseFilter} onValueChange={setCourseFilter}>
                 <SelectTrigger className="h-11 w-52 rounded-full border-border bg-background shadow-soft">
-                  <SelectValue placeholder="Curso" />
+                  <SelectValue placeholder={t("turmas.course_placeholder")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos os cursos</SelectItem>
+                  <SelectItem value="all">{t("turmas.all_courses")}</SelectItem>
                   {listCourses.map((c) => (
                     <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                   ))}
@@ -303,12 +389,7 @@ const Turmas = () => {
 
         {showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {[
-            { label: "Total de Turmas", value: stats.total, color: "bg-pastel-blue text-pastel-blue-foreground" },
-            { label: "Manhã", value: stats.manha, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-            { label: "Tarde", value: stats.tarde, color: "bg-pastel-green text-pastel-green-foreground" },
-            { label: "Noite", value: stats.noite, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
-          ].map((stat) => (
+          {kpiDefs.map((stat) => (
             <div key={stat.label} className="rounded-2xl bg-card p-5 shadow-card">
               <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", stat.color)}>
                 {stat.label}
@@ -321,14 +402,14 @@ const Turmas = () => {
 
         {adminTurmasFetching ? (
           <div className="flex items-center justify-center py-20 text-muted-foreground">
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> A carregar...
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> {t("turmas.loading")}
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-2xl bg-card p-10 text-center shadow-card">
             <p className="text-sm text-muted-foreground">
               {isTeacher
-                ? "Sem turmas com horário atribuído neste ano letivo, ou nenhum resultado com os filtros."
-                : "Nenhuma turma encontrada."}
+                ? t("turmas.empty_teacher_hint")
+                : t("turmas.empty")}
             </p>
           </div>
         ) : (
@@ -346,7 +427,7 @@ const Turmas = () => {
                   {!isTeacher && (
                     <div className="absolute right-3 top-3 z-20 flex items-center gap-1">
                       <button
-                        title="Editar"
+                        title={t("shared.edit")}
                         type="button"
                         onClick={(ev) => {
                           ev.preventDefault();
@@ -359,7 +440,7 @@ const Turmas = () => {
                         <Pencil className="h-4 w-4" strokeWidth={1.75} />
                       </button>
                       <button
-                        title="Eliminar"
+                        title={t("shared.delete")}
                         type="button"
                         onClick={(ev) => {
                           ev.preventDefault();
@@ -378,7 +459,7 @@ const Turmas = () => {
                    */}
                   <Link
                     to={`/turmas/${c.id}`}
-                    aria-label={`Abrir turma ${c.name}`}
+                    aria-label={t("turmas.open_class_aria", { name: c.name })}
                     className={cn(
                       "touch-manipulation absolute inset-0 z-10 rounded-2xl ring-offset-background [-webkit-tap-highlight-color:transparent] transition-opacity active:opacity-90 motion-safe:transition-transform motion-safe:active:scale-[0.985] [&:focus-visible]:z-[15] [&:focus-visible]:outline-none [&:focus-visible]:ring-2 [&:focus-visible]:ring-primary [&:focus-visible]:ring-offset-2",
                     )}
@@ -398,7 +479,7 @@ const Turmas = () => {
                         {c.courses?.name && <p className="mt-1 text-xs text-muted-foreground">{c.courses.name}</p>}
                         <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
                           <UserCog className="h-3.5 w-3.5 shrink-0 text-pastel-green-foreground/90" strokeWidth={1.75} aria-hidden />
-                          <span className="font-medium text-foreground">Diretor de turma:</span>
+                          <span className="font-medium text-foreground">{t("turmas.homeroom_label")}</span>
                           <span className="text-foreground/90">{c.homeroom_teacher?.full_name ?? "—"}</span>
                         </p>
                       </div>
@@ -407,11 +488,11 @@ const Turmas = () => {
                     <div className="flex flex-wrap items-center gap-2">
                       {c.period && (
                         <span className={cn("rounded-full px-3 py-1 text-xs font-medium", periodStyles[c.period] ?? "bg-muted text-foreground")}>
-                          {c.period}
+                          {periodLabel(c.period)}
                         </span>
                       )}
                       {c.grade_level && (
-                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{c.grade_level}</span>
+                        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{gradeLabel(c.grade_level)}</span>
                       )}
                       {c.academic_years?.label && (
                         <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">{c.academic_years.label}</span>
@@ -421,7 +502,7 @@ const Turmas = () => {
                     <div className="mt-auto flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
                         <Users className="h-3.5 w-3.5" strokeWidth={1.75} />
-                        {c.studentCount} alunos
+                        {t("turmas.footer_students", { count: c.studentCount })}
                       </span>
                     </div>
                   </div>
@@ -438,7 +519,7 @@ const Turmas = () => {
             type="button"
             size="icon"
             className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-            aria-label="Nova turma"
+            aria-label={t("turmas.fab_new_aria")}
             onClick={() => { setEditing(null); setFormOpen(true); }}
           >
             <Plus className="h-6 w-6" />
@@ -458,14 +539,14 @@ const Turmas = () => {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar turma?</AlertDialogTitle>
+            <AlertDialogTitle>{t("turmas.delete_title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acção não pode ser desfeita. Os alunos associados perderão a referência a esta turma.
+              {t("turmas.delete_description")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>Eliminar</AlertDialogAction>
+            <AlertDialogCancel>{t("shared.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>{t("turmas.delete_confirm")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -474,46 +555,41 @@ const Turmas = () => {
       <ExcelImportDialog
         open={importOpen}
         onOpenChange={setImportOpen}
-        title="Importar Turmas"
-        description="Importe várias turmas a partir de um ficheiro Excel ou CSV."
-        templateSheetName="Turmas"
-        fields={[
-          { key: "name", label: "Nome da turma", required: true, aliases: ["turma", "classe", "name"], example: "5ª A" },
-          { key: "grade_level", label: "Ano de escolaridade", required: true, aliases: ["ano", "ano de escolaridade", "grade", "nivel", "escolaridade"], example: "Ensino Básico" },
-          { key: "period", label: "Período", required: true, aliases: ["periodo", "turno"], example: "Manhã" },
-          { key: "course", label: "Curso", required: true, aliases: ["curso", "course"], example: "Informática" },
-          { key: "academic_year", label: "Ano letivo", aliases: ["ano letivo", "ano lectivo", "academic year", "ano_letivo"], example: "2025/2026" },
-        ]}
+        title={t("turmas.import.title")}
+        description={t("turmas.import.description")}
+        templateSheetName={t("turmas.import.sheet_name")}
+        fields={excelImportFields}
         onImportRow={async (row) => {
-          if (!row.name) throw new Error("Nome da turma em falta");
+          if (!row.name) throw new Error(t("turmas.import.missing_name"));
           const { data: profile } = await supabase
             .from("profiles").select("school_id, support_context_school_id")
             .eq("id", (await supabase.auth.getUser()).data.user?.id ?? "")
             .maybeSingle();
           const schoolId = effectiveSchoolIdFromProfile(profile);
-          if (!schoolId) throw new Error("Escola não encontrada");
+          if (!schoolId) throw new Error(t("turmas.import.school_not_found"));
           let academicYearId: string | undefined;
           if (row.academic_year) {
             const match = listYears.find((y) => y.label.toLowerCase() === row.academic_year.toLowerCase());
-            if (!match) throw new Error(`Ano letivo "${row.academic_year}" não encontrado`);
+            if (!match) throw new Error(t("turmas.import.year_not_found", { year: row.academic_year }));
             academicYearId = match.id;
           } else {
             academicYearId = selectedYearId || listYears.find((y) => y.is_active)?.id || listYears[0]?.id;
           }
-          if (!academicYearId) throw new Error("Sem ano lectivo activo");
+          if (!academicYearId) throw new Error(t("turmas.import.no_active_year"));
           let course_id: string | null = null;
           if (row.course) {
             const match = listCourses.find((c) => c.name.toLowerCase() === row.course.toLowerCase());
             course_id = match?.id ?? null;
           }
-          let period: string | null = null;
-          if (row.period) {
-            const p = row.period.toLowerCase();
-            period = p.startsWith("m") ? "Manhã" : p.startsWith("t") ? "Tarde" : p.startsWith("n") ? "Noite" : null;
-          }
+          const resolvedGrade = row.grade_level
+            ? resolveImportedGradeLevel(row.grade_level, translateGradeLevel)
+            : "";
+          const period =
+            resolveImportedPeriod(row.period, (_k: string) => t(_k));
+
           const { error } = await supabase.from("classrooms").insert({
             name: row.name,
-            grade_level: row.grade_level || null,
+            grade_level: resolvedGrade || null,
             period,
             course_id,
             academic_year_id: academicYearId,

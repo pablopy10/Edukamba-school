@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ interface Props {
 const COLORS = ["blue", "pink", "green", "yellow", "lilac"];
 
 export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSaved }: Props) => {
+  const { t } = useTranslation("pages");
   const isEdit = !!teacher;
   const [loading, setLoading] = useState(false);
   const [fullName, setFullName] = useState("");
@@ -81,13 +83,17 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
 
   const handleSubmit = async () => {
     if (!fullName.trim()) {
-      toast({ title: "Nome obrigatório", variant: "destructive" });
+      toast({ title: t("professores.form.toast_name_required"), variant: "destructive" });
       return;
     }
     if (isEdit && teacher?.profile_id) {
       const em = email.trim().toLowerCase();
       if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
-        toast({ title: "Email inválido", description: "Indique um email válido — é também o utilizador de login.", variant: "destructive" });
+        toast({
+          title: t("professores.form.toast_email_invalid_login"),
+          description: t("professores.form.toast_email_invalid_login_desc"),
+          variant: "destructive",
+        });
         return;
       }
     }
@@ -100,7 +106,7 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
         if (teacher.profile_id && nextMail.length > 0 && nextMail !== prevMail) {
           const fx = await invokeAdminUpdateUserEmail(teacher.profile_id, nextMail);
           if (!fx.ok) {
-            toast({ title: "Erro ao actualizar email de login", description: fx.message, variant: "destructive" });
+            toast({ title: t("professores.form.toast_login_email_failed"), description: fx.message, variant: "destructive" });
             setLoading(false);
             return;
           }
@@ -152,14 +158,18 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
         if (error) throw error;
         if ((data as any)?.error) throw new Error((data as any).error);
         toast({
-          title: "Professor criado",
-          description: `Credenciais enviadas por email para ${email.trim()}.`,
+          title: t("professores.form.toast_created_title"),
+          description: t("professores.form.toast_created_desc", { email: email.trim() }),
         });
       }
       onSaved();
       onOpenChange(false);
     } catch (e: any) {
-      toast({ title: "Erro", description: e?.message ?? String(e), variant: "destructive" });
+      toast({
+        title: t("professores.form.toast_generic_error_title"),
+        description: e?.message ?? String(e),
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -169,51 +179,62 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar Professor" : "Novo Professor"}</DialogTitle>
+          <DialogTitle>{isEdit ? t("professores.form.title_edit") : t("professores.form.title_create")}</DialogTitle>
           <DialogDescription>
-            {isEdit ? "Actualize os dados do professor." : "Preencha os dados e escolha como criar a conta."}
+            {isEdit ? t("professores.form.desc_edit") : t("professores.form.desc_create")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <Label htmlFor="fn">Nome completo</Label>
-            <Input id="fn" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Ex.: Carla Mendes" />
+            <Label htmlFor="fn">{t("professores.form.full_name")}</Label>
+            <Input
+              id="fn"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder={t("professores.form.placeholder_full_name")}
+            />
           </div>
           {!isEdit && (
             <div className="sm:col-span-2">
-              <Label htmlFor="em">Email</Label>
-              <Input id="em" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="professor@escola.edu" />
+              <Label htmlFor="em">{t("professores.form.email")}</Label>
+              <Input
+                id="em"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder={t("professores.form.placeholder_email_login")}
+              />
             </div>
           )}
           {isEdit && !!teacher?.profile_id && (
             <div className="sm:col-span-2">
-              <Label htmlFor="pem">Email (início de sessão)</Label>
+              <Label htmlFor="pem">{t("professores.form.login_email_label")}</Label>
               <Input
                 id="pem"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="professor@escola.edu"
+                placeholder={t("professores.form.placeholder_email_login")}
                 autoComplete="off"
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                Alterar também actualiza o email utilizado para entrar na Edukamba.
+                {t("professores.form.login_email_hint")}
               </p>
             </div>
           )}
           <div>
-            <Label htmlFor="ph">Telefone</Label>
-            <Input id="ph" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(244) 924 ..." />
+            <Label htmlFor="ph">{t("professores.form.phone")}</Label>
+            <Input id="ph" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t("professores.form.placeholder_phone")} />
           </div>
           <div>
-            <Label htmlFor="emp">Nº Funcionário</Label>
-            <Input id="emp" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} placeholder="PROF-2024-001" />
+            <Label htmlFor="emp">{t("professores.form.employee_number")}</Label>
+            <Input id="emp" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} placeholder={t("professores.form.placeholder_employee")} />
           </div>
           <div>
-            <Label>Disciplina</Label>
+            <Label>{t("professores.form.subject")}</Label>
             <Select value={subjectId} onValueChange={setSubjectId}>
-              <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("professores.form.select_placeholder")} /></SelectTrigger>
               <SelectContent>
                 {subjects.map((s) => (
                   <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
@@ -222,40 +243,45 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
             </Select>
           </div>
           <div>
-            <Label htmlFor="hd">Data de admissão</Label>
+            <Label htmlFor="hd">{t("professores.form.hire_date")}</Label>
             <Input id="hd" type="date" value={hireDate} onChange={(e) => setHireDate(e.target.value)} />
           </div>
           <div className="sm:col-span-2">
-            <Label htmlFor="edu-inst">Onde estudou (instituição)</Label>
+            <Label htmlFor="edu-inst">{t("professores.form.education_institution")}</Label>
             <Input
               id="edu-inst"
               value={educationInstitution}
               onChange={(e) => setEducationInstitution(e.target.value)}
-              placeholder="Escola, faculdade ou universidade"
+              placeholder={t("professores.form.placeholder_education")}
             />
           </div>
           <div>
-            <Label>Grau académico</Label>
+            <Label>{t("professores.form.degree")}</Label>
             <Select value={academicDegree} onValueChange={setAcademicDegree}>
-              <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("professores.form.select_placeholder")} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">Sem informação</SelectItem>
+                <SelectItem value="__none__">{t("professores.form.degree_none")}</SelectItem>
                 {ACADEMIC_DEGREE_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  <SelectItem key={o.value} value={o.value}>{t(`professores.form.degree_${o.value}`)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label htmlFor="field-study">Área de estudo</Label>
-            <Input id="field-study" value={fieldOfStudy} onChange={(e) => setFieldOfStudy(e.target.value)} placeholder="Ex.: Matemática" />
+            <Label htmlFor="field-study">{t("professores.form.field_of_study")}</Label>
+            <Input
+              id="field-study"
+              value={fieldOfStudy}
+              onChange={(e) => setFieldOfStudy(e.target.value)}
+              placeholder={t("professores.form.placeholder_field")}
+            />
           </div>
           <div>
-            <Label htmlFor="bd">Data de nascimento</Label>
+            <Label htmlFor="bd">{t("professores.form.birth_date")}</Label>
             <Input id="bd" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
           </div>
           <div className="sm:col-span-2">
-            <Label>Cor do avatar</Label>
+            <Label>{t("professores.form.avatar_color")}</Label>
             <div className="mt-2 flex gap-2">
               {COLORS.map((c) => (
                 <button
@@ -271,18 +297,26 @@ export const TeacherFormDialog = ({ open, onOpenChange, subjects, teacher, onSav
 
           {!isEdit && (
             <div className="sm:col-span-2 space-y-1.5">
-              <Label htmlFor="pw">Password inicial *</Label>
-              <Input id="pw" type="text" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
-              <p className="text-xs text-muted-foreground">O professor receberá um email com as credenciais de acesso.</p>
+              <Label htmlFor="pw">{t("professores.form.password_initial")}</Label>
+              <Input
+                id="pw"
+                type="text"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={t("professores.form.placeholder_password")}
+              />
+              <p className="text-xs text-muted-foreground">{t("professores.form.password_hint_email")}</p>
             </div>
           )}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancelar</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            {t("shared.cancel")}
+          </Button>
           <Button onClick={handleSubmit} disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEdit ? "Guardar" : "Criar professor"}
+            {isEdit ? t("shared.save") : t("professores.form.submit_create")}
           </Button>
         </DialogFooter>
       </DialogContent>

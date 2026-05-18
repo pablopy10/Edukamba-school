@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Search, Plus, Pencil, Trash2, BookOpen, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,6 +19,8 @@ type CourseWithStats = CourseRow & {
   studentCount: number;
 };
 
+const LEVEL_DB_VALUES = ["Básico", "Médio", "Avançado"] as const;
+
 const palette = ["blue", "lilac", "yellow", "green", "pink"] as const;
 const colorStyles: Record<(typeof palette)[number], string> = {
   lilac: "bg-pastel-lilac text-pastel-lilac-foreground",
@@ -33,6 +36,8 @@ const levelStyles: Record<string, string> = {
 };
 
 const Cursos = () => {
+  const { t } = useTranslation("pages");
+  const { t: tCommon } = useTranslation("common");
   const native = isNativeMobileApp();
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
@@ -84,8 +89,9 @@ const Cursos = () => {
           studentCount: studentCountByCourse.get(c.id) ?? 0,
         })),
       );
-    } catch (e: any) {
-      toast({ title: "Erro a carregar cursos", description: e?.message, variant: "destructive" });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: t("cursos.toast_load_error"), description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -106,9 +112,9 @@ const Cursos = () => {
     if (!deleteId) return;
     const { error } = await supabase.from("courses").delete().eq("id", deleteId);
     if (error) {
-      toast({ title: "Erro a eliminar", description: error.message, variant: "destructive" });
+      toast({ title: t("cursos.toast_delete_error"), description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Curso eliminado" });
+      toast({ title: t("cursos.toast_deleted") });
       load();
     }
     setDeleteId(null);
@@ -123,13 +129,26 @@ const Cursos = () => {
     avancado: courses.filter((c) => c.type === "Avançado").length,
   }), [courses]);
 
+  const kpiDefs = useMemo(
+    () => [
+      { label: t("cursos.kpi_total"), value: stats.total, color: "bg-pastel-blue text-pastel-blue-foreground" },
+      { label: t("cursos.level.Básico"), value: stats.basico, color: "bg-pastel-green text-pastel-green-foreground" },
+      { label: t("cursos.level.Médio"), value: stats.medio, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+      { label: t("cursos.level.Avançado"), value: stats.avancado, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
+    ],
+    [t, stats],
+  );
+
+  const levelLabel = (dbType: string | null | undefined) =>
+    (dbType && t(`cursos.level.${dbType}`, { defaultValue: dbType })) || "";
+
   return (
     <>
       <div className={cn("flex flex-col gap-6", native && "relative pb-28")}>
         <div className={cn("flex flex-col gap-4", native ? "" : "sm:flex-row sm:items-center sm:justify-between")}>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Cursos</h1>
-            <p className="text-sm text-muted-foreground">Faça a gestão de todos os cursos oferecidos pela escola.</p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{tCommon("nav.courses")}</h1>
+            <p className="text-sm text-muted-foreground">{t("cursos.header_subtitle")}</p>
           </div>
           <div className={cn("flex flex-wrap items-center gap-3", native && "w-full")}>
             <div className={cn("relative", native ? "min-w-0 flex-1" : "")}>
@@ -138,7 +157,7 @@ const Cursos = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 type="text"
-                placeholder="Pesquisar curso..."
+                placeholder={t("cursos.search_placeholder")}
                 className={cn(
                   "h-11 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20",
                   native ? "w-full min-w-0" : "w-72",
@@ -147,13 +166,15 @@ const Cursos = () => {
             </div>
             <Select value={levelFilter} onValueChange={setLevelFilter}>
               <SelectTrigger className={cn("h-11 rounded-full border-border bg-card shadow-soft", native ? "w-full" : "w-44")}>
-                <SelectValue placeholder="Filtrar nível" />
+                <SelectValue placeholder={t("cursos.filter_level_placeholder")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos os níveis</SelectItem>
-                <SelectItem value="Básico">Básico</SelectItem>
-                <SelectItem value="Médio">Médio</SelectItem>
-                <SelectItem value="Avançado">Avançado</SelectItem>
+                <SelectItem value="all">{t("cursos.all_levels")}</SelectItem>
+                {LEVEL_DB_VALUES.map((lv) => (
+                  <SelectItem key={lv} value={lv}>
+                    {t(`cursos.level.${lv}`)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             {!native && (
@@ -162,7 +183,7 @@ const Cursos = () => {
               className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
             >
               <Plus className="h-4 w-4" strokeWidth={2.25} />
-              Novo Curso
+              {t("cursos.new_course")}
             </button>
             )}
           </div>
@@ -170,12 +191,7 @@ const Cursos = () => {
 
         {showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {[
-            { label: "Total de Cursos", value: stats.total, color: "bg-pastel-blue text-pastel-blue-foreground" },
-            { label: "Básico", value: stats.basico, color: "bg-pastel-green text-pastel-green-foreground" },
-            { label: "Médio", value: stats.medio, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-            { label: "Avançado", value: stats.avancado, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
-          ].map((stat) => (
+          {kpiDefs.map((stat) => (
             <div key={stat.label} className="rounded-2xl bg-card p-5 shadow-card">
               <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", stat.color)}>
                 {stat.label}
@@ -187,7 +203,7 @@ const Cursos = () => {
         )}
 
         <div className={cn("flex items-center justify-between gap-3", native && "flex-col items-stretch")}>
-          <h2 className="text-lg font-bold text-foreground">Catálogo de Cursos</h2>
+          <h2 className="text-lg font-bold text-foreground">{t("cursos.catalog_title")}</h2>
           {!native && (
           <div className="flex rounded-full border border-border bg-card p-1 shadow-soft">
             <button
@@ -197,7 +213,7 @@ const Cursos = () => {
                 view === "grid" ? "bg-pastel-blue text-pastel-blue-foreground" : "text-muted-foreground",
               )}
             >
-              Grelha
+              {t("cursos.view_grid")}
             </button>
             <button
               onClick={() => setView("list")}
@@ -206,7 +222,7 @@ const Cursos = () => {
                 view === "list" ? "bg-pastel-blue text-pastel-blue-foreground" : "text-muted-foreground",
               )}
             >
-              Lista
+              {t("cursos.view_list")}
             </button>
           </div>
           )}
@@ -214,11 +230,11 @@ const Cursos = () => {
 
         {loading ? (
           <div className="flex items-center justify-center py-20 text-muted-foreground">
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> A carregar...
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> {t("cursos.loading")}
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-2xl bg-card p-10 text-center shadow-card">
-            <p className="text-sm text-muted-foreground">Nenhum curso encontrado.</p>
+            <p className="text-sm text-muted-foreground">{t("cursos.empty")}</p>
           </div>
         ) : native || view === "grid" ? (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -232,14 +248,14 @@ const Cursos = () => {
                     </div>
                     <div className="flex items-center gap-1">
                       <button
-                        title="Editar"
+                        title={t("shared.edit")}
                         onClick={() => { setEditing(c); setFormOpen(true); }}
                         className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
                       >
                         <Pencil className="h-4 w-4" strokeWidth={1.75} />
                       </button>
                       <button
-                        title="Eliminar"
+                        title={t("shared.delete")}
                         onClick={() => setDeleteId(c.id)}
                         className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
                       >
@@ -258,14 +274,14 @@ const Cursos = () => {
                   {c.type && (
                     <div className="flex items-center gap-2">
                       <span className={cn("rounded-full px-3 py-1 text-xs font-medium", levelStyles[c.type] ?? "bg-muted text-foreground")}>
-                        {c.type}
+                        {levelLabel(c.type)}
                       </span>
                     </div>
                   )}
 
                   <div className="mt-auto flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground">
-                    <span>{c.studentCount} alunos</span>
-                    <span>{c.classroomCount} turmas</span>
+                    <span>{t("cursos.footer_students", { count: c.studentCount })}</span>
+                    <span>{t("cursos.footer_classes", { count: c.classroomCount })}</span>
                   </div>
                 </div>
               );
@@ -277,11 +293,11 @@ const Cursos = () => {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-pastel-blue/40 text-left text-xs uppercase tracking-wider text-pastel-blue-foreground">
-                    <th className="py-4 pl-5 pr-4 font-semibold">Curso</th>
-                    <th className="py-4 pr-4 font-semibold">Nível</th>
-                    <th className="py-4 pr-4 font-semibold">Alunos</th>
-                    <th className="py-4 pr-4 font-semibold">Turmas</th>
-                    <th className="py-4 pr-5 font-semibold text-right">Acções</th>
+                    <th className="py-4 pl-5 pr-4 font-semibold">{t("cursos.col_course")}</th>
+                    <th className="py-4 pr-4 font-semibold">{t("cursos.col_level")}</th>
+                    <th className="py-4 pr-4 font-semibold">{t("cursos.col_students")}</th>
+                    <th className="py-4 pr-4 font-semibold">{t("cursos.col_classes")}</th>
+                    <th className="py-4 pr-5 font-semibold text-right">{t("cursos.col_actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -300,7 +316,7 @@ const Cursos = () => {
                         <td className="py-4 pr-4">
                           {c.type ? (
                             <span className={cn("rounded-full px-3 py-1 text-xs font-medium", levelStyles[c.type] ?? "bg-muted text-foreground")}>
-                              {c.type}
+                              {levelLabel(c.type)}
                             </span>
                           ) : (
                             <span className="text-muted-foreground">—</span>
@@ -311,14 +327,14 @@ const Cursos = () => {
                         <td className="py-4 pr-5">
                           <div className="flex items-center justify-end gap-1">
                             <button
-                              title="Editar"
+                              title={t("shared.edit")}
                               onClick={() => { setEditing(c); setFormOpen(true); }}
                               className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
                             >
                               <Pencil className="h-4 w-4" strokeWidth={1.75} />
                             </button>
                             <button
-                              title="Eliminar"
+                              title={t("shared.delete")}
                               onClick={() => setDeleteId(c.id)}
                               className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
                             >
@@ -342,7 +358,7 @@ const Cursos = () => {
             type="button"
             size="icon"
             className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-            aria-label="Novo curso"
+            aria-label={t("cursos.fab_new_aria")}
             onClick={() => { setEditing(null); setFormOpen(true); }}
           >
             <Plus className="h-6 w-6" />
@@ -355,14 +371,14 @@ const Cursos = () => {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar curso?</AlertDialogTitle>
+            <AlertDialogTitle>{t("cursos.delete_title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acção não pode ser desfeita. As turmas associadas continuarão existir, mas perderão a referência ao curso.
+              {t("cursos.delete_description")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>Eliminar</AlertDialogAction>
+            <AlertDialogCancel>{t("shared.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>{t("cursos.delete_confirm")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

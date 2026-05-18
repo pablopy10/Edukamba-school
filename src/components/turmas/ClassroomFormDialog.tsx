@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { Loader2 } from "lucide-react";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { HOMEROOM_ELIGIBLE_PROFILE_ROLES } from "@/lib/schoolStaffRoles";
+import { intlLocaleTagFromLng } from "@/lib/intlLocale";
 
 export type ClassroomRow = {
   id: string;
@@ -34,11 +36,7 @@ interface Props {
   onSaved: () => void;
 }
 
-const PERIODS = [
-  { value: "Manhã", label: "Manhã" },
-  { value: "Tarde", label: "Tarde" },
-  { value: "Noite", label: "Noite" },
-];
+const PERIOD_DB_VALUES = ["Manhã", "Tarde", "Noite"] as const;
 
 const NONE_HOMEROOM = "__none__";
 
@@ -46,6 +44,7 @@ const NONE_HOMEROOM = "__none__";
 const HOMEROOM_STAFF_ROLES = [...HOMEROOM_ELIGIBLE_PROFILE_ROLES];
 
 export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classroom, onSaved }: Props) => {
+  const { t, i18n } = useTranslation("pages");
   const { selectedYearId } = useAcademicYear();
   const isEdit = !!classroom;
   const [loading, setLoading] = useState(false);
@@ -57,6 +56,11 @@ export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classr
   const [homeroomTeacherId, setHomeroomTeacherId] = useState<string>(NONE_HOMEROOM);
   const [staffLoading, setStaffLoading] = useState(false);
   const [staffOptions, setStaffOptions] = useState<{ id: string; full_name: string }[]>([]);
+
+  const periodOptions = useMemo(
+    () => PERIOD_DB_VALUES.map((value) => ({ value, label: t(`turmas.period.${value}`) })),
+    [t],
+  );
 
   useEffect(() => {
     if (open) {
@@ -104,8 +108,10 @@ export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classr
           .order("full_name", { ascending: true });
         if (cancelled) return;
         if (error) throw error;
-        let rows = (data ?? []).map((p) => ({ id: p.id, full_name: p.full_name?.trim() || "Sem nome" }));
+        const unnamed = t("turmas.form.unnamed_staff");
+        let rows = (data ?? []).map((p) => ({ id: p.id, full_name: p.full_name?.trim() || unnamed }));
         const hid = classroom?.homeroom_teacher_id;
+        const sortLocale = intlLocaleTagFromLng(i18n.language);
         if (hid && !rows.some((r) => r.id === hid)) {
           const { data: extra } = await supabase
             .from("profiles")
@@ -114,12 +120,11 @@ export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classr
             .maybeSingle();
           if (cancelled) return;
           if (extra) {
-            rows = [
-              ...rows,
-              { id: extra.id, full_name: extra.full_name?.trim() || "Sem nome" },
-            ].sort((a, b) => a.full_name.localeCompare(b.full_name, "pt"));
+            rows = [...rows, { id: extra.id, full_name: extra.full_name?.trim() || unnamed }];
           }
         }
+        rows.sort((a, b) => a.full_name.localeCompare(b.full_name, sortLocale));
+        if (cancelled) return;
         setStaffOptions(rows);
       } catch {
         if (!cancelled) setStaffOptions([]);
@@ -130,11 +135,11 @@ export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classr
     return () => {
       cancelled = true;
     };
-  }, [open, classroom?.school_id, classroom?.homeroom_teacher_id]);
+  }, [open, classroom?.school_id, classroom?.homeroom_teacher_id, t, i18n.language]);
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      toast({ title: "Nome obrigatório", variant: "destructive" });
+      toast({ title: t("turmas.form.toast_name_required"), variant: "destructive" });
       return;
     }
     setLoading(true);
@@ -149,13 +154,13 @@ export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classr
           homeroom_teacher_id: homeroomTeacherId === NONE_HOMEROOM ? null : homeroomTeacherId,
         }).eq("id", classroom.id);
         if (error) throw error;
-        toast({ title: "Turma actualizada" });
+        toast({ title: t("turmas.form.toast_updated") });
       } else {
         const { data: userRes } = await supabase.auth.getUser();
         const { data: profile } = await supabase
           .from("profiles").select("school_id").eq("id", userRes.user?.id ?? "").maybeSingle();
         const schoolId = profile?.school_id;
-        if (!schoolId) throw new Error("Escola não encontrada para o utilizador.");
+        if (!schoolId) throw new Error(t("turmas.form.toast_school_missing"));
 
         const { error } = await supabase.from("classrooms").insert({
           name: name.trim(),
@@ -167,58 +172,65 @@ export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classr
           homeroom_teacher_id: homeroomTeacherId === NONE_HOMEROOM ? null : homeroomTeacherId,
         });
         if (error) throw error;
-        toast({ title: "Turma criada" });
+        toast({ title: t("turmas.form.toast_created") });
       }
       onSaved();
       onOpenChange(false);
-    } catch (e: any) {
-      toast({ title: "Erro", description: e?.message ?? String(e), variant: "destructive" });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: t("turmas.form.toast_generic_error"), description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
 
+  const homeroomPlaceholder = staffLoading
+    ? t("turmas.form.staff_loading")
+    : staffOptions.length === 0
+      ? t("turmas.form.staff_empty_hint")
+      : t("matriculas.form.select_placeholder");
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar Turma" : "Nova Turma"}</DialogTitle>
+          <DialogTitle>{isEdit ? t("turmas.form.title_edit") : t("turmas.form.title_create")}</DialogTitle>
           <DialogDescription>
-            {isEdit ? "Actualize os dados da turma." : "Adicione uma nova turma à escola."}
+            {isEdit ? t("turmas.form.desc_edit") : t("turmas.form.desc_create")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <Label htmlFor="tn">Nome da turma</Label>
-            <Input id="tn" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: 9º B" />
+            <Label htmlFor="tn">{t("turmas.form.name_label")}</Label>
+            <Input id="tn" value={name} onChange={(e) => setName(e.target.value)} placeholder={t("turmas.form.name_placeholder")} />
           </div>
           <div>
-            <Label htmlFor="gl">Ano de escolaridade</Label>
+            <Label htmlFor="gl">{t("turmas.form.grade_label")}</Label>
             <Select value={gradeLevel} onValueChange={setGradeLevel}>
-              <SelectTrigger id="gl"><SelectValue placeholder="Seleccionar nível..." /></SelectTrigger>
+              <SelectTrigger id="gl"><SelectValue placeholder={t("turmas.form.grade_placeholder")} /></SelectTrigger>
               <SelectContent>
                 {GRADE_LEVELS.map((g) => (
-                  <SelectItem key={g} value={g}>{g}</SelectItem>
+                  <SelectItem key={g} value={g}>{t(`turmas.grade_levels.${g}`)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label>Período</Label>
+            <Label>{t("turmas.form.period_label")}</Label>
             <Select value={period} onValueChange={setPeriod}>
-              <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("turmas.form.period_placeholder")} /></SelectTrigger>
               <SelectContent>
-                {PERIODS.map((p) => (
+                {periodOptions.map((p) => (
                   <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="sm:col-span-2">
-            <Label>Curso</Label>
+            <Label>{t("turmas.form.course_label")}</Label>
             <Select value={courseId} onValueChange={setCourseId}>
-              <SelectTrigger><SelectValue placeholder="Seleccionar curso..." /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("turmas.form.course_placeholder")} /></SelectTrigger>
               <SelectContent>
                 {courses.map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
@@ -227,30 +239,30 @@ export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classr
             </Select>
           </div>
           <div className="sm:col-span-2">
-            <Label>Ano lectivo</Label>
+            <Label>{t("turmas.form.year_label")}</Label>
             <Select value={yearId} onValueChange={setYearId}>
-              <SelectTrigger><SelectValue placeholder="Seleccionar ano..." /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("turmas.form.year_placeholder")} /></SelectTrigger>
               <SelectContent>
                 {years.map((y) => (
-                  <SelectItem key={y.id} value={y.id}>{y.label}{y.is_active ? " (activo)" : ""}</SelectItem>
+                  <SelectItem key={y.id} value={y.id}>
+                    {y.label}{y.is_active ? ` ${t("turmas.form.year_active_suffix")}` : ""}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="sm:col-span-2">
-            <Label>Diretor de turma</Label>
+            <Label>{t("turmas.form.homeroom_label")}</Label>
             <Select
               value={homeroomTeacherId === NONE_HOMEROOM || staffOptions.some((s) => s.id === homeroomTeacherId) ? homeroomTeacherId : NONE_HOMEROOM}
               onValueChange={setHomeroomTeacherId}
               disabled={staffLoading}
             >
               <SelectTrigger>
-                <SelectValue
-                  placeholder={staffLoading ? "A carregar..." : staffOptions.length === 0 ? "Adicione funcionários (admin/professor)" : "Seleccionar..."}
-                />
+                <SelectValue placeholder={homeroomPlaceholder} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NONE_HOMEROOM}>Nenhum</SelectItem>
+                <SelectItem value={NONE_HOMEROOM}>{t("turmas.form.homeroom_none")}</SelectItem>
                 {staffOptions.map((s) => (
                   <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>
                 ))}
@@ -260,10 +272,10 @@ export const ClassroomFormDialog = ({ open, onOpenChange, courses, years, classr
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancelar</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>{t("shared.cancel")}</Button>
           <Button onClick={handleSubmit} disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEdit ? "Guardar" : "Criar turma"}
+            {isEdit ? t("shared.save") : t("turmas.form.submit_create")}
           </Button>
         </DialogFooter>
       </DialogContent>

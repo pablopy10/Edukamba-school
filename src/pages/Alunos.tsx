@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useIsRestoring, useQuery } from "@tanstack/react-query";
 import { Search, Plus, Pencil, Trash2, Loader2, Upload, UserCog } from "lucide-react";
 import { cn, sortByName } from "@/lib/utils";
@@ -8,7 +9,7 @@ import { StudentFormDialog, StudentRow } from "@/components/alunos/StudentFormDi
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
-import { ExcelImportDialog } from "@/components/shared/ExcelImportDialog";
+import { ExcelImportDialog, type ImportField } from "@/components/shared/ExcelImportDialog";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useParentChildren } from "@/hooks/useParentChildren";
@@ -23,6 +24,7 @@ import {
 } from "@/lib/offline/teacherListQueries";
 import { queryClient } from "@/lib/queryClient";
 import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
+import { intlLocaleTagFromLng } from "@/lib/intlLocale";
 
 type ClassroomOpt = { id: string; name: string };
 
@@ -38,6 +40,9 @@ const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 
 const Alunos = () => {
+  const { t, i18n } = useTranslation("pages");
+  const { t: tCommon } = useTranslation("common");
+  const localeTag = intlLocaleTagFromLng(i18n.language);
   const persistRestoring = useIsRestoring();
   const native = isNativeMobileApp();
   const { user } = useAuth();
@@ -58,6 +63,52 @@ const Alunos = () => {
 
   const teacherNative = native && isTeacher;
   const showBulkChrome = !isParent && !isTeacher;
+
+  const excelImportFields = useMemo((): ImportField[] => [
+    {
+      key: "full_name",
+      label: t("alunos.import.fields.full_name"),
+      required: true,
+      aliases: ["nome", "name", "aluno"],
+      example: t("alunos.import.examples.full_name"),
+    },
+    {
+      key: "email",
+      label: t("alunos.import.fields.email"),
+      aliases: ["e-mail"],
+      example: t("alunos.import.examples.email"),
+    },
+    {
+      key: "phone",
+      label: t("alunos.import.fields.phone"),
+      aliases: ["telemovel", "tel", "phone"],
+      example: t("alunos.import.examples.phone"),
+    },
+    {
+      key: "enrollment_number",
+      label: t("alunos.import.fields.enrollment_number"),
+      aliases: ["matricula", "n matricula", "numero"],
+      example: t("alunos.import.examples.enrollment_number"),
+    },
+    {
+      key: "birth_date",
+      label: t("alunos.import.fields.birth_date"),
+      aliases: ["data nascimento", "nascimento", "birth"],
+      example: t("alunos.import.examples.birth_date"),
+    },
+    {
+      key: "gender",
+      label: t("alunos.import.fields.gender"),
+      aliases: ["genero", "sexo"],
+      example: t("alunos.import.examples.gender"),
+    },
+    {
+      key: "classroom",
+      label: t("alunos.import.fields.classroom"),
+      aliases: ["turma", "classe", "classroom"],
+      example: t("alunos.import.examples.classroom"),
+    },
+  ], [t]);
 
   const teacherAlunosQuery = useQuery({
     queryKey: teacherAlunosQueryKey(
@@ -129,7 +180,11 @@ const Alunos = () => {
       classroomsQuery,
     ]);
     if (sErr) {
-      toast({ title: "Erro a carregar alunos", description: sErr.message, variant: "destructive" });
+      toast({
+        title: t("alunos.toast_load_error"),
+        description: sErr.message,
+        variant: "destructive",
+      });
     }
     setStudents((sData ?? []) as unknown as StudentRow[]);
     let classroomList = (cData ?? []) as ClassroomOpt[];
@@ -191,9 +246,9 @@ const Alunos = () => {
     if (!deleting) return;
     const { error } = await supabase.from("students").delete().eq("id", deleting.id);
     if (error) {
-      toast({ title: "Erro a eliminar", description: error.message, variant: "destructive" });
+      toast({ title: t("alunos.toast_delete_error"), description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Aluno removido" });
+      toast({ title: t("alunos.toast_removed_title") });
       setDeleting(null);
       void refreshAfterMutation();
     }
@@ -210,15 +265,21 @@ const Alunos = () => {
 
   if (parentLoading || teacherAwaitingHydration) return <PageLoadingSkeleton />;
 
-  const renderStudentCard = (s: StudentRow) => {
-    const isSelected = selected.includes(s.id);
-    const initials = initialsOf(s.full_name) || "??";
-    const color = (s.avatar_color as string) || "blue";
-    const birthStr = s.birth_date ? new Date(s.birth_date).toLocaleDateString("pt-PT") : "—";
+  const renderStudentCard = (student: StudentRow) => {
+    const isSelected = selected.includes(student.id);
+    const initials = initialsOf(student.full_name) || "??";
+    const color = (student.avatar_color as string) || "blue";
+    const birthStr = student.birth_date ? new Date(student.birth_date).toLocaleDateString(localeTag) : "—";
+    const genderLabel =
+      student.gender === "M"
+        ? t("alunos.gender_m")
+        : student.gender === "F"
+          ? t("alunos.gender_f")
+          : student.gender;
 
     return (
       <div
-        key={s.id}
+        key={student.id}
         className={cn(
           "rounded-2xl border border-border bg-background p-4 shadow-soft transition-colors",
           isSelected ? "border-pastel-blue/60 bg-pastel-blue/10" : "hover:bg-muted/30",
@@ -229,9 +290,9 @@ const Alunos = () => {
             <input
               type="checkbox"
               checked={isSelected}
-              onChange={() => toggle(s.id)}
+              onChange={() => toggle(student.id)}
               className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-border accent-pastel-blue-foreground"
-              aria-label={`Seleccionar ${s.full_name}`}
+              aria-label={t("alunos.aria_select", { name: student.full_name })}
             />
           )}
           <div
@@ -244,31 +305,31 @@ const Alunos = () => {
           </div>
           <div className="min-w-0 flex-1">
             <Link
-              to={`/alunos/${s.id}`}
+              to={`/alunos/${student.id}`}
               className="font-semibold text-foreground transition-colors hover:text-pastel-blue-foreground hover:underline"
             >
-              {s.full_name}
+              {student.full_name}
             </Link>
-            <p className="mt-0.5 text-sm text-muted-foreground">{s.email ?? "—"}</p>
-            {s.phone ? <p className="text-xs text-muted-foreground">{s.phone}</p> : null}
+            <p className="mt-0.5 text-sm text-muted-foreground">{student.email ?? "—"}</p>
+            {student.phone ? <p className="text-xs text-muted-foreground">{student.phone}</p> : null}
             <div className="mt-3 flex flex-wrap gap-2">
               <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
-                Turma: {classroomName(s.classroom_id)}
+                {t("alunos.tag_class")} {classroomName(student.classroom_id)}
               </span>
-              {s.classrooms?.homeroom_teacher?.full_name ? (
+              {student.classrooms?.homeroom_teacher?.full_name ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-pastel-green/25 px-2.5 py-1 text-xs font-medium text-pastel-green-foreground">
                   <UserCog className="h-3 w-3 shrink-0" strokeWidth={1.75} />
-                  Diretor: {s.classrooms.homeroom_teacher.full_name}
+                  {t("alunos.tag_homeroom")} {student.classrooms.homeroom_teacher.full_name}
                 </span>
               ) : null}
               <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
-                Nº matrícula: {s.enrollment_number ?? "—"}
+                {t("alunos.tag_enrollment_no")} {student.enrollment_number ?? "—"}
               </span>
               <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
-                Nasc.: {birthStr}
+                {t("alunos.tag_birth")} {birthStr}
               </span>
-              {s.gender ? (
-                <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">{s.gender}</span>
+              {genderLabel ? (
+                <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">{genderLabel}</span>
               ) : null}
             </div>
           </div>
@@ -277,18 +338,18 @@ const Alunos = () => {
               <button
                 type="button"
                 onClick={() => {
-                  setEditing(s);
+                  setEditing(student);
                   setFormOpen(true);
                 }}
-                title="Editar"
+                title={t("shared.edit")}
                 className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
               >
                 <Pencil className="h-4 w-4" strokeWidth={1.75} />
               </button>
               <button
                 type="button"
-                onClick={() => setDeleting(s)}
-                title="Eliminar"
+                onClick={() => setDeleting(student)}
+                title={t("shared.delete")}
                 className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
               >
                 <Trash2 className="h-4 w-4" strokeWidth={1.75} />
@@ -306,8 +367,14 @@ const Alunos = () => {
         {/* Page header */}
         <div className={cn("flex flex-col gap-4", native ? "" : "sm:flex-row sm:items-center sm:justify-between")}>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Alunos</h1>
-            <p className="text-sm text-muted-foreground">Faça a gestão e acompanhe todos os alunos da escola.</p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{tCommon("nav.students")}</h1>
+            <p className="text-sm text-muted-foreground">
+              {isParent
+                ? t("alunos.header_sub_parent")
+                : isTeacher
+                  ? t("alunos.header_sub_teacher")
+                  : t("alunos.header_sub_admin")}
+            </p>
           </div>
           <div className={cn("flex flex-wrap items-center gap-3", native && "w-full")}>
             <div className={cn("relative", native ? "min-w-0 flex-1" : "")}>
@@ -316,7 +383,7 @@ const Alunos = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 type="text"
-                placeholder="Pesquisar por nome..."
+                placeholder={t("alunos.search_placeholder")}
                 className={cn(
                   "h-11 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20",
                   native ? "w-full min-w-0" : "w-72",
@@ -336,7 +403,7 @@ const Alunos = () => {
                   className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
                 >
                   <Plus className="h-4 w-4" strokeWidth={2.25} />
-                  Novo Aluno
+                  {t("alunos.new_student")}
                 </button>
                 <button
                   type="button"
@@ -344,7 +411,7 @@ const Alunos = () => {
                   className="flex h-11 items-center gap-2 rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
                 >
                   <Upload className="h-4 w-4" strokeWidth={2.25} />
-                  Importar Excel
+                  {t("alunos.import_excel")}
                 </button>
                 </>
                 )}
@@ -357,10 +424,10 @@ const Alunos = () => {
         {!isParent && (
           <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-card p-4 shadow-card">
             <div className={cn("min-w-[200px] flex-1", native && "min-w-0 w-full")}>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Turma</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">{t("alunos.filter_class")}</label>
               {teacherNative && listClassrooms.length === 0 ? (
                 <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-                  Sem turmas neste ano letivo.
+                  {t("alunos.teacher_no_classes")}
                 </p>
               ) : (
               <Select
@@ -369,10 +436,10 @@ const Alunos = () => {
                 disabled={false}
               >
                 <SelectTrigger className="h-10">
-                  <SelectValue placeholder={teacherNative ? "Sem turmas" : undefined} />
+                  <SelectValue placeholder={teacherNative ? t("alunos.select_no_classes") : undefined} />
                 </SelectTrigger>
                 <SelectContent>
-                  {!teacherNative && <SelectItem value="all">Todas as turmas</SelectItem>}
+                  {!teacherNative && <SelectItem value="all">{t("alunos.all_classes")}</SelectItem>}
                   {listClassrooms.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.name}
@@ -388,7 +455,7 @@ const Alunos = () => {
                 onClick={() => setFilterClassroom("all")}
                 className="h-10 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground hover:bg-muted"
               >
-                Limpar filtros
+                {t("alunos.clear_filters")}
               </button>
             )}
           </div>
@@ -398,10 +465,10 @@ const Alunos = () => {
         {!isParent && !native && (
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {[
-              { label: "Total de Alunos", value: String(stats.total), color: "bg-pastel-blue text-pastel-blue-foreground" },
-              { label: "Alunos Activos", value: String(stats.active), color: "bg-pastel-green text-pastel-green-foreground" },
-              { label: "Novos este mês", value: String(stats.newThisMonth), color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-              { label: "Inactivos", value: String(stats.inactive), color: "bg-pastel-pink text-pastel-pink-foreground" },
+              { label: t("alunos.kpi_total"), value: String(stats.total), color: "bg-pastel-blue text-pastel-blue-foreground" },
+              { label: t("alunos.kpi_active"), value: String(stats.active), color: "bg-pastel-green text-pastel-green-foreground" },
+              { label: t("alunos.kpi_new_month"), value: String(stats.newThisMonth), color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+              { label: t("alunos.kpi_inactive"), value: String(stats.inactive), color: "bg-pastel-pink text-pastel-pink-foreground" },
             ].map((stat) => (
               <div key={stat.label} className="rounded-2xl bg-card p-5 shadow-card">
                 <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", stat.color)}>
@@ -416,10 +483,10 @@ const Alunos = () => {
         {/* Lista: cartões na app nativa; tabela na web */}
         <div className="rounded-2xl bg-card shadow-card">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5">
-            <h2 className="text-lg font-bold text-foreground">Lista de Alunos</h2>
+            <h2 className="text-lg font-bold text-foreground">{t("alunos.list_title")}</h2>
             {selected.length > 0 && (
               <div className="flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">{selected.length} selecionados</span>
+                <span className="text-muted-foreground">{t("alunos.selected_count", { count: selected.length })}</span>
               </div>
             )}
           </div>
@@ -434,7 +501,7 @@ const Alunos = () => {
                     onChange={toggleAll}
                     className="h-4 w-4 cursor-pointer rounded border-border accent-pastel-blue-foreground"
                   />
-                  Seleccionar todos ({filtered.length})
+                  {t("alunos.select_all", { count: filtered.length })}
                 </label>
               )}
               {adminListFetching && (
@@ -443,7 +510,7 @@ const Alunos = () => {
                 </div>
               )}
               {!adminListFetching && filtered.length === 0 && (
-                <p className="py-10 text-center text-sm text-muted-foreground">Nenhum aluno encontrado.</p>
+                <p className="py-10 text-center text-sm text-muted-foreground">{t("alunos.empty_list")}</p>
               )}
               {!adminListFetching && filtered.map(renderStudentCard)}
             </div>
@@ -460,13 +527,13 @@ const Alunos = () => {
                         className="h-4 w-4 cursor-pointer rounded border-border accent-pastel-blue-foreground"
                       />
                     </th>
-                    <th className="py-4 pr-4 font-semibold">Nome do Aluno</th>
-                    <th className="py-4 pr-4 font-semibold">ID Aluno</th>
-                    <th className="py-4 pr-4 font-semibold">Turma</th>
-                    <th className="py-4 pr-4 font-semibold">Diretor de turma</th>
-                    <th className="py-4 pr-4 font-semibold">Data Nasc.</th>
+                    <th className="py-4 pr-4 font-semibold">{t("alunos.col_student_name")}</th>
+                    <th className="py-4 pr-4 font-semibold">{t("alunos.col_enrollment_no")}</th>
+                    <th className="py-4 pr-4 font-semibold">{t("alunos.col_class")}</th>
+                    <th className="py-4 pr-4 font-semibold">{t("alunos.col_homeroom")}</th>
+                    <th className="py-4 pr-4 font-semibold">{t("alunos.col_birth_date")}</th>
                     {!isParent && (
-                      <th className="py-4 pr-5 text-right font-semibold">Acções</th>
+                      <th className="py-4 pr-5 text-right font-semibold">{t("shared.actions")}</th>
                     )}
                   </tr>
                 </thead>
@@ -481,18 +548,18 @@ const Alunos = () => {
                   {!adminListFetching && filtered.length === 0 && (
                     <tr>
                       <td colSpan={isParent ? 6 : 7} className="py-10 text-center text-muted-foreground">
-                        Nenhum aluno encontrado.
+                        {t("alunos.empty_list")}
                       </td>
                     </tr>
                   )}
                   {!adminListFetching &&
-                    filtered.map((s) => {
-                      const isSelected = selected.includes(s.id);
-                      const initials = initialsOf(s.full_name) || "??";
-                      const color = (s.avatar_color as string) || "blue";
+                    filtered.map((row) => {
+                      const isSelected = selected.includes(row.id);
+                      const initials = initialsOf(row.full_name) || "??";
+                      const color = (row.avatar_color as string) || "blue";
                       return (
                         <tr
-                          key={s.id}
+                          key={row.id}
                           className={cn(
                             "border-b border-border last:border-0 transition-colors",
                             isSelected ? "bg-pastel-blue/15" : "hover:bg-muted/40",
@@ -502,7 +569,7 @@ const Alunos = () => {
                             <input
                               type="checkbox"
                               checked={isSelected}
-                              onChange={() => toggle(s.id)}
+                              onChange={() => toggle(row.id)}
                               className="h-4 w-4 cursor-pointer rounded border-border accent-pastel-blue-foreground"
                             />
                           </td>
@@ -518,33 +585,33 @@ const Alunos = () => {
                               </div>
                               <div>
                                 <Link
-                                  to={`/alunos/${s.id}`}
+                                  to={`/alunos/${row.id}`}
                                   className="font-semibold text-foreground transition-colors hover:text-pastel-blue-foreground hover:underline"
                                 >
-                                  {s.full_name}
+                                  {row.full_name}
                                 </Link>
-                                <p className="text-xs text-muted-foreground">{s.email ?? ""}</p>
+                                <p className="text-xs text-muted-foreground">{row.email ?? ""}</p>
                               </div>
                             </div>
                           </td>
-                          <td className="py-4 pr-4 text-foreground">{s.enrollment_number ?? "—"}</td>
+                          <td className="py-4 pr-4 text-foreground">{row.enrollment_number ?? "—"}</td>
                           <td className="py-4 pr-4">
                             <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
-                              {classroomName(s.classroom_id)}
+                              {classroomName(row.classroom_id)}
                             </span>
                           </td>
                           <td className="py-4 pr-4 text-foreground">
-                            {s.classrooms?.homeroom_teacher?.full_name ? (
+                            {row.classrooms?.homeroom_teacher?.full_name ? (
                               <span className="inline-flex items-center gap-1 text-sm">
                                 <UserCog className="h-3.5 w-3.5 shrink-0 text-pastel-green-foreground" strokeWidth={1.75} />
-                                {s.classrooms.homeroom_teacher.full_name}
+                                {row.classrooms.homeroom_teacher.full_name}
                               </span>
                             ) : (
                               "—"
                             )}
                           </td>
                           <td className="py-4 pr-4 text-muted-foreground">
-                            {s.birth_date ? new Date(s.birth_date).toLocaleDateString("pt-PT") : "—"}
+                            {row.birth_date ? new Date(row.birth_date).toLocaleDateString(localeTag) : "—"}
                           </td>
                           {!isParent && (
                             <td className="py-4 pr-5">
@@ -554,18 +621,18 @@ const Alunos = () => {
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        setEditing(s);
+                                        setEditing(row);
                                         setFormOpen(true);
                                       }}
-                                      title="Editar"
+                                      title={t("shared.edit")}
                                       className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
                                     >
                                       <Pencil className="h-4 w-4" strokeWidth={1.75} />
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => setDeleting(s)}
-                                      title="Eliminar"
+                                      onClick={() => setDeleting(row)}
+                                      title={t("shared.delete")}
                                       className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
                                     >
                                       <Trash2 className="h-4 w-4" strokeWidth={1.75} />
@@ -586,7 +653,7 @@ const Alunos = () => {
           {/* Pagination */}
           <div className="flex flex-col items-center justify-between gap-3 border-t border-border p-5 sm:flex-row">
             <p className="text-xs text-muted-foreground">
-              A mostrar {filtered.length} de {listStudents.length} alunos
+              {t("alunos.pagination_showing", { shown: filtered.length, total: listStudents.length })}
             </p>
           </div>
         </div>
@@ -598,7 +665,7 @@ const Alunos = () => {
             type="button"
             size="icon"
             className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-            aria-label="Novo aluno"
+            aria-label={t("alunos.fab_new_aria")}
             onClick={() => { setEditing(null); setFormOpen(true); }}
           >
             <Plus className="h-6 w-6" />
@@ -611,19 +678,20 @@ const Alunos = () => {
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover aluno?</AlertDialogTitle>
+            <AlertDialogTitle>{t("alunos.delete_dialog_title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem a certeza que quer remover <strong>{deleting?.full_name}</strong>?
-              Esta acção não pode ser desfeita.
+              {t("alunos.delete_intro")}{" "}
+              <strong>{deleting?.full_name}</strong>
+              {t("alunos.delete_suffix")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel>{t("shared.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Remover
+              {t("alunos.delete_confirm_action")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -633,27 +701,19 @@ const Alunos = () => {
       <ExcelImportDialog
         open={importOpen}
         onOpenChange={setImportOpen}
-        title="Importar Alunos"
-        description="Importe vários alunos a partir de um ficheiro Excel ou CSV."
-        templateSheetName="Alunos"
-        fields={[
-          { key: "full_name", label: "Nome completo", required: true, aliases: ["nome", "name", "aluno"], example: "Sara Miller" },
-          { key: "email", label: "Email", aliases: ["e-mail"], example: "sara@escola.ao" },
-          { key: "phone", label: "Telefone", aliases: ["telemovel", "tel", "phone"], example: "924 000 000" },
-          { key: "enrollment_number", label: "Nº Matrícula", aliases: ["matricula", "n matricula", "numero"], example: "2024-01-001" },
-          { key: "birth_date", label: "Data de nascimento", aliases: ["data nascimento", "nascimento", "birth"], example: "2012-05-14" },
-          { key: "gender", label: "Género", aliases: ["genero", "sexo"], example: "Masculino" },
-          { key: "classroom", label: "Turma", aliases: ["turma", "classe", "classroom"], example: "5ª A" },
-        ]}
+        title={t("alunos.import.title")}
+        description={t("alunos.import.description")}
+        templateSheetName={t("alunos.import.sheet_name")}
+        fields={excelImportFields}
         onImportRow={async (row) => {
-          if (!row.full_name) throw new Error("Nome em falta");
+          if (!row.full_name) throw new Error(t("alunos.import.missing_name_error"));
           const { data: profile } = await supabase
             .from("profiles")
             .select("school_id, support_context_school_id")
             .eq("id", (await supabase.auth.getUser()).data.user?.id ?? "")
             .maybeSingle();
           const schoolId = effectiveSchoolIdFromProfile(profile);
-          if (!schoolId) throw new Error("Escola não encontrada");
+          if (!schoolId) throw new Error(t("alunos.import.school_not_found_error"));
           let classroom_id: string | null = null;
           if (row.classroom) {
             const match = listClassrooms.find((c) => c.name.toLowerCase() === row.classroom.toLowerCase());

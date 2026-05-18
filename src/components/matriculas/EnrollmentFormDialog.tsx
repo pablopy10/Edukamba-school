@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -42,20 +43,8 @@ interface Props {
   onSaved: () => void;
 }
 
-const STATUSES: { value: string; label: string }[] = [
-  { value: "ACTIVE", label: "Confirmada" },
-  { value: "PENDING", label: "Pendente" },
-  { value: "CANCELLED", label: "Cancelada" },
-];
-
-const RESULTS: { value: string; label: string }[] = [
-  { value: "EM_CURSO", label: "Em curso (sem resultado)" },
-  { value: "APROVADO", label: "Aprovado (passou de classe)" },
-  { value: "REPROVADO", label: "Reprovado" },
-  { value: "TRANSFERIDO", label: "Transferido" },
-];
-
 export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms, years, enrollment, onSaved }: Props) => {
+  const { t } = useTranslation("pages");
   const { selectedYearId } = useAcademicYear();
   const { isParent, children: parentChildren } = useParentChildren();
   const isEdit = !!enrollment;
@@ -150,7 +139,11 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
     let triggeredAccessPrompt = false;
     try {
       if (isEdit && enrollment) {
-        if (!studentId) { toast({ title: "Aluno obrigatório", variant: "destructive" }); setLoading(false); return; }
+        if (!studentId) {
+          toast({ title: t("matriculas.form.toast_student_required"), variant: "destructive" });
+          setLoading(false);
+          return;
+        }
         // Prevent duplicate: same student + same year on a different enrollment
         if (yearId) {
           const { data: dup, error: dErr } = await supabase
@@ -162,7 +155,11 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
             .limit(1);
           if (dErr) throw dErr;
           if (dup && dup.length > 0) {
-            toast({ title: "Aluno já matriculado", description: "Este aluno já tem uma matrícula no ano lectivo seleccionado.", variant: "destructive" });
+            toast({
+              title: t("matriculas.form.toast_duplicate_title"),
+              description: t("matriculas.form.toast_duplicate_same_year"),
+              variant: "destructive",
+            });
             setLoading(false);
             return;
           }
@@ -195,15 +192,23 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         }
         const { error } = await supabase.from("enrollments").update(updatePayload).eq("id", enrollment.id);
         if (error) throw error;
-        toast({ title: "Matrícula actualizada", description: shouldPublish && !alreadyPublished ? "Resultado comunicado ao encarregado." : undefined });
+        toast({
+          title: t("matriculas.form.toast_updated"),
+          description:
+            shouldPublish && !alreadyPublished ? t("matriculas.form.toast_updated_published") : undefined,
+        });
       } else if (tab === "new") {
-        if (!fullName.trim()) { toast({ title: "Nome do aluno obrigatório", variant: "destructive" }); setLoading(false); return; }
+        if (!fullName.trim()) {
+          toast({ title: t("matriculas.form.toast_name_required_student"), variant: "destructive" });
+          setLoading(false);
+          return;
+        }
         // Need school_id for student creation
         const { data: userRes } = await supabase.auth.getUser();
         const { data: profile } = await supabase
           .from("profiles").select("school_id").eq("id", userRes.user?.id ?? "").maybeSingle();
         const schoolId = profile?.school_id;
-        if (!schoolId) throw new Error("Escola não encontrada para o utilizador.");
+        if (!schoolId) throw new Error(t("matriculas.form.toast_school_missing"));
 
         const { data: created, error: sErr } = await supabase.from("students").insert({
           full_name: fullName.trim(),
@@ -224,13 +229,17 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
           status,
         });
         if (eErr) throw eErr;
-        toast({ title: "Aluno e matrícula criados" });
+        toast({ title: t("matriculas.form.toast_created_student_enrollment") });
         if (classroomId && isClassroomEligible(classroomId)) {
           setAccessPrompt({ studentId: created.id, studentName: fullName.trim(), defaultEmail: email || null });
           triggeredAccessPrompt = true;
         }
       } else {
-        if (!studentId) { toast({ title: "Seleccione o aluno", variant: "destructive" }); setLoading(false); return; }
+        if (!studentId) {
+          toast({ title: t("matriculas.form.toast_pick_student_renew"), variant: "destructive" });
+          setLoading(false);
+          return;
+        }
         // Prevent duplicate enrollment on the same year
         if (yearId) {
           const { data: dup, error: dErr } = await supabase
@@ -241,7 +250,11 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
             .limit(1);
           if (dErr) throw dErr;
           if (dup && dup.length > 0) {
-            toast({ title: "Aluno já matriculado", description: "Este aluno já tem uma matrícula no ano lectivo seleccionado.", variant: "destructive" });
+            toast({
+              title: t("matriculas.form.toast_duplicate_title"),
+              description: t("matriculas.form.toast_duplicate_same_year"),
+              variant: "destructive",
+            });
             setLoading(false);
             return;
           }
@@ -253,7 +266,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
           status: isParent ? "PENDING" : status,
         });
         if (error) throw error;
-        toast({ title: "Matrícula renovada" });
+        toast({ title: t("matriculas.form.toast_renewed") });
         if (classroomId && isClassroomEligible(classroomId)) {
           const { data: st } = await supabase
             .from("students")
@@ -274,7 +287,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         onOpenChange(false);
       }
     } catch (e: any) {
-      toast({ title: "Erro", description: e?.message ?? String(e), variant: "destructive" });
+      toast({ title: t("matriculas.form.toast_generic_error"), description: e?.message ?? String(e), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -285,9 +298,9 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
     <Dialog open={open && !accessPrompt} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar Matrícula" : "Nova Matrícula"}</DialogTitle>
+          <DialogTitle>{isEdit ? t("matriculas.form.title_edit") : t("matriculas.form.title_create")}</DialogTitle>
           <DialogDescription>
-            {isEdit ? "Actualize os dados da matrícula." : "Crie um novo aluno ou renove uma matrícula existente."}
+            {isEdit ? t("matriculas.form.desc_edit") : t("matriculas.form.desc_create")}
           </DialogDescription>
         </DialogHeader>
 
@@ -295,8 +308,8 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
           <Tabs value={isParent ? "renew" : tab} onValueChange={(v) => setTab(v as "new" | "renew")}>
             {!isParent && (
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="new">Nova</TabsTrigger>
-                <TabsTrigger value="renew">Renovação</TabsTrigger>
+                <TabsTrigger value="new">{t("matriculas.form.tab_new_student")}</TabsTrigger>
+                <TabsTrigger value="renew">{t("matriculas.form.tab_renew")}</TabsTrigger>
               </TabsList>
             )}
 
@@ -304,32 +317,37 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
             <TabsContent value="new" className="mt-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  <Label htmlFor="fn">Nome completo</Label>
-                  <Input id="fn" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Ex.: Sara Miller" />
+                  <Label htmlFor="fn">{t("matriculas.form.full_name")}</Label>
+                  <Input
+                    id="fn"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder={t("matriculas.form.placeholder_full_name")}
+                  />
                 </div>
                 <div>
-                  <Label htmlFor="em">Email</Label>
-                  <Input id="em" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="aluno@escola.edu" />
+                  <Label htmlFor="em">{t("matriculas.form.email")}</Label>
+                  <Input id="em" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("matriculas.form.placeholder_email")} />
                 </div>
                 <div>
-                  <Label htmlFor="ph">Telefone</Label>
-                  <Input id="ph" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(244) 924 ..." />
+                  <Label htmlFor="ph">{t("matriculas.form.phone")}</Label>
+                  <Input id="ph" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t("matriculas.form.placeholder_phone")} />
                 </div>
                 <div>
-                  <Label htmlFor="en">Nº Matrícula</Label>
-                  <Input id="en" value={enrollmentNumber} onChange={(e) => setEnrollmentNumber(e.target.value)} placeholder="2024-01-001" />
+                  <Label htmlFor="en">{t("matriculas.form.enrollment_number")}</Label>
+                  <Input id="en" value={enrollmentNumber} onChange={(e) => setEnrollmentNumber(e.target.value)} placeholder={t("matriculas.form.placeholder_enrollment_number")} />
                 </div>
                 <div>
-                  <Label htmlFor="bd">Data de nascimento</Label>
+                  <Label htmlFor="bd">{t("matriculas.form.birth_date")}</Label>
                   <Input id="bd" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
                 </div>
                 <div className="sm:col-span-2">
-                  <Label>Género</Label>
+                  <Label>{t("matriculas.form.gender")}</Label>
                   <Select value={gender} onValueChange={setGender}>
-                    <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t("matriculas.form.select_placeholder")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="M">Masculino</SelectItem>
-                      <SelectItem value="F">Feminino</SelectItem>
+                      <SelectItem value="M">{t("matriculas.form.gender_m")}</SelectItem>
+                      <SelectItem value="F">{t("matriculas.form.gender_f")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -339,9 +357,9 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
 
             <TabsContent value="renew" className="mt-4">
               <div>
-                <Label>Aluno existente</Label>
+                <Label>{t("matriculas.form.student_existing")}</Label>
                 <Select value={studentId} onValueChange={setStudentId}>
-                  <SelectTrigger><SelectValue placeholder="Seleccionar aluno..." /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("matriculas.form.select_student_placeholder")} /></SelectTrigger>
                   <SelectContent>
                     {(isParent
                       ? parentChildren.map((c) => ({ id: c.id, name: c.full_name }))
@@ -358,9 +376,9 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
 
         {isEdit && (
           <div>
-            <Label>Aluno</Label>
+            <Label>{t("matriculas.form.student_pick")}</Label>
             <Select value={studentId} onValueChange={setStudentId}>
-              <SelectTrigger><SelectValue placeholder="Seleccionar aluno..." /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("matriculas.form.select_student_placeholder")} /></SelectTrigger>
               <SelectContent>
                 {students.map((s) => (
                   <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
@@ -373,14 +391,22 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {!isParent && (
           <div className="sm:col-span-2">
-            <Label>Turma</Label>
+            <Label>{t("matriculas.form.class_label")}</Label>
             <Select value={classroomId} onValueChange={setClassroomId} disabled={!yearId || loadingClassrooms}>
               <SelectTrigger>
-                <SelectValue placeholder={!yearId ? "Seleccione o ano lectivo primeiro" : (loadingClassrooms ? "A carregar turmas..." : "Seleccionar turma...")} />
+                <SelectValue
+                  placeholder={
+                    !yearId
+                      ? t("matriculas.form.pick_year_before_class")
+                      : loadingClassrooms
+                        ? t("matriculas.form.loading_classes")
+                        : t("matriculas.form.select_class_placeholder")
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
                 {yearClassrooms.length === 0 && !loadingClassrooms && yearId && (
-                  <div className="px-3 py-2 text-xs text-muted-foreground">Sem turmas para este ano lectivo.</div>
+                  <div className="px-3 py-2 text-xs text-muted-foreground">{t("matriculas.form.no_classes_for_year")}</div>
                 )}
                 {yearClassrooms.map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
@@ -390,24 +416,26 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
           </div>
           )}
           <div>
-            <Label>Ano lectivo</Label>
+            <Label>{t("matriculas.form.academic_year")}</Label>
             <Select value={yearId} onValueChange={setYearId}>
-              <SelectTrigger><SelectValue placeholder="Seleccionar ano..." /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("matriculas.form.year_select_placeholder")} /></SelectTrigger>
               <SelectContent>
                 {years.map((y) => (
-                  <SelectItem key={y.id} value={y.id}>{y.label}{y.is_active ? " (activo)" : ""}</SelectItem>
+                  <SelectItem key={y.id} value={y.id}>
+                    {y.label}{y.is_active ? ` ${t("matriculas.form.year_active_suffix")}` : ""}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           {!isParent && (
           <div>
-            <Label>Estado</Label>
+            <Label>{t("matriculas.form.status_label")}</Label>
             <Select value={status} onValueChange={setStatus}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {STATUSES.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                {(["ACTIVE", "PENDING", "CANCELLED"] as const).map((sv) => (
+                  <SelectItem key={sv} value={sv}>{t(`matriculas.status.${sv}`)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -418,28 +446,36 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         {isEdit && (
           <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
             <div>
-              <Label className="text-sm font-semibold">Resultado do ano lectivo</Label>
-              <p className="text-xs text-muted-foreground mt-0.5">Define se o aluno passou ou reprovou neste ano lectivo.</p>
+              <Label className="text-sm font-semibold">{t("matriculas.form.result_section_title")}</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">{t("matriculas.form.result_section_hint")}</p>
             </div>
             <Select value={result} onValueChange={setResult}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {RESULTS.map((r) => (
-                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                {(["EM_CURSO", "APROVADO", "REPROVADO", "TRANSFERIDO"] as const).map((rv) => (
+                  <SelectItem key={rv} value={rv}>{t(`matriculas.form.result.${rv}`)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             {result !== "EM_CURSO" && (
               <>
                 <div>
-                  <Label htmlFor="result-notes" className="text-xs">Observações para o encarregado (opcional)</Label>
-                  <Textarea id="result-notes" rows={3} value={resultNotes} onChange={(e) => setResultNotes(e.target.value)} placeholder="Ex.: passou com média de 14 valores, parabéns!" />
+                  <Label htmlFor="result-notes" className="text-xs">{t("matriculas.form.result_notes_label")}</Label>
+                  <Textarea
+                    id="result-notes"
+                    rows={3}
+                    value={resultNotes}
+                    onChange={(e) => setResultNotes(e.target.value)}
+                    placeholder={t("matriculas.form.result_placeholder_notes")}
+                  />
                 </div>
                 <label className="flex items-start gap-2 cursor-pointer">
                   <Checkbox checked={publishResult} onCheckedChange={(v) => setPublishResult(!!v)} className="mt-0.5" />
                   <span className="text-sm">
-                    Comunicar resultado ao encarregado de educação
-                    {alreadyPublished && <span className="block text-xs text-muted-foreground">Já comunicado anteriormente — desmarcar não retira a notificação enviada.</span>}
+                    {t("matriculas.form.publish_to_guardian")}
+                    {alreadyPublished ? (
+                      <span className="block text-xs text-muted-foreground">{t("matriculas.form.already_published_hint")}</span>
+                    ) : null}
                   </span>
                 </label>
               </>
@@ -448,10 +484,16 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancelar</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            {t("shared.cancel")}
+          </Button>
           <Button onClick={handleSubmit} disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEdit ? "Guardar" : (tab === "new" ? "Criar aluno e matrícula" : "Renovar matrícula")}
+            {isEdit
+              ? t("shared.save")
+              : tab === "new"
+                ? t("matriculas.form.submit_create_both")
+                : t("matriculas.form.submit_renew")}
           </Button>
         </DialogFooter>
       </DialogContent>
