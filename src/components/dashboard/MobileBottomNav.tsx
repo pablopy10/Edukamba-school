@@ -7,21 +7,22 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useSchoolPermissionMatrix } from "@/hooks/useSchoolPermissionMatrix";
 import type { PermissionModuleKey } from "@/lib/schoolPermissionModules";
 import { isNavPathAllowedForRole } from "@/lib/staffNavAccess";
+import { useTranslation } from "react-i18next";
 
 type NavItem = {
   icon: ElementType;
-  label: string;
+  labelKey: string;
   to: string;
   moduleKey?: ModuleKey;
 };
 
 const bottomNavItems: NavItem[] = [
-  { icon: Home, label: "Painel", to: "/dashboard" },
-  { icon: UsersRound, label: "Presenças", to: "/presencas", moduleKey: "presencas" },
-  { icon: CalendarDays, label: "Horário", to: "/horario", moduleKey: "horario" },
-  { icon: BookMarked, label: "Avaliações", to: "/avaliacoes", moduleKey: "avaliacoes" },
-  { icon: BookOpenCheck, label: "Material", to: "/material", moduleKey: "material" },
-  { icon: Smartphone, label: "Pedidos", to: "/pedidos", moduleKey: "pedidos" },
+  { icon: Home, labelKey: "nav.dashboard_short", to: "/dashboard" },
+  { icon: UsersRound, labelKey: "nav.attendance", to: "/presencas", moduleKey: "presencas" },
+  { icon: CalendarDays, labelKey: "nav.timetable", to: "/horario", moduleKey: "horario" },
+  { icon: BookMarked, labelKey: "nav.assessments", to: "/avaliacoes", moduleKey: "avaliacoes" },
+  { icon: BookOpenCheck, labelKey: "nav.materials", to: "/material", moduleKey: "material" },
+  { icon: Smartphone, labelKey: "nav.requests", to: "/pedidos", moduleKey: "pedidos" },
 ];
 
 function routeActive(pathname: string, itemPath: string): boolean {
@@ -32,6 +33,7 @@ function routeActive(pathname: string, itemPath: string): boolean {
 }
 
 export const MobileBottomNav = () => {
+  const { t } = useTranslation("common");
   const location = useLocation();
   const { modules } = useModules();
   const { role, loading } = useUserRole();
@@ -69,7 +71,7 @@ export const MobileBottomNav = () => {
     <nav
       className="pointer-events-auto fixed bottom-0 left-0 right-0 z-[100] border-t border-border bg-card/95 shadow-[0_-4px_24px_rgba(15,23,42,0.06)] backdrop-blur-md lg:hidden"
       style={{ paddingBottom: "max(0.3rem, var(--sab-r))" }}
-      aria-label="Navegação principal"
+      aria-label={t("nav.mobile_nav_label")}
     >
       <div className="mx-auto flex max-w-[1600px] justify-evenly gap-0 px-0 pb-1 pt-1">
         {visible.map((item) => {
@@ -93,7 +95,7 @@ export const MobileBottomNav = () => {
                 <Icon className="h-5 w-5" strokeWidth={active ? 2 : 1.75} />
               </span>
               <span className="max-w-full truncate px-0.5 text-center text-[10px] font-semibold leading-tight sm:text-[11px]">
-                {item.label}
+                {t(item.labelKey)}
               </span>
             </Link>
           );

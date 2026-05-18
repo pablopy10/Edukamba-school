@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import { EdukambaErrorBoundary } from "@/components/EdukambaErrorBoundary";
 import "./index.css";
+import "@/i18n/config";
 
 /** iOS/Android WebView: activa tokens CSS de safe area mínima 28px em `index.css`. */
 if (typeof document !== "undefined" && Capacitor.isNativePlatform()) {

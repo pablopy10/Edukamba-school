@@ -4,6 +4,7 @@
  */
 import type { OneSignalPlugin } from "onesignal-cordova-plugin";
 import { Capacitor } from "@capacitor/core";
+import type { AppLocale } from "@/i18n/constants";
 
 type CordovaWindow = Window & {
   cordova?: { exec?: (...args: unknown[]) => void };
@@ -122,5 +123,20 @@ export async function applyNativePushPreference(wantPush: boolean): Promise<bool
     return true;
   } catch {
     return false;
+  }
+}
+
+/** Segmentation tag (`language`) para mensagens por idioma no dashboard OneSignal. */
+export async function setOneSignalLanguageTag(locale: AppLocale | null): Promise<void> {
+  if (!locale || !shouldInitializeOneSignalNative()) return;
+
+  await initOneSignalNative();
+  const OneSignal = await getPlugin();
+  if (!OneSignal) return;
+
+  try {
+    OneSignal.User.addTags({ language: locale });
+  } catch {
+    /* noop */
   }
 }

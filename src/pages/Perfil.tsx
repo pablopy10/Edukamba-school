@@ -31,13 +31,17 @@ import {
   USER_NOTIFICATION_PREF,
   USER_NOTIFICATION_PREF_CHANNELS,
 } from "@/lib/userNotificationPreferenceChannels";
+import { useTranslation } from "react-i18next";
+import type { AppLocale } from "@/i18n/constants";
+import { normalizeAppLocale } from "@/i18n/constants";
+import { syncAppLocale } from "@/lib/syncAppLocale";
 
 type Tab = "pessoal" | "credenciais" | "preferencias" | "seguranca";
 
 const profileSchema = z.object({
   full_name: z.string().trim().min(1, "Nome obrigatório").max(100, "Máx. 100 caracteres"),
   phone: z.string().trim().max(30, "Máx. 30 caracteres").optional().or(z.literal("")),
-  language: z.string().trim().max(10).optional().or(z.literal("")),
+  language: z.enum(["pt", "en", "fr"]),
 });
 
 const emailSchema = z.object({
@@ -60,11 +64,11 @@ const passwordSchema = z
     message: "As palavras-passe não coincidem",
   });
 
-const tabs: { id: Tab; label: string; icon: typeof User }[] = [
-  { id: "pessoal", label: "Informações Pessoais", icon: User },
-  { id: "credenciais", label: "Credenciais", icon: Lock },
-  { id: "preferencias", label: "Preferências", icon: Bell },
-  { id: "seguranca", label: "Segurança", icon: Shield },
+const PROFILE_TABS: { id: Tab; labelKey: string; icon: typeof User }[] = [
+  { id: "pessoal", labelKey: "perfil.tabs.pessoal", icon: User },
+  { id: "credenciais", labelKey: "perfil.tabs.credenciais", icon: Lock },
+  { id: "preferencias", labelKey: "perfil.tabs.preferencias", icon: Bell },
+  { id: "seguranca", labelKey: "perfil.tabs.seguranca", icon: Shield },
 ];
 
 const roleLabel = (r: string | null | undefined) => {
@@ -89,6 +93,7 @@ const defaultPrefs: UserPrefsUi = { pushNotif: true, emailNotif: true, eventRemi
 const defaultSecurity = { loginAlerts: true };
 
 const Perfil = () => {
+  const { t } = useTranslation("common");
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -103,7 +108,12 @@ const Perfil = () => {
   const [deleting, setDeleting] = useState(false);
 
   // Personal info
-  const [profile, setProfile] = useState({ full_name: "", phone: "", language: "pt-PT", role: "" as string | null });
+  const [profile, setProfile] = useState<{
+    full_name: string;
+    phone: string;
+    language: AppLocale;
+    role: string | null;
+  }>({ full_name: "", phone: "", language: "pt", role: null });
   const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
 
   // Email
@@ -142,7 +152,7 @@ const Perfil = () => {
     setProfile({
       full_name: perfilDb.full_name ?? "",
       phone: perfilDb.phone ?? "",
-      language: perfilDb.language ?? "pt-PT",
+      language: normalizeAppLocale(perfilDb.language),
       role: perfilDb.role ?? null,
     });
   }, [perfilDb]);
@@ -203,15 +213,16 @@ const Perfil = () => {
       const errs: Record<string, string> = {};
       parsed.error.issues.forEach((i) => { if (i.path[0]) errs[String(i.path[0])] = i.message; });
       setProfileErrors(errs);
-      showToast("error", "Verifique os campos do formulário.");
+      showToast("error", t("perfil.pessoal.toast_validation"));
       return;
     }
     setProfileErrors({});
     setSaving(true);
+    const locale = normalizeAppLocale(profile.language);
     const body = {
       full_name: profile.full_name.trim(),
       phone: profile.phone?.trim() || null,
-      language: profile.language || "pt-PT",
+      language: locale,
     };
 
     if (!isOnline) {
@@ -226,15 +237,17 @@ const Perfil = () => {
         return { ...prev, ...body };
       });
       setSaving(false);
-      showToast("success", "Guardado offline — será sincronizado quando voltar a haver rede.");
+      void syncAppLocale(locale);
+      showToast("success", t("perfil.pessoal.toast_offline"));
       return;
     }
 
     const { error } = await supabase.from("profiles").update(body).eq("id", user.id);
     setSaving(false);
     if (error) { showToast("error", error.message); return; }
+    await syncAppLocale(locale);
     await queryClient.invalidateQueries({ queryKey: qk.perfilProfile(user.id) });
-    showToast("success", "Informações pessoais atualizadas.");
+    showToast("success", t("perfil.pessoal.toast_saved"));
   };
 
   const handleSaveEmail = async () => {
@@ -269,11 +282,11 @@ const Perfil = () => {
     if (!user) return;
     const schoolId = perfilDb?.school_id;
     if (!schoolId) {
-      showToast("error", "Sem escola associada ao perfil. Não é possível guardar preferências.");
+      showToast("error", t("perfil.prefs.toast_no_school"));
       return;
     }
     if (!isOnline) {
-      showToast("error", "Precisa de ligação à Internet para guardar preferências.");
+      showToast("error", t("perfil.prefs.toast_offline"));
       return;
     }
     setSaving(true);
@@ -307,11 +320,11 @@ const Perfil = () => {
     if (!pushOk && prefs.pushNotif) {
       showToast(
         "error",
-        "Preferências guardadas, mas não foi possível activar notificações push (permissão ou dispositivo não suportado).",
+        t("perfil.prefs.toast_push_partial"),
       );
       return;
     }
-    showToast("success", "Preferências guardadas.");
+    showToast("success", t("perfil.prefs.toast_saved"));
   };
 
   const handleSaveSecurity = () => {
@@ -405,8 +418,8 @@ const Perfil = () => {
       <div className="flex flex-col gap-6">
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">O Meu Perfil</h1>
-          <p className="text-sm text-muted-foreground">Faça a gestão da sua conta, credenciais e preferências.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("perfil.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("perfil.subtitle")}</p>
         </div>
 
         {/* Profile summary */}
@@ -438,13 +451,13 @@ const Perfil = () => {
 
         {/* Tabs */}
         <div className="flex flex-wrap gap-2 rounded-2xl bg-card p-2 shadow-card">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const active = activeTab === t.id;
+          {PROFILE_TABS.map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
             return (
               <button
-                key={t.id}
-                onClick={() => setActiveTab(t.id)}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
                 className={cn(
                   "flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-[var(--transition-smooth)]",
                   active
@@ -453,7 +466,7 @@ const Perfil = () => {
                 )}
               >
                 <Icon className="h-4 w-4" strokeWidth={1.75} />
-                {t.label}
+                {t(tab.labelKey)}
               </button>
             );
           })}
@@ -462,12 +475,12 @@ const Perfil = () => {
         {/* Personal */}
         {activeTab === "pessoal" && (
           <div className="rounded-2xl bg-card p-6 shadow-card">
-            <h2 className="text-lg font-bold text-foreground">Informações Pessoais</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Atualize os seus dados pessoais.</p>
+            <h2 className="text-lg font-bold text-foreground">{t("perfil.pessoal.heading")}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{t("perfil.pessoal.hint")}</p>
 
             <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2">
               <div className="md:col-span-2">
-                <Field label="Nome completo" icon={User} error={profileErrors.full_name}>
+                <Field label={t("perfil.pessoal.full_name")} icon={User} error={profileErrors.full_name}>
                   <input
                     className={inputCls(!!profileErrors.full_name)}
                     value={profile.full_name}
@@ -476,7 +489,7 @@ const Perfil = () => {
                   />
                 </Field>
               </div>
-              <Field label="Telefone" icon={Phone} error={profileErrors.phone}>
+              <Field label={t("perfil.pessoal.phone")} icon={Phone} error={profileErrors.phone}>
                 <input
                   className={inputCls(!!profileErrors.phone)}
                   value={profile.phone}
@@ -484,19 +497,20 @@ const Perfil = () => {
                   onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
                 />
               </Field>
-              <Field label="Idioma" icon={Globe}>
+              <Field label={t("perfil.pessoal.language")} icon={Globe}>
                 <select
                   className={inputCls(false)}
                   value={profile.language}
-                  onChange={(e) => setProfile({ ...profile, language: e.target.value })}
+                  onChange={(e) =>
+                    setProfile({ ...profile, language: normalizeAppLocale(e.target.value) })
+                  }
                 >
-                  <option value="pt-PT">Português (Portugal)</option>
-                  <option value="pt-AO">Português (Angola)</option>
-                  <option value="en">English</option>
-                  <option value="fr">Français</option>
+                  <option value="pt">{t("perfil.lang.pt")}</option>
+                  <option value="en">{t("perfil.lang.en")}</option>
+                  <option value="fr">{t("perfil.lang.fr")}</option>
                 </select>
               </Field>
-              <Field label="Função" icon={Shield}>
+              <Field label={t("perfil.pessoal.role")} icon={Shield}>
                 <input className={cn(inputCls(false), "bg-muted/40")} value={roleLabel(profile.role)} readOnly />
               </Field>
             </div>
@@ -508,7 +522,7 @@ const Perfil = () => {
                 className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:opacity-50"
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" strokeWidth={2} />}
-                Guardar Alterações
+                {t("perfil.pessoal.save")}
               </button>
             </div>
           </div>
@@ -597,32 +611,30 @@ const Perfil = () => {
         {/* Preferências */}
         {activeTab === "preferencias" && (
           <div className="rounded-2xl bg-card p-6 shadow-card">
-            <h2 className="text-lg font-bold text-foreground">Preferências</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Escolha como quer receber notificações. Estas escolhas sincronizam com a conta e com o envio push via OneSignal.
-            </p>
+            <h2 className="text-lg font-bold text-foreground">{t("perfil.prefs.heading")}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{t("perfil.prefs.hint")}</p>
 
             <div className="mt-6 flex flex-col divide-y divide-border">
               {!prefsLoaded && (
-                <p className="py-4 text-sm text-muted-foreground">A carregar preferências…</p>
+                <p className="py-4 text-sm text-muted-foreground">{t("perfil.prefs.loading")}</p>
               )}
               {prefsLoaded &&
                 (
                   [
                     {
                       k: "pushNotif" as const,
-                      label: "Notificações push",
-                      desc: "No navegador usa OneSignal (web). Na app Android/iOS, notificações do sistema.",
+                      label: t("perfil.prefs.channels.push.label"),
+                      desc: t("perfil.prefs.channels.push.desc"),
                     },
                     {
                       k: "emailNotif" as const,
-                      label: "Notificações por email",
-                      desc: "Quando a escola ou os serviços enviarem alertas por email, respeitar-se-á esta opção.",
+                      label: t("perfil.prefs.channels.email.label"),
+                      desc: t("perfil.prefs.channels.email.desc"),
                     },
                     {
                       k: "eventReminders" as const,
-                      label: "Lembretes de eventos",
-                      desc: "Receber notificações sobre novos eventos no calendário escolar.",
+                      label: t("perfil.prefs.channels.events.label"),
+                      desc: t("perfil.prefs.channels.events.desc"),
                     },
                   ] as const
                 ).map((p) => (
@@ -642,7 +654,7 @@ const Perfil = () => {
                 disabled={saving || !prefsLoaded}
                 className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:opacity-50"
               >
-                <Save className="h-4 w-4" strokeWidth={2} /> Guardar Preferências
+                <Save className="h-4 w-4" strokeWidth={2} /> {t("perfil.prefs.save")}
               </button>
             </div>
           </div>

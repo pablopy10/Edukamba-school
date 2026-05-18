@@ -4,6 +4,7 @@
  * Opcional: VITE_ONESIGNAL_SAFARI_WEB_ID (Safari/iOS push web)
  */
 import { Capacitor } from "@capacitor/core";
+import type { AppLocale } from "@/i18n/constants";
 
 const SW_PATH = "push/onesignal/OneSignalSDKWorker.js";
 const SW_SCOPE = "/push/onesignal/";
@@ -94,5 +95,23 @@ export async function applyWebPushPreference(wantPush: boolean): Promise<boolean
     return true;
   } catch {
     return false;
+  }
+}
+
+/** Segmentation tag (`language`) para mensagens por idioma no dashboard OneSignal. */
+export async function setOneSignalLanguageTag(locale: AppLocale | null): Promise<void> {
+  if (!locale || !shouldInitializeOneSignalWeb()) return;
+
+  try {
+    await initOneSignalWeb();
+  } catch {
+    return;
+  }
+
+  const OneSignal = (await import("react-onesignal")).default;
+  try {
+    OneSignal.User.addTags({ language: locale });
+  } catch {
+    /* noop */
   }
 }

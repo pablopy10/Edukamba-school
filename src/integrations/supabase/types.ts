@@ -3054,7 +3054,7 @@ export type Database = {
           full_name: string
           id: string
           is_active: boolean | null
-          language: string | null
+          language: string
           phone: string | null
           role: Database["public"]["Enums"]["user_role"] | null
           school_id: string | null
@@ -5205,6 +5205,7 @@ export type Database = {
         Args: { _school_id: string }
         Returns: undefined
       }
+      set_my_language: { Args: { p_language: string }; Returns: undefined }
     }
     Enums: {
       absence_reason: "SICKNESS" | "PERSONAL" | "FAMILY" | "OTHER"

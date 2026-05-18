@@ -65,6 +65,7 @@ import { SelectedChildProvider } from "./context/SelectedChildContext";
 import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
 import { queryClient } from "@/lib/queryClient";
 import { OneSignalWebBridge } from "@/components/OneSignalWebBridge";
+import { LanguageSyncBridge } from "@/components/LanguageSyncBridge";
 import { OpenInAppBanner } from "@/components/OpenInAppBanner";
 import { ScrollToTop } from "@/components/ScrollToTop";
 
@@ -128,6 +129,7 @@ const App = () => (
                   <Sonner />
                   <ScrollToTop />
                   <OneSignalWebBridge />
+                  <LanguageSyncBridge />
                   <OpenInAppBanner />
                   <Routes>
                     <Route path="/" element={<NativeAppRoot />} />

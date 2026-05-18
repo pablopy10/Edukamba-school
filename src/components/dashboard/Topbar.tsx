@@ -43,6 +43,7 @@ import { cn } from "@/lib/utils";
 import { isNativeMobileApp } from "@/lib/nativeApp";
 import { EdukambaWordmark } from "@/components/branding/EdukambaWordmark";
 import { ROLE_LABEL_INVITE } from "@/components/definicoes/InviteStaffUserDialog";
+import { useTranslation } from "react-i18next";
 
 const roleLabels: Record<string, string> = {
   SUPER_ADMIN: "Super Admin",
@@ -63,6 +64,7 @@ const nativeIconBtn =
   "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent active:scale-[0.98] [&_svg]:h-[1.15rem] [&_svg]:w-[1.15rem]";
 
 function TopbarConnectivity({ variant }: { variant: "native" | "desktop" }) {
+  const { t } = useTranslation("common");
   const {
     networkAvailableForSync,
     pendingCount,
@@ -78,23 +80,23 @@ function TopbarConnectivity({ variant }: { variant: "native" | "desktop" }) {
       : "relative flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full shadow-soft ring-2 ring-offset-2 ring-offset-background";
 
   const connectivityTitle = !networkAvailableForSync
-    ? "Sem Internet — modo offline"
+    ? t("sync.status_offline")
     : pendingCount > 0
-      ? `Pendente para envio (${pendingCount})`
-      : "Sucesso — sincronizado";
+      ? t("sync.status_pending", { count: pendingCount })
+      : t("sync.status_ok");
 
   const onSyncPress = async () => {
     if (!networkAvailableForSync) {
       toast({
-        title: "Sem rede",
-        description: "Não há ligação suficiente para sincronizar.",
+        title: t("sync.toast_no_network_title"),
+        description: t("sync.toast_no_network_desc"),
         variant: "destructive",
       });
       return;
     }
     const beforeLen = loadPendingSync().length;
     if (beforeLen === 0) {
-      toast({ title: "Nada pendente", description: "Não há alterações por enviar ao servidor." });
+      toast({ title: t("sync.toast_nothing_pending_title"), description: t("sync.toast_nothing_pending_desc") });
       return;
     }
     const { successCount, remainingPending, blocked, httpStatus } = await syncNow();
@@ -105,38 +107,38 @@ function TopbarConnectivity({ variant }: { variant: "native" | "desktop" }) {
     if (successCount === 0) {
       if (blocked === "no_session") {
         toast({
-          title: "Sessão expirada",
-          description: `Inicie sessão novamente para enviar os ${remainingPending} pedido(s) na fila.`,
+          title: t("sync.toast_session_title"),
+          description: t("sync.toast_session_desc", { count: remainingPending }),
           variant: "destructive",
         });
         return;
       }
       if (blocked === "no_network") {
         toast({
-          title: "Sem rede",
-          description: "Não foi possível contactar o servidor. Verifique a ligação e tente outra vez.",
+          title: t("sync.toast_server_unreachable_title"),
+          description: t("sync.toast_server_unreachable_desc"),
           variant: "destructive",
         });
         return;
       }
       const detail =
         httpStatus === 409
-          ? `Conflito com dados já existentes no servidor (HTTP 409). Ainda há ${remainingPending} na fila.`
+          ? t("sync.toast_conflict_detail", { count: remainingPending })
           : httpStatus === 400
-            ? `Pedido rejeitado pelo servidor (HTTP 400) — pode haver dados incompletos ou em formato inválido. Ainda há ${remainingPending} na fila.`
+            ? t("sync.toast_bad_request_detail", { count: remainingPending })
             : httpStatus !== undefined
-              ? `Resposta HTTP ${httpStatus}. Ainda há ${remainingPending} na fila.`
-              : `O servidor pode estar indisponível ou há um erro nos dados enviados. Ainda há ${remainingPending} na fila.`;
+              ? t("sync.toast_http_detail", { status: httpStatus, count: remainingPending })
+              : t("sync.toast_generic_detail", { count: remainingPending });
       toast({
-        title: "Ainda não foi possível sincronizar",
+        title: t("sync.toast_sync_failed_title"),
         description: detail,
         variant: "destructive",
       });
       return;
     }
     toast({
-      title: "Sincronização parcial",
-      description: `Enviámos ${successCount}. Ainda ficam ${remainingPending} pendente(s).`,
+      title: t("sync.toast_partial_title"),
+      description: t("sync.toast_partial_desc", { success: successCount, remaining: remainingPending }),
       variant: "destructive",
     });
   };
@@ -146,7 +148,7 @@ function TopbarConnectivity({ variant }: { variant: "native" | "desktop" }) {
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={`Rede e sincronização. ${connectivityTitle}`}
+          aria-label={`${t("sync.aria_prefix")} ${connectivityTitle}`}
           title={connectivityTitle}
           className={cn(
             ringBase,
@@ -189,14 +191,12 @@ function TopbarConnectivity({ variant }: { variant: "native" | "desktop" }) {
       </PopoverTrigger>
       <PopoverContent align="end" className="z-[100] w-[min(calc(100vw-2rem),20rem)] space-y-3 p-4">
         <div className="space-y-1">
-          <p className="text-sm font-semibold text-foreground">Sincronização</p>
-          <p className="text-xs text-muted-foreground">
-            Modo automático envia assim que há rede. Modo manual só quando tocar em «Sincronizar agora».
-          </p>
+          <p className="text-sm font-semibold text-foreground">{t("sync.popover_title")}</p>
+          <p className="text-xs text-muted-foreground">{t("sync.popover_hint")}</p>
         </div>
         <div className="flex items-center justify-between gap-4">
           <Label htmlFor="offline-sync-auto" className="cursor-pointer text-sm font-normal">
-            Automático
+            {t("sync.mode_auto")}
           </Label>
           <Switch
             id="offline-sync-auto"
@@ -214,16 +214,14 @@ function TopbarConnectivity({ variant }: { variant: "native" | "desktop" }) {
           {syncing ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-              A sincronizar…
+              {t("sync.btn_syncing")}
             </>
           ) : (
-            <>Sincronizar agora</>
+            <>{t("sync.btn_sync_now")}</>
           )}
         </Button>
         <p className="text-[11px] leading-snug text-muted-foreground">
-          {pendingCount > 0
-            ? `${pendingCount} alteração(ões) pendente(s) para envio.`
-            : "Sucesso — sem alterações por enviar."}
+          {pendingCount > 0 ? t("sync.footer_pending", { count: pendingCount }) : t("sync.footer_ok")}
         </p>
       </PopoverContent>
     </Popover>
