@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { invokeAdminUpdateUserEmail } from "@/lib/admin/invokeAdminUpdateUserEmail";
-// (no extra imports needed)
+import { useTranslation } from "react-i18next";
 
 export type GuardianRow = {
   profile_id: string;
@@ -40,6 +40,7 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
   const [studentIds, setStudentIds] = useState<string[]>([]);
   const [studentSearch, setStudentSearch] = useState("");
   const [password, setPassword] = useState("");
+  const { t } = useTranslation("pages", { keyPrefix: "educadores.form" });
 
   useEffect(() => {
     if (open) {
@@ -62,7 +63,7 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
 
   const handleSubmit = async () => {
     if (!fullName.trim()) {
-      toast({ title: "Nome obrigatório", variant: "destructive" });
+      toast({ title: t("toast_name_required"), variant: "destructive" });
       return;
     }
     setLoading(true);
@@ -71,14 +72,14 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
         const nextEmail = email.trim().toLowerCase();
         const prevEmail = (guardian.email ?? "").trim().toLowerCase();
         if (nextEmail.length === 0) {
-          toast({ title: "Email obrigatório", variant: "destructive" });
+          toast({ title: t("toast_email_required_edit"), variant: "destructive" });
           setLoading(false);
           return;
         }
         if (nextEmail !== prevEmail) {
           const fx = await invokeAdminUpdateUserEmail(guardian.profile_id, nextEmail);
           if (!fx.ok) {
-            toast({ title: "Erro ao actualizar email de login", description: fx.message, variant: "destructive" });
+            toast({ title: t("toast_email_update_fail"), description: fx.message, variant: "destructive" });
             setLoading(false);
             return;
           }
@@ -89,7 +90,6 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
         }).eq("id", guardian.profile_id);
         if (pErr) throw pErr;
 
-        // Reconcile student links: unlink removed, link added.
         const previous = new Set(guardian.student_ids ?? []);
         const next = new Set(studentIds);
         const toUnlink = [...previous].filter((id) => !next.has(id));
@@ -102,14 +102,14 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
           const { error } = await supabase.from("students").update({ parent_id: guardian.profile_id }).in("id", toLink);
           if (error) throw error;
         }
-        toast({ title: "Educador actualizado" });
+        toast({ title: t("toast_updated") });
       } else {
         if (!email.trim()) {
-          toast({ title: "Email obrigatório", variant: "destructive" });
+          toast({ title: t("toast_email_required_edit"), variant: "destructive" });
           setLoading(false); return;
         }
         if (password.length < 6) {
-          toast({ title: "Password deve ter pelo menos 6 caracteres", variant: "destructive" });
+          toast({ title: t("toast_password_short"), variant: "destructive" });
           setLoading(false); return;
         }
         const { data, error } = await supabase.functions.invoke("invite-guardian", {
@@ -124,14 +124,14 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
         if (error) throw error;
         if ((data as any)?.error) throw new Error((data as any).error);
         toast({
-          title: "Educador criado",
-          description: `Credenciais enviadas por email para ${email.trim()}.`,
+          title: t("toast_created_title"),
+          description: t("toast_created_description", { email: email.trim() }),
         });
       }
       onSaved();
       onOpenChange(false);
     } catch (e: any) {
-      toast({ title: "Erro", description: e?.message ?? String(e), variant: "destructive" });
+      toast({ title: t("toast_generic_error"), description: e?.message ?? String(e), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -149,41 +149,41 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar Educador" : "Novo Educador"}</DialogTitle>
+          <DialogTitle>{isEdit ? t("title_edit") : t("title_create")}</DialogTitle>
           <DialogDescription>
-            {isEdit ? "Actualize os dados do encarregado de educação." : "Preencha os dados e escolha como criar a conta."}
+            {isEdit ? t("desc_edit") : t("desc_create")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <Label htmlFor="gn">Nome completo</Label>
-            <Input id="gn" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Ex.: Maria Silva" />
+            <Label htmlFor="gn">{t("full_name_label")}</Label>
+            <Input id="gn" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder={t("full_name_placeholder")} />
           </div>
           <div className="sm:col-span-2">
-            <Label htmlFor="ge">Email {isEdit ? "(início de sessão)" : ""}</Label>
-            <Input id="ge" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@email.com" />
+            <Label htmlFor="ge">{isEdit ? t("email_label_login") : t("email_label_plain")}</Label>
+            <Input id="ge" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("email_placeholder")} />
             {isEdit && (
               <p className="mt-1 text-xs text-muted-foreground">
-                Ao alterar o email também actualiza as credenciais de acesso ao Edukamba.
+                {t("email_hint_edit")}
               </p>
             )}
           </div>
           <div>
-            <Label htmlFor="gp">Telefone</Label>
-            <Input id="gp" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(244) 925 ..." />
+            <Label htmlFor="gp">{t("phone_label")}</Label>
+            <Input id="gp" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t("phone_placeholder")} />
           </div>
           <div className="sm:col-span-2">
-            <Label>Alunos associados {studentIds.length > 0 && <span className="text-muted-foreground">({studentIds.length})</span>}</Label>
+            <Label>{t("students_label", { count: studentIds.length })}</Label>
             <Input
               value={studentSearch}
               onChange={(e) => setStudentSearch(e.target.value)}
-              placeholder="Pesquisar aluno..."
+              placeholder={t("student_search_placeholder")}
               className="mt-1"
             />
             <div className="mt-2 max-h-48 overflow-y-auto rounded-md border border-border">
               {filteredStudents.length === 0 ? (
-                <p className="p-3 text-center text-xs text-muted-foreground">Nenhum aluno encontrado.</p>
+                <p className="p-3 text-center text-xs text-muted-foreground">{t("students_empty")}</p>
               ) : (
                 filteredStudents.map((s) => {
                   const checked = studentIds.includes(s.id);
@@ -203,18 +203,18 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
 
           {!isEdit && (
             <div className="sm:col-span-2 space-y-1.5">
-              <Label htmlFor="gpw">Password inicial *</Label>
-              <Input id="gpw" type="text" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
-              <p className="text-xs text-muted-foreground">O educador receberá um email com as credenciais de acesso.</p>
+              <Label htmlFor="gpw">{t("password_label")}</Label>
+              <Input id="gpw" type="text" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t("password_placeholder")} />
+              <p className="text-xs text-muted-foreground">{t("password_hint")}</p>
             </div>
           )}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancelar</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>{t("cancel")}</Button>
           <Button onClick={handleSubmit} disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEdit ? "Guardar" : "Criar educador"}
+            {isEdit ? t("submit_edit") : t("submit_create")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { invokeAdminUpdateUserEmail } from "@/lib/admin/invokeAdminUpdateUserEmail";
+import { useTranslation } from "react-i18next";
 
 type ClassroomOpt = { id: string; name: string };
 type StudentOpt = { id: string; full_name: string; classroom_id: string | null; parent_id: string | null };
@@ -36,6 +37,8 @@ const initialsOf = (name: string) =>
 const Educadores = () => {
   const native = isNativeMobileApp();
   const navigate = useNavigate();
+  const { t } = useTranslation("pages", { keyPrefix: "educadores" });
+  const { t: navT } = useTranslation("common", { keyPrefix: "nav" });
   const { selectedYearId } = useAcademicYear();
   const { isTeacher, classroomIds: teacherClassroomIds, loading: teacherLoading } = useTeacherClassrooms();
   const [guardians, setGuardians] = useState<GuardianRow[]>([]);
@@ -81,7 +84,7 @@ const Educadores = () => {
       classroomsQuery,
     ]);
     if (pErr) {
-      toast({ title: "Erro a carregar educadores", description: pErr.message, variant: "destructive" });
+      toast({ title: t("toast_load_error"), description: pErr.message, variant: "destructive" });
     }
     let studentsArr = (stus ?? []) as StudentOpt[];
     const classroomsArr = (clas ?? []) as ClassroomOpt[];
@@ -153,9 +156,9 @@ const Educadores = () => {
       .update({ is_active: false })
       .eq("id", deleting.profile_id);
     if (error) {
-      toast({ title: "Erro a remover", description: error.message, variant: "destructive" });
+      toast({ title: t("toast_remove_error"), description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Educador removido", description: "A conta foi desactivada." });
+      toast({ title: t("toast_removed_title"), description: t("toast_removed_description") });
       setDeleting(null);
       load();
     }
@@ -169,7 +172,7 @@ const Educadores = () => {
     if (!viewing || isTeacher) return;
     const trimmed = viewEmailDraft.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      toast({ title: "Email inválido", description: "Indique um endereço de email válido.", variant: "destructive" });
+      toast({ title: t("toast_email_invalid_title"), description: t("toast_email_invalid_description"), variant: "destructive" });
       return;
     }
     const prev = (viewing.email ?? "").trim().toLowerCase();
@@ -178,10 +181,10 @@ const Educadores = () => {
     const fx = await invokeAdminUpdateUserEmail(viewing.profile_id, trimmed);
     setSavingViewEmail(false);
     if (!fx.ok) {
-      toast({ title: "Erro ao actualizar email", description: fx.message, variant: "destructive" });
+      toast({ title: t("toast_email_update_error"), description: fx.message, variant: "destructive" });
       return;
     }
-    toast({ title: "Email actualizado", description: "Este email serve para iniciar sessão na Edukamba." });
+    toast({ title: t("toast_email_saved_title"), description: t("toast_email_saved_description") });
     await load();
     setViewing((v) => (v?.profile_id === viewing.profile_id ? { ...v, email: trimmed } : v));
   };
@@ -289,8 +292,8 @@ const Educadores = () => {
       <div className={cn("flex flex-col gap-6", native && !isTeacher && "relative pb-28")}>
         <div className={cn("flex flex-col gap-4", native ? "" : "sm:flex-row sm:items-center sm:justify-between")}>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Educadores</h1>
-            <p className="text-sm text-muted-foreground">Faça a gestão dos encarregados de educação dos alunos.</p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{navT("guardians")}</h1>
+            <p className="text-sm text-muted-foreground">{t("header_subtitle")}</p>
           </div>
           <div className={cn("flex flex-wrap items-center gap-3", native && "w-full")}>
             <div className={cn("relative", native ? "min-w-0 flex-1" : "")}>
@@ -299,7 +302,7 @@ const Educadores = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 type="text"
-                placeholder="Pesquisar educador..."
+                placeholder={t("search_placeholder")}
                 className={cn(
                   "h-11 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20",
                   native ? "w-full min-w-0" : "w-72",
@@ -311,7 +314,7 @@ const Educadores = () => {
                 onClick={() => { setEditing(null); setFormOpen(true); }}
                 className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
                 <Plus className="h-4 w-4" strokeWidth={2.25} />
-                Novo Educador
+                {t("new_guardian")}
               </button>
             )}
           </div>

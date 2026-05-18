@@ -14,6 +14,7 @@ import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPor
 import { isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nativeApp";
 import { Button } from "@/components/ui/button";
 import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
+import { useTranslation } from "react-i18next";
 
 const colorPalette = ["lilac", "blue", "yellow", "green", "pink"] as const;
 const colorStyles: Record<typeof colorPalette[number], string> = {
@@ -26,6 +27,8 @@ const colorStyles: Record<typeof colorPalette[number], string> = {
 
 const Disciplinas = () => {
   const native = isNativeMobileApp();
+  const { t } = useTranslation("pages", { keyPrefix: "disciplinas" });
+  const { t: navT } = useTranslation("common", { keyPrefix: "nav" });
   const [subjects, setSubjects] = useState<SubjectRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string[]>([]);
@@ -43,7 +46,7 @@ const Disciplinas = () => {
       .select("id, name, code, school_id")
       .order("name", { ascending: true });
     if (error) {
-      toast({ title: "Erro a carregar disciplinas", description: error.message, variant: "destructive" });
+      toast({ title: t("toast_load_error"), description: error.message, variant: "destructive" });
     } else {
       setSubjects((data ?? []) as SubjectRow[]);
     }
@@ -80,23 +83,26 @@ const Disciplinas = () => {
   const handleEdit = (s: SubjectRow) => { setEditing(s); setDialogOpen(true); };
   const handleNew = () => { setEditing(null); setDialogOpen(true); };
 
-  const importFields: ImportField[] = [
-    { key: "name", label: "Nome", required: true, aliases: ["disciplina", "nome da disciplina"], example: "Matemática" },
-    { key: "code", label: "Código", aliases: ["codigo", "cod"], example: "MAT-01" },
-  ];
+  const importFields: ImportField[] = useMemo(
+    () => [
+      { key: "name", label: t("import_field_name"), required: true, aliases: ["disciplina", "nome da disciplina", "subject", "matière"], example: t("import_ex_name") },
+      { key: "code", label: t("import_field_code"), aliases: ["codigo", "cod", "code"], example: t("import_ex_code") },
+    ],
+    [t],
+  );
 
   const handleImportRow = async (row: Record<string, string>) => {
     const name = row.name?.trim();
-    if (!name) throw new Error("Nome é obrigatório");
+    if (!name) throw new Error(t("import_err_name"));
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Sessão inválida");
+    if (!user) throw new Error(t("import_err_session"));
     const { data: profile } = await supabase
       .from("profiles")
       .select("school_id, support_context_school_id")
       .eq("id", user.id)
       .maybeSingle();
     const sid = effectiveSchoolIdFromProfile(profile);
-    if (!sid) throw new Error("Escola não encontrada");
+    if (!sid) throw new Error(t("import_err_school"));
     const { error } = await supabase.from("subjects").insert({
       name,
       code: row.code?.trim() || null,
@@ -109,9 +115,9 @@ const Disciplinas = () => {
     if (!deleteId) return;
     const { error } = await supabase.from("subjects").delete().eq("id", deleteId);
     if (error) {
-      toast({ title: "Erro ao eliminar", description: error.message, variant: "destructive" });
+      toast({ title: t("toast_delete_error"), description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Disciplina eliminada" });
+      toast({ title: t("toast_deleted") });
       setSubjects((prev) => prev.filter((s) => s.id !== deleteId));
       setSelected((prev) => prev.filter((id) => id !== deleteId));
     }
@@ -122,9 +128,14 @@ const Disciplinas = () => {
     if (selected.length === 0) return;
     const { error } = await supabase.from("subjects").delete().in("id", selected);
     if (error) {
-      toast({ title: "Erro ao eliminar", description: error.message, variant: "destructive" });
+      toast({ title: t("toast_delete_error"), description: error.message, variant: "destructive" });
     } else {
-      toast({ title: `${selected.length} disciplina(s) eliminada(s)` });
+      toast({
+        title:
+          selected.length === 1
+            ? t("toast_bulk_deleted_one", { count: selected.length })
+            : t("toast_bulk_deleted_other", { count: selected.length }),
+      });
       setSubjects((prev) => prev.filter((s) => !selected.includes(s.id)));
       setSelected([]);
     }
@@ -133,6 +144,7 @@ const Disciplinas = () => {
   const renderSubjectCard = (s: SubjectRow, idx: number) => {
     const isSelected = selected.includes(s.id);
     const color = colorPalette[idx % colorPalette.length];
+    const codeLbl = s.code ?? "—";
     return (
       <div
         key={s.id}
@@ -147,7 +159,7 @@ const Disciplinas = () => {
             checked={isSelected}
             onChange={() => toggle(s.id)}
             className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-border accent-pastel-blue-foreground"
-            aria-label={`Seleccionar ${s.name}`}
+            aria-label={t("select_row_aria", { name: s.name })}
           />
           <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl", colorStyles[color])}>
             <Contact className="h-5 w-5" strokeWidth={1.75} />
@@ -155,14 +167,16 @@ const Disciplinas = () => {
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-foreground">{s.name}</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-xs font-medium text-foreground">Código: {s.code ?? "—"}</span>
+              <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-xs font-medium text-foreground">
+                {t("code_badge", { code: codeLbl })}
+              </span>
             </div>
           </div>
           <div className="flex shrink-0 flex-col gap-1">
             <button
               type="button"
               onClick={() => handleEdit(s)}
-              title="Editar"
+              title={t("title_edit")}
               className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
             >
               <Pencil className="h-4 w-4" strokeWidth={1.75} />
@@ -170,7 +184,7 @@ const Disciplinas = () => {
             <button
               type="button"
               onClick={() => setDeleteId(s.id)}
-              title="Eliminar"
+              title={t("title_delete")}
               className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
             >
               <Trash2 className="h-4 w-4" strokeWidth={1.75} />
@@ -186,8 +200,8 @@ const Disciplinas = () => {
       <div className={cn("flex flex-col gap-6", native && "relative pb-28")}>
         <div className={cn("flex flex-col gap-4", native ? "" : "sm:flex-row sm:items-center sm:justify-between")}>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Disciplinas</h1>
-            <p className="text-sm text-muted-foreground">Faça a gestão das disciplinas leccionadas.</p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{navT("subjects")}</h1>
+            <p className="text-sm text-muted-foreground">{t("header_subtitle")}</p>
           </div>
           <div className={cn("flex flex-wrap items-center gap-3", native && "w-full")}>
             <div className={cn("relative", native ? "min-w-0 flex-1" : "")}>
@@ -196,7 +210,7 @@ const Disciplinas = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 type="text"
-                placeholder="Pesquisar disciplina..."
+                placeholder={t("search_placeholder")}
                 className={cn(
                   "h-11 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20",
                   native ? "w-full min-w-0" : "w-72",
@@ -206,10 +220,10 @@ const Disciplinas = () => {
             <Select value={codeFilter} onValueChange={setCodeFilter}>
               <SelectTrigger className={cn("h-11 rounded-full border-border bg-card", native ? "w-full min-w-0" : "w-[160px]")}>
                 <Filter className="mr-1 h-4 w-4 text-muted-foreground" />
-                <SelectValue placeholder="Filtrar" />
+                <SelectValue placeholder={t("filter_placeholder")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos os códigos</SelectItem>
+                <SelectItem value="all">{t("all_codes")}</SelectItem>
                 {codePrefixes.map((p) => (
                   <SelectItem key={p} value={p}>{p}</SelectItem>
                 ))}
@@ -222,14 +236,14 @@ const Disciplinas = () => {
               className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
             >
               <Plus className="h-4 w-4" strokeWidth={2.25} />
-              Nova Disciplina
+              {t("new_subject")}
             </button>
             <button
               onClick={() => setImportOpen(true)}
               className="flex h-11 items-center gap-2 rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
             >
               <Upload className="h-4 w-4" strokeWidth={2.25} />
-              Importar Excel
+              {t("import_excel")}
             </button>
             </>
             )}
@@ -238,15 +252,15 @@ const Disciplinas = () => {
 
         <div className="rounded-2xl bg-card shadow-card">
           <div className="flex items-center justify-between border-b border-border p-5">
-            <h2 className="text-lg font-bold text-foreground">Lista de Disciplinas</h2>
+            <h2 className="text-lg font-bold text-foreground">{t("list_title")}</h2>
             {selected.length > 0 && (
               <div className="flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">{selected.length} selecionada(s)</span>
+                <span className="text-muted-foreground">{t("selected_indicator", { count: selected.length })}</span>
                 <button
                   onClick={handleBulkDelete}
                   className="rounded-full bg-pastel-pink px-3 py-1.5 text-xs font-medium text-pastel-pink-foreground hover:opacity-90"
                 >
-                  Eliminar
+                  {t("bulk_delete")}
                 </button>
               </div>
             )}
@@ -258,7 +272,7 @@ const Disciplinas = () => {
             </div>
           ) : filtered.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">
-              {subjects.length === 0 ? "Ainda não há disciplinas. Crie a primeira." : "Nenhuma disciplina corresponde aos filtros."}
+              {subjects.length === 0 ? t("empty_initial") : t("empty_filtered")}
             </div>
           ) : native ? (
             <div className="flex flex-col gap-3 p-4">
@@ -270,7 +284,7 @@ const Disciplinas = () => {
                     onChange={toggleAll}
                     className="h-4 w-4 cursor-pointer rounded border-border accent-pastel-blue-foreground"
                   />
-                  Seleccionar todos ({filtered.length})
+                  {t("select_all", { count: filtered.length })}
                 </label>
               )}
               {filtered.map((s, i) => renderSubjectCard(s, i))}
@@ -288,9 +302,9 @@ const Disciplinas = () => {
                         className="h-4 w-4 cursor-pointer rounded border-border accent-pastel-blue-foreground"
                       />
                     </th>
-                    <th className="py-4 pr-4 font-semibold">Disciplina</th>
-                    <th className="py-4 pr-4 font-semibold">Código</th>
-                    <th className="py-4 pr-5 font-semibold text-right">Acções</th>
+                    <th className="py-4 pr-4 font-semibold">{t("col_subject")}</th>
+                    <th className="py-4 pr-4 font-semibold">{t("col_code")}</th>
+                    <th className="py-4 pr-5 font-semibold text-right">{t("col_actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -326,14 +340,14 @@ const Disciplinas = () => {
                           <div className="flex items-center justify-end gap-1">
                             <button
                               onClick={() => handleEdit(s)}
-                              title="Editar"
+                              title={t("title_edit")}
                               className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
                             >
                               <Pencil className="h-4 w-4" strokeWidth={1.75} />
                             </button>
                             <button
                               onClick={() => setDeleteId(s.id)}
-                              title="Eliminar"
+                              title={t("title_delete")}
                               className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
                             >
                               <Trash2 className="h-4 w-4" strokeWidth={1.75} />
@@ -350,7 +364,7 @@ const Disciplinas = () => {
 
           <div className="flex items-center justify-between border-t border-border p-5">
             <p className="text-xs text-muted-foreground">
-              {filtered.length} de {subjects.length} disciplina(s)
+              {t("pagination", { filtered: filtered.length, total: subjects.length })}
             </p>
           </div>
         </div>
@@ -362,7 +376,7 @@ const Disciplinas = () => {
             type="button"
             size="icon"
             className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-            aria-label="Nova disciplina"
+            aria-label={t("fab_aria")}
             onClick={handleNew}
           >
             <Plus className="h-6 w-6" />
@@ -381,9 +395,9 @@ const Disciplinas = () => {
       <ExcelImportDialog
         open={importOpen}
         onOpenChange={setImportOpen}
-        title="Importar Disciplinas"
-        description="Importe disciplinas a partir de um ficheiro Excel."
-        templateSheetName="Disciplinas"
+        title={t("import_title")}
+        description={t("import_description")}
+        templateSheetName={t("import_sheet")}
         fields={importFields}
         onImportRow={handleImportRow}
         onCompleted={fetchSubjects}
@@ -393,14 +407,12 @@ const Disciplinas = () => {
       <AlertDialog open={!!deleteId} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar disciplina?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acção é irreversível. A disciplina será removida permanentemente.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t("delete_title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("delete_description")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete}>Eliminar</AlertDialogAction>
+            <AlertDialogCancel>{t("form.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>{t("bulk_delete")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
