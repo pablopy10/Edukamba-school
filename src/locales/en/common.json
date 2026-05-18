@@ -109,6 +109,84 @@
     "footer_ok": "All clear — nothing waiting to upload.",
     "aria_prefix": "Network and sync."
   },
+  "roles": {
+    "SUPER_ADMIN": "Super Admin",
+    "ADMIN": "Administrator",
+    "DIRECTOR": "Director",
+    "SECRETARY": "Secretary",
+    "TREASURER": "Treasurer",
+    "LIBRARIAN": "Librarian",
+    "STOCK_MANAGER": "Stock manager",
+    "RECEPTIONIST": "Receptionist",
+    "TEACHER": "Teacher",
+    "PARENT": "Parent / guardian",
+    "STUDENT": "Student"
+  },
+  "topbar": {
+    "open_menu": "Open menu",
+    "wordmark_aria": "Edukamba — Dashboard",
+    "search_aria": "Search",
+    "chat_aria": "Chat",
+    "notifications_aria": "Notifications",
+    "profile_aria": "Profile",
+    "parent_consult_heading": "Viewing data for",
+    "select_child_aria": "Select child",
+    "child_placeholder": "Child",
+    "child_selector_title": "Selected child",
+    "search_dialog_title": "Search",
+    "search_dialog_desc": "Type a term and press Enter to open the search page.",
+    "search_placeholder": "Search…",
+    "search_submit": "Search",
+    "academic_year_title": "Academic year in use",
+    "academic_year_placeholder": "Academic year",
+    "year_active_suffix": "active",
+    "trial_period_title": "Trial period",
+    "trial_ends_today": "Trial ends today",
+    "trial_days_one": "{{count}} day left in trial",
+    "trial_days_other": "{{count}} days left in trial"
+  },
+  "dashboard": {
+    "sr_title": "Edukamba dashboard",
+    "stats": {
+      "students": "Students",
+      "teachers": "Teachers",
+      "staff": "Staff",
+      "classrooms": "Classes"
+    },
+    "students_card": {
+      "title": "Students",
+      "boys": "Boys",
+      "girls": "Girls",
+      "total": "Total",
+      "no_data": "No data"
+    },
+    "attendance": {
+      "title": "Attendance",
+      "all_classes": "All classes",
+      "placeholder_class": "Class",
+      "placeholder_no_classes": "No classes",
+      "teacher_no_schedules": "No classes with a timetable set for this academic year.",
+      "present": "Present",
+      "absent": "Absent",
+      "empty_hint": "No attendance records for this period. Check the academic year above or enter attendance under Attendance."
+    },
+    "calendar": {
+      "prev_month_aria": "Previous month",
+      "next_month_aria": "Next month"
+    },
+    "agenda": {
+      "title": "Schedule",
+      "today": "Today",
+      "tomorrow": "Tomorrow",
+      "placeholder_class": "Class",
+      "no_lessons": "No lessons scheduled for this day.",
+      "fallback_class": "Class",
+      "fallback_lesson": "Lesson"
+    },
+    "chart_months_short": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    "calendar_weekdays_short": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    "calendar_months_long": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+  },
   "perfil": {
     "title": "My profile",
     "subtitle": "Manage your account, credentials and preferences.",

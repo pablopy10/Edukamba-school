@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Search,
@@ -18,6 +19,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { intlLocaleTagFromLng } from "@/lib/intlLocale";
 
 type ResultType = "aluno" | "professor" | "matricula" | "curso" | "turma" | "evento" | "avaliacao" | "documento" | "mensagem" | "notificacao";
 
@@ -30,39 +32,13 @@ type Result = {
   to: string;
 };
 
-const typeMeta: Record<ResultType, { label: string; icon: typeof Search; bg: string; text: string }> = {
-  aluno: { label: "Alunos", icon: Users, bg: "bg-pastel-blue", text: "text-pastel-blue-foreground" },
-  professor: { label: "Professores", icon: GraduationCap, bg: "bg-pastel-green", text: "text-pastel-green-foreground" },
-  matricula: { label: "Matrículas", icon: Receipt, bg: "bg-pastel-yellow", text: "text-pastel-yellow-foreground" },
-  curso: { label: "Cursos", icon: BookOpen, bg: "bg-pastel-lilac", text: "text-pastel-lilac-foreground" },
-  turma: { label: "Turmas", icon: Presentation, bg: "bg-pastel-pink", text: "text-pastel-pink-foreground" },
-  evento: { label: "Eventos", icon: CalendarCheck, bg: "bg-pastel-green", text: "text-pastel-green-foreground" },
-  avaliacao: { label: "Avaliações", icon: BookMarked, bg: "bg-pastel-blue", text: "text-pastel-blue-foreground" },
-  documento: { label: "Documentos", icon: FileText, bg: "bg-pastel-yellow", text: "text-pastel-yellow-foreground" },
-  mensagem: { label: "Mensagens", icon: MessageSquare, bg: "bg-pastel-lilac", text: "text-pastel-lilac-foreground" },
-  notificacao: { label: "Notificações", icon: Bell, bg: "bg-pastel-pink", text: "text-pastel-pink-foreground" },
-};
-
 type FilterType = "all" | ResultType;
 
-const formatRelative = (iso?: string | null) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const diff = Date.now() - d.getTime();
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return "agora";
-  if (min < 60) return `há ${min} min`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `há ${h} h`;
-  const days = Math.floor(h / 24);
-  if (days < 30) return `há ${days} d`;
-  return d.toLocaleDateString("pt-PT");
-};
-
 const Pesquisa = () => {
+  const { t, i18n } = useTranslation("pages");
+  const { t: tc } = useTranslation("common");
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const initial = params.get("q") ?? "";
   const [query, setQuery] = useState(initial);
   const [filter, setFilter] = useState<FilterType>("all");
   const [results, setResults] = useState<Result[]>([]);
@@ -80,6 +56,22 @@ const Pesquisa = () => {
     setParams(next, { replace: true });
   };
 
+  const typeMeta: Record<ResultType, { label: string; icon: typeof Search; bg: string; text: string }> = useMemo(
+    () => ({
+      aluno: { label: tc("nav.students"), icon: Users, bg: "bg-pastel-blue", text: "text-pastel-blue-foreground" },
+      professor: { label: tc("nav.teachers"), icon: GraduationCap, bg: "bg-pastel-green", text: "text-pastel-green-foreground" },
+      matricula: { label: tc("nav.enrollments"), icon: Receipt, bg: "bg-pastel-yellow", text: "text-pastel-yellow-foreground" },
+      curso: { label: tc("nav.courses"), icon: BookOpen, bg: "bg-pastel-lilac", text: "text-pastel-lilac-foreground" },
+      turma: { label: tc("nav.classes"), icon: Presentation, bg: "bg-pastel-pink", text: "text-pastel-pink-foreground" },
+      evento: { label: tc("nav.events"), icon: CalendarCheck, bg: "bg-pastel-green", text: "text-pastel-green-foreground" },
+      avaliacao: { label: tc("nav.assessments"), icon: BookMarked, bg: "bg-pastel-blue", text: "text-pastel-blue-foreground" },
+      documento: { label: tc("nav.materials"), icon: FileText, bg: "bg-pastel-yellow", text: "text-pastel-yellow-foreground" },
+      mensagem: { label: t("pesquisa.type_mensagens"), icon: MessageSquare, bg: "bg-pastel-lilac", text: "text-pastel-lilac-foreground" },
+      notificacao: { label: t("pesquisa.type_notificacoes"), icon: Bell, bg: "bg-pastel-pink", text: "text-pastel-pink-foreground" },
+    }),
+    [t, tc],
+  );
+
   // Live search against Supabase, debounced
   useEffect(() => {
     const q = query.trim();
@@ -91,6 +83,20 @@ const Pesquisa = () => {
     setLoading(true);
     const handle = setTimeout(async () => {
       try {
+        const localeTag = intlLocaleTagFromLng(i18n.language);
+        const formatRel = (iso?: string | null) => {
+          if (!iso) return "";
+          const d = new Date(iso);
+          const diff = Date.now() - d.getTime();
+          const min = Math.floor(diff / 60000);
+          if (min < 1) return t("shared.relative_now");
+          if (min < 60) return t("shared.relative_minutes", { count: min });
+          const h = Math.floor(min / 60);
+          if (h < 24) return t("shared.relative_hours", { count: h });
+          const days = Math.floor(h / 24);
+          if (days < 30) return t("shared.relative_days_short", { count: days });
+          return d.toLocaleDateString(localeTag);
+        };
         const like = `%${q}%`;
         const [
           studentsRes,
@@ -162,26 +168,26 @@ const Pesquisa = () => {
         const out: Result[] = [];
 
         studentsRes.data?.forEach((s: any) => {
-          const cls = s.classrooms?.name ?? "Sem turma";
+          const cls = s.classrooms?.name ?? t("pesquisa.ctx_no_class");
           out.push({
             id: `student-${s.id}`,
             type: "aluno",
             title: s.full_name,
-            subtitle: `${cls}${s.enrollment_number ? ` · Nº ${s.enrollment_number}` : ""}`,
-            context: s.email ?? "Aluno",
+            subtitle: `${cls}${s.enrollment_number ? ` · ${t("pesquisa.ctx_student_number", { num: s.enrollment_number })}` : ""}`,
+            context: s.email ?? t("pesquisa.ctx_student"),
             to: "/alunos",
           });
         });
 
-        teachersRes.data?.forEach((t: any) => {
-          const name: string = t.profile?.full_name ?? "Professor";
-          if (!name.toLowerCase().includes(lower) && !(t.employee_id ?? "").toLowerCase().includes(lower) && !(t.subject?.name ?? "").toLowerCase().includes(lower)) return;
+        teachersRes.data?.forEach((teacher: any) => {
+          const name: string = teacher.profile?.full_name ?? t("pesquisa.ctx_teacher");
+          if (!name.toLowerCase().includes(lower) && !(teacher.employee_id ?? "").toLowerCase().includes(lower) && !(teacher.subject?.name ?? "").toLowerCase().includes(lower)) return;
           out.push({
-            id: `teacher-${t.id}`,
+            id: `teacher-${teacher.id}`,
             type: "professor",
             title: name,
-            subtitle: t.subject?.name ?? "Sem disciplina",
-            context: t.employee_id ? `Professor · Nº ${t.employee_id}` : "Professor",
+            subtitle: teacher.subject?.name ?? t("pesquisa.ctx_no_subject"),
+            context: teacher.employee_id ? t("pesquisa.ctx_teacher_id", { id: teacher.employee_id }) : t("pesquisa.ctx_teacher"),
             to: "/professores",
           });
         });
@@ -191,8 +197,8 @@ const Pesquisa = () => {
             id: `course-${c.id}`,
             type: "curso",
             title: c.name,
-            subtitle: c.type ?? "Curso",
-            context: c.description ?? "Curso",
+            subtitle: c.type ?? t("pesquisa.ctx_course_default"),
+            context: c.description ?? t("pesquisa.ctx_course_default"),
             to: "/cursos",
           });
         });
@@ -202,8 +208,8 @@ const Pesquisa = () => {
             id: `classroom-${c.id}`,
             type: "turma",
             title: c.name,
-            subtitle: [c.grade_level, c.period].filter(Boolean).join(" · ") || "Turma",
-            context: c.courses?.name ?? "Turma",
+            subtitle: [c.grade_level, c.period].filter(Boolean).join(" · ") || t("pesquisa.ctx_class_default"),
+            context: c.courses?.name ?? t("pesquisa.ctx_class_default"),
             to: "/turmas",
           });
         });
@@ -213,8 +219,8 @@ const Pesquisa = () => {
             id: `event-${e.id}`,
             type: "evento",
             title: e.title,
-            subtitle: `${new Date(e.event_date).toLocaleDateString("pt-PT")}${e.location ? ` · ${e.location}` : ""}`,
-            context: e.organizer ? `Organizado por ${e.organizer}` : `Evento · ${e.type}`,
+            subtitle: `${new Date(e.event_date).toLocaleDateString(localeTag)}${e.location ? ` · ${e.location}` : ""}`,
+            context: e.organizer ? t("pesquisa.ctx_event_org", { name: e.organizer }) : t("pesquisa.ctx_event_type", { type: e.type }),
             to: "/eventos",
           });
         });
@@ -224,8 +230,8 @@ const Pesquisa = () => {
             id: `assessment-${a.id}`,
             type: "avaliacao",
             title: a.title,
-            subtitle: [a.classrooms?.name, a.subjects?.name].filter(Boolean).join(" · ") || "Avaliação",
-            context: `${a.type ?? "Avaliação"} · ${new Date(a.date).toLocaleDateString("pt-PT")}`,
+            subtitle: [a.classrooms?.name, a.subjects?.name].filter(Boolean).join(" · ") || t("pesquisa.ctx_assessment_default"),
+            context: `${a.type ?? t("pesquisa.ctx_assessment_default")} · ${new Date(a.date).toLocaleDateString(localeTag)}`,
             to: "/avaliacoes",
           });
         });
@@ -247,7 +253,7 @@ const Pesquisa = () => {
             type: "notificacao",
             title: n.title,
             subtitle: n.description ?? n.category,
-            context: `Notificação · ${formatRelative(n.created_at)}`,
+            context: `${t("pesquisa.ctx_notification")} · ${formatRel(n.created_at)}`,
             to: n.link ?? "/notificacoes",
           });
         });
@@ -256,9 +262,9 @@ const Pesquisa = () => {
           out.push({
             id: `message-${m.id}`,
             type: "mensagem",
-            title: m.sender?.full_name ?? "Mensagem",
+            title: m.sender?.full_name ?? t("pesquisa.ctx_message"),
             subtitle: `"${(m.content ?? "").slice(0, 80)}"`,
-            context: `Mensagem · ${formatRelative(m.created_at)}`,
+            context: `${t("pesquisa.ctx_message")} · ${formatRel(m.created_at)}`,
             to: "/chat",
           });
         });
@@ -270,9 +276,12 @@ const Pesquisa = () => {
           out.push({
             id: `enrollment-${e.id}`,
             type: "matricula",
-            title: `Matrícula${num ? ` Nº ${num}` : ""}`,
+            title: num ? t("pesquisa.ctx_enrollment_title_num", { num }) : t("pesquisa.ctx_enrollment_title"),
             subtitle: `${name}${e.classrooms?.name ? ` · ${e.classrooms.name}` : ""}`,
-            context: `${e.status ?? "Matrícula"} · ${formatRelative(e.enrolled_at)}`,
+            context: t("pesquisa.ctx_enrollment_status", {
+              status: e.status ?? t("pesquisa.ctx_enrollment_title"),
+              when: formatRel(e.enrolled_at),
+            }),
             to: "/matriculas",
           });
         });
@@ -289,7 +298,7 @@ const Pesquisa = () => {
       cancelled = true;
       clearTimeout(handle);
     };
-  }, [query]);
+  }, [query, t, i18n.language, tc]);
 
   const filtered = useMemo(() => {
     if (filter === "all") return results;
@@ -308,22 +317,27 @@ const Pesquisa = () => {
 
   const counts = useMemo(() => {
     const c: Record<FilterType, number> = { all: results.length } as Record<FilterType, number>;
-    (Object.keys(typeMeta) as ResultType[]).forEach((t) => (c[t] = results.filter((r) => r.type === t).length));
+    (Object.keys(typeMeta) as ResultType[]).forEach((rt) => (c[rt] = results.filter((r) => r.type === rt).length));
     return c;
-  }, [results]);
+  }, [results, typeMeta]);
 
-  const filterTabs: { id: FilterType; label: string }[] = [
-    { id: "all", label: "Todos" },
-    ...(Object.keys(typeMeta) as ResultType[]).map((t) => ({ id: t as FilterType, label: typeMeta[t].label })),
-  ];
+  const filterTabs: { id: FilterType; label: string }[] = useMemo(
+    () => [
+      { id: "all", label: tc("shared.all") },
+      ...(Object.keys(typeMeta) as ResultType[]).map((k) => ({ id: k as FilterType, label: typeMeta[k].label })),
+    ],
+    [typeMeta, tc],
+  );
+
+  const suggestionChips = useMemo(() => t("pesquisa.suggestions", { returnObjects: true }) as string[], [t]);
 
   return (
     <>
       <div className="flex flex-col gap-6">
         {/* Header */}
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Pesquisa global</h1>
-          <p className="text-sm text-muted-foreground">Pesquise alunos, professores, matrículas, cursos, eventos, mensagens e mais.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("pesquisa.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("pesquisa.subtitle")}</p>
         </div>
 
         {/* Big input */}
@@ -335,13 +349,13 @@ const Pesquisa = () => {
               value={query}
               maxLength={200}
               onChange={(e) => updateQuery(e.target.value)}
-              placeholder="O que procura?"
+              placeholder={t("pesquisa.placeholder")}
               className="h-14 w-full rounded-2xl border border-border bg-background pl-14 pr-14 text-base shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
             />
             {query && (
               <button
                 onClick={() => updateQuery("")}
-                aria-label="Limpar"
+                aria-label={t("shared.clear_search_aria")}
                 className="absolute right-4 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 <X className="h-4 w-4" strokeWidth={1.75} />
@@ -351,13 +365,13 @@ const Pesquisa = () => {
 
           {/* Filtros */}
           <div className="mt-4 flex flex-wrap gap-2">
-            {filterTabs.map((t) => {
-              const active = filter === t.id;
-              const count = counts[t.id] ?? 0;
+            {filterTabs.map((tab) => {
+              const active = filter === tab.id;
+              const count = counts[tab.id] ?? 0;
               return (
                 <button
-                  key={t.id}
-                  onClick={() => setFilter(t.id)}
+                  key={tab.id}
+                  onClick={() => setFilter(tab.id)}
                   className={cn(
                     "flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors",
                     active
@@ -365,7 +379,7 @@ const Pesquisa = () => {
                       : "border-border bg-card text-muted-foreground hover:bg-muted",
                   )}
                 >
-                  {t.label}
+                  {tab.label}
                   <span className={cn("rounded-full px-1.5 text-[10px] font-bold", active ? "bg-card/70" : "bg-muted")}>{count}</span>
                 </button>
               );
@@ -379,11 +393,11 @@ const Pesquisa = () => {
             <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
               <Search className="h-6 w-6" strokeWidth={1.5} />
             </span>
-            <p className="mt-4 text-sm font-medium text-foreground">Comece a escrever para pesquisar</p>
-            <p className="mt-1 text-xs text-muted-foreground">A pesquisa abrange toda a plataforma — pessoas, registos, conteúdos e comunicações.</p>
+            <p className="mt-4 text-sm font-medium text-foreground">{t("pesquisa.hint_title")}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t("pesquisa.hint_body")}</p>
 
             <div className="mt-6 flex flex-wrap justify-center gap-2">
-              {["Aluno", "Turma", "Reunião", "Matemática", "Matrícula"].map((s) => (
+              {suggestionChips.map((s) => (
                 <button
                   key={s}
                   onClick={() => updateQuery(s)}
@@ -399,20 +413,20 @@ const Pesquisa = () => {
             <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin" strokeWidth={1.5} />
             </span>
-            <p className="mt-4 text-sm font-medium text-foreground">A pesquisar…</p>
+            <p className="mt-4 text-sm font-medium text-foreground">{t("pesquisa.searching")}</p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-2xl bg-card p-12 text-center shadow-card">
             <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-pastel-pink text-pastel-pink-foreground">
               <Search className="h-6 w-6" strokeWidth={1.5} />
             </span>
-            <p className="mt-4 text-sm font-medium text-foreground">Sem resultados para "{query}"</p>
-            <p className="mt-1 text-xs text-muted-foreground">Tente outras palavras-chave ou remova os filtros aplicados.</p>
+            <p className="mt-4 text-sm font-medium text-foreground">{t("pesquisa.no_results_title", { query })}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t("pesquisa.no_results_hint")}</p>
           </div>
         ) : (
           <div className="flex flex-col gap-5">
             <p className="px-1 text-xs font-medium text-muted-foreground">
-              {filtered.length} {filtered.length === 1 ? "resultado encontrado" : "resultados encontrados"} para "{query}"
+              {t("pesquisa.result_count", { count: filtered.length, query })}
             </p>
 
             {grouped.map(([type, items]) => {

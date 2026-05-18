@@ -5,6 +5,7 @@
  * Usado em todos os links de email: https://www.edukamba.com/app-open?path=/pagamentos
  */
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 const APP_SCHEME = "edukamba";
 const WEB_BASE = "https://www.edukamba.com";
@@ -21,6 +22,7 @@ function getParams(): { path: string; webUrl: string; appUrl: string } {
 }
 
 export default function AppOpen() {
+  const { t } = useTranslation("pages");
   const [status, setStatus] = useState<"trying" | "redirecting">("trying");
   const didRedirect = useRef(false);
 
@@ -107,7 +109,7 @@ export default function AppOpen() {
         {status === "trying" ? (
           <>
             <p style={{ margin: "16px 0 24px", fontSize: "14px", color: "#64748b", lineHeight: 1.6 }}>
-              A abrir a aplicação Edukamba&hellip;
+              {t("app_open.opening_app")}
             </p>
             {/* Spinner */}
             <div
@@ -124,7 +126,7 @@ export default function AppOpen() {
           </>
         ) : (
           <p style={{ margin: "16px 0 24px", fontSize: "14px", color: "#64748b", lineHeight: 1.6 }}>
-            A redirecionar para a plataforma web&hellip;
+            {t("app_open.redirecting_web")}
           </p>
         )}
 
@@ -141,7 +143,7 @@ export default function AppOpen() {
             borderRadius: "24px",
           }}
         >
-          Abrir na web
+          {t("app_open.open_in_web")}
         </a>
       </div>
 

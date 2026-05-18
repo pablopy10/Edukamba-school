@@ -1,9 +1,10 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
-const days = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-const monthNames = [
+const WEEK_FALLBACK_PT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const MONTH_LONG_FALLBACK_PT = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
@@ -19,6 +20,16 @@ const isSameDay = (a: Date, b: Date) =>
   a.getDate() === b.getDate();
 
 export const CalendarCard = ({ selectedDate, onSelect }: CalendarCardProps) => {
+  const { t, i18n } = useTranslation("common");
+  const weekdaysShort = useMemo(() => {
+    const arr = t("dashboard.calendar_weekdays_short", { returnObjects: true });
+    return Array.isArray(arr) && arr.length === 7 ? (arr as string[]) : WEEK_FALLBACK_PT;
+  }, [t, i18n.language]);
+  const monthNamesLong = useMemo(() => {
+    const arr = t("dashboard.calendar_months_long", { returnObjects: true });
+    return Array.isArray(arr) && arr.length === 12 ? (arr as string[]) : MONTH_LONG_FALLBACK_PT;
+  }, [t, i18n.language]);
+
   const today = new Date();
   const [cursor, setCursor] = useState(
     new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1),
@@ -38,25 +49,27 @@ export const CalendarCard = ({ selectedDate, onSelect }: CalendarCardProps) => {
     <div className="flex flex-col gap-4 rounded-2xl bg-card p-6 shadow-card">
       <div className="flex items-center justify-between">
         <button
+          type="button"
           onClick={() => setCursor(new Date(year, month - 1, 1))}
           className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent"
-          aria-label="Mês anterior"
+          aria-label={t("dashboard.calendar.prev_month_aria")}
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <h3 className="text-base font-bold text-foreground">{monthNames[month]} {year}</h3>
+        <h3 className="text-base font-bold text-foreground">{monthNamesLong[month]} {year}</h3>
         <button
+          type="button"
           onClick={() => setCursor(new Date(year, month + 1, 1))}
           className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent"
-          aria-label="Próximo mês"
+          aria-label={t("dashboard.calendar.next_month_aria")}
         >
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
 
       <div className="grid grid-cols-7 gap-1 text-center">
-        {days.map((d) => (
-          <p key={d} className="py-1 text-[11px] font-medium text-muted-foreground">{d}</p>
+        {weekdaysShort.map((d, idx) => (
+          <p key={`cal-wd-${idx}`} className="py-1 text-[11px] font-medium text-muted-foreground">{d}</p>
         ))}
         {cells.map((d, i) => {
           if (d === null) return <div key={i} className="h-10" />;
@@ -66,6 +79,7 @@ export const CalendarCard = ({ selectedDate, onSelect }: CalendarCardProps) => {
           return (
             <div key={i} className="flex h-10 items-center justify-center">
               <button
+                type="button"
                 onClick={() => onSelect(cellDate)}
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-xl text-sm font-semibold transition-[var(--transition-smooth)]",

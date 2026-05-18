@@ -1,17 +1,19 @@
 import { CheckCircle2, Cloud, Loader2 } from "lucide-react";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 /** Estado resumido da fila REST offline (presenças, notas, etc.). */
 export function OfflineSyncStatusBar({ className }: { className?: string }) {
+  const { t } = useTranslation("common");
   const { pendingCount, syncing, isOnline } = useOfflineSync();
 
   const hasQueue = pendingCount > 0;
   const label = hasQueue
-    ? `Pendente para envio — ${pendingCount} alteração(ões)`
+    ? t("sync.status_pending", { count: pendingCount })
     : syncing
-      ? "A sincronizar…"
-      : "Sucesso — sincronizado";
+      ? t("sync.btn_syncing")
+      : t("sync.status_ok");
 
   return (
     <div

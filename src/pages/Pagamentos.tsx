@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -40,12 +41,10 @@ type StaffValidatedInsertResult = { error: string | null; paymentId?: string };
 type FeeTargetScope = "grade_level" | "classrooms" | "students";
 type FeeRecurrence = "monthly" | "quarterly" | "semester" | "yearly";
 
-const RECURRENCE_LABELS: Record<FeeRecurrence, string> = {
-  monthly: "Mensal",
-  quarterly: "Trimestral",
-  semester: "Semestral",
-  yearly: "Anual",
-};
+const CALENDAR_MONTHS_FALLBACK_PT = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+] as const;
 
 function recurrenceStepMonths(r: FeeRecurrence): number {
   if (r === "quarterly") return 3;
@@ -90,9 +89,9 @@ function formatFeeRuleTarget(r: FeeRule): string {
   return r.grade_level ?? "—";
 }
 
-function formatRecurrenceLabel(r: string | undefined): string {
+function formatRecurrenceLabel(r: string | undefined, labels: Record<FeeRecurrence, string>): string {
   const k = (r as FeeRecurrence) || "monthly";
-  return RECURRENCE_LABELS[k] ?? String(r ?? "");
+  return labels[k] ?? String(r ?? "");
 }
 
 type AcademicYear = { id: string; label: string; is_active: boolean | null; start_date?: string | null };
@@ -305,11 +304,6 @@ type EnrollmentFeeRow = {
 const fmtAOA = (n: number) =>
   new Intl.NumberFormat("pt-PT", { style: "currency", currency: "AOA", maximumFractionDigits: 0 }).format(n || 0);
 
-const monthNames = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
-];
-
 /** Particiona lista de IDs para consultas `.in(...)` dentro dos limites do PostgREST. */
 function chunkBySize<T>(items: readonly T[], size: number): T[][] {
   if (size <= 0) return [items.slice()];
@@ -328,6 +322,24 @@ export type PagamentosFinancePageMode =
 
 /** `tuition` = página Propinas. Demais modos: listas de cobrança embutidas em Matrículas, Extracurricular, Transporte, Refeições ou Eventos. */
 export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosFinancePageMode }) {
+  const { t: tPages } = useTranslation("pages");
+  const { t: tCommon, i18n } = useTranslation("common");
+
+  const monthNamesLong = useMemo(() => {
+    const arr = tCommon("dashboard.calendar_months_long", { returnObjects: true });
+    return Array.isArray(arr) && arr.length === 12 ? (arr as string[]) : [...CALENDAR_MONTHS_FALLBACK_PT];
+  }, [tCommon, i18n.language]);
+
+  const recurrenceLabels = useMemo(
+    (): Record<FeeRecurrence, string> => ({
+      monthly: tPages("pagamentos.recurrence.monthly"),
+      quarterly: tPages("pagamentos.recurrence.quarterly"),
+      semester: tPages("pagamentos.recurrence.semester"),
+      yearly: tPages("pagamentos.recurrence.yearly"),
+    }),
+    [tPages],
+  );
+
   const tuitionOnly = financePage === "tuition";
   const activityChargesOnly = financePage === "activityCharges";
   const transportChargesOnly = financePage === "transportCharges";
@@ -618,7 +630,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     if (parentId) {
       if (kind === "fee") {
         const f = fee as FeeListRow;
-        const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
+        const monthLabel = f.month_index ? monthNamesLong[f.month_index - 1] : "";
         await supabase.from("notifications").insert({
           recipient_id: parentId,
           school_id: schoolId,
@@ -639,7 +651,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         });
       } else if (kind === "transport") {
         const f = fee as TransportFeeRow;
-        const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
+        const monthLabel = f.month_index ? monthNamesLong[f.month_index - 1] : "";
         await supabase.from("notifications").insert({
           recipient_id: parentId,
           school_id: schoolId,
@@ -650,7 +662,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         });
       } else if (kind === "meal") {
         const f = fee as MealFeeRow;
-        const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
+        const monthLabel = f.month_index ? monthNamesLong[f.month_index - 1] : "";
         await supabase.from("notifications").insert({
           recipient_id: parentId,
           school_id: schoolId,
@@ -737,7 +749,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     if (parentId) {
       if (kind === "fee") {
         const f = fee as FeeListRow;
-        const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
+        const monthLabel = f.month_index ? monthNamesLong[f.month_index - 1] : "";
         await supabase.from("notifications").insert({
           recipient_id: parentId,
           school_id: schoolId,
@@ -758,7 +770,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         });
       } else if (kind === "transport") {
         const f = fee as TransportFeeRow;
-        const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
+        const monthLabel = f.month_index ? monthNamesLong[f.month_index - 1] : "";
         await supabase.from("notifications").insert({
           recipient_id: parentId,
           school_id: schoolId,
@@ -769,7 +781,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         });
       } else if (kind === "meal") {
         const f = fee as MealFeeRow;
-        const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
+        const monthLabel = f.month_index ? monthNamesLong[f.month_index - 1] : "";
         await supabase.from("notifications").insert({
           recipient_id: parentId,
           school_id: schoolId,
@@ -1389,7 +1401,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           studentId: st.id,
           studentName: st.full_name,
           periodIndex: p,
-          monthLabel: `${monthNames[dd.monthIndex - 1]} · P${p + 1}`,
+          monthLabel: `${monthNamesLong[dd.monthIndex - 1]} · P${p + 1}`,
           dueIso: dd.dueIso,
           fee,
           baseEstimate: Number(ruleDetailRule.monthly_amount) || 0,
@@ -1403,7 +1415,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       return a.periodIndex - b.periodIndex;
     });
     return rows;
-  }, [ruleDetailRule, ruleDetailYearId, ruleDetailYearStart, students, classrooms, allFees]);
+  }, [ruleDetailRule, ruleDetailYearId, ruleDetailYearStart, students, classrooms, allFees, monthNamesLong]);
 
   const generateRulePeriodFee = async (studentId: string, periodIndex: number) => {
     if (!ruleDetailRule || !ruleDetailYearId || !schoolId) return;
@@ -1610,7 +1622,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     const { error: feeErr } = await supabase.from("student_fees").update({ is_paid: true }).eq("id", fee.id);
     if (feeErr) return feeErr.message;
     if (fee.student?.parent_id) {
-      const monthLabel = fee.month_index ? monthNames[fee.month_index - 1] : "";
+      const monthLabel = fee.month_index ? monthNamesLong[fee.month_index - 1] : "";
       await supabase.from("notifications").insert({
         recipient_id: fee.student.parent_id,
         school_id: schoolId,
@@ -1884,7 +1896,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       return;
     }
     if (fee?.student?.parent_id) {
-      const monthLabel = fee.month_index ? monthNames[fee.month_index - 1] : "";
+      const monthLabel = fee.month_index ? monthNamesLong[fee.month_index - 1] : "";
       const followUp = usarAnexoEncarregado
         ? "Por favor reenvie o comprovativo correto."
         : "Para regularizar o pagamento, dirija-se à escola.";
@@ -1968,7 +1980,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       return;
     }
     setRemindingFeeId(fee.id);
-    const monthLabel = fee.month_index ? monthNames[fee.month_index - 1] : "";
+    const monthLabel = fee.month_index ? monthNamesLong[fee.month_index - 1] : "";
     const title = `Lembrete de propina ${monthLabel}`.trim();
     const description = `A propina de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`;
     const { error } = await supabase.from("notifications").insert({
@@ -1998,7 +2010,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     const rows = targets.map((f) => ({
       recipient_id: f.student!.parent_id!,
       school_id: schoolId!,
-      title: `Lembrete de propina ${f.month_index ? monthNames[f.month_index - 1] : ""}`.trim(),
+      title: `Lembrete de propina ${f.month_index ? monthNamesLong[f.month_index - 1] : ""}`.trim(),
       description: `A propina de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
       category: "pagamento",
       link: "https://www.edukamba.com/pagamentos",
@@ -2024,7 +2036,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     }
     setBulkRemindingTuition(true);
     const rows = fees.map((f) => {
-      const monthLabel = f.month_index ? monthNames[f.month_index - 1] : "";
+      const monthLabel = f.month_index ? monthNamesLong[f.month_index - 1] : "";
       const title = `Lembrete de propina ${monthLabel}`.trim();
       const description = `A propina de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`;
       return {
@@ -3068,7 +3080,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               />
                             </td>
                             <td className="py-2 px-2 font-medium">{fee.student?.full_name ?? "—"}</td>
-                            <td className="py-2 px-2">{fee.month_index ? monthNames[fee.month_index - 1] : "—"}</td>
+                            <td className="py-2 px-2">{fee.month_index ? monthNamesLong[fee.month_index - 1] : "—"}</td>
                             <td className="py-2 px-2 font-semibold">{fmtAOA(Number(payment.amount_paid))}</td>
                             <td className="py-2 px-2 capitalize text-muted-foreground">{payment.method ?? "—"}</td>
                             <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString("pt-PT") : "—"}</td>
@@ -3262,7 +3274,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               )}
                               <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{f.student?.classroom?.name ?? "—"}</td>
-                              <td className="py-2 px-2">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
+                              <td className="py-2 px-2">{f.month_index ? monthNamesLong[f.month_index - 1] : "—"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
                               <td className="py-2 px-2">
@@ -3615,7 +3627,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               )}
                               <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
                               <td className="py-2 px-2">{f.activity?.name ?? "—"}</td>
-                              <td className="py-2 px-2">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
+                              <td className="py-2 px-2">{f.month_index ? monthNamesLong[f.month_index - 1] : "—"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
                               <td className="py-2 px-2">
@@ -3963,7 +3975,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               )}
                               <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
                               <td className="py-2 px-2">{f.route?.name ?? "—"}</td>
-                              <td className="py-2 px-2">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
+                              <td className="py-2 px-2">{f.month_index ? monthNamesLong[f.month_index - 1] : "—"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
                               <td className="py-2 px-2">
@@ -4311,7 +4323,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               )}
                               <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
                               <td className="py-2 px-2">{f.meal_program?.name ?? "—"}</td>
-                              <td className="py-2 px-2">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
+                              <td className="py-2 px-2">{f.month_index ? monthNamesLong[f.month_index - 1] : "—"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
                               <td className="py-2 px-2">
@@ -4666,7 +4678,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   </span>
                                 ) : null}
                               </td>
-                              <td className="py-2 px-2">{f.month_index ? monthNames[f.month_index - 1] : "—"}</td>
+                              <td className="py-2 px-2">{f.month_index ? monthNamesLong[f.month_index - 1] : "—"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
                               <td className="py-2 px-2">
@@ -5135,12 +5147,12 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                         {rules.map((r) => (
                           <tr key={r.id} className="border-b border-border/60 bg-card hover:bg-muted/40">
                             <td className="py-2.5 px-3 font-medium">{formatFeeRuleTarget(r)}</td>
-                            <td className="py-2.5 px-3">{formatRecurrenceLabel(r.recurrence)}</td>
+                            <td className="py-2.5 px-3">{formatRecurrenceLabel(r.recurrence, recurrenceLabels)}</td>
                             <td className="py-2.5 px-3">{fmtAOA(Number(r.monthly_amount))}</td>
                             <td className="py-2.5 px-3 whitespace-nowrap">Dia {r.due_day}</td>
                             <td className="py-2.5 px-3 text-muted-foreground">
-                              {monthNames[r.start_month - 1]}
-                              {r.end_month != null ? ` → ${monthNames[r.end_month - 1]}` : ""}
+                              {monthNamesLong[r.start_month - 1]}
+                              {r.end_month != null ? ` → ${monthNamesLong[r.end_month - 1]}` : ""}
                               <span className="text-xs"> · {r.months_count} período(s)</span>
                             </td>
                             <td className="py-2.5 px-3">
@@ -5283,8 +5295,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
               >
                 <SelectTrigger className="bg-card"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(Object.keys(RECURRENCE_LABELS) as FeeRecurrence[]).map((k) => (
-                    <SelectItem key={k} value={k}>{RECURRENCE_LABELS[k]}</SelectItem>
+                  {(Object.keys(recurrenceLabels) as FeeRecurrence[]).map((k) => (
+                    <SelectItem key={k} value={k}>{recurrenceLabels[k]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -5321,7 +5333,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 <Select value={ruleForm.start_month} onValueChange={(v) => setRuleForm({ ...ruleForm, start_month: v })}>
                   <SelectTrigger className="bg-card"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {monthNames.map((m, i) => (
+                    {monthNamesLong.map((m, i) => (
                       <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
                     ))}
                   </SelectContent>
@@ -5332,7 +5344,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 <Select value={ruleForm.end_month} onValueChange={(v) => setRuleForm({ ...ruleForm, end_month: v })}>
                   <SelectTrigger className="bg-card"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {monthNames.map((m, i) => (
+                    {monthNamesLong.map((m, i) => (
                       <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
                     ))}
                   </SelectContent>
@@ -5397,11 +5409,11 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 <div className="min-w-[200px] space-y-1">
                   <p className="font-medium text-foreground">Alvo: {formatFeeRuleTarget(ruleDetailRule)}</p>
                   <p className="text-muted-foreground">
-                    {formatRecurrenceLabel(ruleDetailRule.recurrence)} · {fmtAOA(Number(ruleDetailRule.monthly_amount))} por período · dia {ruleDetailRule.due_day}
+                    {formatRecurrenceLabel(ruleDetailRule.recurrence, recurrenceLabels)} · {fmtAOA(Number(ruleDetailRule.monthly_amount))} por período · dia {ruleDetailRule.due_day}
                   </p>
                   <p className="text-muted-foreground">
-                    Calendário: {monthNames[ruleDetailRule.start_month - 1]}
-                    {ruleDetailRule.end_month != null ? ` → ${monthNames[ruleDetailRule.end_month - 1]}` : ""} · {ruleDetailRule.months_count} período(s)
+                    Calendário: {monthNamesLong[ruleDetailRule.start_month - 1]}
+                    {ruleDetailRule.end_month != null ? ` → ${monthNamesLong[ruleDetailRule.end_month - 1]}` : ""} · {ruleDetailRule.months_count} período(s)
                   </p>
                   <p className="text-muted-foreground">
                     Gerar tudo de uma vez: {ruleDetailRule.generate_all_upfront ? "sim" : "não"}

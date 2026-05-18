@@ -11,7 +11,7 @@ void i18n
     resources,
     fallbackLng: FALLBACK_LOCALE,
     supportedLngs: ["pt", "en", "fr"],
-    ns: ["common"],
+    ns: ["common", "pages"],
     defaultNS: "common",
     interpolation: { escapeValue: false },
     /** PT por omissão: só mudamos língua com escolha explícita (Perfil / `profiles.language`) ou chave em localStorage. */

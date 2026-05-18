@@ -109,6 +109,84 @@
     "footer_ok": "À jour — rien à envoyer.",
     "aria_prefix": "Réseau et synchronisation."
   },
+  "roles": {
+    "SUPER_ADMIN": "Super admin",
+    "ADMIN": "Administrateur",
+    "DIRECTOR": "Directeur",
+    "SECRETARY": "Secrétariat",
+    "TREASURER": "Trésorier",
+    "LIBRARIAN": "Bibliothécaire",
+    "STOCK_MANAGER": "Gestionnaire de stock",
+    "RECEPTIONIST": "Réceptionniste",
+    "TEACHER": "Enseignant",
+    "PARENT": "Parent / responsable",
+    "STUDENT": "Élève"
+  },
+  "topbar": {
+    "open_menu": "Ouvrir le menu",
+    "wordmark_aria": "Edukamba — Tableau de bord",
+    "search_aria": "Rechercher",
+    "chat_aria": "Chat",
+    "notifications_aria": "Notifications",
+    "profile_aria": "Profil",
+    "parent_consult_heading": "Consulter les données de",
+    "select_child_aria": "Sélectionner un enfant",
+    "child_placeholder": "Enfant",
+    "child_selector_title": "Enfant sélectionné",
+    "search_dialog_title": "Rechercher",
+    "search_dialog_desc": "Saisissez un terme et appuyez sur Entrée pour ouvrir la page de recherche.",
+    "search_placeholder": "Rechercher…",
+    "search_submit": "Rechercher",
+    "academic_year_title": "Année scolaire utilisée",
+    "academic_year_placeholder": "Année scolaire",
+    "year_active_suffix": "active",
+    "trial_period_title": "Période d’essai",
+    "trial_ends_today": "Fin de l’essai aujourd’hui",
+    "trial_days_one": "{{count}} jour d’essai restant",
+    "trial_days_other": "{{count}} jours d’essai restants"
+  },
+  "dashboard": {
+    "sr_title": "Tableau de bord Edukamba",
+    "stats": {
+      "students": "Élèves",
+      "teachers": "Enseignants",
+      "staff": "Personnel",
+      "classrooms": "Classes"
+    },
+    "students_card": {
+      "title": "Élèves",
+      "boys": "Garçons",
+      "girls": "Filles",
+      "total": "Total",
+      "no_data": "Aucune donnée"
+    },
+    "attendance": {
+      "title": "Présences",
+      "all_classes": "Toutes les classes",
+      "placeholder_class": "Classe",
+      "placeholder_no_classes": "Aucune classe",
+      "teacher_no_schedules": "Aucune classe avec un emploi du temps défini pour cette année scolaire.",
+      "present": "Présents",
+      "absent": "Absents",
+      "empty_hint": "Aucune présence sur cette période. Vérifiez l’année scolaire ci-dessus ou saisissez les présences dans Présences."
+    },
+    "calendar": {
+      "prev_month_aria": "Mois précédent",
+      "next_month_aria": "Mois suivant"
+    },
+    "agenda": {
+      "title": "Agenda",
+      "today": "Aujourd’hui",
+      "tomorrow": "Demain",
+      "placeholder_class": "Classe",
+      "no_lessons": "Aucun cours prévu ce jour-là.",
+      "fallback_class": "Classe",
+      "fallback_lesson": "Cours"
+    },
+    "chart_months_short": ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."],
+    "calendar_weekdays_short": ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."],
+    "calendar_months_long": ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+  },
   "perfil": {
     "title": "Mon profil",
     "subtitle": "Gérez votre compte, vos identifiants et vos préférences.",

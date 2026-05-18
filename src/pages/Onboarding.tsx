@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   ArrowLeft,
   ArrowRight,
@@ -23,16 +24,21 @@ import { useAuth } from "@/hooks/useAuth";
 
 type StepId = 1 | 2 | 3 | 4;
 
-const steps: { id: StepId; title: string; description: string; icon: React.ElementType }[] = [
-  { id: 1, title: "Dados da escola", description: "Nome, NIF e contactos", icon: Building2 },
-  { id: 2, title: "Identidade visual", description: "Logótipo e cores", icon: Palette },
-  { id: 3, title: "Ano lectivo", description: "Configurar ano activo", icon: CalendarRange },
-  { id: 4, title: "Confirmação", description: "Rever e criar", icon: Sparkles },
-];
-
 const Onboarding = () => {
+  const { t } = useTranslation("pages");
+  const { t: tc } = useTranslation("common");
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
+
+  const steps: { id: StepId; title: string; description: string; icon: React.ElementType }[] = useMemo(
+    () => [
+      { id: 1, title: t("onboarding.step1_title"), description: t("onboarding.step1_desc"), icon: Building2 },
+      { id: 2, title: t("onboarding.step2_title"), description: t("onboarding.step2_desc"), icon: Palette },
+      { id: 3, title: t("onboarding.step3_title"), description: t("onboarding.step3_desc"), icon: CalendarRange },
+      { id: 4, title: t("onboarding.step4_title"), description: t("onboarding.step4_desc"), icon: Sparkles },
+    ],
+    [t],
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [currentStep, setCurrentStep] = useState<StepId>(1);
@@ -72,7 +78,7 @@ const Onboarding = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
-      toast({ title: "Imagem muito grande", description: "Máximo 2MB.", variant: "destructive" });
+      toast({ title: t("onboarding.toast_image_large_title"), description: t("onboarding.toast_image_large_desc"), variant: "destructive" });
       return;
     }
     setLogoFile(file);
@@ -82,19 +88,19 @@ const Onboarding = () => {
   const validateStep = (step: StepId): boolean => {
     if (step === 1) {
       if (!name.trim()) {
-        toast({ title: "Nome obrigatório", description: "Indique o nome da escola.", variant: "destructive" });
+        toast({ title: t("onboarding.toast_name_required_title"), description: t("onboarding.toast_name_required_desc"), variant: "destructive" });
         return false;
       }
     }
     if (step === 3) {
       if (!yearLabel.trim() || !startDate || !endDate) {
-        toast({ title: "Dados incompletos", description: "Preencha o ano lectivo.", variant: "destructive" });
+        toast({ title: t("onboarding.toast_year_incomplete_title"), description: t("onboarding.toast_year_incomplete_desc"), variant: "destructive" });
         return false;
       }
       if (new Date(endDate) <= new Date(startDate)) {
         toast({
-          title: "Datas inválidas",
-          description: "A data de fim deve ser posterior à data de início.",
+          title: t("onboarding.toast_dates_invalid_title"),
+          description: t("onboarding.toast_dates_invalid_desc"),
           variant: "destructive",
         });
         return false;
@@ -142,12 +148,12 @@ const Onboarding = () => {
       });
       if (rpcError) throw rpcError;
 
-      toast({ title: "Escola criada!", description: "Bem-vindo ao Edukamba." });
+      toast({ title: t("onboarding.toast_success_title"), description: t("onboarding.toast_success_desc") });
       // Hard reload to ensure all auth/school context is refreshed
       window.location.assign("/dashboard");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Tente novamente.";
-      toast({ title: "Erro a criar escola", description: message, variant: "destructive" });
+      const message = err instanceof Error ? err.message : t("onboarding.toast_error_retry");
+      toast({ title: t("onboarding.toast_error_title"), description: message, variant: "destructive" });
     } finally {
       setSubmitting(false);
     }
@@ -184,7 +190,7 @@ const Onboarding = () => {
               navigate("/", { replace: true });
             }}
           >
-            Sair
+            {tc("nav.logout")}
           </Button>
         </div>
       </header>
@@ -192,13 +198,13 @@ const Onboarding = () => {
       <main className="container max-w-4xl py-12">
         <div className="mb-10 text-center">
           <span className="text-sm font-medium uppercase tracking-wider text-pastel-blue-foreground">
-            Bem-vindo
+            {t("onboarding.welcome_badge")}
           </span>
           <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
-            Vamos configurar a sua escola
+            {t("onboarding.title")}
           </h1>
           <p className="mt-3 text-muted-foreground">
-            Em 4 passos simples a sua escola estará pronta a usar.
+            {t("onboarding.subtitle")}
           </p>
         </div>
 
@@ -239,21 +245,21 @@ const Onboarding = () => {
           {currentStep === 1 && (
             <div className="space-y-6">
               <header>
-                <h2 className="text-xl font-semibold">Dados da escola</h2>
-                <p className="text-sm text-muted-foreground">Informações básicas da instituição.</p>
+                <h2 className="text-xl font-semibold">{t("onboarding.step1_heading")}</h2>
+                <p className="text-sm text-muted-foreground">{t("onboarding.step1_intro")}</p>
               </header>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2 space-y-2">
-                  <Label htmlFor="name">Nome da escola *</Label>
+                  <Label htmlFor="name">{t("onboarding.school_name_label")}</Label>
                   <Input
                     id="name"
-                    placeholder="Colégio Edukamba"
+                    placeholder={t("onboarding.school_name_placeholder")}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="nif">NIF</Label>
+                  <Label htmlFor="nif">{t("onboarding.nif_label")}</Label>
                   <Input
                     id="nif"
                     placeholder="5417000000"
@@ -262,11 +268,11 @@ const Onboarding = () => {
                   />
                 </div>
                 <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="address">Endereço</Label>
+                  <Label htmlFor="address">{t("onboarding.address_label")}</Label>
                   <Textarea
                     id="address"
                     rows={3}
-                    placeholder="Rua, bairro, município, província"
+                    placeholder={t("onboarding.address_placeholder")}
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
                   />
@@ -278,18 +284,18 @@ const Onboarding = () => {
           {currentStep === 2 && (
             <div className="space-y-6">
               <header>
-                <h2 className="text-xl font-semibold">Identidade visual</h2>
+                <h2 className="text-xl font-semibold">{t("onboarding.step2_heading")}</h2>
                 <p className="text-sm text-muted-foreground">
-                  Carregue o logótipo e escolha as cores da sua escola.
+                  {t("onboarding.step2_intro")}
                 </p>
               </header>
 
               <div className="space-y-2">
-                <Label>Logótipo</Label>
+                <Label>{t("onboarding.logo_label")}</Label>
                 <div className="flex items-center gap-4">
                   <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-border bg-muted/40">
                     {logoPreview ? (
-                      <img src={logoPreview} alt="Pré-visualização" className="h-full w-full object-cover" />
+                      <img src={logoPreview} alt={t("onboarding.logo_preview_alt")} className="h-full w-full object-cover" />
                     ) : (
                       <ImagePlus className="h-7 w-7 text-muted-foreground" />
                     )}
@@ -308,16 +314,16 @@ const Onboarding = () => {
                       className="rounded-full"
                       onClick={() => fileInputRef.current?.click()}
                     >
-                      {logoFile ? "Trocar imagem" : "Carregar imagem"}
+                      {logoFile ? t("onboarding.change_logo") : t("onboarding.upload_logo")}
                     </Button>
-                    <p className="text-xs text-muted-foreground">PNG, JPG ou SVG. Máx. 2MB.</p>
+                    <p className="text-xs text-muted-foreground">{t("onboarding.logo_hint")}</p>
                   </div>
                 </div>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="primary">Cor primária</Label>
+                  <Label htmlFor="primary">{t("onboarding.primary_color")}</Label>
                   <div className="flex items-center gap-3">
                     <input
                       id="primary"
@@ -334,7 +340,7 @@ const Onboarding = () => {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="secondary">Cor secundária</Label>
+                  <Label htmlFor="secondary">{t("onboarding.secondary_color")}</Label>
                   <div className="flex items-center gap-3">
                     <input
                       id="secondary"
@@ -357,23 +363,23 @@ const Onboarding = () => {
           {currentStep === 3 && (
             <div className="space-y-6">
               <header>
-                <h2 className="text-xl font-semibold">Ano lectivo activo</h2>
+                <h2 className="text-xl font-semibold">{t("onboarding.step3_heading")}</h2>
                 <p className="text-sm text-muted-foreground">
-                  Defina o ano lectivo em curso. Pode adicionar mais anos depois.
+                  {t("onboarding.step3_intro")}
                 </p>
               </header>
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-2 sm:col-span-1">
-                  <Label htmlFor="year-label">Designação *</Label>
+                  <Label htmlFor="year-label">{t("onboarding.year_label_field")}</Label>
                   <Input
                     id="year-label"
-                    placeholder="2025/2026"
+                    placeholder={t("onboarding.year_label_ph")}
                     value={yearLabel}
                     onChange={(e) => setYearLabel(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="start">Início *</Label>
+                  <Label htmlFor="start">{t("onboarding.start_date")}</Label>
                   <Input
                     id="start"
                     type="date"
@@ -382,7 +388,7 @@ const Onboarding = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="end">Fim *</Label>
+                  <Label htmlFor="end">{t("onboarding.end_date")}</Label>
                   <Input
                     id="end"
                     type="date"
@@ -397,26 +403,26 @@ const Onboarding = () => {
           {currentStep === 4 && (
             <div className="space-y-6">
               <header>
-                <h2 className="text-xl font-semibold">Confirmar e criar</h2>
+                <h2 className="text-xl font-semibold">{t("onboarding.step4_heading")}</h2>
                 <p className="text-sm text-muted-foreground">
-                  Reveja as informações antes de criar a sua escola.
+                  {t("onboarding.step4_intro")}
                 </p>
               </header>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground">Escola</p>
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">{t("onboarding.summary_school")}</p>
                   <p className="mt-1 font-medium">{name || "—"}</p>
-                  {nif && <p className="text-sm text-muted-foreground">NIF: {nif}</p>}
+                  {nif && <p className="text-sm text-muted-foreground">{t("onboarding.nif_label")}: {nif}</p>}
                   {address && <p className="text-sm text-muted-foreground">{address}</p>}
                 </div>
                 <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground">Identidade</p>
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">{t("onboarding.summary_brand")}</p>
                   <div className="mt-2 flex items-center gap-3">
                     {logoPreview ? (
                       <img
                         src={logoPreview}
-                        alt="Logo"
+                        alt={t("onboarding.logo_alt")}
                         className="h-10 w-10 rounded-lg object-cover"
                       />
                     ) : (
@@ -440,7 +446,7 @@ const Onboarding = () => {
                 </div>
                 <div className="rounded-xl border border-border/60 bg-muted/30 p-4 sm:col-span-2">
                   <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                    Ano lectivo
+                    {t("onboarding.summary_year")}
                   </p>
                   <p className="mt-1 font-medium">{yearLabel || "—"}</p>
                   <p className="text-sm text-muted-foreground">
@@ -460,7 +466,7 @@ const Onboarding = () => {
               disabled={currentStep === 1 || submitting}
             >
               <ArrowLeft className="h-4 w-4" />
-              Voltar
+              {t("onboarding.back")}
             </Button>
 
             {currentStep < 4 ? (
@@ -469,7 +475,7 @@ const Onboarding = () => {
                 className="rounded-full bg-pastel-blue-foreground text-primary-foreground hover:bg-pastel-blue-foreground/90"
                 onClick={goNext}
               >
-                Continuar
+                {t("onboarding.continue")}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             ) : (
@@ -483,7 +489,7 @@ const Onboarding = () => {
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <>
-                    Criar escola
+                    {t("onboarding.create_school")}
                     <Check className="h-4 w-4" />
                   </>
                 )}

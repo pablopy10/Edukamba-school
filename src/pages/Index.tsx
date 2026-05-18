@@ -16,8 +16,13 @@ import { PageLoadingSkeleton } from "@/components/dashboard/PageLoadingSkeleton"
 import { cn } from "@/lib/utils";
 import { isNativeMobileApp } from "@/lib/nativeApp";
 import { StudentTodayScheduleCard } from "@/components/dashboard/StudentTodayScheduleCard";
+import { useTranslation } from "react-i18next";
+import { intlLocaleTagFromLng } from "@/lib/intlLocale";
 
 const Index = () => {
+  const { t, i18n } = useTranslation("common");
+  const countsFmtLocale = intlLocaleTagFromLng(i18n.language);
+  const fmt = (n: number) => n.toLocaleString(countsFmtLocale);
   const { counts, gender, messages } = useDashboardData();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const { role, loading: roleLoading } = useUserRole();
@@ -31,7 +36,6 @@ const Index = () => {
   const hideStudentMobileAside = nativeMobile && isStudent;
   const showDashboardAside = !hideTeacherMobileRail && !hideStudentMobileAside;
   const { studentId, loading: studentLoading } = useStudentSelf();
-  const fmt = (n: number) => n.toLocaleString("pt-PT");
   if (roleLoading || (isStudent && studentLoading)) return <PageLoadingSkeleton />;
   return (
     <>
@@ -43,7 +47,7 @@ const Index = () => {
       >
             {/* Center column */}
             <div className="flex flex-col gap-6">
-              <h1 className="sr-only">Painel Edukamba</h1>
+              <h1 className="sr-only">{t("dashboard.sr_title")}</h1>
 
               {isStudent && (
                 <section className="grid grid-cols-1 gap-6">
@@ -53,10 +57,10 @@ const Index = () => {
 
               {!isParent && !isStudent && (
                 <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                  <StatCard label="Alunos" value={fmt(counts.students)} delta={0} variant="lilac" />
-                  <StatCard label="Professores" value={fmt(counts.teachers)} delta={0} variant="yellow" />
-                  <StatCard label="Funcionários" value={fmt(counts.staff)} delta={0} variant="lilac" />
-                  <StatCard label="Turmas" value={fmt(counts.classrooms)} delta={0} variant="yellow" />
+                  <StatCard label={t("dashboard.stats.students")} value={fmt(counts.students)} delta={0} variant="lilac" />
+                  <StatCard label={t("dashboard.stats.teachers")} value={fmt(counts.teachers)} delta={0} variant="yellow" />
+                  <StatCard label={t("dashboard.stats.staff")} value={fmt(counts.staff)} delta={0} variant="lilac" />
+                  <StatCard label={t("dashboard.stats.classrooms")} value={fmt(counts.classrooms)} delta={0} variant="yellow" />
                 </section>
               )}
 

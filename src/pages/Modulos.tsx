@@ -3,8 +3,11 @@ import { Search, Package, Eye, EyeOff, RotateCcw, Check, AlertCircle, Lock } fro
 import { cn } from "@/lib/utils";
 import { useModules, moduleMeta, ModuleKey, modulePlan, isModuleAllowedForPlan } from "@/context/ModulesContext";
 import { showPageKpiCards } from "@/lib/nativeApp";
+import { useTranslation } from "react-i18next";
 
 const Modulos = () => {
+  const { t, i18n } = useTranslation("pages");
+  const { t: tc } = useTranslation("common");
   const { modules, setModule, setAll, resetDefaults, plan, isPlatformForcedOff } = useModules();
   const [search, setSearch] = useState("");
   const [toast, setToast] = useState<{ kind: "success" | "error"; msg: string } | null>(null);
@@ -17,16 +20,25 @@ const Modulos = () => {
   const list = useMemo(
     () =>
       (Object.keys(moduleMeta) as ModuleKey[])
-        .map((k) => ({
-          key: k,
-          ...moduleMeta[k],
-          enabled: modules[k],
-          platformLock: isPlatformForcedOff(k),
-          requiredPlan: modulePlan[k],
-          allowed: isModuleAllowedForPlan(k, plan),
-        }))
-        .filter((m) => m.label.toLowerCase().includes(search.toLowerCase()) || m.description.toLowerCase().includes(search.toLowerCase())),
-    [modules, search, plan, isPlatformForcedOff],
+        .map((k) => {
+          const meta = moduleMeta[k];
+          return {
+            key: k,
+            path: meta.path,
+            label: t(`modulos.items.${k}.label`),
+            description: t(`modulos.items.${k}.description`),
+            enabled: modules[k],
+            platformLock: isPlatformForcedOff(k),
+            requiredPlan: modulePlan[k],
+            allowed: isModuleAllowedForPlan(k, plan),
+          };
+        })
+        .filter(
+          (m) =>
+            m.label.toLowerCase().includes(search.toLowerCase()) ||
+            m.description.toLowerCase().includes(search.toLowerCase()),
+        ),
+    [modules, search, plan, isPlatformForcedOff, t, i18n.language],
   );
 
   const total = (Object.keys(moduleMeta) as ModuleKey[]).length;
@@ -57,9 +69,9 @@ const Modulos = () => {
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Módulos</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{tc("nav.modules")}</h1>
             <p className="text-sm text-muted-foreground">
-              Active ou desactive módulos da plataforma. Apenas os módulos incluídos no plano <span className="font-semibold text-foreground">{plan}</span> podem ser activados.
+              {t("modulos.subtitle", { plan: t(`modulos.plans.${plan}`) })}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -69,15 +81,16 @@ const Modulos = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 type="text"
-                placeholder="Pesquisar módulo..."
+                placeholder={t("modulos.search_placeholder")}
                 className="h-11 w-64 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             </div>
             <button
-              onClick={() => { resetDefaults(); showToast("success", "Módulos repostos."); }}
+              type="button"
+              onClick={() => { resetDefaults(); showToast("success", t("modulos.reset_toast")); }}
               className="flex h-11 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent"
             >
-              <RotateCcw className="h-4 w-4" strokeWidth={1.75} /> Repor
+              <RotateCcw className="h-4 w-4" strokeWidth={1.75} /> {t("modulos.reset")}
             </button>
           </div>
         </div>
@@ -86,19 +99,19 @@ const Modulos = () => {
         {showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <div className="rounded-2xl bg-card p-5 shadow-card">
-            <span className="inline-block rounded-full bg-pastel-blue px-3 py-1 text-xs font-medium text-pastel-blue-foreground">Total de Módulos</span>
+            <span className="inline-block rounded-full bg-pastel-blue px-3 py-1 text-xs font-medium text-pastel-blue-foreground">{t("modulos.kpi_total")}</span>
             <p className="mt-3 text-3xl font-bold text-foreground">{total}</p>
           </div>
           <div className="rounded-2xl bg-card p-5 shadow-card">
-            <span className="inline-block rounded-full bg-pastel-green px-3 py-1 text-xs font-medium text-pastel-green-foreground">Activos</span>
+            <span className="inline-block rounded-full bg-pastel-green px-3 py-1 text-xs font-medium text-pastel-green-foreground">{t("modulos.kpi_active")}</span>
             <p className="mt-3 text-3xl font-bold text-foreground">{enabledCount}</p>
           </div>
           <div className="rounded-2xl bg-card p-5 shadow-card">
-            <span className="inline-block rounded-full bg-pastel-pink px-3 py-1 text-xs font-medium text-pastel-pink-foreground">Inactivos</span>
+            <span className="inline-block rounded-full bg-pastel-pink px-3 py-1 text-xs font-medium text-pastel-pink-foreground">{t("modulos.kpi_inactive")}</span>
             <p className="mt-3 text-3xl font-bold text-foreground">{total - enabledCount}</p>
           </div>
           <div className="rounded-2xl bg-card p-5 shadow-card">
-            <span className="inline-block rounded-full bg-pastel-yellow px-3 py-1 text-xs font-medium text-pastel-yellow-foreground">Ocupação</span>
+            <span className="inline-block rounded-full bg-pastel-yellow px-3 py-1 text-xs font-medium text-pastel-yellow-foreground">{t("modulos.kpi_usage")}</span>
             <p className="mt-3 text-3xl font-bold text-foreground">{Math.round((enabledCount / total) * 100)}%</p>
           </div>
         </div>
@@ -108,14 +121,14 @@ const Modulos = () => {
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-4 shadow-card">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Package className="h-4 w-4" strokeWidth={1.75} />
-            A mostrar {list.length} de {total} módulos
+            {t("modulos.showing", { shown: list.length, total })}
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => { setAll(true); showToast("success", "Todos os módulos activados."); }} className="flex h-10 items-center gap-2 rounded-full bg-pastel-green/60 px-4 text-sm font-medium text-pastel-green-foreground transition-colors hover:opacity-90">
-              <Eye className="h-4 w-4" strokeWidth={1.75} /> Activar todos
+            <button type="button" onClick={() => { setAll(true); showToast("success", t("modulos.toast_all_on")); }} className="flex h-10 items-center gap-2 rounded-full bg-pastel-green/60 px-4 text-sm font-medium text-pastel-green-foreground transition-colors hover:opacity-90">
+              <Eye className="h-4 w-4" strokeWidth={1.75} /> {t("modulos.enable_all")}
             </button>
-            <button onClick={() => { setAll(false); showToast("success", "Todos os módulos desactivados."); }} className="flex h-10 items-center gap-2 rounded-full bg-pastel-pink/60 px-4 text-sm font-medium text-pastel-pink-foreground transition-colors hover:opacity-90">
-              <EyeOff className="h-4 w-4" strokeWidth={1.75} /> Desactivar todos
+            <button type="button" onClick={() => { setAll(false); showToast("success", t("modulos.toast_all_off")); }} className="flex h-10 items-center gap-2 rounded-full bg-pastel-pink/60 px-4 text-sm font-medium text-pastel-pink-foreground transition-colors hover:opacity-90">
+              <EyeOff className="h-4 w-4" strokeWidth={1.75} /> {t("modulos.disable_all")}
             </button>
           </div>
         </div>
@@ -142,27 +155,33 @@ const Modulos = () => {
                 {m.allowed ? (
                   m.platformLock ? (
                     <span className="inline-flex max-w-[140px] items-center gap-1 rounded-full bg-amber-500/25 px-2.5 py-1 text-[10px] font-medium text-amber-900 dark:text-amber-100">
-                      <AlertCircle className="h-3 w-3 shrink-0" /> Bloqueado pela Edukamba
+                      <AlertCircle className="h-3 w-3 shrink-0" /> {t("modulos.platform_blocked")}
                     </span>
                   ) : (
                     <Toggle
                       checked={m.enabled}
                       onChange={(v) => {
                         setModule(m.key, v);
-                        showToast("success", `${m.label} ${v ? "activado" : "desactivado"}.`);
+                        showToast(
+                          "success",
+                          t("modulos.toggle_toast", {
+                            name: m.label,
+                            state: v ? t("modulos.toggle_on") : t("modulos.toggle_off"),
+                          }),
+                        );
                       }}
                     />
                   )
                 ) : (
                   <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-                    <Lock className="h-3 w-3" /> {m.requiredPlan}
+                    <Lock className="h-3 w-3" /> {t(`modulos.plans.${m.requiredPlan}`)}
                   </span>
                 )}
               </div>
               <div className="mt-1">
                 {!m.allowed ? (
                   <span className="inline-block rounded-full bg-pastel-yellow px-2.5 py-1 text-[11px] font-medium text-pastel-yellow-foreground">
-                    Disponível no plano {m.requiredPlan}
+                    {t("modulos.available_on_plan", { plan: t(`modulos.plans.${m.requiredPlan}`) })}
                   </span>
                 ) : (
                   <span
@@ -175,7 +194,7 @@ const Modulos = () => {
                           : "bg-pastel-pink text-pastel-pink-foreground",
                     )}
                   >
-                    {m.platformLock ? "Bloqueio plataforma" : m.enabled ? "Activo" : "Inactivo"}
+                    {m.platformLock ? t("modulos.platform_lock_badge") : m.enabled ? t("modulos.status_active") : t("modulos.status_inactive")}
                   </span>
                 )}
               </div>
@@ -185,7 +204,7 @@ const Modulos = () => {
 
         {list.length === 0 && (
           <div className="rounded-2xl bg-card p-10 text-center shadow-card">
-            <p className="text-sm text-muted-foreground">Nenhum módulo corresponde à pesquisa.</p>
+            <p className="text-sm text-muted-foreground">{t("modulos.empty_search")}</p>
           </div>
         )}
 

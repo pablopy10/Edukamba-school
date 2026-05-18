@@ -10,6 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useTranslation } from "react-i18next";
+import { intlLocaleTagFromLng } from "@/lib/intlLocale";
 
 const palette = [
   "bg-pastel-lilac text-pastel-lilac-foreground",
@@ -40,20 +42,22 @@ const isSameDay = (a: Date, b: Date) =>
   a.getMonth() === b.getMonth() &&
   a.getDate() === b.getDate();
 
-const dateLabel = (date: Date) => {
-  const today = new Date();
-  const tomorrow = new Date();
-  tomorrow.setDate(today.getDate() + 1);
-  if (isSameDay(date, today)) return "Hoje";
-  if (isSameDay(date, tomorrow)) return "Amanhã";
-  return date.toLocaleDateString("pt-PT", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-  });
-};
-
 export const AgendaCard = ({ date }: AgendaCardProps) => {
+  const { t, i18n } = useTranslation("common");
+  const localeTag = intlLocaleTagFromLng(i18n.language);
+
+  const dateLabel = (d: Date) => {
+    const today = new Date();
+    const tomorrow = new Date();
+    tomorrow.setDate(today.getDate() + 1);
+    if (isSameDay(d, today)) return t("dashboard.agenda.today");
+    if (isSameDay(d, tomorrow)) return t("dashboard.agenda.tomorrow");
+    return d.toLocaleDateString(localeTag, {
+      weekday: "long",
+      day: "2-digit",
+      month: "long",
+    });
+  };
   const { selectedYearId } = useAcademicYear();
   const { isParent, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
@@ -117,8 +121,8 @@ export const AgendaCard = ({ date }: AgendaCardProps) => {
         ((data ?? []) as unknown as Row[]).map((s) => ({
           id: s.id,
           time: (s.start_time ?? "").slice(0, 5),
-          grade: s.classrooms?.name ?? s.classrooms?.grade_level ?? "Turma",
-          title: s.subjects?.name ?? "Aula",
+          grade: s.classrooms?.name ?? s.classrooms?.grade_level ?? t("dashboard.agenda.fallback_class"),
+          title: s.subjects?.name ?? t("dashboard.agenda.fallback_lesson"),
         })),
       );
     };
@@ -126,13 +130,13 @@ export const AgendaCard = ({ date }: AgendaCardProps) => {
     return () => {
       cancelled = true;
     };
-  }, [date, classroomId, selectedYearId]);
+  }, [date, classroomId, selectedYearId, t]);
 
   return (
     <div className="flex flex-col gap-4 rounded-2xl bg-card p-6 shadow-card">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="text-lg font-bold text-foreground">Agenda</h3>
+          <h3 className="text-lg font-bold text-foreground">{t("dashboard.agenda.title")}</h3>
           <p className="truncate text-xs capitalize text-muted-foreground">{dateLabel(date)}</p>
         </div>
         <Select
@@ -141,7 +145,7 @@ export const AgendaCard = ({ date }: AgendaCardProps) => {
           disabled={classrooms.length === 0 || (isParent && classrooms.length <= 1)}
         >
           <SelectTrigger className="h-8 w-auto min-w-[120px] rounded-full border-border bg-background px-3 text-xs font-medium">
-            <SelectValue placeholder="Turma" />
+            <SelectValue placeholder={t("dashboard.agenda.placeholder_class")} />
           </SelectTrigger>
           <SelectContent>
             {classrooms.map((c) => (
@@ -156,7 +160,7 @@ export const AgendaCard = ({ date }: AgendaCardProps) => {
       <div className="flex flex-col gap-3">
         {items.length === 0 ? (
           <p className="rounded-xl bg-muted/50 p-4 text-center text-xs text-muted-foreground">
-            Sem aulas agendadas neste dia.
+            {t("dashboard.agenda.no_lessons")}
           </p>
         ) : (
           items.map((it, i) => (

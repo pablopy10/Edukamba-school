@@ -1,5 +1,7 @@
 import { MoreHorizontal } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
+import { useTranslation } from "react-i18next";
+import { intlLocaleTagFromLng } from "@/lib/intlLocale";
 
 const COLORS = ["hsl(var(--pastel-blue))", "hsl(var(--pastel-yellow))"];
 
@@ -9,30 +11,31 @@ interface StudentsCardProps {
   total: number;
 }
 
-const formatNumber = (n: number) => n.toLocaleString("pt-PT");
-
 const formatCompact = (n: number) => {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
   return String(n);
 };
 
 export const StudentsCard = ({ male, female, total }: StudentsCardProps) => {
+  const { t, i18n } = useTranslation("common");
+  const fmt = (n: number) => n.toLocaleString(intlLocaleTagFromLng(i18n.language));
+
   const safeTotal = total > 0 ? total : 1;
   const malePct = Math.round((male / safeTotal) * 100);
   const femalePct = Math.round((female / safeTotal) * 100);
   const data =
     total === 0
-      ? [{ name: "Sem dados", value: 1 }]
+      ? [{ name: t("dashboard.students_card.no_data"), value: 1 }]
       : [
-          { name: "Meninos", value: male },
-          { name: "Meninas", value: female },
+          { name: t("dashboard.students_card.boys"), value: male },
+          { name: t("dashboard.students_card.girls"), value: female },
         ];
   const colors = total === 0 ? ["hsl(var(--muted))"] : COLORS;
   return (
     <div className="flex flex-col gap-4 rounded-2xl bg-card p-6 shadow-card">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-bold text-foreground">Alunos</h3>
-        <button className="rounded-full p-1 text-muted-foreground hover:bg-accent">
+        <h3 className="text-lg font-bold text-foreground">{t("dashboard.students_card.title")}</h3>
+        <button className="rounded-full p-1 text-muted-foreground hover:bg-accent" type="button" aria-hidden>
           <MoreHorizontal className="h-4 w-4" />
         </button>
       </div>
@@ -59,7 +62,7 @@ export const StudentsCard = ({ male, female, total }: StudentsCardProps) => {
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div className="text-center">
             <p className="text-2xl font-bold text-foreground">{formatCompact(total)}</p>
-            <p className="text-xs text-muted-foreground">Total</p>
+            <p className="text-xs text-muted-foreground">{t("dashboard.students_card.total")}</p>
           </div>
         </div>
       </div>
@@ -68,16 +71,20 @@ export const StudentsCard = ({ male, female, total }: StudentsCardProps) => {
         <div>
           <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-pastel-blue" />
-            <p className="text-2xl font-bold text-foreground">{formatNumber(male)}</p>
+            <p className="text-2xl font-bold text-foreground">{fmt(male)}</p>
           </div>
-          <p className="ml-4.5 mt-0.5 pl-2 text-xs text-muted-foreground">Meninos ({malePct}%)</p>
+          <p className="ml-4.5 mt-0.5 pl-2 text-xs text-muted-foreground">
+            {t("dashboard.students_card.boys")} ({malePct}%)
+          </p>
         </div>
         <div>
           <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-pastel-yellow" />
-            <p className="text-2xl font-bold text-foreground">{formatNumber(female)}</p>
+            <p className="text-2xl font-bold text-foreground">{fmt(female)}</p>
           </div>
-          <p className="mt-0.5 pl-4 text-xs text-muted-foreground">Meninas ({femalePct}%)</p>
+          <p className="mt-0.5 pl-4 text-xs text-muted-foreground">
+            {t("dashboard.students_card.girls")} ({femalePct}%)
+          </p>
         </div>
       </div>
     </div>

@@ -42,15 +42,7 @@ import { loadPendingSync } from "@/lib/pendingSyncStorage";
 import { cn } from "@/lib/utils";
 import { isNativeMobileApp } from "@/lib/nativeApp";
 import { EdukambaWordmark } from "@/components/branding/EdukambaWordmark";
-import { ROLE_LABEL_INVITE } from "@/components/definicoes/InviteStaffUserDialog";
 import { useTranslation } from "react-i18next";
-
-const roleLabels: Record<string, string> = {
-  SUPER_ADMIN: "Super Admin",
-  ...ROLE_LABEL_INVITE,
-  PARENT: "Encarregado",
-  STUDENT: "Aluno",
-};
 
 const initialsOf = (name: string) =>
   name
@@ -231,6 +223,7 @@ function TopbarConnectivity({ variant }: { variant: "native" | "desktop" }) {
 export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) => {
   const native = isNativeMobileApp();
   const navigate = useNavigate();
+  const { t } = useTranslation("common");
   const [q, setQ] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -364,7 +357,9 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
   };
 
   const displayName = profile?.full_name ?? user?.email ?? "";
-  const displayRole = profile?.role ? roleLabels[profile.role] ?? profile.role : "";
+  const displayRole = profile?.role
+    ? String(t(`roles.${profile.role}`, { defaultValue: profile.role }))
+    : "";
   const avatarUrl = profile?.avatar_url ?? "";
 
   if (native) {
@@ -376,7 +371,7 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
               <button
                 type="button"
                 className={cn(nativeIconBtn)}
-                aria-label="Abrir menu"
+                aria-label={t("topbar.open_menu")}
                 onClick={onOpenMobileMenu}
               >
                 <Menu strokeWidth={1.75} />
@@ -385,7 +380,7 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
             <Link
               to="/dashboard"
               className="min-w-0 shrink touch-manipulation"
-              aria-label="Edukamba — Painel"
+              aria-label={t("topbar.wordmark_aria")}
             >
               <EdukambaWordmark className="block truncate leading-none" />
             </Link>
@@ -403,13 +398,13 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
 
             <TopbarConnectivity variant="native" />
 
-            <Link to="/chat" aria-label="Chat" className={cn(nativeIconBtn, "relative")}>
+            <Link to="/chat" aria-label={t("topbar.chat_aria")} className={cn(nativeIconBtn, "relative")}>
               <MessageSquare strokeWidth={1.75} />
               {unreadMessagesCount > 0 && (
                 <span className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-card" />
               )}
             </Link>
-            <Link to="/notificacoes" aria-label="Notificações" className={cn(nativeIconBtn, "relative")}>
+            <Link to="/notificacoes" aria-label={t("topbar.notifications_aria")} className={cn(nativeIconBtn, "relative")}>
               <Bell strokeWidth={1.75} />
               {unreadCount > 0 && (
                 <span className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-card" />
@@ -417,7 +412,7 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
             </Link>
             <Link
               to="/perfil"
-              aria-label="Perfil"
+              aria-label={t("topbar.profile_aria")}
               className="flex shrink-0 touch-manipulation items-center justify-center rounded-full transition-opacity hover:opacity-80"
             >
               <div className="relative">
@@ -441,15 +436,15 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
         {isParent && kids.length > 1 && (
           <div className="w-full min-w-0 rounded-2xl border border-border/60 bg-muted/25 p-3 shadow-soft/50 ring-1 ring-border/40">
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Consultar dados de
+              {t("topbar.parent_consult_heading")}
             </p>
             <Select value={selectedChildId ?? undefined} onValueChange={(v) => setSelectedChildId(v)}>
               <SelectTrigger
-                aria-label="Selecionar filho ou filha"
+                aria-label={t("topbar.select_child_aria")}
                 className="h-12 w-full min-w-0 gap-2 rounded-xl border-border/80 bg-card px-4 text-left text-sm font-semibold text-foreground shadow-soft [&_svg]:shrink-0 [&>span]:line-clamp-1"
               >
                 <Baby className="h-4 w-4 text-pastel-pink-foreground" strokeWidth={1.75} />
-                <SelectValue placeholder="Filho(a)" />
+                <SelectValue placeholder={t("topbar.child_placeholder")} />
               </SelectTrigger>
               <SelectContent align="center" position="popper" className="max-h-[min(60vh,20rem)] w-[min(100vw-2rem,var(--radix-select-trigger-width))]">
                 {kids.map((c) => (
@@ -470,8 +465,8 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
         <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
           <DialogContent className="gap-4 sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Pesquisar</DialogTitle>
-              <DialogDescription>Escreva um termo e prima Enter para ir à página de pesquisa.</DialogDescription>
+              <DialogTitle>{t("topbar.search_dialog_title")}</DialogTitle>
+              <DialogDescription>{t("topbar.search_dialog_desc")}</DialogDescription>
             </DialogHeader>
             <form onSubmit={submit} className="flex flex-col gap-3">
               <div className="relative">
@@ -483,12 +478,12 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
                   autoCapitalize="sentences"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder="Buscar..."
+                  placeholder={t("topbar.search_placeholder")}
                   className="pl-10"
                 />
               </div>
               <Button type="submit" className="w-full sm:w-auto">
-                Pesquisar
+                {t("topbar.search_submit")}
               </Button>
             </form>
           </DialogContent>
@@ -504,7 +499,7 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
           <button
             type="button"
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent lg:hidden"
-            aria-label="Abrir menu"
+            aria-label={t("topbar.open_menu")}
             onClick={onOpenMobileMenu}
           >
             <Menu className="h-6 w-6" strokeWidth={1.75} />
@@ -516,21 +511,21 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
             type="text"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar..."
+            placeholder={t("topbar.search_placeholder")}
             className="h-11 w-full rounded-full border border-border bg-card pl-11 pr-4 text-sm text-foreground placeholder:text-muted-foreground shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
         </form>
 
         <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-3 min-[480px]:w-auto min-[480px]:flex-1">
           {isParent && kids.length > 0 && (
-            <div className="hidden items-center md:flex" title="Filho(a) em consulta">
+            <div className="hidden items-center md:flex" title={t("topbar.child_selector_title")}>
               <Select
                 value={selectedChildId ?? undefined}
                 onValueChange={(v) => setSelectedChildId(v)}
               >
                 <SelectTrigger className="h-11 w-auto gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-soft hover:bg-accent">
                   <Baby className="h-4 w-4 text-pastel-pink-foreground" strokeWidth={1.75} />
-                  <SelectValue placeholder="Filho(a)" />
+                  <SelectValue placeholder={t("topbar.child_placeholder")} />
                 </SelectTrigger>
                 <SelectContent>
                   {kids.map((c) => (
@@ -544,17 +539,17 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
             </div>
           )}
           {years.length > 0 && (
-            <div className="hidden items-center md:flex" title="Ano letivo em gestão">
+            <div className="hidden items-center md:flex" title={t("topbar.academic_year_title")}>
               <Select value={selectedYearId ?? undefined} onValueChange={setSelectedYearId}>
                 <SelectTrigger className="h-11 w-auto gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-soft hover:bg-accent">
                   <CalendarDays className="h-4 w-4 text-pastel-blue-foreground" strokeWidth={1.75} />
-                  <SelectValue placeholder="Ano letivo" />
+                  <SelectValue placeholder={t("topbar.academic_year_placeholder")} />
                 </SelectTrigger>
                 <SelectContent>
                   {years.map((y) => (
                     <SelectItem key={y.id} value={y.id}>
                       {y.label}
-                      {y.is_active ? " · ativo" : ""}
+                      {y.is_active ? ` · ${t("topbar.year_active_suffix")}` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -568,18 +563,18 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
                   ? "bg-destructive/10 text-destructive"
                   : "bg-pastel-yellow text-pastel-yellow-foreground"
               }`}
-              title="Período de avaliação"
+              title={t("topbar.trial_period_title")}
             >
               <Clock className="h-3.5 w-3.5" />
               {trialDaysLeft === 0
-                ? "Trial termina hoje"
-                : `${trialDaysLeft} ${trialDaysLeft === 1 ? "dia" : "dias"} de trial`}
+                ? t("topbar.trial_ends_today")
+                : t("topbar.trial_days", { count: trialDaysLeft })}
             </div>
           )}
           <TopbarConnectivity variant="desktop" />
           <Link
             to="/chat"
-            aria-label="Chat"
+            aria-label={t("topbar.chat_aria")}
             className="relative flex h-11 w-11 items-center justify-center rounded-full bg-card text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent"
           >
             <MessageSquare className="h-5 w-5" strokeWidth={1.75} />
@@ -589,7 +584,7 @@ export const Topbar = ({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
           </Link>
           <Link
             to="/notificacoes"
-            aria-label="Notificações"
+            aria-label={t("topbar.notifications_aria")}
             className="relative flex h-11 w-11 items-center justify-center rounded-full bg-card text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent"
           >
             <Bell className="h-5 w-5" strokeWidth={1.75} />

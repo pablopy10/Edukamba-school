@@ -109,6 +109,84 @@
     "footer_ok": "Tudo em dia — sem alterações por enviar.",
     "aria_prefix": "Rede e sincronização."
   },
+  "roles": {
+    "SUPER_ADMIN": "Super admin",
+    "ADMIN": "Administrador",
+    "DIRECTOR": "Director",
+    "SECRETARY": "Secretaria",
+    "TREASURER": "Tesoureiro",
+    "LIBRARIAN": "Bibliotecário",
+    "STOCK_MANAGER": "Gestor de stock",
+    "RECEPTIONIST": "Rececionista",
+    "TEACHER": "Professor",
+    "PARENT": "Educador",
+    "STUDENT": "Aluno"
+  },
+  "topbar": {
+    "open_menu": "Abrir menu",
+    "wordmark_aria": "Edukamba — Painel",
+    "search_aria": "Pesquisar",
+    "chat_aria": "Chat",
+    "notifications_aria": "Notificações",
+    "profile_aria": "Perfil",
+    "parent_consult_heading": "Consultar dados de",
+    "select_child_aria": "Selecionar filho ou filha",
+    "child_placeholder": "Filho(a)",
+    "child_selector_title": "Filho(a) em consulta",
+    "search_dialog_title": "Pesquisar",
+    "search_dialog_desc": "Escreva um termo e prima Enter para ir à página de pesquisa.",
+    "search_placeholder": "Buscar...",
+    "search_submit": "Pesquisar",
+    "academic_year_title": "Ano letivo em gestão",
+    "academic_year_placeholder": "Ano letivo",
+    "year_active_suffix": "ativo",
+    "trial_period_title": "Período de avaliação",
+    "trial_ends_today": "O trial termina hoje",
+    "trial_days_one": "{{count}} dia de trial",
+    "trial_days_other": "{{count}} dias de trial"
+  },
+  "dashboard": {
+    "sr_title": "Painel Edukamba",
+    "stats": {
+      "students": "Alunos",
+      "teachers": "Professores",
+      "staff": "Funcionários",
+      "classrooms": "Turmas"
+    },
+    "students_card": {
+      "title": "Alunos",
+      "boys": "Meninos",
+      "girls": "Meninas",
+      "total": "Total",
+      "no_data": "Sem dados"
+    },
+    "attendance": {
+      "title": "Frequência",
+      "all_classes": "Todas as turmas",
+      "placeholder_class": "Turma",
+      "placeholder_no_classes": "Sem turmas",
+      "teacher_no_schedules": "Sem turmas com horário definido neste ano letivo.",
+      "present": "Presentes",
+      "absent": "Ausentes",
+      "empty_hint": "Sem registos de frequência neste período. Verifique o ano letivo no topo ou registe presenças em Presenças."
+    },
+    "calendar": {
+      "prev_month_aria": "Mês anterior",
+      "next_month_aria": "Próximo mês"
+    },
+    "agenda": {
+      "title": "Agenda",
+      "today": "Hoje",
+      "tomorrow": "Amanhã",
+      "placeholder_class": "Turma",
+      "no_lessons": "Sem aulas agendadas neste dia.",
+      "fallback_class": "Turma",
+      "fallback_lesson": "Aula"
+    },
+    "chart_months_short": ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"],
+    "calendar_weekdays_short": ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"],
+    "calendar_months_long": ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+  },
   "perfil": {
     "title": "O Meu Perfil",
     "subtitle": "Faça a gestão da sua conta, credenciais e preferências.",

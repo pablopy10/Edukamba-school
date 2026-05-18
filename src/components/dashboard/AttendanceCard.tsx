@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useTranslation } from "react-i18next";
 
 interface Classroom {
   id: string;
@@ -25,17 +26,11 @@ interface WeekBucket {
   absent: number;
 }
 
-const monthShort = [
+/** Fallback se JSON não devolver array (12 meses Jan–Dez). */
+const CHART_MONTHS_FALLBACK_PT = [
   "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
   "Jul", "Ago", "Set", "Out", "Nov", "Dez",
 ];
-
-const emptyMonths = (): WeekBucket[] =>
-  Array.from({ length: 12 }, (_, i) => ({
-    week: monthShort[i],
-    present: 0,
-    absent: 0,
-  }));
 
 /** Índice 0–11 a partir da parte calendário YYYY-MM-DD (sem UTC). */
 const calendarMonthIndexFromIso = (dateStr: string): number | null => {
@@ -71,6 +66,7 @@ function attendanceFromTooltipPayload(payload: TooltipProps<number, string>["pay
 }
 
 function AttendanceTooltip({ active, payload, label }: TooltipProps<number, string>) {
+  const { t } = useTranslation("common");
   if (!active) return null;
   const stats = attendanceFromTooltipPayload(payload);
   if (!stats) return null;
@@ -93,7 +89,7 @@ function AttendanceTooltip({ active, payload, label }: TooltipProps<number, stri
               className="h-2.5 w-2.5 shrink-0 rounded-full"
               style={{ backgroundColor: "hsl(var(--pastel-yellow))" }}
             />
-            <span style={{ color: "hsl(var(--pastel-yellow-foreground))" }}>Presentes</span>
+            <span style={{ color: "hsl(var(--pastel-yellow-foreground))" }}>{t("dashboard.attendance.present")}</span>
           </span>
           <span className="tabular-nums text-base font-bold text-foreground">{present}</span>
         </li>
@@ -103,7 +99,7 @@ function AttendanceTooltip({ active, payload, label }: TooltipProps<number, stri
               className="h-2.5 w-2.5 shrink-0 rounded-full"
               style={{ backgroundColor: "hsl(var(--pastel-blue))" }}
             />
-            <span style={{ color: "hsl(var(--pastel-blue-foreground))" }}>Ausentes</span>
+            <span style={{ color: "hsl(var(--pastel-blue-foreground))" }}>{t("dashboard.attendance.absent")}</span>
           </span>
           <span className="tabular-nums text-base font-bold text-foreground">{absent}</span>
         </li>
@@ -122,6 +118,17 @@ const isUuidLike = (id: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 
 export const AttendanceCard = () => {
+  const { t, i18n } = useTranslation("common");
+  const chartMonthsShort = useMemo(() => {
+    const arr = t("dashboard.chart_months_short", { returnObjects: true });
+    return Array.isArray(arr) && arr.length === 12 ? (arr as string[]) : CHART_MONTHS_FALLBACK_PT;
+  }, [t, i18n.language]);
+
+  const makeEmptyMonths = useCallback(
+    (): WeekBucket[] => chartMonthsShort.map((week) => ({ week, present: 0, absent: 0 })),
+    [chartMonthsShort],
+  );
+
   const { selectedYear, selectedYearId, schoolId, loading: academicYearLoading } = useAcademicYear();
   const { role, loading: roleLoading } = useUserRole();
   /** Evita tratar como admin antes do perfil estar definido (cache/async). */
@@ -130,7 +137,9 @@ export const AttendanceCard = () => {
 
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [classroomId, setClassroomId] = useState<string>("ALL");
-  const [data, setData] = useState<WeekBucket[]>(() => emptyMonths());
+  const [data, setData] = useState<WeekBucket[]>(() =>
+    CHART_MONTHS_FALLBACK_PT.map((week) => ({ week, present: 0, absent: 0 })),
+  );
 
   /** Limites estritos do ano letivo (YYYY-MM-DD). */
   const dateBounds = useMemo(() => {
@@ -223,8 +232,16 @@ export const AttendanceCard = () => {
     };
   }, [roleLoading, teacherMode, selectedYearId, teacherLoading, teacherClassroomIds.join(",")]);
 
+  useEffect(() => {
+    setData((prev) => {
+      const empty = makeEmptyMonths();
+      if (prev.length !== 12) return empty;
+      return prev.map((row, i) => ({ ...row, week: chartMonthsShort[i] ?? row.week }));
+    });
+  }, [chartMonthsShort, makeEmptyMonths]);
+
   const aggregateRows = useCallback((rows: { date: string; status: string | null; notes: string | null }[]) => {
-    const months = emptyMonths();
+    const months = makeEmptyMonths();
     const toDateKey = (raw: unknown): string => {
       if (typeof raw === "string") return raw;
       if (raw instanceof Date) {
@@ -243,30 +260,30 @@ export const AttendanceCard = () => {
       else months[monthIdx].present += 1;
     }
     return months;
-  }, []);
+  }, [makeEmptyMonths]);
 
   useEffect(() => {
     const load = async () => {
       if (roleLoading) {
-        setData(emptyMonths());
+        setData(makeEmptyMonths());
         return;
       }
 
       /** Evita intervalo só com ano civil (errado) antes de `academic_years` estar resolvido. */
       if (academicYearLoading) {
-        setData(emptyMonths());
+        setData(makeEmptyMonths());
         return;
       }
 
       if (!schoolId) {
-        setData(emptyMonths());
+        setData(makeEmptyMonths());
         return;
       }
 
       if (teacherMode) {
         /** Estado inicial é "ALL"; professores nunca usam todas as turmas — esperar UUID real. */
         if (teacherLoading || !classroomId || classroomId === "ALL" || !isUuidLike(classroomId)) {
-          setData(emptyMonths());
+          setData(makeEmptyMonths());
           return;
         }
         let query = supabase
@@ -280,7 +297,7 @@ export const AttendanceCard = () => {
         const { data: rows, error } = await query;
         if (error) {
           console.error("AttendanceCard load", error);
-          setData(emptyMonths());
+          setData(makeEmptyMonths());
           return;
         }
         setData(aggregateRows((rows ?? []) as { date: string; status: string | null; notes: string | null }[]));
@@ -301,7 +318,7 @@ export const AttendanceCard = () => {
       const { data: rows, error } = await query;
       if (error) {
         console.error("AttendanceCard load", error);
-        setData(emptyMonths());
+        setData(makeEmptyMonths());
         return;
       }
       setData(aggregateRows((rows ?? []) as { date: string; status: string | null; notes: string | null }[]));
@@ -318,6 +335,7 @@ export const AttendanceCard = () => {
     teacherMode,
     teacherLoading,
     roleLoading,
+    makeEmptyMonths,
   ]);
 
   const maxValue = Math.max(10, ...data.flatMap((d) => [d.present, d.absent]));
@@ -326,20 +344,25 @@ export const AttendanceCard = () => {
 
   const teacherSelectDisabled = teacherMode && (classrooms.length === 0 || !classroomId);
 
+  const presentLabel = t("dashboard.attendance.present");
+  const absentLabel = t("dashboard.attendance.absent");
+
   return (
     <div className="flex h-full flex-col gap-5 rounded-2xl bg-card p-6 shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-lg font-bold text-foreground">Frequência</h3>
+        <h3 className="text-lg font-bold text-foreground">{t("dashboard.attendance.title")}</h3>
         <Select
           value={teacherMode ? classroomId || undefined : classroomId}
           onValueChange={setClassroomId}
           disabled={teacherSelectDisabled}
         >
           <SelectTrigger className="h-8 w-auto min-w-[140px] rounded-full border-border bg-background px-3 text-xs font-medium disabled:opacity-60">
-            <SelectValue placeholder={teacherMode ? "Sem turmas" : "Turma"} />
+            <SelectValue
+              placeholder={teacherMode ? t("dashboard.attendance.placeholder_no_classes") : t("dashboard.attendance.placeholder_class")}
+            />
           </SelectTrigger>
           <SelectContent>
-            {!teacherMode && <SelectItem value="ALL">Todas as turmas</SelectItem>}
+            {!teacherMode && <SelectItem value="ALL">{t("dashboard.attendance.all_classes")}</SelectItem>}
             {classrooms.map((c) => (
               <SelectItem key={c.id} value={c.id}>
                 {c.name}
@@ -350,17 +373,15 @@ export const AttendanceCard = () => {
       </div>
 
       {teacherMode && classrooms.length === 0 && !teacherLoading && (
-        <p className="text-xs text-muted-foreground">
-          Sem turmas com horário definido neste ano letivo.
-        </p>
+        <p className="text-xs text-muted-foreground">{t("dashboard.attendance.teacher_no_schedules")}</p>
       )}
 
       <div className="flex items-center gap-5 text-xs font-medium text-muted-foreground">
         <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-pastel-yellow" /> Presentes
+          <span className="h-2.5 w-2.5 rounded-full bg-pastel-yellow" /> {presentLabel}
         </div>
         <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-pastel-blue" /> Ausentes
+          <span className="h-2.5 w-2.5 rounded-full bg-pastel-blue" /> {absentLabel}
         </div>
       </div>
 
@@ -374,7 +395,7 @@ export const AttendanceCard = () => {
               cursor={{ fill: "hsl(var(--muted) / 0.35)" }}
               content={(props) => <AttendanceTooltip {...props} />}
             />
-            <Bar dataKey="present" name="Presentes" fill="hsl(var(--pastel-yellow))" radius={[8, 8, 0, 0]} stroke="hsl(var(--pastel-yellow-foreground) / 0.25)" strokeWidth={1}>
+            <Bar dataKey="present" name={presentLabel} fill="hsl(var(--pastel-yellow))" radius={[8, 8, 0, 0]} stroke="hsl(var(--pastel-yellow-foreground) / 0.25)" strokeWidth={1}>
               <LabelList
                 dataKey="present"
                 position="top"
@@ -383,7 +404,7 @@ export const AttendanceCard = () => {
                 formatter={barCountLabel}
               />
             </Bar>
-            <Bar dataKey="absent" name="Ausentes" fill="hsl(var(--pastel-blue))" radius={[8, 8, 0, 0]} stroke="hsl(var(--pastel-blue-foreground) / 0.35)" strokeWidth={1}>
+            <Bar dataKey="absent" name={absentLabel} fill="hsl(var(--pastel-blue))" radius={[8, 8, 0, 0]} stroke="hsl(var(--pastel-blue-foreground) / 0.35)" strokeWidth={1}>
               <LabelList
                 dataKey="absent"
                 position="top"
@@ -396,9 +417,7 @@ export const AttendanceCard = () => {
         </ResponsiveContainer>
       </div>
       {isEmpty && (
-        <p className="text-center text-xs text-muted-foreground">
-          Sem registos de frequência neste período. Verifique o ano letivo no topo ou registe presenças em Presenças.
-        </p>
+        <p className="text-center text-xs text-muted-foreground">{t("dashboard.attendance.empty_hint")}</p>
       )}
     </div>
   );
