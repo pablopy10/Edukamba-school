@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Trophy, TrendingDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export const ClassroomPerformanceCard = ({ variant }: Props) => {
+  const { t } = useTranslation("common");
   const { selectedYear } = useAcademicYear();
   const [name, setName] = useState<string>("—");
   const [score, setScore] = useState<number | null>(null);
@@ -71,7 +73,7 @@ export const ClassroomPerformanceCard = ({ variant }: Props) => {
     return () => {
       cancelled = true;
     };
-  }, [variant, selectedYear]);
+  }, [variant, selectedYear, t]);
 
   const isBest = variant === "best";
   const Icon = isBest ? Trophy : TrendingDown;
@@ -91,7 +93,7 @@ export const ClassroomPerformanceCard = ({ variant }: Props) => {
       <div className="min-w-0">
         <p className="truncate text-xl font-bold text-foreground">{name}</p>
         <p className="text-xs text-muted-foreground">
-          {isBest ? "Turma com melhor desempenho" : "Turma com pior desempenho"}
+          {isBest ? t("dashboard.classroom_performance.subtitle_best") : t("dashboard.classroom_performance.subtitle_worst")}
         </p>
       </div>
       {score !== null && (
@@ -101,7 +103,7 @@ export const ClassroomPerformanceCard = ({ variant }: Props) => {
             isBest ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive",
           )}
         >
-          Média {score.toFixed(1)}
+          {t("dashboard.classroom_performance.average_badge", { value: score.toFixed(1) })}
         </span>
       )}
     </div>

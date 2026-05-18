@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { SCHOOL_MANAGEMENT_ROLES } from "@/lib/schoolStaffRoles";
 import type { Enums } from "@/integrations/supabase/types";
+import { intlLocaleTagFromLng } from "@/lib/intlLocale";
 
 const DASHBOARD_STAFF_ROLE_FILTER: Enums<"user_role">[] = [...SCHOOL_MANAGEMENT_ROLES, "TEACHER"];
+
+const WEEKDAY_FALLBACK_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export interface DashboardCounts {
   students: number;
@@ -41,8 +45,6 @@ export interface MessagePreview {
   unread: boolean;
   contactId: string | null;
 }
-
-const dayLabels = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 const initials = (name: string) =>
   name
@@ -166,9 +168,13 @@ export const useDashboardData = () => {
           if (isAbsent) buckets[wd].absent += 1;
           else buckets[wd].present += 1;
         });
+        const wdLabelsUnknown = t("dashboard.calendar_weekdays_short", { returnObjects: true });
+        const weekdayShort =
+          Array.isArray(wdLabelsUnknown) && wdLabelsUnknown.length === 7 ? (wdLabelsUnknown as string[]) : WEEKDAY_FALLBACK_EN;
+
         setAttendance(
           [1, 2, 3, 4, 5].map((wd) => ({
-            day: dayLabels[wd],
+            day: weekdayShort[wd],
             present: buckets[wd].present,
             absent: buckets[wd].absent,
           })),
@@ -186,8 +192,9 @@ export const useDashboardData = () => {
           sched.map((s) => ({
             id: s.id,
             time: (s.start_time ?? "").slice(0, 5),
-            grade: s.classrooms?.name ?? s.classrooms?.grade_level ?? "Turma",
-            title: s.subjects?.name ?? "Aula",
+            grade:
+              s.classrooms?.name ?? s.classrooms?.grade_level ?? t("dashboard.agenda.fallback_class"),
+            title: s.subjects?.name ?? t("dashboard.agenda.fallback_lesson"),
           })),
         );
 
@@ -217,7 +224,9 @@ export const useDashboardData = () => {
             .from("profiles")
             .select("id, full_name")
             .in("id", receiverIds);
-          (profs ?? []).forEach((p) => receiverNameMap.set(p.id, p.full_name ?? "Desconhecido"));
+          (profs ?? []).forEach((p) =>
+            receiverNameMap.set(p.id, p.full_name ?? t("dashboard.messages.unknown_contact")),
+          );
         }
 
         // Group by contact — keep only the most recent message per conversation
@@ -229,8 +238,8 @@ export const useDashboardData = () => {
           // Already have a (more recent) entry for this contact — skip
           if (conversationMap.has(contactId)) continue;
           const name = isOutgoing
-            ? (receiverNameMap.get(m.receiver_id!) ?? "Desconhecido")
-            : (m.profiles?.full_name ?? "Desconhecido");
+            ? (receiverNameMap.get(m.receiver_id!) ?? t("dashboard.messages.unknown_contact"))
+            : (m.profiles?.full_name ?? t("dashboard.messages.unknown_contact"));
           const d = new Date(m.created_at);
           const now = new Date();
           const isToday =
@@ -238,14 +247,14 @@ export const useDashboardData = () => {
             d.getMonth() === now.getMonth() &&
             d.getDate() === now.getDate();
           const time = isToday
-            ? d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })
-            : d.toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit" });
+            ? d.toLocaleTimeString(localeTag, { hour: "2-digit", minute: "2-digit" })
+            : d.toLocaleDateString(localeTag, { day: "2-digit", month: "2-digit" });
           const isIncoming = !!currentUserId && m.receiver_id === currentUserId && m.sender_id !== currentUserId;
           conversationMap.set(contactId, {
             id: m.id,
             name,
             initials: initials(name),
-            text: isOutgoing ? `Você: ${m.content}` : m.content,
+            text: isOutgoing ? t("dashboard.messages.you_prefix", { text: m.content }) : m.content,
             time,
             unread: isIncoming && !m.is_read,
             contactId,
@@ -261,7 +270,7 @@ export const useDashboardData = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedYearId]);
+  }, [selectedYearId, i18n.language, t]);
 
   return { loading, counts, gender, attendance, agenda, messages };
 };

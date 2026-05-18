@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Medal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,6 +23,7 @@ const medalColor = (i: number) =>
     : "bg-muted text-muted-foreground";
 
 export const HonorRollCard = () => {
+  const { t } = useTranslation("common");
   const [entries, setEntries] = useState<HonorEntry[]>([]);
   const [terms, setTerms] = useState<Term[]>([]);
   const [selectedTermId, setSelectedTermId] = useState<string>("all");
@@ -129,8 +131,8 @@ export const HonorRollCard = () => {
             <Medal className="h-5 w-5" strokeWidth={1.75} />
           </div>
           <div>
-            <h3 className="text-base font-bold text-foreground">Quadro de Honra</h3>
-            <p className="text-xs text-muted-foreground">Média ≥ {minAverage}/{maxScore}</p>
+            <h3 className="text-base font-bold text-foreground">{t("dashboard.honor_roll.title")}</h3>
+            <p className="text-xs text-muted-foreground">{t("dashboard.honor_roll.subtitle", { min: minAverage, max: maxScore })}</p>
           </div>
         </div>
         {terms.length > 0 && (
@@ -139,7 +141,7 @@ export const HonorRollCard = () => {
               <SelectValue />
             </SelectTrigger>
             <SelectContent align="end">
-              <SelectItem value="all">Todo o ano</SelectItem>
+              <SelectItem value="all">{t("dashboard.honor_roll.term_all_year")}</SelectItem>
               {terms.map((t) => (
                 <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
               ))}
@@ -150,7 +152,7 @@ export const HonorRollCard = () => {
 
       {entries.length === 0 ? (
         <p className="rounded-xl bg-muted/50 p-4 text-center text-xs text-muted-foreground">
-          Nenhum aluno com média ≥ {minAverage}.
+          {t("dashboard.honor_roll.empty", { min: minAverage })}
         </p>
       ) : (
         <ol className="flex max-h-64 flex-col gap-2 overflow-y-auto pr-2 -mr-2">

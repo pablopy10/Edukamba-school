@@ -183,6 +183,47 @@
       "fallback_class": "Turma",
       "fallback_lesson": "Aula"
     },
+    "classroom_performance": {
+      "subtitle_best": "Turma com melhor desempenho",
+      "subtitle_worst": "Turma com pior desempenho",
+      "average_badge": "Média {{value}}",
+      "no_data": "Sem dados"
+    },
+    "honor_roll": {
+      "title": "Quadro de Honra",
+      "subtitle": "Média ≥ {{min}}/{{max}}",
+      "term_all_year": "Todo o ano",
+      "empty": "Nenhum aluno com média ≥ {{min}}."
+    },
+    "earnings": {
+      "title": "Receita",
+      "received": "Recebido",
+      "expected": "Previsto",
+      "empty_year": "Sem registos financeiros este ano."
+    },
+    "complaints": {
+      "title": "Reclamações",
+      "view_all": "Ver todas",
+      "empty": "Sem reclamações registadas.",
+      "col_subject": "Assunto",
+      "col_target": "Visado",
+      "col_status": "Estado",
+      "target_STUDENT": "Aluno",
+      "target_TEACHER": "Professor",
+      "target_STAFF": "Funcionário",
+      "status_OPEN": "Aberta",
+      "status_IN_REVIEW": "Em análise",
+      "status_RESOLVED": "Resolvida",
+      "status_REJECTED": "Rejeitada"
+    },
+    "messages": {
+      "title": "Mensagens",
+      "view_all": "Ver todas",
+      "empty": "Sem mensagens recentes.",
+      "you_prefix": "Você: {{text}}",
+      "unknown_contact": "Desconhecido",
+      "unread_aria": "Não lida"
+    },
     "chart_months_short": ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"],
     "calendar_weekdays_short": ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"],
     "calendar_months_long": ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]

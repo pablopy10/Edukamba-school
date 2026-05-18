@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 const palette = [
@@ -13,6 +14,7 @@ interface MessagesCardProps {
 }
 
 export const MessagesCard = ({ messages }: MessagesCardProps) => {
+  const { t } = useTranslation("common");
   const navigate = useNavigate();
   const openChat = (contactId: string | null) => {
     if (contactId) navigate(`/chat?to=${contactId}`);
@@ -21,18 +23,19 @@ export const MessagesCard = ({ messages }: MessagesCardProps) => {
   return (
     <div className="flex flex-col gap-4 rounded-2xl bg-card p-6 shadow-card">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-bold text-foreground">Mensagens</h3>
+        <h3 className="text-lg font-bold text-foreground">{t("dashboard.messages.title")}</h3>
         <button
+          type="button"
           onClick={() => navigate("/chat")}
           className="text-xs font-semibold text-primary hover:underline"
         >
-          Ver todas
+          {t("dashboard.messages.view_all")}
         </button>
       </div>
       <div className="flex flex-col gap-4">
         {messages.length === 0 && (
           <p className="rounded-xl bg-muted/50 p-4 text-center text-xs text-muted-foreground">
-            Sem mensagens recentes.
+            {t("dashboard.messages.empty")}
           </p>
         )}
         {messages.map((m, i) => (
@@ -53,7 +56,7 @@ export const MessagesCard = ({ messages }: MessagesCardProps) => {
               <p className="line-clamp-2 text-xs text-muted-foreground">{m.text}</p>
             </div>
             {m.unread && (
-              <span className="ml-1 mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" aria-label="Não lida" />
+              <span className="ml-1 mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" aria-label={t("dashboard.messages.unread_aria")} />
             )}
           </button>
         ))}

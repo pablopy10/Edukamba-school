@@ -183,6 +183,47 @@
       "fallback_class": "Class",
       "fallback_lesson": "Lesson"
     },
+    "classroom_performance": {
+      "subtitle_best": "Top-performing class",
+      "subtitle_worst": "Lowest-performing class",
+      "average_badge": "Avg. {{value}}",
+      "no_data": "No data"
+    },
+    "honor_roll": {
+      "title": "Honor roll",
+      "subtitle": "Average ≥ {{min}}/{{max}}",
+      "term_all_year": "Full year",
+      "empty": "No students with average ≥ {{min}}."
+    },
+    "earnings": {
+      "title": "Revenue",
+      "received": "Received",
+      "expected": "Expected",
+      "empty_year": "No fee records this year."
+    },
+    "complaints": {
+      "title": "Complaints",
+      "view_all": "View all",
+      "empty": "No complaints on file.",
+      "col_subject": "Subject",
+      "col_target": "Regarding",
+      "col_status": "Status",
+      "target_STUDENT": "Student",
+      "target_TEACHER": "Teacher",
+      "target_STAFF": "Staff member",
+      "status_OPEN": "Open",
+      "status_IN_REVIEW": "In review",
+      "status_RESOLVED": "Resolved",
+      "status_REJECTED": "Rejected"
+    },
+    "messages": {
+      "title": "Messages",
+      "view_all": "View all",
+      "empty": "No recent messages.",
+      "you_prefix": "You: {{text}}",
+      "unknown_contact": "Unknown",
+      "unread_aria": "Unread"
+    },
     "chart_months_short": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
     "calendar_weekdays_short": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
     "calendar_months_long": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]

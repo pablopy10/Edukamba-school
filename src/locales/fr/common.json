@@ -183,6 +183,47 @@
       "fallback_class": "Classe",
       "fallback_lesson": "Cours"
     },
+    "classroom_performance": {
+      "subtitle_best": "Classe la plus performante",
+      "subtitle_worst": "Classe la moins performante",
+      "average_badge": "Moy. {{value}}",
+      "no_data": "Pas de données"
+    },
+    "honor_roll": {
+      "title": "Tableau d’honneur",
+      "subtitle": "Moyenne ≥ {{min}}/{{max}}",
+      "term_all_year": "Année complète",
+      "empty": "Aucun élève avec une moyenne ≥ {{min}}."
+    },
+    "earnings": {
+      "title": "Revenus",
+      "received": "Encaissé",
+      "expected": "Prévu",
+      "empty_year": "Aucune donnée de frais pour cette année."
+    },
+    "complaints": {
+      "title": "Réclamations",
+      "view_all": "Tout voir",
+      "empty": "Aucune réclamation enregistrée.",
+      "col_subject": "Objet",
+      "col_target": "Concernant",
+      "col_status": "Statut",
+      "target_STUDENT": "Élève",
+      "target_TEACHER": "Enseignant",
+      "target_STAFF": "Personnel",
+      "status_OPEN": "Ouverte",
+      "status_IN_REVIEW": "En cours d’étude",
+      "status_RESOLVED": "Traitée",
+      "status_REJECTED": "Rejetée"
+    },
+    "messages": {
+      "title": "Messages",
+      "view_all": "Tout voir",
+      "empty": "Pas de messages récents.",
+      "you_prefix": "Vous : {{text}}",
+      "unknown_contact": "Inconnu",
+      "unread_aria": "Non lu"
+    },
     "chart_months_short": ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."],
     "calendar_weekdays_short": ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."],
     "calendar_months_long": ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]

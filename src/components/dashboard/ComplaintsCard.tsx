@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { intlLocaleTagFromLng } from "@/lib/intlLocale";
 
 interface ComplaintRow {
   id: string;
@@ -13,19 +15,6 @@ interface ComplaintRow {
   target_student: { full_name: string | null } | null;
   target_profile: { full_name: string | null } | null;
 }
-
-const targetLabel: Record<ComplaintRow["target_type"], string> = {
-  STUDENT: "Aluno",
-  TEACHER: "Professor",
-  STAFF: "Funcionário",
-};
-
-const statusLabel: Record<ComplaintRow["status"], string> = {
-  OPEN: "Aberta",
-  IN_REVIEW: "Em análise",
-  RESOLVED: "Resolvida",
-  REJECTED: "Rejeitada",
-};
 
 const statusClass: Record<ComplaintRow["status"], string> = {
   OPEN: "bg-pastel-yellow text-pastel-yellow-foreground",
@@ -41,6 +30,8 @@ const severityClass: Record<ComplaintRow["severity"], string> = {
 };
 
 export const ComplaintsCard = ({ studentScopeId }: { studentScopeId?: string | null } = {}) => {
+  const { t, i18n } = useTranslation("common");
+  const localeTag = intlLocaleTagFromLng(i18n.language);
   const [rows, setRows] = useState<ComplaintRow[]>([]);
 
   useEffect(() => {
@@ -63,6 +54,20 @@ export const ComplaintsCard = ({ studentScopeId }: { studentScopeId?: string | n
     };
   }, [studentScopeId]);
 
+  const targetLabel = (type: ComplaintRow["target_type"]) =>
+    ({
+      STUDENT: t("dashboard.complaints.target_STUDENT"),
+      TEACHER: t("dashboard.complaints.target_TEACHER"),
+      STAFF: t("dashboard.complaints.target_STAFF"),
+    })[type];
+  const statusLabel = (status: ComplaintRow["status"]) =>
+    ({
+      OPEN: t("dashboard.complaints.status_OPEN"),
+      IN_REVIEW: t("dashboard.complaints.status_IN_REVIEW"),
+      RESOLVED: t("dashboard.complaints.status_RESOLVED"),
+      REJECTED: t("dashboard.complaints.status_REJECTED"),
+    })[status];
+
   return (
     <div className="flex h-full flex-col gap-4 rounded-2xl bg-card p-6 shadow-card">
       <div className="flex items-center justify-between">
@@ -70,23 +75,23 @@ export const ComplaintsCard = ({ studentScopeId }: { studentScopeId?: string | n
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-pastel-pink text-pastel-pink-foreground">
             <AlertTriangle className="h-5 w-5" strokeWidth={1.75} />
           </div>
-          <h3 className="text-lg font-bold text-foreground">Reclamações</h3>
+          <h3 className="text-lg font-bold text-foreground">{t("dashboard.complaints.title")}</h3>
         </div>
-        <button className="text-xs font-semibold text-primary hover:underline">Ver todas</button>
+        <button type="button" className="text-xs font-semibold text-primary hover:underline">{t("dashboard.complaints.view_all")}</button>
       </div>
 
       {rows.length === 0 ? (
         <p className="rounded-xl bg-muted/50 p-4 text-center text-xs text-muted-foreground">
-          Sem reclamações registadas.
+          {t("dashboard.complaints.empty")}
         </p>
       ) : (
         <div className="overflow-hidden rounded-xl border border-border">
           <table className="w-full text-left text-xs">
             <thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="px-3 py-2 font-medium">Assunto</th>
-                <th className="px-3 py-2 font-medium">Visado</th>
-                <th className="px-3 py-2 font-medium">Estado</th>
+                <th className="px-3 py-2 font-medium">{t("dashboard.complaints.col_subject")}</th>
+                <th className="px-3 py-2 font-medium">{t("dashboard.complaints.col_target")}</th>
+                <th className="px-3 py-2 font-medium">{t("dashboard.complaints.col_status")}</th>
               </tr>
             </thead>
             <tbody>
@@ -102,12 +107,12 @@ export const ComplaintsCard = ({ studentScopeId }: { studentScopeId?: string | n
                         {r.subject}
                       </p>
                       <p className="text-[11px] text-muted-foreground">
-                        {new Date(r.created_at).toLocaleDateString("pt-PT")}
+                        {new Date(r.created_at).toLocaleDateString(localeTag)}
                       </p>
                     </td>
                     <td className="px-3 py-2">
                       <p className="truncate text-sm text-foreground">{targetName ?? "—"}</p>
-                      <p className="text-[11px] text-muted-foreground">{targetLabel[r.target_type]}</p>
+                      <p className="text-[11px] text-muted-foreground">{targetLabel(r.target_type)}</p>
                     </td>
                     <td className="px-3 py-2">
                       <span
@@ -116,7 +121,7 @@ export const ComplaintsCard = ({ studentScopeId }: { studentScopeId?: string | n
                           statusClass[r.status],
                         )}
                       >
-                        {statusLabel[r.status]}
+                        {statusLabel(r.status)}
                       </span>
                     </td>
                   </tr>

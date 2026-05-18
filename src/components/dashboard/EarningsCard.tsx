@@ -1,14 +1,27 @@
 import { MoreHorizontal } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip } from "recharts";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
+import { intlLocaleTagFromLng } from "@/lib/intlLocale";
 
-const monthLabels = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const CHART_MONTHS_FALLBACK_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export const EarningsCard = () => {
+  const { t, i18n } = useTranslation("common");
+  const localeTag = intlLocaleTagFromLng(i18n.language);
+  const monthLabels = useMemo((): string[] => {
+    const fromJson = t("dashboard.chart_months_short", { returnObjects: true });
+    return Array.isArray(fromJson) && fromJson.length === 12 ? (fromJson as string[]) : [...CHART_MONTHS_FALLBACK_EN];
+  }, [t, i18n.language]);
+
   const [data, setData] = useState(
     monthLabels.map((m) => ({ m, income: 0, expense: 0 })),
   );
+
+  useEffect(() => {
+    setData(monthLabels.map((m) => ({ m, income: 0, expense: 0 })));
+  }, [monthLabels]);
 
   useEffect(() => {
     const load = async () => {
@@ -42,21 +55,24 @@ export const EarningsCard = () => {
       setData(buckets);
     };
     load();
-  }, []);
+  }, [monthLabels]);
+
+  const receivedLabel = t("dashboard.earnings.received");
+  const expectedLabel = t("dashboard.earnings.expected");
 
   const hasData = data.some((d) => d.income > 0 || d.expense > 0);
   return (
     <div className="flex flex-col gap-4 rounded-2xl bg-card p-6 shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-lg font-bold text-foreground">Receita</h3>
+        <h3 className="text-lg font-bold text-foreground">{t("dashboard.earnings.title")}</h3>
         <div className="flex items-center gap-5 text-xs text-muted-foreground">
           <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-pastel-blue" /> Recebido
+            <span className="h-2.5 w-2.5 rounded-full bg-pastel-blue" /> {receivedLabel}
           </div>
           <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-pastel-lilac" /> Previsto
+            <span className="h-2.5 w-2.5 rounded-full bg-pastel-lilac" /> {expectedLabel}
           </div>
-          <button className="rounded-full p-1 text-muted-foreground hover:bg-accent">
+          <button type="button" className="rounded-full p-1 text-muted-foreground hover:bg-accent">
             <MoreHorizontal className="h-4 w-4" />
           </button>
         </div>
@@ -86,12 +102,12 @@ export const EarningsCard = () => {
                 boxShadow: "var(--shadow-soft)",
                 fontSize: "12px",
               }}
-              formatter={(value: number) => value.toLocaleString("pt-PT", { style: "currency", currency: "AOA", maximumFractionDigits: 0 })}
+              formatter={(value: number) => value.toLocaleString(localeTag, { style: "currency", currency: "AOA", maximumFractionDigits: 0 })}
             />
             <Area
               type="monotone"
               dataKey="income"
-              name="Recebido"
+              name={receivedLabel}
               stroke="hsl(var(--pastel-blue-foreground))"
               strokeWidth={2.5}
               fill="url(#incomeFill)"
@@ -99,7 +115,7 @@ export const EarningsCard = () => {
             <Area
               type="monotone"
               dataKey="expense"
-              name="Previsto"
+              name={expectedLabel}
               stroke="hsl(var(--pastel-lilac-foreground))"
               strokeWidth={2.5}
               fill="url(#expenseFill)"
@@ -108,7 +124,7 @@ export const EarningsCard = () => {
         </ResponsiveContainer>
       </div>
       {!hasData && (
-        <p className="text-center text-xs text-muted-foreground">Sem registos financeiros este ano.</p>
+        <p className="text-center text-xs text-muted-foreground">{t("dashboard.earnings.empty_year")}</p>
       )}
     </div>
   );
