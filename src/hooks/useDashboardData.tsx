@@ -55,6 +55,8 @@ const initials = (name: string) =>
     .join("") || "?";
 
 export const useDashboardData = () => {
+  const { t, i18n } = useTranslation("common");
+  const localeTag = intlLocaleTagFromLng(i18n.language);
   const { selectedYearId } = useAcademicYear();
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState<DashboardCounts>({

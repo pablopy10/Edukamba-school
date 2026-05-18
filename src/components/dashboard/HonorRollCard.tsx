@@ -99,8 +99,8 @@ export const HonorRollCard = () => {
           const a = g.assessments;
           let effective = a?.term_id ?? null;
           if (!effective && a?.date) {
-            const t = terms.find((tt) => a.date! >= tt.start_date && a.date! <= tt.end_date);
-            effective = t?.id ?? null;
+            const matchedTerm = terms.find((tt) => a.date! >= tt.start_date && a.date! <= tt.end_date);
+            effective = matchedTerm?.id ?? null;
           }
           if (effective !== selectedTermId) return;
         }
@@ -142,8 +142,8 @@ export const HonorRollCard = () => {
             </SelectTrigger>
             <SelectContent align="end">
               <SelectItem value="all">{t("dashboard.honor_roll.term_all_year")}</SelectItem>
-              {terms.map((t) => (
-                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+              {terms.map((term) => (
+                <SelectItem key={term.id} value={term.id}>{term.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
