@@ -252,12 +252,12 @@ const Avaliacoes = () => {
 
   const teachersInSubjectFilter = useMemo(() => {
     if (subjectFilter === "all") return displayTeachers;
-    return displayTeachers.filter((t) => (t.subject_id ?? null) === subjectFilter);
+    return displayTeachers.filter((teach) => (teach.subject_id ?? null) === subjectFilter);
   }, [displayTeachers, subjectFilter]);
 
   useEffect(() => {
     if (teacherFilter === "all") return;
-    if (!teachersInSubjectFilter.some((t) => t.id === teacherFilter)) setTeacherFilter("all");
+    if (!teachersInSubjectFilter.some((teach) => teach.id === teacherFilter)) setTeacherFilter("all");
   }, [teacherFilter, teachersInSubjectFilter]);
 
   const invalidateTeacherAvalPack = useCallback(() => {
@@ -698,12 +698,14 @@ const Avaliacoes = () => {
               </SelectContent>
             </Select>
             <Select value={teacherFilter} onValueChange={setTeacherFilter} disabled={isStudent}>
-              <SelectTrigger className="h-10 rounded-full"><SelectValue placeholder="Professor" /></SelectTrigger>
+              <SelectTrigger className="h-10 rounded-full">
+                <SelectValue placeholder={t("filter_teacher_placeholder")} />
+              </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos os professores</SelectItem>
-                {teachersInSubjectFilter.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name}
+                <SelectItem value="all">{t("all_teachers")}</SelectItem>
+                {teachersInSubjectFilter.map((teach) => (
+                  <SelectItem key={teach.id} value={teach.id}>
+                    {teach.name}
                   </SelectItem>
                 ))}
               </SelectContent>
