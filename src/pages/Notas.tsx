@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useIsRestoring, useQuery } from "@tanstack/react-query";
 import { Search, Table2, Loader2, AlertTriangle, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
