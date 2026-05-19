@@ -19,6 +19,8 @@ import { Button } from "@/components/ui/button";
 import type { UserRole } from "@/hooks/useUserRole";
 import { isNativeMobileApp } from "@/lib/nativeApp";
 import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
+import { uploadFileToR2, R2UploadError } from "@/lib/r2/uploadFileToR2";
+import { isPublicFileUrl, openFileUrl, resolveFileUrl } from "@/lib/r2/resolveFileUrl";
 
 type Role = UserRole;
 
@@ -329,35 +331,34 @@ const Chat = () => {
       return;
     }
     setUploading(true);
-    const ext = file.name.split(".").pop() ?? "bin";
-    const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const { error: upErr } = await supabase.storage.from("chat-attachments").upload(path, file, {
-      contentType: file.type || "application/octet-stream",
-    });
-    if (upErr) {
-      setUploading(false);
-      toast({ title: t("toast_upload_failed"), description: upErr.message, variant: "destructive" });
-      return;
+    try {
+      const publicUrl = await uploadFileToR2(file, { prefix: "chat-attachments" });
+      await insertMessage({
+        content: null,
+        message_type: kind,
+        file_url: publicUrl,
+        file_name: file.name,
+        file_type: file.type || null,
+        file_size: file.size,
+      });
+    } catch (e) {
+      const msg = e instanceof R2UploadError ? e.message : e instanceof Error ? e.message : t("toast_upload_failed");
+      toast({ title: t("toast_upload_failed"), description: msg, variant: "destructive" });
     }
-    await insertMessage({
-      content: null,
-      message_type: kind,
-      file_url: path,
-      file_name: file.name,
-      file_type: file.type || null,
-      file_size: file.size,
-    });
     setUploading(false);
   };
 
   const downloadAttachment = async (m: DBMessage) => {
     if (!m.file_url) return;
-    const { data, error } = await supabase.storage.from("chat-attachments").createSignedUrl(m.file_url, 60 * 5);
-    if (error || !data) {
-      toast({ title: t("toast_open_file_failed"), description: error?.message, variant: "destructive" });
-      return;
+    try {
+      await openFileUrl(m.file_url, "chat-attachments");
+    } catch (e) {
+      toast({
+        title: t("toast_open_file_failed"),
+        description: e instanceof Error ? e.message : undefined,
+        variant: "destructive",
+      });
     }
-    window.open(data.signedUrl, "_blank");
   };
 
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
@@ -368,8 +369,14 @@ const Chat = () => {
     (async () => {
       const updates: Record<string, string> = {};
       for (const m of imgs) {
-        const { data } = await supabase.storage.from("chat-attachments").createSignedUrl(m.file_url!, 60 * 30);
-        if (data) updates[m.id] = data.signedUrl;
+        if (!m.file_url) continue;
+        try {
+          updates[m.id] = isPublicFileUrl(m.file_url)
+            ? m.file_url
+            : await resolveFileUrl(m.file_url, "chat-attachments");
+        } catch {
+          /* skip broken legacy paths */
+        }
       }
       if (Object.keys(updates).length) setSignedUrls((p) => ({ ...p, ...updates }));
     })();

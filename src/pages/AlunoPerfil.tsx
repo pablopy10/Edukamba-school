@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreateStudentAccessDialog, ELIGIBLE_GRADES } from "@/components/alunos/CreateStudentAccessDialog";
 import { KeyRound, ShieldCheck } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
+import { uploadFileToR2, R2UploadError } from "@/lib/r2/uploadFileToR2";
 
 type AvatarColor = "lilac" | "blue" | "yellow" | "green" | "pink";
 
@@ -453,12 +454,13 @@ const AlunoPerfil = () => {
       return;
     }
     setProofUploading(true);
-    const ext = proofFile.name.split(".").pop() || "bin";
-    const path = `${schoolId}/${student.id}/${proofDialogFee.id}-${Date.now()}.${ext}`;
-    const { error: upErr } = await supabase.storage.from("payment-proofs").upload(path, proofFile, { upsert: false });
-    if (upErr) {
+    let proofPublicUrl: string;
+    try {
+      proofPublicUrl = await uploadFileToR2(proofFile, { prefix: "payment-proofs" });
+    } catch (e) {
       setProofUploading(false);
-      toast({ title: "Erro a enviar ficheiro", description: upErr.message, variant: "destructive" });
+      const msg = e instanceof R2UploadError ? e.message : e instanceof Error ? e.message : "Upload failed";
+      toast({ title: "Erro a enviar ficheiro", description: msg, variant: "destructive" });
       return;
     }
     const amount = Number(proofAmount) || Number(proofDialogFee.amount_due);
@@ -466,7 +468,7 @@ const AlunoPerfil = () => {
       student_fee_id: proofDialogFee.id,
       amount_paid: amount,
       method: proofMethod,
-      proof_url: path,
+      proof_url: proofPublicUrl,
       status: "pendente",
       submitted_by: userId,
       school_id: schoolId,

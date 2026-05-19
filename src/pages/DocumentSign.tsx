@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { uploadBlobToR2 } from "@/lib/r2/uploadFileToR2";
 
 type DocCategory = "assinatura" | "formulario" | "informativo";
 
@@ -201,18 +202,14 @@ export default function DocumentSign() {
 
         setSubmitStep("A guardar PDF assinado…");
         const blob = new Blob([pdfBytes], { type: "application/pdf" });
-        const storagePath = `signed/${request.id}.pdf`;
-
-        const { error: uploadErr } = await supabase.storage
-          .from("documents")
-          .upload(storagePath, blob, { contentType: "application/pdf", upsert: true });
-
-        if (!uploadErr) {
-          const { data: urlData } = supabase.storage.from("documents").getPublicUrl(storagePath);
-          builtSignedPdfUrl = urlData.publicUrl;
+        try {
+          builtSignedPdfUrl = await uploadBlobToR2(blob, `signed-${request.id}.pdf`, {
+            prefix: "documents",
+            contentType: "application/pdf",
+          });
           setSignedPdfUrl(builtSignedPdfUrl);
-        } else {
-          console.warn("Signed PDF upload error:", uploadErr.message);
+        } catch (e) {
+          console.warn("Signed PDF upload error:", e instanceof Error ? e.message : e);
         }
       } catch (e) {
         console.warn("PDF signing failed (will still save signature image):", e);

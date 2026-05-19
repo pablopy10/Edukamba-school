@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { uploadFileToR2 } from "@/lib/r2/uploadFileToR2";
 
 type StepId = 1 | 2 | 3 | 4;
 
@@ -124,14 +125,7 @@ const Onboarding = () => {
       // 1. Upload logo (optional)
       let logoUrl: string | null = null;
       if (logoFile) {
-        const ext = logoFile.name.split(".").pop() ?? "png";
-        const path = `${user.id}/logo-${Date.now()}.${ext}`;
-        const { error: uploadError } = await supabase.storage
-          .from("school-logos")
-          .upload(path, logoFile, { upsert: true });
-        if (uploadError) throw uploadError;
-        const { data: pub } = supabase.storage.from("school-logos").getPublicUrl(path);
-        logoUrl = pub.publicUrl;
+        logoUrl = await uploadFileToR2(logoFile, { prefix: "school-logos" });
       }
 
       // 2. Atomically create school, link profile and create academic year

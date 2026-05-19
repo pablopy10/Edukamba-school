@@ -35,6 +35,8 @@ import { encarregadosUsamAnexo, normalizeGuardianPaymentMode } from "@/lib/guard
 import { invokeEmitFiscalInvoices, type EmitFiscalInvoicesResult } from "@/lib/fiscal/invokeEmitFiscalInvoices";
 import { downloadFiscalInvoicePdfById } from "@/lib/fiscal/downloadFiscalInvoicePdf";
 import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
+import { uploadFileToR2, R2UploadError } from "@/lib/r2/uploadFileToR2";
+import { openFileUrl } from "@/lib/r2/resolveFileUrl";
 
 type StaffValidatedInsertResult = { error: string | null; paymentId?: string };
 
@@ -589,15 +591,14 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     setRecordUploading(true);
     let proofPath: string | null = null;
     if (recordFile) {
-      const ext = recordFile.name.split(".").pop() || "bin";
-      const path = `${schoolId}/${studentId}/${fee.id}-${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("payment-proofs").upload(path, recordFile, { upsert: false });
-      if (upErr) {
+      try {
+        proofPath = await uploadFileToR2(recordFile, { prefix: "payment-proofs" });
+      } catch (e) {
         setRecordUploading(false);
-        toast({ title: "Erro a enviar ficheiro", description: upErr.message, variant: "destructive" });
+        const msg = e instanceof R2UploadError ? e.message : e instanceof Error ? e.message : "Upload failed";
+        toast({ title: "Erro a enviar ficheiro", description: msg, variant: "destructive" });
         return;
       }
-      proofPath = path;
     }
     const amount = Number(recordAmount) || Number(fee.amount_due);
     const insertPayload = isParent ? {
@@ -1873,18 +1874,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   };
 
   const viewProof = async (path: string) => {
-    const { data, error } = await supabase.storage.from("payment-proofs").createSignedUrl(path, 3600);
-    if (error || !data?.signedUrl) {
-      toast({ title: "Erro a abrir comprovativo", description: error?.message ?? "Sem URL", variant: "destructive" });
-      return;
+    try {
+      await openFileUrl(path, "payment-proofs");
+    } catch (e) {
+      toast({
+        title: "Erro a abrir comprovativo",
+        description: e instanceof Error ? e.message : "Sem URL",
+        variant: "destructive",
+      });
     }
-    const a = document.createElement("a");
-    a.href = data.signedUrl;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
   };
 
   const validatePayment = async (fee: FeeListRow, payment: PaymentListRow) => {

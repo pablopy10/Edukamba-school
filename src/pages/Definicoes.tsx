@@ -50,6 +50,8 @@ import {
   type PermissionModuleKey,
 } from "@/lib/schoolPermissionModules";
 import { schoolPermissionMatrixQueryRoot } from "@/hooks/useSchoolPermissionMatrix";
+import { uploadFileToR2, R2UploadError } from "@/lib/r2/uploadFileToR2";
+import { openFileUrl } from "@/lib/r2/resolveFileUrl";
 import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 
 type Tab =
@@ -712,17 +714,16 @@ const Definicoes = () => {
     if (!file || !schoolId) return;
     if (file.size > 2 * 1024 * 1024) return showToast("error", tr("validation.logo_max_size"));
     setLogoUploading(true);
-    const ext = file.name.split(".").pop();
-    const path = `${schoolId}/logo-${Date.now()}.${ext}`;
-    const { error: upErr } = await supabase.storage.from("school-logos").upload(path, file, { upsert: true });
-    if (upErr) {
+    try {
+      const publicUrl = await uploadFileToR2(file, { prefix: "school-logos" });
+      setSchool((s) => ({ ...s, logo_url: publicUrl }));
+      showToast("success", tr("toasts.logo_uploaded"));
+    } catch (e) {
+      const msg = e instanceof R2UploadError ? e.message : e instanceof Error ? e.message : tr("toasts.proof_error");
+      showToast("error", msg);
+    } finally {
       setLogoUploading(false);
-      return showToast("error", upErr.message);
     }
-    const { data: pub } = supabase.storage.from("school-logos").getPublicUrl(path);
-    setSchool((s) => ({ ...s, logo_url: pub.publicUrl }));
-    setLogoUploading(false);
-    showToast("success", tr("toasts.logo_uploaded"));
   };
 
   // ===== Save academic =====
@@ -1137,16 +1138,11 @@ const Definicoes = () => {
     if (!proofFile) return showToast("error", tr("validation.proof_file_required"));
     setProofUploading(true);
     try {
-      const ext = proofFile.name.split(".").pop() || "pdf";
-      const path = `${schoolId}/${proofInvoice.id}-${Date.now()}.${ext}`;
-      const up = await supabase.storage
-        .from("school-invoice-proofs")
-        .upload(path, proofFile, { upsert: true, contentType: proofFile.type || undefined });
-      if (up.error) throw up.error;
+      const proofPublicUrl = await uploadFileToR2(proofFile, { prefix: "school-invoice-proofs" });
       const { error: updErr } = await supabase
         .from("school_invoices")
         .update({
-          proof_url: path,
+          proof_url: proofPublicUrl,
           payment_method: proofMethod,
           notes: proofNotes || null,
           submitted_at: new Date().toISOString(),
@@ -1170,11 +1166,11 @@ const Definicoes = () => {
   };
 
   const downloadProof = async (path: string) => {
-    const { data, error } = await supabase.storage
-      .from("school-invoice-proofs")
-      .createSignedUrl(path, 60 * 5);
-    if (error || !data?.signedUrl) return showToast("error", tr("toasts.proof_open_failed"));
-    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    try {
+      await openFileUrl(path, "school-invoice-proofs");
+    } catch {
+      showToast("error", tr("toasts.proof_open_failed"));
+    }
   };
 
   const statusBadge = (active: boolean | null) => {

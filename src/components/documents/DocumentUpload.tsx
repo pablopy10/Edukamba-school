@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 import { Upload, FileText, X, Loader2, FolderOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { uploadFileToR2, R2UploadError } from "@/lib/r2/uploadFileToR2";
 
 interface Props {
   schoolId: string | null;
@@ -13,8 +13,6 @@ interface Props {
   accept?: string;
   className?: string;
 }
-
-const BUCKET = "documents";
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -38,32 +36,22 @@ export function DocumentUpload({ schoolId, onUpload, onClear, currentUrl, curren
     }
 
     setUploading(true);
-    setProgress(10);
+    setProgress(0);
 
-    const ext = file.name.split(".").pop() ?? "bin";
-    const path = `${schoolId ?? "shared"}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-
-    setProgress(30);
-
-    const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-      cacheControl: "3600",
-      upsert: false,
-      contentType: file.type,
-    });
-
-    setProgress(90);
-
-    if (error) {
-      toast({ title: "Erro no upload", description: error.message, variant: "destructive" });
+    try {
+      const publicUrl = await uploadFileToR2(file, {
+        prefix: "documents",
+        onProgress: setProgress,
+      });
+      setUploading(false);
+      setProgress(100);
+      onUpload(publicUrl, file.name);
+    } catch (e) {
+      const msg = e instanceof R2UploadError ? e.message : e instanceof Error ? e.message : "Upload failed";
+      toast({ title: "Erro no upload", description: msg, variant: "destructive" });
       setUploading(false);
       setProgress(0);
-      return;
     }
-
-    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
-    setUploading(false);
-    setProgress(100);
-    onUpload(urlData.publicUrl, file.name);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

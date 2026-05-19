@@ -23,6 +23,8 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 import { isNativeMobileApp } from "@/lib/nativeApp";
+import { uploadFileToR2, R2UploadError } from "@/lib/r2/uploadFileToR2";
+import { openFileUrl } from "@/lib/r2/resolveFileUrl";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   LineChart, Line,
@@ -329,11 +331,13 @@ const Financas = () => {
 
     let receiptUrl: string | undefined;
     if (receiptFile) {
-      const ext = receiptFile.name.split(".").pop();
-      const path = `${schoolId}/${crypto.randomUUID()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("expense-receipts").upload(path, receiptFile);
-      if (upErr) { toast({ title: t("toast.receipt_upload_error"), description: upErr.message, variant: "destructive" }); return; }
-      receiptUrl = path;
+      try {
+        receiptUrl = await uploadFileToR2(receiptFile, { prefix: "expense-receipts" });
+      } catch (e) {
+        const msg = e instanceof R2UploadError ? e.message : e instanceof Error ? e.message : t("toast.receipt_upload_error");
+        toast({ title: t("toast.receipt_upload_error"), description: msg, variant: "destructive" });
+        return;
+      }
     }
 
     const basePayload = {
@@ -486,9 +490,15 @@ const Financas = () => {
   };
 
   const downloadReceipt = async (path: string) => {
-    const { data, error } = await supabase.storage.from("expense-receipts").createSignedUrl(path, 60);
-    if (error || !data?.signedUrl) { toast({ title: t("toast.error"), description: error?.message, variant: "destructive" }); return; }
-    window.open(data.signedUrl, "_blank");
+    try {
+      await openFileUrl(path, "expense-receipts");
+    } catch (e) {
+      toast({
+        title: t("toast.error"),
+        description: e instanceof Error ? e.message : undefined,
+        variant: "destructive",
+      });
+    }
   };
 
   return (
