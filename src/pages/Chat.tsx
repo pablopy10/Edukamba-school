@@ -133,6 +133,7 @@ const Chat = () => {
   const mobileScrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
+  const uploadLockRef = useRef(false);
 
   // Mobile layout detection: native app OR screen width < md (768px)
   const native = isNativeMobileApp();
@@ -323,6 +324,7 @@ const Chat = () => {
   };
 
   const onPickFile = async (file: File, kind: "image" | "file") => {
+    if (uploadLockRef.current) return;
     if (!user || !activeId || !schoolId) {
       toast({ title: t("toast_select_conversation"), variant: "destructive" });
       return;
@@ -331,6 +333,9 @@ const Chat = () => {
       toast({ title: t("toast_file_large_title"), description: t("toast_file_large_desc"), variant: "destructive" });
       return;
     }
+    uploadLockRef.current = true;
+    setShowAttachMenu(false);
+    setShowEmoji(false);
     setUploading(true);
     try {
       const publicUrl = await uploadFileToR2(file, { prefix: "chat-attachments" });
@@ -345,8 +350,10 @@ const Chat = () => {
     } catch (e) {
       const msg = e instanceof R2UploadError ? e.message : e instanceof Error ? e.message : t("toast_upload_failed");
       toast({ title: t("toast_upload_failed"), description: msg, variant: "destructive" });
+    } finally {
+      uploadLockRef.current = false;
+      setUploading(false);
     }
-    setUploading(false);
   };
 
   const downloadAttachment = async (m: DBMessage) => {
@@ -434,9 +441,10 @@ const Chat = () => {
         tabIndex={-1}
         accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
         onChange={(e) => {
-          const f = e.target.files?.[0];
+          const input = e.target;
+          const f = input.files?.[0];
+          input.value = "";
           if (f) void onPickFile(f, "file");
-          e.target.value = "";
         }}
       />
       <input
@@ -446,9 +454,10 @@ const Chat = () => {
         tabIndex={-1}
         accept="image/*"
         onChange={(e) => {
-          const f = e.target.files?.[0];
+          const input = e.target;
+          const f = input.files?.[0];
+          input.value = "";
           if (f) void onPickFile(f, "image");
-          e.target.value = "";
         }}
       />
       <div className="flex flex-col gap-4">
@@ -815,66 +824,84 @@ const Chat = () => {
               </div>
             </div>
 
-            {/* Composer */}
-            <div className="shrink-0 border-t border-border bg-card px-3 pb-[max(0.75rem,var(--sab-r))] pt-3">
-              <div className="flex items-end gap-2">
-                <Popover modal={false}>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      disabled={!active || uploading}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
-                      aria-label={t("attach_aria")}
-                    >
-                      {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" strokeWidth={1.75} />}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent align="start" side="top" className="z-[200] w-44 p-1">
-                    <button
-                      type="button"
-                      onClick={triggerImagePick}
-                      className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent"
-                    >
-                      <ImageIcon className="h-4 w-4" /> {t("attach_image")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={triggerFilePick}
-                      className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent"
-                    >
-                      <FileText className="h-4 w-4" /> {t("attach_document")}
-                    </button>
-                  </PopoverContent>
-                </Popover>
-
-                <Popover modal={false} open={showEmoji} onOpenChange={setShowEmoji}>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      disabled={!active}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
-                      aria-label={t("emoji_aria")}
-                    >
-                      <Smile className="h-4 w-4" strokeWidth={1.75} />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    align="start"
-                    side="top"
-                    className="z-[200] w-auto border-0 p-0"
-                    onOpenAutoFocus={(e) => e.preventDefault()}
+            {/* Composer mobile — menus inline (Popover não funciona no Dialog/Capacitor) */}
+            <div className="relative shrink-0 border-t border-border bg-card px-3 pb-[max(0.75rem,var(--sab-r))] pt-3">
+              {(showAttachMenu || showEmoji) && (
+                <button
+                  type="button"
+                  className="absolute inset-0 -top-[100vh] z-[1] h-[200vh] w-full bg-transparent"
+                  aria-label={t("close")}
+                  onClick={() => {
+                    setShowAttachMenu(false);
+                    setShowEmoji(false);
+                  }}
+                />
+              )}
+              {showAttachMenu && (
+                <div
+                  className="absolute bottom-full left-0 z-[2] mb-2 w-44 rounded-lg border border-border bg-popover p-1 shadow-lg"
+                  role="menu"
+                >
+                  <button
+                    type="button"
+                    onClick={triggerImagePick}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent"
                   >
-                    <EmojiPicker
-                      onEmojiClick={(e) => { setDraft((d) => d + e.emoji); }}
-                      emojiStyle={EmojiStyle.NATIVE}
-                      theme={Theme.AUTO}
-                      width={emojiPickerWidth}
-                      height={320}
-                      searchPlaceHolder={t("emoji_search")}
-                      previewConfig={{ showPreview: false }}
-                    />
-                  </PopoverContent>
-                </Popover>
+                    <ImageIcon className="h-4 w-4" /> {t("attach_image")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={triggerFilePick}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent"
+                  >
+                    <FileText className="h-4 w-4" /> {t("attach_document")}
+                  </button>
+                </div>
+              )}
+              {showEmoji && (
+                <div className="absolute bottom-full left-0 right-0 z-[2] mb-2 overflow-hidden rounded-lg border border-border bg-popover shadow-lg">
+                  <EmojiPicker
+                    onEmojiClick={(e) => {
+                      setDraft((d) => d + e.emoji);
+                    }}
+                    emojiStyle={native ? EmojiStyle.APPLE : EmojiStyle.NATIVE}
+                    theme={Theme.AUTO}
+                    width={emojiPickerWidth}
+                    height={Math.min(320, Math.round(window.innerHeight * 0.38))}
+                    lazyLoadEmojis
+                    searchPlaceHolder={t("emoji_search")}
+                    previewConfig={{ showPreview: false }}
+                  />
+                </div>
+              )}
+              <div className="relative z-[3] flex items-end gap-2">
+                <button
+                  type="button"
+                  disabled={!active || uploading}
+                  onClick={() => {
+                    setShowEmoji(false);
+                    setShowAttachMenu((v) => !v);
+                  }}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
+                  aria-label={t("attach_aria")}
+                  aria-expanded={showAttachMenu}
+                >
+                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" strokeWidth={1.75} />}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={!active || uploading}
+                  onClick={() => {
+                    setShowAttachMenu(false);
+                    setShowEmoji((v) => !v);
+                  }}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
+                  aria-label={t("emoji_aria")}
+                  aria-expanded={showEmoji}
+                >
+                  <Smile className="h-4 w-4" strokeWidth={1.75} />
+                </button>
 
                 <textarea
                   value={draft}
@@ -885,12 +912,12 @@ const Chat = () => {
                   rows={1}
                   placeholder={active ? t("placeholder_active", { name: active.full_name }) : t("placeholder_inactive")}
                   maxLength={2000}
-                  disabled={!active || sending}
+                  disabled={!active || sending || uploading}
                   className="min-h-[40px] max-h-32 flex-1 resize-none rounded-2xl border border-border bg-card px-4 py-2.5 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
                 />
                 <button
                   onClick={sendText}
-                  disabled={!draft.trim() || !active || sending}
+                  disabled={!draft.trim() || !active || sending || uploading}
                   className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pastel-blue-foreground text-card shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:opacity-40"
                   aria-label={t("send_aria")}
                 >
