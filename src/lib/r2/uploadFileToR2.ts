@@ -1,13 +1,22 @@
 import { FunctionsFetchError, FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { isNativeMobileApp } from "@/lib/nativeApp";
+import { compressImageForUpload } from "@/lib/r2/compressImageForUpload";
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
 
 /** Limite do upload via Edge Function (contorna CORS no Capacitor). */
 const EDGE_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 
-const XHR_TIMEOUT_MS = 120_000;
+/** PUT directo para R2 (presigned). */
+const PRESIGN_PUT_TIMEOUT_MS = 180_000;
+
+/**
+ * POST para upload-to-r2: o telemóvel envia o ficheiro inteiro ao Supabase antes a função correr.
+ * 2 min era pouco → EarlyDrop no log quando o cliente abortava (não é CORS).
+ */
+const EDGE_POST_TIMEOUT_MS = 600_000;
 
 /** Resposta da Edge Function `get-r2-upload-url`. */
 export type R2PresignResponse = {
@@ -93,13 +102,13 @@ function putFileWithXHR(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", uploadUrl);
-    xhr.timeout = XHR_TIMEOUT_MS;
+    xhr.timeout = PRESIGN_PUT_TIMEOUT_MS;
     xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
 
     if (onProgress) {
       xhr.upload.onprogress = (ev) => {
         if (!ev.lengthComputable) return;
-        onProgress(Math.min(100, Math.round((ev.loaded / ev.total) * 100)));
+        onProgress(Math.min(99, Math.round((ev.loaded / ev.total) * 100)));
       };
     }
 
@@ -119,11 +128,12 @@ function putFileWithXHR(
 
     xhr.onerror = () => {
       const hint = isNativeMobileApp()
-        ? " Verifique CORS no bucket R2 (origens capacitor://localhost e https://localhost) ou use ficheiros até 5 MB."
-        : " Verifique a política CORS do bucket R2 para o domínio da app.";
-      reject(new R2UploadError(`Falha de rede ao enviar o ficheiro.${hint}`));
+        ? " Isto é CORS no bucket R2 — adicione https://localhost e capacitor://localhost em AllowedOrigins com PUT."
+        : " Verifique a política CORS do bucket R2 (método PUT) para o domínio da app.";
+      reject(new R2UploadError(`Falha de rede no envio directo para o armazenamento.${hint}`));
     };
-    xhr.ontimeout = () => reject(new R2UploadError("Upload expirou — tente novamente com ficheiro mais pequeno ou melhor rede."));
+    xhr.ontimeout = () =>
+      reject(new R2UploadError("Upload directo expirou — rede lenta ou ficheiro demasiado grande."));
     xhr.onabort = () => reject(new R2UploadError("Upload cancelado"));
 
     xhr.send(file);
@@ -150,7 +160,7 @@ async function uploadViaEdgeFunction(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url);
-    xhr.timeout = XHR_TIMEOUT_MS;
+    xhr.timeout = EDGE_POST_TIMEOUT_MS;
     xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.setRequestHeader("apikey", SUPABASE_KEY);
     xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
@@ -159,9 +169,10 @@ async function uploadViaEdgeFunction(
     xhr.setRequestHeader("x-prefix", prefix);
 
     if (onProgress) {
+      onProgress(0);
       xhr.upload.onprogress = (ev) => {
         if (!ev.lengthComputable) return;
-        onProgress(Math.min(100, Math.round((ev.loaded / ev.total) * 100)));
+        onProgress(Math.min(99, Math.round((ev.loaded / ev.total) * 100)));
       };
     }
 
@@ -196,11 +207,21 @@ async function uploadViaEdgeFunction(
       );
     };
     xhr.ontimeout = () => {
-      reject(new R2UploadError("Upload expirou — confirme que a função upload-to-r2 está publicada no Supabase."));
+      reject(
+        new R2UploadError(
+          "Upload cancelado por tempo esgotado (10 min). Use Wi‑Fi, uma foto mais pequena ou tente outra rede. " +
+            "Isto não é CORS — o pedido chegou ao Supabase mas a ligação foi interrompida.",
+        ),
+      );
     };
 
     xhr.send(file);
   });
+}
+
+async function prepareFileForUpload(file: File): Promise<File> {
+  if (!isNativeMobileApp() || !file.type.startsWith("image/")) return file;
+  return compressImageForUpload(file);
 }
 
 async function uploadViaPresignedUrl(
@@ -224,16 +245,23 @@ export async function uploadFileToR2(
 ): Promise<string> {
   const prefix = options?.prefix ?? "documents";
   const onProgress = options?.onProgress;
+  const prepared = await prepareFileForUpload(file);
 
-  const canUseEdge = file.size <= EDGE_UPLOAD_MAX_BYTES;
+  if (prepared.size > EDGE_UPLOAD_MAX_BYTES && isNativeMobileApp()) {
+    throw new R2UploadError(
+      `Ficheiro demasiado grande (${(prepared.size / (1024 * 1024)).toFixed(1)} MB). Máximo 5 MB na app móvel.`,
+    );
+  }
+
+  const canUseEdge = prepared.size <= EDGE_UPLOAD_MAX_BYTES;
 
   if (isNativeMobileApp() && canUseEdge) {
     try {
-      return await uploadViaEdgeFunction(file, prefix, onProgress);
+      return await uploadViaEdgeFunction(prepared, prefix, onProgress);
     } catch (edgeErr) {
-      /* fallback presigned para ficheiros pequenos se edge não estiver deployada */
+      /* fallback presigned se edge falhar (ex.: função não deployada) */
       try {
-        return await uploadViaPresignedUrl(file, prefix, onProgress);
+        return await uploadViaPresignedUrl(prepared, prefix, onProgress);
       } catch {
         throw edgeErr;
       }
@@ -241,11 +269,11 @@ export async function uploadFileToR2(
   }
 
   try {
-    return await uploadViaPresignedUrl(file, prefix, onProgress);
+    return await uploadViaPresignedUrl(prepared, prefix, onProgress);
   } catch (presignErr) {
     if (canUseEdge) {
       try {
-        return await uploadViaEdgeFunction(file, prefix, onProgress);
+        return await uploadViaEdgeFunction(prepared, prefix, onProgress);
       } catch {
         /* mantém erro original */
       }

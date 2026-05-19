@@ -124,6 +124,7 @@ const Chat = () => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [showEmoji, setShowEmoji] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
@@ -337,8 +338,12 @@ const Chat = () => {
     setShowAttachMenu(false);
     setShowEmoji(false);
     setUploading(true);
+    setUploadProgress(0);
     try {
-      const publicUrl = await uploadFileToR2(file, { prefix: "chat-attachments" });
+      const publicUrl = await uploadFileToR2(file, {
+        prefix: "chat-attachments",
+        onProgress: setUploadProgress,
+      });
       await insertMessage({
         content: null,
         message_type: kind,
@@ -353,6 +358,7 @@ const Chat = () => {
     } finally {
       uploadLockRef.current = false;
       setUploading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -886,7 +892,16 @@ const Chat = () => {
                   aria-label={t("attach_aria")}
                   aria-expanded={showAttachMenu}
                 >
-                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" strokeWidth={1.75} />}
+                  {uploading ? (
+                    <span className="flex flex-col items-center gap-0.5">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {uploadProgress != null && uploadProgress > 0 && (
+                        <span className="text-[9px] font-medium tabular-nums">{uploadProgress}%</span>
+                      )}
+                    </span>
+                  ) : (
+                    <Paperclip className="h-4 w-4" strokeWidth={1.75} />
+                  )}
                 </button>
 
                 <button
@@ -910,7 +925,13 @@ const Chat = () => {
                     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(); }
                   }}
                   rows={1}
-                  placeholder={active ? t("placeholder_active", { name: active.full_name }) : t("placeholder_inactive")}
+                  placeholder={
+                    uploading && uploadProgress != null && uploadProgress > 0
+                      ? `${uploadProgress}%…`
+                      : active
+                        ? t("placeholder_active", { name: active.full_name })
+                        : t("placeholder_inactive")
+                  }
                   maxLength={2000}
                   disabled={!active || sending || uploading}
                   className="min-h-[40px] max-h-32 flex-1 resize-none rounded-2xl border border-border bg-card px-4 py-2.5 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
