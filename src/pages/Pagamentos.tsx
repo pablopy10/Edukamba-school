@@ -3273,7 +3273,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                       disabled={bulkValidating || bulkRemindingTuition || (!!pay && validatingId === pay.id)}
                                       checked={bulkSelectedTuitionFeeIds.has(f.id)}
                                       onCheckedChange={(v) => setBulkTuitionFeeChecked(f.id, v === true)}
-                                      title="Incluída na validação em lote («Validar seleccionados») para cobranças não pagas."
+                                      title={embeddedT("bulk_row_include_hint")}
                                     />
                                   ) : null}
                                 </td>
@@ -3380,15 +3380,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             {!isParent && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total recebido</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{tuitionT("kpi_total_received")}</CardTitle></CardHeader>
                 <CardContent><p className="text-2xl font-bold text-pastel-green-foreground">{fmtAOA(activityFeeStats.paid)}</p></CardContent>
               </Card>
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em dívida</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{tuitionT("kpi_outstanding")}</CardTitle></CardHeader>
                 <CardContent><p className="text-2xl font-bold text-pastel-yellow-foreground">{fmtAOA(activityFeeStats.pending)}</p></CardContent>
               </Card>
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em atraso</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{tuitionT("kpi_overdue_amount")}</CardTitle></CardHeader>
                 <CardContent><p className="text-2xl font-bold text-destructive">{fmtAOA(activityFeeStats.overdue)}</p></CardContent>
               </Card>
             </div>
@@ -3400,10 +3400,10 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
                       <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-                        <FileText className="h-4 w-4" /> Comprovativos a validar
+                        <FileText className="h-4 w-4" /> {tuitionT("pending_proofs_title")}
                         <Badge variant="secondary">{pendingActivityValidations.length}</Badge>
                       </CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">Envios pelos encarregados relativos a atividades extracurriculares.</p>
+                      <p className="text-sm text-muted-foreground mt-1">{embeddedT("activity_pending_proofs_hint")}</p>
                     </div>
                     <Button
                       type="button"
@@ -3413,7 +3413,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                       onClick={() => void bulkValidateActivityFeesList()}
                     >
                       {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                      Validar seleccionados
+                      {tuitionT("bulk_validate_selected")}
                     </Button>
                   </div>
                 </CardHeader>
@@ -3438,15 +3438,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   return next;
                                 });
                               }}
-                              aria-label="Seleccionar todos"
+                              aria-label={tuitionT("select_all_aria")}
                             />
                           </th>
-                          <th className="py-2 px-2">Aluno</th>
-                          <th className="py-2 px-2">Atividade</th>
-                          <th className="py-2 px-2">Valor pago</th>
-                          <th className="py-2 px-2">Método</th>
-                          <th className="py-2 px-2">Submetido</th>
-                          <th className="py-2 px-2 text-right">Ações</th>
+                          <th className="py-2 px-2">{tuitionT("col_student")}</th>
+                          <th className="py-2 px-2">{embeddedT("col_activity")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_amount_paid")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_method")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_submitted")}</th>
+                          <th className="py-2 px-2 text-right">{tuitionT("col_actions_right")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3468,7 +3468,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <div className="flex flex-wrap justify-end gap-2">
                                 {payment.proof_url && (
                                   <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(payment.proof_url!)}>
-                                    <Eye className="h-3.5 w-3.5" /> Ver
+                                    <Eye className="h-3.5 w-3.5" /> {tuitionT("view")}
                                   </Button>
                                 )}
                                 <Button
@@ -3478,7 +3478,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   onClick={() => validateActivityPayment(fee, payment)}
                                 >
                                   {validatingId === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                  Validar
+                                  {tuitionT("validate")}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -3487,7 +3487,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   disabled={bulkValidating || validatingId === payment.id}
                                   onClick={() => { setRejectDialog(payment); setRejectReason(""); }}
                                 >
-                                  <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                  <XCircle className="h-3.5 w-3.5" /> {tuitionT("reject")}
                                 </Button>
                               </div>
                             </td>
@@ -3503,8 +3503,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             <Card>
               <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <CardTitle>Cobranças de atividades extracurriculares</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">Controla o estado das cobranças e envia lembretes aos encarregados.</p>
+                  <CardTitle>{embeddedT("activity_list_title")}</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">{embeddedT("activity_list_hint")}</p>
                 </div>
                 {!isParent && (
                   <div className="flex flex-wrap items-center gap-2">
@@ -3520,11 +3520,11 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                         onClick={() => void bulkValidateActivityFeesList()}
                       >
                         {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                        Validar seleccionados
+                        {tuitionT("bulk_validate_selected")}
                       </Button>
                     )}
                     <Button onClick={sendActivityBulkReminders} size="sm" variant="outline" className="gap-2">
-                      <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                      <Bell className="h-4 w-4" /> {tuitionT("send_reminders_current_filter")}
                     </Button>
                   </div>
                 )}
@@ -3533,28 +3533,28 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input className="pl-9" placeholder="Pesquisar aluno ou atividade..." value={actSearch} onChange={(e) => setActSearch(e.target.value)} />
+                    <Input className="pl-9" placeholder={embeddedT("activity_search_placeholder")} value={actSearch} onChange={(e) => setActSearch(e.target.value)} />
                   </div>
                   <Select value={actFilter} onValueChange={(v) => setActFilter(v as typeof actFilter)}>
                     <SelectTrigger className="md:w-44"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todas</SelectItem>
-                      <SelectItem value="pending">Não pagas</SelectItem>
-                      <SelectItem value="overdue">Em atraso</SelectItem>
-                      <SelectItem value="paid">Pagas</SelectItem>
+                      <SelectItem value="all">{tuitionT("filter_all")}</SelectItem>
+                      <SelectItem value="pending">{tuitionT("filter_unpaid")}</SelectItem>
+                      <SelectItem value="overdue">{tuitionT("filter_overdue")}</SelectItem>
+                      <SelectItem value="paid">{tuitionT("filter_paid")}</SelectItem>
                     </SelectContent>
                   </Select>
                   <Select value={actYearFilter} onValueChange={setActYearFilter}>
-                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Ano letivo" /></SelectTrigger>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder={tuitionT("school_year_placeholder")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todos os anos</SelectItem>
+                      <SelectItem value="all">{tuitionT("all_years")}</SelectItem>
                       {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <Select value={actActivityFilter} onValueChange={setActActivityFilter}>
-                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Atividade" /></SelectTrigger>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder={embeddedT("activity_filter_label")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todas as atividades</SelectItem>
+                      <SelectItem value="all">{embeddedT("activity_filter_all")}</SelectItem>
                       {activitiesList.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -3563,7 +3563,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 {loading ? (
                   <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
                 ) : filteredActivityFees.length === 0 ? (
-                  <p className="text-center py-10 text-muted-foreground">Sem cobranças a apresentar.</p>
+                  <p className="text-center py-10 text-muted-foreground">{tuitionT("no_fees_to_show")}</p>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -3595,20 +3595,20 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                     return next;
                                   });
                                 }}
-                                aria-label="Seleccionar todos (filtro atual)"
+                                aria-label={tuitionT("select_all_unpaid_aria")}
                               />
                             </th>
                           )}
-                          <th className="py-2 px-2">Aluno</th>
-                          <th className="py-2 px-2">Atividade</th>
-                          <th className="py-2 px-2">Mês</th>
-                          <th className="py-2 px-2">Vencimento</th>
-                          <th className="py-2 px-2">Valor</th>
-                          <th className="py-2 px-2">Estado</th>
-                          <th className="py-2 px-2 text-center w-12" title="Factura-recibo fiscal (FACTURA‑RECIBO AGT)">
-                            FT
+                          <th className="py-2 px-2">{tuitionT("col_student")}</th>
+                          <th className="py-2 px-2">{embeddedT("col_activity")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_month")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_due")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_value")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_status")}</th>
+                          <th className="py-2 px-2 text-center w-12" title={embeddedT("col_ft_title")}>
+                            {tuitionT("col_ft_abbr")}
                           </th>
-                          <th className="py-2 px-2 text-right">Ação</th>
+                          <th className="py-2 px-2 text-right">{tuitionT("col_action_right")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3626,7 +3626,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                       disabled={bulkValidating || (!!pay && validatingId === pay.id)}
                                       checked={bulkSelectedActivityFeeIds.has(f.id)}
                                       onCheckedChange={(v) => setBulkActivityFeeChecked(f.id, v === true)}
-                                      title="Incluída na validação em lote («Validar seleccionados») para cobranças não pagas."
+                                      title={embeddedT("bulk_row_include_hint")}
                                     />
                                   ) : null}
                                 </td>
@@ -3638,15 +3638,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
-                                  <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">Pago</Badge>
+                                  <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">{tuitionT("status_paid")}</Badge>
                                 ) : pendingValidation ? (
-                                  <Badge className="bg-pastel-blue text-pastel-blue-foreground hover:bg-pastel-blue">A validar</Badge>
+                                  <Badge className="bg-pastel-blue text-pastel-blue-foreground hover:bg-pastel-blue">{tuitionT("status_pending_validation")}</Badge>
                                 ) : rejected ? (
-                                  <Badge variant="outline" className="border-destructive text-destructive">Rejeitado</Badge>
+                                  <Badge variant="outline" className="border-destructive text-destructive">{tuitionT("status_rejected")}</Badge>
                                 ) : overdue ? (
-                                  <Badge variant="destructive">Em atraso</Badge>
+                                  <Badge variant="destructive">{tuitionT("status_overdue")}</Badge>
                                 ) : (
-                                  <Badge variant="secondary">Pendente</Badge>
+                                  <Badge variant="secondary">{tuitionT("status_pending")}</Badge>
                                 )}
                               </td>
                               <td className="py-2 px-2 align-middle text-center">{invoiceIconForValidatedPayment(!!f.is_paid, pay)}</td>
@@ -3656,7 +3656,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                     <>
                                       {pay.proof_url && (
                                         <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
-                                          <Eye className="h-3.5 w-3.5" /> Ver
+                                          <Eye className="h-3.5 w-3.5" /> {tuitionT("view")}
                                         </Button>
                                       )}
                                       {canValidatePaymentProofs && (
@@ -3668,7 +3668,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                             onClick={() => validateActivityPayment(f, pay)}
                                           >
                                             {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                            Validar
+                                            {tuitionT("validate")}
                                           </Button>
                                           <Button
                                             size="sm"
@@ -3677,7 +3677,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                             disabled={bulkValidating || validatingId === pay.id}
                                             onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
                                           >
-                                            <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                            <XCircle className="h-3.5 w-3.5" /> {tuitionT("reject")}
                                           </Button>
                                         </>
                                       )}
@@ -3687,18 +3687,18 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                     <>
                                       {(!isParent || usarAnexoEncarregado) && (
                                         <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForActivity(f)}>
-                                          <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
+                                          <Upload className="h-3.5 w-3.5" /> {isParent ? tuitionT("attach_proof") : tuitionT("record_payment")}
                                         </Button>
                                       )}
                                       {isParent && !usarAnexoEncarregado && (
                                         <span className="rounded-md border border-muted bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
-                                          Pagamento presencial na escola
+                                          {tuitionT("in_person_payment_hint")}
                                         </span>
                                       )}
                                       {!isParent && (
                                         <Button size="sm" variant="outline" className="gap-2" onClick={() => sendActivityReminder(f)} disabled={remindingActFeeId === f.id || !f.student?.parent_id}>
                                           {remindingActFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                                          Cobrar
+                                          {tuitionT("charge_single")}
                                         </Button>
                                       )}
                                     </>
@@ -3711,7 +3711,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                       </tbody>
                     </table>
                     {filteredActivityFees.length > 200 && (
-                      <p className="text-xs text-muted-foreground text-center py-3">A mostrar 200 de {filteredActivityFees.length}. Refina os filtros para ver as restantes.</p>
+                      <p className="text-xs text-muted-foreground text-center py-3">{tuitionT("showing_200_of", { total: filteredActivityFees.length })}</p>
                     )}
                   </div>
                 )}
@@ -3728,15 +3728,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             {!isParent && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total recebido</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{tuitionT("kpi_total_received")}</CardTitle></CardHeader>
                 <CardContent><p className="text-2xl font-bold text-pastel-green-foreground">{fmtAOA(transportFeeStats.paid)}</p></CardContent>
               </Card>
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em dívida</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{tuitionT("kpi_outstanding")}</CardTitle></CardHeader>
                 <CardContent><p className="text-2xl font-bold text-pastel-yellow-foreground">{fmtAOA(transportFeeStats.pending)}</p></CardContent>
               </Card>
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em atraso</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{tuitionT("kpi_overdue_amount")}</CardTitle></CardHeader>
                 <CardContent><p className="text-2xl font-bold text-destructive">{fmtAOA(transportFeeStats.overdue)}</p></CardContent>
               </Card>
             </div>
@@ -3748,10 +3748,10 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
                       <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-                        <FileText className="h-4 w-4" /> Comprovativos a validar
+                        <FileText className="h-4 w-4" /> {tuitionT("pending_proofs_title")}
                         <Badge variant="secondary">{pendingTransportValidations.length}</Badge>
                       </CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">Envios pelos encarregados relativos ao transporte escolar.</p>
+                      <p className="text-sm text-muted-foreground mt-1">{embeddedT("transport_pending_proofs_hint")}</p>
                     </div>
                     <Button
                       type="button"
@@ -3761,7 +3761,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                       onClick={() => void bulkValidateTransportFeesList()}
                     >
                       {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                      Validar seleccionados
+                      {tuitionT("bulk_validate_selected")}
                     </Button>
                   </div>
                 </CardHeader>
@@ -3786,15 +3786,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   return next;
                                 });
                               }}
-                              aria-label="Seleccionar todos"
+                              aria-label={tuitionT("select_all_aria")}
                             />
                           </th>
-                          <th className="py-2 px-2">Aluno</th>
-                          <th className="py-2 px-2">Rota</th>
-                          <th className="py-2 px-2">Valor pago</th>
-                          <th className="py-2 px-2">Método</th>
-                          <th className="py-2 px-2">Submetido</th>
-                          <th className="py-2 px-2 text-right">Ações</th>
+                          <th className="py-2 px-2">{tuitionT("col_student")}</th>
+                          <th className="py-2 px-2">{embeddedT("col_route")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_amount_paid")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_method")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_submitted")}</th>
+                          <th className="py-2 px-2 text-right">{tuitionT("col_actions_right")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3816,7 +3816,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <div className="flex flex-wrap justify-end gap-2">
                                 {payment.proof_url && (
                                   <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(payment.proof_url!)}>
-                                    <Eye className="h-3.5 w-3.5" /> Ver
+                                    <Eye className="h-3.5 w-3.5" /> {tuitionT("view")}
                                   </Button>
                                 )}
                                 <Button
@@ -3826,7 +3826,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   onClick={() => validateTransportPayment(fee, payment)}
                                 >
                                   {validatingId === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                  Validar
+                                  {tuitionT("validate")}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -3835,7 +3835,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   disabled={bulkValidating || validatingId === payment.id}
                                   onClick={() => { setRejectDialog(payment); setRejectReason(""); }}
                                 >
-                                  <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                  <XCircle className="h-3.5 w-3.5" /> {tuitionT("reject")}
                                 </Button>
                               </div>
                             </td>
@@ -3851,8 +3851,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             <Card>
               <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <CardTitle className="flex items-center gap-2"><Bus className="h-4 w-4" /> Cobranças de transporte escolar</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">Controla as mensalidades de transporte e envia lembretes aos encarregados.</p>
+                  <CardTitle className="flex items-center gap-2"><Bus className="h-4 w-4" /> {embeddedT("transport_list_title")}</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">{embeddedT("transport_list_hint")}</p>
                 </div>
                 {!isParent && (
                   <div className="flex flex-wrap items-center gap-2">
@@ -3868,11 +3868,11 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                         onClick={() => void bulkValidateTransportFeesList()}
                       >
                         {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                        Validar seleccionados
+                        {tuitionT("bulk_validate_selected")}
                       </Button>
                     )}
                     <Button onClick={sendTransportBulkReminders} size="sm" variant="outline" className="gap-2">
-                      <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                      <Bell className="h-4 w-4" /> {tuitionT("send_reminders_current_filter")}
                     </Button>
                   </div>
                 )}
@@ -3881,28 +3881,28 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input className="pl-9" placeholder="Pesquisar aluno ou rota..." value={trSearch} onChange={(e) => setTrSearch(e.target.value)} />
+                    <Input className="pl-9" placeholder={embeddedT("transport_search_placeholder")} value={trSearch} onChange={(e) => setTrSearch(e.target.value)} />
                   </div>
                   <Select value={trFilter} onValueChange={(v) => setTrFilter(v as typeof trFilter)}>
                     <SelectTrigger className="md:w-44"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todas</SelectItem>
-                      <SelectItem value="pending">Não pagas</SelectItem>
-                      <SelectItem value="overdue">Em atraso</SelectItem>
-                      <SelectItem value="paid">Pagas</SelectItem>
+                      <SelectItem value="all">{tuitionT("filter_all")}</SelectItem>
+                      <SelectItem value="pending">{tuitionT("filter_unpaid")}</SelectItem>
+                      <SelectItem value="overdue">{tuitionT("filter_overdue")}</SelectItem>
+                      <SelectItem value="paid">{tuitionT("filter_paid")}</SelectItem>
                     </SelectContent>
                   </Select>
                   <Select value={trYearFilter} onValueChange={setTrYearFilter}>
-                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Ano letivo" /></SelectTrigger>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder={tuitionT("school_year_placeholder")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todos os anos</SelectItem>
+                      <SelectItem value="all">{tuitionT("all_years")}</SelectItem>
                       {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <Select value={trRouteFilter} onValueChange={setTrRouteFilter}>
-                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Rota" /></SelectTrigger>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder={embeddedT("route_filter_label")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todas as rotas</SelectItem>
+                      <SelectItem value="all">{embeddedT("route_filter_all")}</SelectItem>
                       {routesList.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -3911,7 +3911,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 {loading ? (
                   <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
                 ) : filteredTransportFees.length === 0 ? (
-                  <p className="text-center py-10 text-muted-foreground">Sem cobranças a apresentar.</p>
+                  <p className="text-center py-10 text-muted-foreground">{tuitionT("no_fees_to_show")}</p>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -3943,20 +3943,20 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                     return next;
                                   });
                                 }}
-                                aria-label="Seleccionar todos (filtro atual)"
+                                aria-label={tuitionT("select_all_unpaid_aria")}
                               />
                             </th>
                           )}
-                          <th className="py-2 px-2">Aluno</th>
-                          <th className="py-2 px-2">Rota</th>
-                          <th className="py-2 px-2">Mês</th>
-                          <th className="py-2 px-2">Vencimento</th>
-                          <th className="py-2 px-2">Valor</th>
-                          <th className="py-2 px-2">Estado</th>
-                          <th className="py-2 px-2 text-center w-12" title="Factura-recibo fiscal (FACTURA‑RECIBO AGT)">
-                            FT
+                          <th className="py-2 px-2">{tuitionT("col_student")}</th>
+                          <th className="py-2 px-2">{embeddedT("col_route")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_month")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_due")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_value")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_status")}</th>
+                          <th className="py-2 px-2 text-center w-12" title={embeddedT("col_ft_title")}>
+                            {tuitionT("col_ft_abbr")}
                           </th>
-                          <th className="py-2 px-2 text-right">Ação</th>
+                          <th className="py-2 px-2 text-right">{tuitionT("col_action_right")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3974,7 +3974,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                       disabled={bulkValidating || (!!pay && validatingId === pay.id)}
                                       checked={bulkSelectedTransportFeeIds.has(f.id)}
                                       onCheckedChange={(v) => setBulkTransportFeeChecked(f.id, v === true)}
-                                      title="Incluída na validação em lote («Validar seleccionados») para cobranças não pagas."
+                                      title={embeddedT("bulk_row_include_hint")}
                                     />
                                   ) : null}
                                 </td>
@@ -3986,15 +3986,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
-                                  <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">Pago</Badge>
+                                  <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">{tuitionT("status_paid")}</Badge>
                                 ) : pendingValidation ? (
-                                  <Badge className="bg-pastel-blue text-pastel-blue-foreground hover:bg-pastel-blue">A validar</Badge>
+                                  <Badge className="bg-pastel-blue text-pastel-blue-foreground hover:bg-pastel-blue">{tuitionT("status_pending_validation")}</Badge>
                                 ) : rejected ? (
-                                  <Badge variant="outline" className="border-destructive text-destructive">Rejeitado</Badge>
+                                  <Badge variant="outline" className="border-destructive text-destructive">{tuitionT("status_rejected")}</Badge>
                                 ) : overdue ? (
-                                  <Badge variant="destructive">Em atraso</Badge>
+                                  <Badge variant="destructive">{tuitionT("status_overdue")}</Badge>
                                 ) : (
-                                  <Badge variant="secondary">Pendente</Badge>
+                                  <Badge variant="secondary">{tuitionT("status_pending")}</Badge>
                                 )}
                               </td>
                               <td className="py-2 px-2 align-middle text-center">{invoiceIconForValidatedPayment(!!f.is_paid, pay)}</td>
@@ -4004,7 +4004,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                     <>
                                       {pay.proof_url && (
                                         <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
-                                          <Eye className="h-3.5 w-3.5" /> Ver
+                                          <Eye className="h-3.5 w-3.5" /> {tuitionT("view")}
                                         </Button>
                                       )}
                                       {canValidatePaymentProofs && (
@@ -4016,7 +4016,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                             onClick={() => validateTransportPayment(f, pay)}
                                           >
                                             {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                            Validar
+                                            {tuitionT("validate")}
                                           </Button>
                                           <Button
                                             size="sm"
@@ -4025,7 +4025,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                             disabled={bulkValidating || validatingId === pay.id}
                                             onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
                                           >
-                                            <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                            <XCircle className="h-3.5 w-3.5" /> {tuitionT("reject")}
                                           </Button>
                                         </>
                                       )}
@@ -4035,18 +4035,18 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                     <>
                                       {(!isParent || usarAnexoEncarregado) && (
                                         <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForTransport(f)}>
-                                          <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
+                                          <Upload className="h-3.5 w-3.5" /> {isParent ? tuitionT("attach_proof") : tuitionT("record_payment")}
                                         </Button>
                                       )}
                                       {isParent && !usarAnexoEncarregado && (
                                         <span className="rounded-md border border-muted bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
-                                          Pagamento presencial na escola
+                                          {tuitionT("in_person_payment_hint")}
                                         </span>
                                       )}
                                       {!isParent && (
                                         <Button size="sm" variant="outline" className="gap-2" onClick={() => sendTransportReminder(f)} disabled={remindingTrFeeId === f.id || !f.student?.parent_id}>
                                           {remindingTrFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                                          Cobrar
+                                          {tuitionT("charge_single")}
                                         </Button>
                                       )}
                                     </>
@@ -4059,7 +4059,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                       </tbody>
                     </table>
                     {filteredTransportFees.length > 200 && (
-                      <p className="text-xs text-muted-foreground text-center py-3">A mostrar 200 de {filteredTransportFees.length}. Refina os filtros para ver as restantes.</p>
+                      <p className="text-xs text-muted-foreground text-center py-3">{tuitionT("showing_200_of", { total: filteredTransportFees.length })}</p>
                     )}
                   </div>
                 )}
@@ -4076,15 +4076,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             {!isParent && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total recebido</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{tuitionT("kpi_total_received")}</CardTitle></CardHeader>
                 <CardContent><p className="text-2xl font-bold text-pastel-green-foreground">{fmtAOA(mealFeeStats.paid)}</p></CardContent>
               </Card>
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em dívida</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{tuitionT("kpi_outstanding")}</CardTitle></CardHeader>
                 <CardContent><p className="text-2xl font-bold text-pastel-yellow-foreground">{fmtAOA(mealFeeStats.pending)}</p></CardContent>
               </Card>
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em atraso</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{tuitionT("kpi_overdue_amount")}</CardTitle></CardHeader>
                 <CardContent><p className="text-2xl font-bold text-destructive">{fmtAOA(mealFeeStats.overdue)}</p></CardContent>
               </Card>
             </div>
@@ -4096,10 +4096,10 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
                       <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-                        <FileText className="h-4 w-4" /> Comprovativos a validar
+                        <FileText className="h-4 w-4" /> {tuitionT("pending_proofs_title")}
                         <Badge variant="secondary">{pendingMealValidations.length}</Badge>
                       </CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">Envios pelos encarregados relativos às refeições escolares.</p>
+                      <p className="text-sm text-muted-foreground mt-1">{embeddedT("meal_pending_proofs_hint")}</p>
                     </div>
                     <Button
                       type="button"
@@ -4109,7 +4109,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                       onClick={() => void bulkValidateMealFeesList()}
                     >
                       {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                      Validar seleccionados
+                      {tuitionT("bulk_validate_selected")}
                     </Button>
                   </div>
                 </CardHeader>
@@ -4134,15 +4134,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   return next;
                                 });
                               }}
-                              aria-label="Seleccionar todos"
+                              aria-label={tuitionT("select_all_aria")}
                             />
                           </th>
-                          <th className="py-2 px-2">Aluno</th>
-                          <th className="py-2 px-2">Plano</th>
-                          <th className="py-2 px-2">Valor pago</th>
-                          <th className="py-2 px-2">Método</th>
-                          <th className="py-2 px-2">Submetido</th>
-                          <th className="py-2 px-2 text-right">Ações</th>
+                          <th className="py-2 px-2">{tuitionT("col_student")}</th>
+                          <th className="py-2 px-2">{embeddedT("col_plan")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_amount_paid")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_method")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_submitted")}</th>
+                          <th className="py-2 px-2 text-right">{tuitionT("col_actions_right")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4164,7 +4164,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <div className="flex flex-wrap justify-end gap-2">
                                 {payment.proof_url && (
                                   <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(payment.proof_url!)}>
-                                    <Eye className="h-3.5 w-3.5" /> Ver
+                                    <Eye className="h-3.5 w-3.5" /> {tuitionT("view")}
                                   </Button>
                                 )}
                                 <Button
@@ -4174,7 +4174,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   onClick={() => validateMealPayment(fee, payment)}
                                 >
                                   {validatingId === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                  Validar
+                                  {tuitionT("validate")}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -4183,7 +4183,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   disabled={bulkValidating || validatingId === payment.id}
                                   onClick={() => { setRejectDialog(payment); setRejectReason(""); }}
                                 >
-                                  <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                  <XCircle className="h-3.5 w-3.5" /> {tuitionT("reject")}
                                 </Button>
                               </div>
                             </td>
@@ -4199,8 +4199,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             <Card>
               <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <CardTitle className="flex items-center gap-2"><Utensils className="h-4 w-4" /> Cobranças de refeições escolares</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">Controla as cobranças de refeições e envia lembretes aos encarregados.</p>
+                  <CardTitle className="flex items-center gap-2"><Utensils className="h-4 w-4" /> {embeddedT("meal_list_title")}</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">{embeddedT("meal_list_hint")}</p>
                 </div>
                 {!isParent && (
                   <div className="flex flex-wrap items-center gap-2">
@@ -4216,11 +4216,11 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                         onClick={() => void bulkValidateMealFeesList()}
                       >
                         {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                        Validar seleccionados
+                        {tuitionT("bulk_validate_selected")}
                       </Button>
                     )}
                     <Button onClick={sendMealBulkReminders} size="sm" variant="outline" className="gap-2">
-                      <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                      <Bell className="h-4 w-4" /> {tuitionT("send_reminders_current_filter")}
                     </Button>
                   </div>
                 )}
@@ -4229,28 +4229,28 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input className="pl-9" placeholder="Pesquisar aluno ou plano..." value={meSearch} onChange={(e) => setMeSearch(e.target.value)} />
+                    <Input className="pl-9" placeholder={embeddedT("meal_search_placeholder")} value={meSearch} onChange={(e) => setMeSearch(e.target.value)} />
                   </div>
                   <Select value={meFilter} onValueChange={(v) => setMeFilter(v as typeof meFilter)}>
                     <SelectTrigger className="md:w-44"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todas</SelectItem>
-                      <SelectItem value="pending">Não pagas</SelectItem>
-                      <SelectItem value="overdue">Em atraso</SelectItem>
-                      <SelectItem value="paid">Pagas</SelectItem>
+                      <SelectItem value="all">{tuitionT("filter_all")}</SelectItem>
+                      <SelectItem value="pending">{tuitionT("filter_unpaid")}</SelectItem>
+                      <SelectItem value="overdue">{tuitionT("filter_overdue")}</SelectItem>
+                      <SelectItem value="paid">{tuitionT("filter_paid")}</SelectItem>
                     </SelectContent>
                   </Select>
                   <Select value={meYearFilter} onValueChange={setMeYearFilter}>
-                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Ano letivo" /></SelectTrigger>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder={tuitionT("school_year_placeholder")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todos os anos</SelectItem>
+                      <SelectItem value="all">{tuitionT("all_years")}</SelectItem>
                       {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <Select value={meProgramFilter} onValueChange={setMeProgramFilter}>
-                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Plano" /></SelectTrigger>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder={embeddedT("meal_filter_label")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todos os planos</SelectItem>
+                      <SelectItem value="all">{embeddedT("meal_filter_all")}</SelectItem>
                       {mealProgramsList.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -4259,7 +4259,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 {loading ? (
                   <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
                 ) : filteredMealFees.length === 0 ? (
-                  <p className="text-center py-10 text-muted-foreground">Sem cobranças a apresentar.</p>
+                  <p className="text-center py-10 text-muted-foreground">{tuitionT("no_fees_to_show")}</p>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -4291,20 +4291,20 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                     return next;
                                   });
                                 }}
-                                aria-label="Seleccionar todos (filtro atual)"
+                                aria-label={tuitionT("select_all_unpaid_aria")}
                               />
                             </th>
                           )}
-                          <th className="py-2 px-2">Aluno</th>
-                          <th className="py-2 px-2">Plano</th>
-                          <th className="py-2 px-2">Mês</th>
-                          <th className="py-2 px-2">Vencimento</th>
-                          <th className="py-2 px-2">Valor</th>
-                          <th className="py-2 px-2">Estado</th>
-                          <th className="py-2 px-2 text-center w-12" title="Factura-recibo fiscal (FACTURA‑RECIBO AGT)">
-                            FT
+                          <th className="py-2 px-2">{tuitionT("col_student")}</th>
+                          <th className="py-2 px-2">{embeddedT("col_plan")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_month")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_due")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_value")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_status")}</th>
+                          <th className="py-2 px-2 text-center w-12" title={embeddedT("col_ft_title")}>
+                            {tuitionT("col_ft_abbr")}
                           </th>
-                          <th className="py-2 px-2 text-right">Ação</th>
+                          <th className="py-2 px-2 text-right">{tuitionT("col_action_right")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4322,7 +4322,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                       disabled={bulkValidating || (!!pay && validatingId === pay.id)}
                                       checked={bulkSelectedMealFeeIds.has(f.id)}
                                       onCheckedChange={(v) => setBulkMealFeeChecked(f.id, v === true)}
-                                      title="Incluída na validação em lote («Validar seleccionados») para cobranças não pagas."
+                                      title={embeddedT("bulk_row_include_hint")}
                                     />
                                   ) : null}
                                 </td>
@@ -4334,15 +4334,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
-                                  <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">Pago</Badge>
+                                  <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">{tuitionT("status_paid")}</Badge>
                                 ) : pendingValidation ? (
-                                  <Badge className="bg-pastel-blue text-pastel-blue-foreground hover:bg-pastel-blue">A validar</Badge>
+                                  <Badge className="bg-pastel-blue text-pastel-blue-foreground hover:bg-pastel-blue">{tuitionT("status_pending_validation")}</Badge>
                                 ) : rejected ? (
-                                  <Badge variant="outline" className="border-destructive text-destructive">Rejeitado</Badge>
+                                  <Badge variant="outline" className="border-destructive text-destructive">{tuitionT("status_rejected")}</Badge>
                                 ) : overdue ? (
-                                  <Badge variant="destructive">Em atraso</Badge>
+                                  <Badge variant="destructive">{tuitionT("status_overdue")}</Badge>
                                 ) : (
-                                  <Badge variant="secondary">Pendente</Badge>
+                                  <Badge variant="secondary">{tuitionT("status_pending")}</Badge>
                                 )}
                               </td>
                               <td className="py-2 px-2 align-middle text-center">{invoiceIconForValidatedPayment(!!f.is_paid, pay)}</td>
@@ -4352,7 +4352,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                     <>
                                       {pay.proof_url && (
                                         <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
-                                          <Eye className="h-3.5 w-3.5" /> Ver
+                                          <Eye className="h-3.5 w-3.5" /> {tuitionT("view")}
                                         </Button>
                                       )}
                                       {canValidatePaymentProofs && (
@@ -4364,7 +4364,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                             onClick={() => validateMealPayment(f, pay)}
                                           >
                                             {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                            Validar
+                                            {tuitionT("validate")}
                                           </Button>
                                           <Button
                                             size="sm"
@@ -4373,7 +4373,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                             disabled={bulkValidating || validatingId === pay.id}
                                             onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
                                           >
-                                            <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                            <XCircle className="h-3.5 w-3.5" /> {tuitionT("reject")}
                                           </Button>
                                         </>
                                       )}
@@ -4383,18 +4383,18 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                     <>
                                       {(!isParent || usarAnexoEncarregado) && (
                                         <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForMeal(f)}>
-                                          <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
+                                          <Upload className="h-3.5 w-3.5" /> {isParent ? tuitionT("attach_proof") : tuitionT("record_payment")}
                                         </Button>
                                       )}
                                       {isParent && !usarAnexoEncarregado && (
                                         <span className="rounded-md border border-muted bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
-                                          Pagamento presencial na escola
+                                          {tuitionT("in_person_payment_hint")}
                                         </span>
                                       )}
                                       {!isParent && (
                                         <Button size="sm" variant="outline" className="gap-2" onClick={() => sendMealReminder(f)} disabled={remindingMeFeeId === f.id || !f.student?.parent_id}>
                                           {remindingMeFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                                          Cobrar
+                                          {tuitionT("charge_single")}
                                         </Button>
                                       )}
                                     </>
@@ -4407,7 +4407,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                       </tbody>
                     </table>
                     {filteredMealFees.length > 200 && (
-                      <p className="text-xs text-muted-foreground text-center py-3">A mostrar 200 de {filteredMealFees.length}. Refina os filtros para ver as restantes.</p>
+                      <p className="text-xs text-muted-foreground text-center py-3">{tuitionT("showing_200_of", { total: filteredMealFees.length })}</p>
                     )}
                   </div>
                 )}
@@ -4424,15 +4424,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             {!isParent && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total recebido</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{tuitionT("kpi_total_received")}</CardTitle></CardHeader>
                 <CardContent><p className="text-2xl font-bold text-pastel-green-foreground">{fmtAOA(eventFeeStats.paid)}</p></CardContent>
               </Card>
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em dívida</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{tuitionT("kpi_outstanding")}</CardTitle></CardHeader>
                 <CardContent><p className="text-2xl font-bold text-pastel-yellow-foreground">{fmtAOA(eventFeeStats.pending)}</p></CardContent>
               </Card>
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em atraso</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{tuitionT("kpi_overdue_amount")}</CardTitle></CardHeader>
                 <CardContent><p className="text-2xl font-bold text-destructive">{fmtAOA(eventFeeStats.overdue)}</p></CardContent>
               </Card>
             </div>
@@ -4444,7 +4444,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
                       <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-                        <FileText className="h-4 w-4" /> Comprovativos a validar
+                        <FileText className="h-4 w-4" /> {tuitionT("pending_proofs_title")}
                         <Badge variant="secondary">{pendingEventValidations.length}</Badge>
                       </CardTitle>
                       <p className="text-sm text-muted-foreground mt-1">Pagamentos relacionados com cobranças de eventos escolares.</p>
@@ -4457,7 +4457,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                       onClick={() => void bulkValidateEventFeesList()}
                     >
                       {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                      Validar seleccionados
+                      {tuitionT("bulk_validate_selected")}
                     </Button>
                   </div>
                 </CardHeader>
@@ -4482,15 +4482,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   return next;
                                 });
                               }}
-                              aria-label="Seleccionar todos"
+                              aria-label={tuitionT("select_all_aria")}
                             />
                           </th>
-                          <th className="py-2 px-2">Aluno</th>
+                          <th className="py-2 px-2">{tuitionT("col_student")}</th>
                           <th className="py-2 px-2">Evento</th>
-                          <th className="py-2 px-2">Valor pago</th>
-                          <th className="py-2 px-2">Método</th>
-                          <th className="py-2 px-2">Submetido</th>
-                          <th className="py-2 px-2 text-right">Ações</th>
+                          <th className="py-2 px-2">{tuitionT("col_amount_paid")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_method")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_submitted")}</th>
+                          <th className="py-2 px-2 text-right">{tuitionT("col_actions_right")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4512,7 +4512,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <div className="flex flex-wrap justify-end gap-2">
                                 {payment.proof_url && (
                                   <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(payment.proof_url!)}>
-                                    <Eye className="h-3.5 w-3.5" /> Ver
+                                    <Eye className="h-3.5 w-3.5" /> {tuitionT("view")}
                                   </Button>
                                 )}
                                 <Button
@@ -4522,7 +4522,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   onClick={() => validateEventPayment(fee, payment)}
                                 >
                                   {validatingId === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                  Validar
+                                  {tuitionT("validate")}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -4531,7 +4531,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   disabled={bulkValidating || validatingId === payment.id}
                                   onClick={() => { setRejectDialog(payment); setRejectReason(""); }}
                                 >
-                                  <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                  <XCircle className="h-3.5 w-3.5" /> {tuitionT("reject")}
                                 </Button>
                               </div>
                             </td>
@@ -4564,11 +4564,11 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                         onClick={() => void bulkValidateEventFeesList()}
                       >
                         {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                        Validar seleccionados
+                        {tuitionT("bulk_validate_selected")}
                       </Button>
                     )}
                     <Button onClick={sendEventBulkReminders} size="sm" variant="outline" className="gap-2">
-                      <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                      <Bell className="h-4 w-4" /> {tuitionT("send_reminders_current_filter")}
                     </Button>
                   </div>
                 )}
@@ -4582,16 +4582,16 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                   <Select value={evFilter} onValueChange={(v) => setEvFilter(v as typeof evFilter)}>
                     <SelectTrigger className="md:w-44"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todas</SelectItem>
-                      <SelectItem value="pending">Não pagas</SelectItem>
-                      <SelectItem value="overdue">Em atraso</SelectItem>
-                      <SelectItem value="paid">Pagas</SelectItem>
+                      <SelectItem value="all">{tuitionT("filter_all")}</SelectItem>
+                      <SelectItem value="pending">{tuitionT("filter_unpaid")}</SelectItem>
+                      <SelectItem value="overdue">{tuitionT("filter_overdue")}</SelectItem>
+                      <SelectItem value="paid">{tuitionT("filter_paid")}</SelectItem>
                     </SelectContent>
                   </Select>
                   <Select value={evYearFilter} onValueChange={setEvYearFilter}>
-                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Ano letivo" /></SelectTrigger>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder={tuitionT("school_year_placeholder")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todos os anos</SelectItem>
+                      <SelectItem value="all">{tuitionT("all_years")}</SelectItem>
                       {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -4607,7 +4607,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 {loading ? (
                   <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
                 ) : filteredEventFees.length === 0 ? (
-                  <p className="text-center py-10 text-muted-foreground">Sem cobranças a apresentar.</p>
+                  <p className="text-center py-10 text-muted-foreground">{tuitionT("no_fees_to_show")}</p>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -4639,18 +4639,18 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                     return next;
                                   });
                                 }}
-                                aria-label="Seleccionar todos (filtro atual)"
+                                aria-label={tuitionT("select_all_unpaid_aria")}
                               />
                             </th>
                           )}
-                          <th className="py-2 px-2">Aluno</th>
+                          <th className="py-2 px-2">{tuitionT("col_student")}</th>
                           <th className="py-2 px-2">Evento</th>
-                          <th className="py-2 px-2">Mês</th>
-                          <th className="py-2 px-2">Vencimento</th>
-                          <th className="py-2 px-2">Valor</th>
-                          <th className="py-2 px-2">Estado</th>
-                          <th className="py-2 px-2 text-center w-12" title="Factura-recibo fiscal (FACTURA‑RECIBO AGT)">
-                            FT
+                          <th className="py-2 px-2">{tuitionT("col_month")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_due")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_value")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_status")}</th>
+                          <th className="py-2 px-2 text-center w-12" title={embeddedT("col_ft_title")}>
+                            {tuitionT("col_ft_abbr")}
                           </th>
                           <th className="py-2 px-2 text-right">Acção</th>
                         </tr>
@@ -4670,7 +4670,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                       disabled={bulkValidating || (!!pay && validatingId === pay.id)}
                                       checked={bulkSelectedEventFeeIds.has(f.id)}
                                       onCheckedChange={(v) => setBulkEventFeeChecked(f.id, v === true)}
-                                      title="Incluída na validação em lote («Validar seleccionados») para cobranças não pagas."
+                                      title={embeddedT("bulk_row_include_hint")}
                                     />
                                   ) : null}
                                 </td>
@@ -4689,15 +4689,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
-                                  <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">Pago</Badge>
+                                  <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">{tuitionT("status_paid")}</Badge>
                                 ) : pendingValidation ? (
-                                  <Badge className="bg-pastel-blue text-pastel-blue-foreground hover:bg-pastel-blue">A validar</Badge>
+                                  <Badge className="bg-pastel-blue text-pastel-blue-foreground hover:bg-pastel-blue">{tuitionT("status_pending_validation")}</Badge>
                                 ) : rejected ? (
-                                  <Badge variant="outline" className="border-destructive text-destructive">Rejeitado</Badge>
+                                  <Badge variant="outline" className="border-destructive text-destructive">{tuitionT("status_rejected")}</Badge>
                                 ) : overdue ? (
-                                  <Badge variant="destructive">Em atraso</Badge>
+                                  <Badge variant="destructive">{tuitionT("status_overdue")}</Badge>
                                 ) : (
-                                  <Badge variant="secondary">Pendente</Badge>
+                                  <Badge variant="secondary">{tuitionT("status_pending")}</Badge>
                                 )}
                               </td>
                               <td className="py-2 px-2 align-middle text-center">{invoiceIconForValidatedPayment(!!f.is_paid, pay)}</td>
@@ -4707,7 +4707,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                     <>
                                       {pay.proof_url && (
                                         <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
-                                          <Eye className="h-3.5 w-3.5" /> Ver
+                                          <Eye className="h-3.5 w-3.5" /> {tuitionT("view")}
                                         </Button>
                                       )}
                                       {canValidatePaymentProofs && (
@@ -4719,7 +4719,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                             onClick={() => validateEventPayment(f, pay)}
                                           >
                                             {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                            Validar
+                                            {tuitionT("validate")}
                                           </Button>
                                           <Button
                                             size="sm"
@@ -4728,7 +4728,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                             disabled={bulkValidating || validatingId === pay.id}
                                             onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
                                           >
-                                            <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                            <XCircle className="h-3.5 w-3.5" /> {tuitionT("reject")}
                                           </Button>
                                         </>
                                       )}
@@ -4738,18 +4738,18 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                     <>
                                       {(!isParent || usarAnexoEncarregado) && (
                                         <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForEvent(f)}>
-                                          <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
+                                          <Upload className="h-3.5 w-3.5" /> {isParent ? tuitionT("attach_proof") : tuitionT("record_payment")}
                                         </Button>
                                       )}
                                       {isParent && !usarAnexoEncarregado && (
                                         <span className="rounded-md border border-muted bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
-                                          Pagamento presencial na escola
+                                          {tuitionT("in_person_payment_hint")}
                                         </span>
                                       )}
                                       {!isParent && (
                                         <Button size="sm" variant="outline" className="gap-2" onClick={() => sendEventReminder(f)} disabled={remindingEvFeeId === f.id || !f.student?.parent_id}>
                                           {remindingEvFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                                          Cobrar
+                                          {tuitionT("charge_single")}
                                         </Button>
                                       )}
                                     </>
@@ -4779,15 +4779,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             {!isParent && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total recebido</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{tuitionT("kpi_total_received")}</CardTitle></CardHeader>
                 <CardContent><p className="text-2xl font-bold text-pastel-green-foreground">{fmtAOA(enrollmentFeeStats.paid)}</p></CardContent>
               </Card>
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em dívida</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{tuitionT("kpi_outstanding")}</CardTitle></CardHeader>
                 <CardContent><p className="text-2xl font-bold text-pastel-yellow-foreground">{fmtAOA(enrollmentFeeStats.pending)}</p></CardContent>
               </Card>
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em atraso</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{tuitionT("kpi_overdue_amount")}</CardTitle></CardHeader>
                 <CardContent><p className="text-2xl font-bold text-destructive">{fmtAOA(enrollmentFeeStats.overdue)}</p></CardContent>
               </Card>
             </div>
@@ -4799,7 +4799,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
                       <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-                        <FileText className="h-4 w-4" /> Comprovativos a validar
+                        <FileText className="h-4 w-4" /> {tuitionT("pending_proofs_title")}
                         <Badge variant="secondary">{pendingEnrollmentValidations.length}</Badge>
                       </CardTitle>
                       <p className="text-sm text-muted-foreground mt-1">Envios pelos encarregados relativos à matrícula ou renovação.</p>
@@ -4812,7 +4812,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                       onClick={() => void bulkValidateEnrollmentFeesList()}
                     >
                       {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                      Validar seleccionados
+                      {tuitionT("bulk_validate_selected")}
                     </Button>
                   </div>
                 </CardHeader>
@@ -4837,15 +4837,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   return next;
                                 });
                               }}
-                              aria-label="Seleccionar todos"
+                              aria-label={tuitionT("select_all_aria")}
                             />
                           </th>
-                          <th className="py-2 px-2">Aluno</th>
+                          <th className="py-2 px-2">{tuitionT("col_student")}</th>
                           <th className="py-2 px-2">Tipo</th>
-                          <th className="py-2 px-2">Valor pago</th>
-                          <th className="py-2 px-2">Método</th>
-                          <th className="py-2 px-2">Submetido</th>
-                          <th className="py-2 px-2 text-right">Ações</th>
+                          <th className="py-2 px-2">{tuitionT("col_amount_paid")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_method")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_submitted")}</th>
+                          <th className="py-2 px-2 text-right">{tuitionT("col_actions_right")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4867,7 +4867,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <div className="flex flex-wrap justify-end gap-2">
                                 {payment.proof_url && (
                                   <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(payment.proof_url!)}>
-                                    <Eye className="h-3.5 w-3.5" /> Ver
+                                    <Eye className="h-3.5 w-3.5" /> {tuitionT("view")}
                                   </Button>
                                 )}
                                 <Button
@@ -4877,7 +4877,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   onClick={() => validateEnrollmentPayment(fee, payment)}
                                 >
                                   {validatingId === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                  Validar
+                                  {tuitionT("validate")}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -4886,7 +4886,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   disabled={bulkValidating || validatingId === payment.id}
                                   onClick={() => { setRejectDialog(payment); setRejectReason(""); }}
                                 >
-                                  <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                  <XCircle className="h-3.5 w-3.5" /> {tuitionT("reject")}
                                 </Button>
                               </div>
                             </td>
@@ -4917,7 +4917,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                     onClick={() => void bulkValidateEnrollmentFeesList()}
                   >
                     {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                    Validar seleccionados
+                        {tuitionT("bulk_validate_selected")}
                   </Button>
                 )}
               </CardHeader>
@@ -4930,16 +4930,16 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                   <Select value={enFilter} onValueChange={(v) => setEnFilter(v as typeof enFilter)}>
                     <SelectTrigger className="md:w-44"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todas</SelectItem>
-                      <SelectItem value="pending">Não pagas</SelectItem>
-                      <SelectItem value="overdue">Em atraso</SelectItem>
-                      <SelectItem value="paid">Pagas</SelectItem>
+                      <SelectItem value="all">{tuitionT("filter_all")}</SelectItem>
+                      <SelectItem value="pending">{tuitionT("filter_unpaid")}</SelectItem>
+                      <SelectItem value="overdue">{tuitionT("filter_overdue")}</SelectItem>
+                      <SelectItem value="paid">{tuitionT("filter_paid")}</SelectItem>
                     </SelectContent>
                   </Select>
                   <Select value={enYearFilter} onValueChange={setEnYearFilter}>
-                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Ano letivo" /></SelectTrigger>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder={tuitionT("school_year_placeholder")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todos os anos</SelectItem>
+                      <SelectItem value="all">{tuitionT("all_years")}</SelectItem>
                       {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -4988,20 +4988,20 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                     return next;
                                   });
                                 }}
-                                aria-label="Seleccionar todos (filtro atual)"
+                                aria-label={tuitionT("select_all_unpaid_aria")}
                               />
                             </th>
                           )}
-                          <th className="py-2 px-2">Aluno</th>
+                          <th className="py-2 px-2">{tuitionT("col_student")}</th>
                           <th className="py-2 px-2">Tipo</th>
                           <th className="py-2 px-2">Ano letivo</th>
-                          <th className="py-2 px-2">Vencimento</th>
-                          <th className="py-2 px-2">Valor</th>
-                          <th className="py-2 px-2">Estado</th>
-                          <th className="py-2 px-2 text-center w-12" title="Factura-recibo fiscal (FACTURA‑RECIBO AGT)">
-                            FT
+                          <th className="py-2 px-2">{tuitionT("col_due")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_value")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_status")}</th>
+                          <th className="py-2 px-2 text-center w-12" title={embeddedT("col_ft_title")}>
+                            {tuitionT("col_ft_abbr")}
                           </th>
-                          <th className="py-2 px-2 text-right">Ação</th>
+                          <th className="py-2 px-2 text-right">{tuitionT("col_action_right")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -5019,7 +5019,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                       disabled={bulkValidating || (!!pay && validatingId === pay.id)}
                                       checked={bulkSelectedEnrollmentFeeIds.has(f.id)}
                                       onCheckedChange={(v) => setBulkEnrollmentFeeChecked(f.id, v === true)}
-                                      title="Incluída na validação em lote («Validar seleccionados») para cobranças não pagas."
+                                      title={embeddedT("bulk_row_include_hint")}
                                     />
                                   ) : null}
                                 </td>
@@ -5031,15 +5031,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
-                                  <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">Pago</Badge>
+                                  <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">{tuitionT("status_paid")}</Badge>
                                 ) : pendingValidation ? (
-                                  <Badge className="bg-pastel-blue text-pastel-blue-foreground hover:bg-pastel-blue">A validar</Badge>
+                                  <Badge className="bg-pastel-blue text-pastel-blue-foreground hover:bg-pastel-blue">{tuitionT("status_pending_validation")}</Badge>
                                 ) : rejected ? (
-                                  <Badge variant="outline" className="border-destructive text-destructive">Rejeitado</Badge>
+                                  <Badge variant="outline" className="border-destructive text-destructive">{tuitionT("status_rejected")}</Badge>
                                 ) : overdue ? (
-                                  <Badge variant="destructive">Em atraso</Badge>
+                                  <Badge variant="destructive">{tuitionT("status_overdue")}</Badge>
                                 ) : (
-                                  <Badge variant="secondary">Pendente</Badge>
+                                  <Badge variant="secondary">{tuitionT("status_pending")}</Badge>
                                 )}
                               </td>
                               <td className="py-2 px-2 align-middle text-center">{invoiceIconForValidatedPayment(!!f.is_paid, pay)}</td>
@@ -5049,7 +5049,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                     <>
                                       {pay.proof_url && (
                                         <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
-                                          <Eye className="h-3.5 w-3.5" /> Ver
+                                          <Eye className="h-3.5 w-3.5" /> {tuitionT("view")}
                                         </Button>
                                       )}
                                       {canValidatePaymentProofs && (
@@ -5061,7 +5061,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                             onClick={() => validateEnrollmentPayment(f, pay)}
                                           >
                                             {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                            Validar
+                                            {tuitionT("validate")}
                                           </Button>
                                           <Button
                                             size="sm"
@@ -5070,7 +5070,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                             disabled={bulkValidating || validatingId === pay.id}
                                             onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
                                           >
-                                            <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                            <XCircle className="h-3.5 w-3.5" /> {tuitionT("reject")}
                                           </Button>
                                         </>
                                       )}
@@ -5080,18 +5080,18 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                     <>
                                       {(!isParent || usarAnexoEncarregado) && (
                                         <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForEnrollment(f)}>
-                                          <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
+                                          <Upload className="h-3.5 w-3.5" /> {isParent ? tuitionT("attach_proof") : tuitionT("record_payment")}
                                         </Button>
                                       )}
                                       {isParent && !usarAnexoEncarregado && (
                                         <span className="rounded-md border border-muted bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
-                                          Pagamento presencial na escola
+                                          {tuitionT("in_person_payment_hint")}
                                         </span>
                                       )}
                                       {!isParent && (
                                         <Button size="sm" variant="outline" className="gap-2" onClick={() => sendEnrollmentReminder(f)} disabled={remindingEnFeeId === f.id || !f.student?.parent_id}>
                                           {remindingEnFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                                          Cobrar
+                                          {tuitionT("charge_single")}
                                         </Button>
                                       )}
                                     </>
