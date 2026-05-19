@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,10 +42,8 @@ type Enrollment = TransportEnrollment & {
   dropoff_stop?: { name: string } | null;
 };
 
-const shiftLabel = (s: string) => (s === "MORNING" ? "Manhã" : s === "AFTERNOON" ? "Tarde" : "Manhã + Tarde");
-const directionLabel = (d: string) => (d === "PICKUP" ? "Ida" : d === "DROPOFF" ? "Regresso" : "Ida + Regresso");
-
 const Transportes = () => {
+  const { t } = useTranslation("pages", { keyPrefix: "transportes" });
   const [searchParams] = useSearchParams();
   const native = isNativeMobileApp();
   const [schoolId, setSchoolId] = useState<string | null>(null);
@@ -188,7 +187,7 @@ const Transportes = () => {
     if (!deleteRouteId) return;
     const { error } = await supabase.from("transport_routes").delete().eq("id", deleteRouteId);
     if (error) toast.error(error.message);
-    else toast.success("Rota removida");
+    else toast.success(t("toast_route_removed"));
     setDeleteRouteId(null);
     loadAll();
   };
@@ -197,7 +196,7 @@ const Transportes = () => {
     if (!deleteStopId) return;
     const { error } = await supabase.from("transport_stops").delete().eq("id", deleteStopId);
     if (error) toast.error(error.message);
-    else toast.success("Paragem removida");
+    else toast.success(t("toast_stop_removed"));
     setDeleteStopId(null);
     loadAll();
   };
@@ -206,7 +205,7 @@ const Transportes = () => {
     if (!deleteEnrollId) return;
     const { error } = await supabase.from("transport_enrollments").delete().eq("id", deleteEnrollId);
     if (error) toast.error(error.message);
-    else toast.success("Inscrição removida");
+    else toast.success(t("toast_enrollment_removed"));
     setDeleteEnrollId(null);
     loadAll();
   };
@@ -214,7 +213,7 @@ const Transportes = () => {
   const handleRegenerateFees = async (enrollmentId: string) => {
     const { error, data } = await supabase.rpc("generate_transport_fees", { _enrollment_id: enrollmentId });
     if (error) toast.error(error.message);
-    else toast.success(`Mensalidades geradas: ${data}`);
+    else toast.success(t("toast_fees_generated", { data }));
   };
 
   const handlePrintList = () => window.print();
@@ -239,15 +238,15 @@ const Transportes = () => {
           <div>
             <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-foreground">
               <Bus className="h-8 w-8 text-primary" />
-              Transporte Escolar
+              {t("title")}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Regras de cobrança, rotas e paragens, inscrições, lista de passageiros e mensalidades (com lembretes e comprovativos).
+              {t("subtitle")}
             </p>
           </div>
           {isAdmin && !native && (
             <Button onClick={() => { setEditRoute(null); setRouteOpen(true); }}>
-              <Plus className="mr-2 h-4 w-4" /> Nova rota
+              <Plus className="mr-2 h-4 w-4" /> {t("new_route")}
             </Button>
           )}
         </div>
@@ -258,14 +257,14 @@ const Transportes = () => {
           className="w-full"
         >
           <TabsList className="flex h-auto w-full flex-wrap gap-1">
-            {!isParent && <TabsTrigger value="regras">Regras de cobranças</TabsTrigger>}
-            <TabsTrigger value="rotas"><Bus className="mr-2 h-4 w-4" />Rotas</TabsTrigger>
-            <TabsTrigger value="inscricoes"><Users className="mr-2 h-4 w-4" />Inscrições</TabsTrigger>
-            {!isParent && <TabsTrigger value="lista"><ListChecks className="mr-2 h-4 w-4" />Lista de passageiros</TabsTrigger>}
-            <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
+            {!isParent && <TabsTrigger value="regras">{t("tab_rules")}</TabsTrigger>}
+            <TabsTrigger value="rotas"><Bus className="mr-2 h-4 w-4" />{t("tab_routes")}</TabsTrigger>
+            <TabsTrigger value="inscricoes"><Users className="mr-2 h-4 w-4" />{t("tab_enrollments")}</TabsTrigger>
+            {!isParent && <TabsTrigger value="lista"><ListChecks className="mr-2 h-4 w-4" />{t("tab_passenger_list")}</TabsTrigger>}
+            <TabsTrigger value="pagamentos">{t("tab_payments")}</TabsTrigger>
             <TabsTrigger value="autorizacoes">
               <FileSignature className="mr-2 h-4 w-4" />
-              Autorizações
+              {t("tab_authorizations")}
             </TabsTrigger>
           </TabsList>
 
@@ -282,7 +281,7 @@ const Transportes = () => {
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   className="pl-9"
-                  placeholder="Pesquisar rota, motorista, matrícula…"
+                  placeholder={t("search_routes")}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -290,10 +289,10 @@ const Transportes = () => {
             </div>
 
             {loading ? (
-              <p className="text-muted-foreground">A carregar…</p>
+              <p className="text-muted-foreground">{t("loading")}</p>
             ) : filteredRoutes.length === 0 ? (
               <Card className="p-10 text-center text-muted-foreground">
-                Sem rotas registadas. {isAdmin && "Crie a primeira rota."}
+                {t("no_routes")} {isAdmin && t("no_routes_admin_hint")}
               </Card>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -306,7 +305,7 @@ const Transportes = () => {
                         <div>
                           <div className="flex items-center gap-2">
                             <h3 className="text-lg font-semibold">{r.name}</h3>
-                            {!r.is_active && <Badge variant="secondary">Inativa</Badge>}
+                            {!r.is_active && <Badge variant="secondary">{t("badge_inactive")}</Badge>}
                           </div>
                           {r.description && <p className="text-sm text-muted-foreground">{r.description}</p>}
                         </div>
@@ -323,27 +322,27 @@ const Transportes = () => {
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div><span className="text-muted-foreground">Período:</span> {shiftLabel(r.shift)}</div>
-                        <div><span className="text-muted-foreground">Capacidade:</span> {r.capacity}</div>
-                        <div><span className="text-muted-foreground">Mensalidade:</span> {r.monthly_fee} AOA</div>
-                        <div><span className="text-muted-foreground">Inscritos:</span> {enrolled}/{r.capacity}</div>
-                        {r.driver_name && <div className="col-span-2"><span className="text-muted-foreground">Motorista:</span> {r.driver_name}{r.driver_phone ? ` · ${r.driver_phone}` : ""}</div>}
+                        <div><span className="text-muted-foreground">{t("label_shift")}</span> {t(`shifts.${r.shift}`)}</div>
+                        <div><span className="text-muted-foreground">{t("label_capacity")}</span> {r.capacity}</div>
+                        <div><span className="text-muted-foreground">{t("label_monthly_fee")}</span> {r.monthly_fee} AOA</div>
+                        <div><span className="text-muted-foreground">{t("label_enrolled")}</span> {enrolled}/{r.capacity}</div>
+                        {r.driver_name && <div className="col-span-2"><span className="text-muted-foreground">{t("label_driver")}</span> {r.driver_name}{r.driver_phone ? ` · ${r.driver_phone}` : ""}</div>}
                         {(r.vehicle_plate || r.vehicle_model) && (
-                          <div className="col-span-2"><span className="text-muted-foreground">Veículo:</span> {[r.vehicle_model, r.vehicle_plate].filter(Boolean).join(" · ")}</div>
+                          <div className="col-span-2"><span className="text-muted-foreground">{t("label_vehicle")}</span> {[r.vehicle_model, r.vehicle_plate].filter(Boolean).join(" · ")}</div>
                         )}
                       </div>
 
                       <div className="border-t border-border pt-3">
                         <div className="mb-2 flex items-center justify-between">
-                          <span className="text-sm font-medium">Paragens ({routeStops.length})</span>
+                          <span className="text-sm font-medium">{t("stops_title", { count: routeStops.length })}</span>
                           {isAdmin && (
                             <Button size="sm" variant="ghost" onClick={() => { setStopRouteId(r.id); setEditStop(null); setStopOpen(true); }}>
-                              <Plus className="mr-1 h-3 w-3" /> Paragem
+                              <Plus className="mr-1 h-3 w-3" /> {t("add_stop")}
                             </Button>
                           )}
                         </div>
                         {routeStops.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">Sem paragens.</p>
+                          <p className="text-xs text-muted-foreground">{t("no_stops")}</p>
                         ) : (
                           <ul className="space-y-1">
                             {routeStops.map((s) => (
@@ -379,21 +378,21 @@ const Transportes = () => {
           <TabsContent value="inscricoes" className="mt-4">
             {role === "TEACHER" && homeroomStudentIds.length === 0 && (
               <p className="mb-3 text-sm text-muted-foreground rounded-lg border border-border bg-muted/30 px-3 py-2">
-                Só vê aqui os seus alunos (turmas em que está como diretor de turma). Se esta lista está vazia, confira a atribuição na escola.
+                {t("teacher_homeroom_hint")}
               </p>
             )}
             <div className="mb-4 flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold">Alunos inscritos no transporte</h2>
+              <h2 className="text-lg font-semibold">{t("enrollments_title")}</h2>
               {canEnroll && !native && (
                 <Button onClick={() => { setEditEnroll(null); setEnrollOpen(true); }} disabled={routes.length === 0}>
-                  <Plus className="mr-2 h-4 w-4" /> Inscrever aluno
+                  <Plus className="mr-2 h-4 w-4" /> {t("enroll_student")}
                 </Button>
               )}
             </div>
             {native ? (
               <div className="grid gap-4 md:grid-cols-2">
                 {visibleEnrollments.length === 0 ? (
-                  <Card className="p-8 text-center text-muted-foreground">Sem inscrições.</Card>
+                  <Card className="p-8 text-center text-muted-foreground">{t("no_enrollments")}</Card>
                 ) : (
                   visibleEnrollments.map((e) => {
                     const route = routes.find((r) => r.id === e.route_id);
@@ -401,22 +400,22 @@ const Transportes = () => {
                       <Card key={e.id} className="flex flex-col gap-3 p-4">
                         <div className="flex items-start justify-between">
                           <div>
-                            <h3 className="text-lg font-semibold">{e.student?.full_name ?? "—"}</h3>
-                            <p className="text-sm text-muted-foreground">{route?.name ?? "—"}</p>
+                            <h3 className="text-lg font-semibold">{e.student?.full_name ?? t("em_dash")}</h3>
+                            <p className="text-sm text-muted-foreground">{route?.name ?? t("em_dash")}</p>
                           </div>
                           <Badge variant={e.status === "ACTIVE" ? "default" : "secondary"}>
-                            {e.status === "ACTIVE" ? "Ativa" : e.status === "INACTIVE" ? "Inativa" : "Cancelada"}
+                            {t(`enrollment_status.${e.status}`)}
                           </Badge>
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div><span className="text-muted-foreground">Direção:</span> {directionLabel(e.direction)}</div>
-                          <div><span className="text-muted-foreground">Início:</span> {e.start_date}</div>
-                          <div className="col-span-2"><span className="text-muted-foreground">Ida:</span> {e.pickup_stop?.name ?? "—"}</div>
-                          <div className="col-span-2"><span className="text-muted-foreground">Regresso:</span> {e.dropoff_stop?.name ?? "—"}</div>
+                          <div><span className="text-muted-foreground">{t("label_direction")}</span> {t(`directions.${e.direction}`)}</div>
+                          <div><span className="text-muted-foreground">{t("label_start")}</span> {e.start_date}</div>
+                          <div className="col-span-2"><span className="text-muted-foreground">{t("label_pickup")}</span> {e.pickup_stop?.name ?? t("em_dash")}</div>
+                          <div className="col-span-2"><span className="text-muted-foreground">{t("label_dropoff")}</span> {e.dropoff_stop?.name ?? t("em_dash")}</div>
                         </div>
                         {isAdmin && (
                           <div className="mt-1 flex justify-end gap-2 border-t border-border pt-3">
-                            <Button size="sm" variant="outline" onClick={() => handleRegenerateFees(e.id)} title="Gerar mensalidades">
+                            <Button size="sm" variant="outline" onClick={() => handleRegenerateFees(e.id)} title={t("generate_fees_title")}>
                               <Wallet className="h-4 w-4" />
                             </Button>
                             <Button size="sm" variant="outline" onClick={() => { setEditEnroll(e); setEnrollOpen(true); }}>
@@ -437,38 +436,38 @@ const Transportes = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Aluno</TableHead>
-                      <TableHead>Rota</TableHead>
-                      <TableHead>Direção</TableHead>
-                      <TableHead>Paragem ida</TableHead>
-                      <TableHead>Paragem regresso</TableHead>
-                      <TableHead>Início</TableHead>
-                      <TableHead>Estado</TableHead>
-                      {isAdmin && <TableHead className="text-right">Ações</TableHead>}
+                      <TableHead>{t("col_student")}</TableHead>
+                      <TableHead>{t("col_route")}</TableHead>
+                      <TableHead>{t("col_direction")}</TableHead>
+                      <TableHead>{t("col_pickup_stop")}</TableHead>
+                      <TableHead>{t("col_dropoff_stop")}</TableHead>
+                      <TableHead>{t("col_start")}</TableHead>
+                      <TableHead>{t("col_status")}</TableHead>
+                      {isAdmin && <TableHead className="text-right">{t("col_actions")}</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {visibleEnrollments.length === 0 ? (
-                      <TableRow><TableCell colSpan={isAdmin ? 8 : 7} className="text-center text-muted-foreground py-8">Sem inscrições.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={isAdmin ? 8 : 7} className="text-center text-muted-foreground py-8">{t("no_enrollments")}</TableCell></TableRow>
                     ) : (
                       visibleEnrollments.map((e) => {
                         const route = routes.find((r) => r.id === e.route_id);
                         return (
                           <TableRow key={e.id}>
-                            <TableCell className="font-medium">{e.student?.full_name ?? "—"}</TableCell>
-                            <TableCell>{route?.name ?? "—"}</TableCell>
-                            <TableCell>{directionLabel(e.direction)}</TableCell>
-                            <TableCell>{e.pickup_stop?.name ?? "—"}</TableCell>
-                            <TableCell>{e.dropoff_stop?.name ?? "—"}</TableCell>
+                            <TableCell className="font-medium">{e.student?.full_name ?? t("em_dash")}</TableCell>
+                            <TableCell>{route?.name ?? t("em_dash")}</TableCell>
+                            <TableCell>{t(`directions.${e.direction}`)}</TableCell>
+                            <TableCell>{e.pickup_stop?.name ?? t("em_dash")}</TableCell>
+                            <TableCell>{e.dropoff_stop?.name ?? t("em_dash")}</TableCell>
                             <TableCell>{e.start_date}</TableCell>
                             <TableCell>
                               <Badge variant={e.status === "ACTIVE" ? "default" : "secondary"}>
-                                {e.status === "ACTIVE" ? "Ativa" : e.status === "INACTIVE" ? "Inativa" : "Cancelada"}
+                                {t(`enrollment_status.${e.status}`)}
                               </Badge>
                             </TableCell>
                             {isAdmin && (
                               <TableCell className="text-right">
-                                <Button size="sm" variant="ghost" onClick={() => handleRegenerateFees(e.id)} title="Gerar mensalidades">
+                                <Button size="sm" variant="ghost" onClick={() => handleRegenerateFees(e.id)} title={t("generate_fees_title")}>
                                   <Wallet className="h-4 w-4" />
                                 </Button>
                                 <Button size="sm" variant="ghost" onClick={() => { setEditEnroll(e); setEnrollOpen(true); }}>
@@ -509,9 +508,9 @@ const Transportes = () => {
           <TabsContent value="lista" className="mt-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
               <div className="flex items-center gap-2">
-                <Label className="text-sm font-medium">Rota:</Label>
+                <Label className="text-sm font-medium">{t("route_label")}</Label>
                 <Select value={listRouteId} onValueChange={setListRouteId}>
-                  <SelectTrigger className="w-72"><SelectValue placeholder="Escolher rota" /></SelectTrigger>
+                  <SelectTrigger className="w-72"><SelectValue placeholder={t("choose_route")} /></SelectTrigger>
                   <SelectContent>
                     {routes.map((r) => (
                       <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
@@ -520,7 +519,7 @@ const Transportes = () => {
                 </Select>
               </div>
               <Button variant="outline" onClick={handlePrintList}>
-                <Printer className="mr-2 h-4 w-4" /> Imprimir lista
+                <Printer className="mr-2 h-4 w-4" /> {t("print_list")}
               </Button>
             </div>
 
@@ -529,15 +528,15 @@ const Transportes = () => {
                 <div className="mb-4 border-b border-border pb-3">
                   <h2 className="text-2xl font-bold">{selectedListRoute.name}</h2>
                   <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                    <span>Período: {shiftLabel(selectedListRoute.shift)}</span>
-                    {selectedListRoute.driver_name && <span>Motorista: {selectedListRoute.driver_name}</span>}
-                    {selectedListRoute.driver_phone && <span>Tel: {selectedListRoute.driver_phone}</span>}
-                    {selectedListRoute.vehicle_plate && <span>Matrícula: {selectedListRoute.vehicle_plate}</span>}
+                    <span>{t("label_shift")} {t(`shifts.${selectedListRoute.shift}`)}</span>
+                    {selectedListRoute.driver_name && <span>{t("label_driver")} {selectedListRoute.driver_name}</span>}
+                    {selectedListRoute.driver_phone && <span>{t("route_form.driver_phone")}: {selectedListRoute.driver_phone}</span>}
+                    {selectedListRoute.vehicle_plate && <span>{t("route_form.vehicle_plate")}: {selectedListRoute.vehicle_plate}</span>}
                   </div>
                 </div>
 
                 {(stopsByRoute.get(listRouteId) ?? []).length === 0 && passengerList.size === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">Sem passageiros nesta rota.</p>
+                  <p className="text-center text-muted-foreground py-8">{t("no_passengers_route")}</p>
                 ) : (
                   <div className="space-y-5">
                     {(stopsByRoute.get(listRouteId) ?? []).map((stop) => {
@@ -547,18 +546,18 @@ const Transportes = () => {
                           <div className="flex items-center gap-2 border-b border-border/60 pb-1 mb-2">
                             <MapPin className="h-4 w-4 text-primary" />
                             <span className="font-semibold">{stop.position}. {stop.name}</span>
-                            {stop.pickup_time && <Badge variant="outline">Ida {stop.pickup_time.slice(0, 5)}</Badge>}
-                            {stop.dropoff_time && <Badge variant="outline">Regresso {stop.dropoff_time.slice(0, 5)}</Badge>}
-                            {stop.address && <span className="text-xs text-muted-foreground">— {stop.address}</span>}
+                            {stop.pickup_time && <Badge variant="outline">{t("badge_pickup", { time: stop.pickup_time.slice(0, 5) })}</Badge>}
+                            {stop.dropoff_time && <Badge variant="outline">{t("badge_dropoff", { time: stop.dropoff_time.slice(0, 5) })}</Badge>}
+                            {stop.address && <span className="text-xs text-muted-foreground">{t("em_dash")} {stop.address}</span>}
                           </div>
                           {pax.length === 0 ? (
-                            <p className="text-sm text-muted-foreground pl-6">Sem passageiros nesta paragem.</p>
+                            <p className="text-sm text-muted-foreground pl-6">{t("no_passengers_stop")}</p>
                           ) : (
                             <ol className="ml-6 list-decimal space-y-0.5 text-sm">
                               {pax.map((e) => (
                                 <li key={e.id}>
-                                  {e.student?.full_name ?? "—"}{" "}
-                                  <span className="text-xs text-muted-foreground">({directionLabel(e.direction)})</span>
+                                  {e.student?.full_name ?? t("em_dash")}{" "}
+                                  <span className="text-xs text-muted-foreground">({t(`directions.${e.direction}`)})</span>
                                 </li>
                               ))}
                             </ol>
@@ -570,18 +569,18 @@ const Transportes = () => {
                     {(passengerList.get("__no_stop__")?.length ?? 0) > 0 && (
                       <div>
                         <div className="flex items-center gap-2 border-b border-border/60 pb-1 mb-2">
-                          <span className="font-semibold text-muted-foreground">Sem paragem atribuída</span>
+                          <span className="font-semibold text-muted-foreground">{t("no_stop_assigned")}</span>
                         </div>
                         <ol className="ml-6 list-decimal space-y-0.5 text-sm">
                           {(passengerList.get("__no_stop__") ?? []).map((e) => (
-                            <li key={e.id}>{e.student?.full_name ?? "—"}</li>
+                            <li key={e.id}>{e.student?.full_name ?? t("em_dash")}</li>
                           ))}
                         </ol>
                       </div>
                     )}
 
                     <div className="border-t border-border pt-3 text-sm text-muted-foreground">
-                      Total de passageiros ativos:{" "}
+                      {t("total_passengers")}{" "}
                       <strong className="text-foreground">
                         {(enrollmentsByRoute.get(listRouteId) ?? []).filter((e) => e.status === "ACTIVE").length}
                       </strong>{" "}
@@ -591,7 +590,7 @@ const Transportes = () => {
                 )}
               </Card>
             ) : (
-              <Card className="p-10 text-center text-muted-foreground">Escolha uma rota.</Card>
+              <Card className="p-10 text-center text-muted-foreground">{t("choose_route_hint")}</Card>
             )}
           </TabsContent>
         </Tabs>
@@ -608,11 +607,11 @@ const Transportes = () => {
             type="button"
             size="icon"
             className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-            aria-label={transportTab === "inscricoes" ? "Inscrever aluno" : "Nova rota"}
+            aria-label={transportTab === "inscricoes" ? t("fab_enroll") : t("fab_new_route")}
             onClick={() => {
               if (transportTab === "inscricoes") {
                 if (routes.length === 0) {
-                  toast.error("Crie primeiro pelo menos uma rota.");
+                  toast.error(t("toast_need_route_first"));
                   return;
                 }
                 setEditEnroll(null);
@@ -664,12 +663,12 @@ const Transportes = () => {
       <AlertDialog open={!!deleteRouteId} onOpenChange={(o) => !o && setDeleteRouteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover rota?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação remove também as paragens, inscrições e mensalidades associadas.</AlertDialogDescription>
+            <AlertDialogTitle>{t("confirm_delete_route_title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("confirm_delete_route_desc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteRoute}>Remover</AlertDialogAction>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteRoute}>{t("remove")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -677,11 +676,11 @@ const Transportes = () => {
       <AlertDialog open={!!deleteStopId} onOpenChange={(o) => !o && setDeleteStopId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover paragem?</AlertDialogTitle>
+            <AlertDialogTitle>{t("confirm_delete_stop_title")}</AlertDialogTitle>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteStop}>Remover</AlertDialogAction>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteStop}>{t("remove")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -689,12 +688,12 @@ const Transportes = () => {
       <AlertDialog open={!!deleteEnrollId} onOpenChange={(o) => !o && setDeleteEnrollId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover inscrição?</AlertDialogTitle>
-            <AlertDialogDescription>As mensalidades não pagas associadas serão também removidas.</AlertDialogDescription>
+            <AlertDialogTitle>{t("confirm_delete_enrollment_title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("confirm_delete_enrollment_desc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteEnroll}>Remover</AlertDialogAction>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteEnroll}>{t("remove")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

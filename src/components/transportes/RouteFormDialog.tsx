@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,8 @@ type Props = {
 };
 
 export const RouteFormDialog = ({ open, onOpenChange, schoolId, initial, onSaved }: Props) => {
+  const { t } = useTranslation("pages", { keyPrefix: "transportes.route_form" });
+  const { t: tt } = useTranslation("pages", { keyPrefix: "transportes" });
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -68,7 +71,7 @@ export const RouteFormDialog = ({ open, onOpenChange, schoolId, initial, onSaved
 
   const submit = async () => {
     if (!form.name.trim()) {
-      toast.error("Nome da rota é obrigatório");
+      toast.error(t("name_required"));
       return;
     }
     setSaving(true);
@@ -91,10 +94,10 @@ export const RouteFormDialog = ({ open, onOpenChange, schoolId, initial, onSaved
       : await supabase.from("transport_routes").insert(payload);
     setSaving(false);
     if (error) {
-      toast.error("Erro a guardar rota: " + error.message);
+      toast.error(t("save_error", { message: error.message }));
       return;
     }
-    toast.success(initial ? "Rota atualizada" : "Rota criada");
+    toast.success(initial ? t("updated") : t("created"));
     onSaved();
     onOpenChange(false);
   };
@@ -103,64 +106,64 @@ export const RouteFormDialog = ({ open, onOpenChange, schoolId, initial, onSaved
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>{initial ? "Editar rota" : "Nova rota de transporte"}</DialogTitle>
+          <DialogTitle>{initial ? t("edit_title") : t("new_title")}</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 overflow-y-auto flex-1 pr-2 -mr-2">
           <div className="md:col-span-2">
-            <Label>Nome da rota *</Label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex: Giro Talatona — Maianga" />
+            <Label>{t("name")}</Label>
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t("name_placeholder")} />
           </div>
           <div className="md:col-span-2">
-            <Label>Descrição</Label>
+            <Label>{t("description")}</Label>
             <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} />
           </div>
           <div>
-            <Label>Motorista</Label>
+            <Label>{t("driver")}</Label>
             <Input value={form.driver_name} onChange={(e) => setForm({ ...form, driver_name: e.target.value })} />
           </div>
           <div>
-            <Label>Telefone do motorista</Label>
+            <Label>{t("driver_phone")}</Label>
             <Input value={form.driver_phone} onChange={(e) => setForm({ ...form, driver_phone: e.target.value })} />
           </div>
           <div>
-            <Label>Matrícula do veículo</Label>
+            <Label>{t("vehicle_plate")}</Label>
             <Input value={form.vehicle_plate} onChange={(e) => setForm({ ...form, vehicle_plate: e.target.value })} />
           </div>
           <div>
-            <Label>Modelo do veículo</Label>
+            <Label>{t("vehicle_model")}</Label>
             <Input value={form.vehicle_model} onChange={(e) => setForm({ ...form, vehicle_model: e.target.value })} />
           </div>
           <div>
-            <Label>Capacidade</Label>
+            <Label>{t("capacity")}</Label>
             <Input type="number" min={1} value={form.capacity} onChange={(e) => setForm({ ...form, capacity: Number(e.target.value) })} />
           </div>
           <div>
-            <Label>Período</Label>
+            <Label>{t("shift")}</Label>
             <Select value={form.shift} onValueChange={(v) => setForm({ ...form, shift: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="MORNING">Manhã</SelectItem>
-                <SelectItem value="AFTERNOON">Tarde</SelectItem>
-                <SelectItem value="BOTH">Manhã e Tarde</SelectItem>
+                <SelectItem value="MORNING">{tt("shifts.MORNING")}</SelectItem>
+                <SelectItem value="AFTERNOON">{tt("shifts.AFTERNOON")}</SelectItem>
+                <SelectItem value="BOTH">{tt("shifts.BOTH")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label>Mensalidade (AOA)</Label>
+            <Label>{t("monthly_fee")}</Label>
             <Input type="number" min={0} step="0.01" value={form.monthly_fee} onChange={(e) => setForm({ ...form, monthly_fee: Number(e.target.value) })} />
           </div>
           <div className="flex items-center gap-3 pt-6">
             <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
-            <Label>Rota ativa</Label>
+            <Label>{t("active_route")}</Label>
           </div>
           <div className="md:col-span-2">
-            <Label>Notas</Label>
+            <Label>{t("notes")}</Label>
             <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
           </div>
         </div>
         <DialogFooter className="flex-shrink-0">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={submit} disabled={saving}>{saving ? "A guardar..." : "Guardar"}</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
+          <Button onClick={submit} disabled={saving}>{saving ? t("saving") : t("save")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

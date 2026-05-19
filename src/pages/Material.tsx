@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { dateLocaleTag } from "@/lib/i18nDateLocale";
 import {
   Plus, Search, Boxes, ClipboardList, Check, AlertTriangle, Pencil, Trash2, ListChecks,
   BookOpen, Beaker, Palette, Dumbbell, Laptop, Package,
@@ -25,15 +27,15 @@ import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 
 type Category = "papelaria" | "laboratorio" | "artes" | "desporto" | "tecnologia";
 
-const categoryMeta: Record<string, { label: string; color: string; icon: typeof BookOpen }> = {
-  papelaria: { label: "Papelaria", color: "bg-pastel-blue text-pastel-blue-foreground", icon: BookOpen },
-  laboratorio: { label: "Laboratório", color: "bg-pastel-green text-pastel-green-foreground", icon: Beaker },
-  artes: { label: "Artes", color: "bg-pastel-pink text-pastel-pink-foreground", icon: Palette },
-  desporto: { label: "Desporto", color: "bg-pastel-yellow text-pastel-yellow-foreground", icon: Dumbbell },
-  tecnologia: { label: "Tecnologia", color: "bg-pastel-lilac text-pastel-lilac-foreground", icon: Laptop },
+const categoryMeta: Record<string, { color: string; icon: typeof BookOpen }> = {
+  papelaria: { color: "bg-pastel-blue text-pastel-blue-foreground", icon: BookOpen },
+  laboratorio: { color: "bg-pastel-green text-pastel-green-foreground", icon: Beaker },
+  artes: { color: "bg-pastel-pink text-pastel-pink-foreground", icon: Palette },
+  desporto: { color: "bg-pastel-yellow text-pastel-yellow-foreground", icon: Dumbbell },
+  tecnologia: { color: "bg-pastel-lilac text-pastel-lilac-foreground", icon: Laptop },
 };
-const catFallback = { label: "Outro", color: "bg-muted text-foreground", icon: Package };
-const meta = (c: string) => categoryMeta[c] ?? catFallback;
+const catFallbackMeta = { color: "bg-muted text-foreground", icon: Package };
+const categoryVisual = (c: string) => categoryMeta[c] ?? catFallbackMeta;
 
 type DeliveryRow = {
   id: string;
@@ -47,6 +49,9 @@ type DeliveryFilter = "all" | "pendente" | "completo";
 type Tab = "stock" | "pedidos";
 
 const Material = () => {
+  const { t } = useTranslation("pages", { keyPrefix: "material" });
+  const categoryLabel = (key: string) =>
+    t(`categories.${key}`, { defaultValue: t("categories.other") });
   const native = isNativeMobileApp();
   const { user } = useAuth();
   const { selectedYearId } = useAcademicYear();
@@ -267,20 +272,27 @@ const Material = () => {
   }, [requests, search, reqDeliveryFilter, reqTeacherFilter, students, classrooms, deliveries, isParent, childIds, classroomIds, isTeacher, user?.id, isStudent, studentId, studentClassroomId]);
 
   const removeMaterial = async (id: string) => {
-    if (!confirm("Remover este material?")) return;
+    if (!confirm(t("confirm_remove_material"))) return;
     const { error } = await supabase.from("materials").delete().eq("id", id);
-    if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
-    toast({ title: "Material removido" });
+    if (error) return toast({ title: t("toast_error"), description: error.message, variant: "destructive" });
+    toast({ title: t("toast_material_removed") });
     loadAll();
   };
 
   const removeRequest = async (id: string) => {
-    if (!confirm("Remover este pedido?")) return;
+    if (!confirm(t("confirm_remove_request"))) return;
     const { error } = await supabase.from("material_requests").delete().eq("id", id);
-    if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
-    toast({ title: "Pedido removido" });
+    if (error) return toast({ title: t("toast_error"), description: error.message, variant: "destructive" });
+    toast({ title: t("toast_request_removed") });
     loadAll();
   };
+
+  const childSuffix = selectedChild
+    ? t("child_suffix", { name: selectedChild.full_name })
+    : "";
+  const subtitle = isParent
+    ? t("subtitle_parent", { childSuffix })
+    : t("subtitle_admin");
 
   const showCreateFab =
     native &&
@@ -292,32 +304,28 @@ const Material = () => {
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Material</h1>
-            <p className="text-sm text-muted-foreground">
-              {isParent
-                ? `Pedidos de material${selectedChild ? ` para ${selectedChild.full_name}` : ""}.`
-                : "Gerir stock da escola e pedidos de material para encarregados de educação."}
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("title")}</h1>
+            <p className="text-sm text-muted-foreground">{subtitle}</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {!isParent && !isTeacher && !isStudent && (
             <div className="inline-flex h-11 items-center rounded-full border border-border bg-card p-1 shadow-soft">
               <button onClick={() => setTab("stock")} className={cn("flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors", tab === "stock" ? "bg-pastel-blue text-pastel-blue-foreground" : "text-muted-foreground hover:text-foreground")}>
-                <Boxes className="h-4 w-4" strokeWidth={1.75} /> Stock
+                <Boxes className="h-4 w-4" strokeWidth={1.75} /> {t("tab_stock")}
               </button>
               <button onClick={() => setTab("pedidos")} className={cn("flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors", tab === "pedidos" ? "bg-pastel-blue text-pastel-blue-foreground" : "text-muted-foreground hover:text-foreground")}>
-                <ClipboardList className="h-4 w-4" strokeWidth={1.75} /> Pedidos
+                <ClipboardList className="h-4 w-4" strokeWidth={1.75} /> {t("tab_requests")}
               </button>
             </div>
             )}
             {tab === "stock" && isAdmin && !native && (
               <button onClick={() => { setEditingMaterial(null); setShowMaterialDialog(true); }} className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
-                <Plus className="h-4 w-4" strokeWidth={2.25} /> Novo Material
+                <Plus className="h-4 w-4" strokeWidth={2.25} /> {t("new_material")}
               </button>
             )}
             {tab === "pedidos" && canRequest && !native && (
               <button onClick={() => { setEditingRequest(null); setShowRequestDialog(true); }} className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
-                <Plus className="h-4 w-4" strokeWidth={2.25} /> Novo Pedido
+                <Plus className="h-4 w-4" strokeWidth={2.25} /> {t("new_request")}
               </button>
             )}
           </div>
@@ -328,14 +336,14 @@ const Material = () => {
         <div className={cn("grid gap-4", (isParent || isTeacher || isStudent) ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-4")}>
           {((isParent || isTeacher || isStudent)
             ? [
-                { label: "Pedidos ativos", value: stats.pedidosAtivos, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-                { label: "Materiais entregues", value: stats.entregasMarcadas, color: "bg-pastel-green text-pastel-green-foreground" },
+                { label: t("kpi_active_requests"), value: stats.pedidosAtivos, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+                { label: t("kpi_delivered"), value: stats.entregasMarcadas, color: "bg-pastel-green text-pastel-green-foreground" },
               ]
             : [
-                { label: "Itens em Stock", value: stats.totalItens, color: "bg-pastel-blue text-pastel-blue-foreground" },
-                { label: "Stock Baixo", value: stats.baixoStock, color: "bg-pastel-pink text-pastel-pink-foreground" },
-                { label: "Pedidos ativos", value: stats.pedidosAtivos, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-                { label: "Materiais entregues", value: stats.entregasMarcadas, color: "bg-pastel-green text-pastel-green-foreground" },
+                { label: t("kpi_stock_items"), value: stats.totalItens, color: "bg-pastel-blue text-pastel-blue-foreground" },
+                { label: t("kpi_low_stock"), value: stats.baixoStock, color: "bg-pastel-pink text-pastel-pink-foreground" },
+                { label: t("kpi_active_requests"), value: stats.pedidosAtivos, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+                { label: t("kpi_delivered"), value: stats.entregasMarcadas, color: "bg-pastel-green text-pastel-green-foreground" },
               ]
           ).map((s) => (
             <div key={s.label} className="rounded-2xl bg-card p-5 shadow-card">
@@ -354,7 +362,7 @@ const Material = () => {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={tab === "stock" ? "Pesquisar material ou SKU..." : "Pesquisar pedido, professor ou aluno..."}
+                placeholder={tab === "stock" ? t("search_stock") : t("search_requests")}
                 className="h-10 w-full rounded-full border border-border bg-background pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-pastel-blue/40"
               />
             </div>
@@ -362,16 +370,16 @@ const Material = () => {
             {tab === "stock" ? (
               <div className="flex flex-wrap items-center gap-2">
                 <Select value={stockCategoryFilter} onValueChange={setStockCategoryFilter}>
-                  <SelectTrigger className="h-10 w-44 rounded-full"><SelectValue placeholder="Categoria" /></SelectTrigger>
+                  <SelectTrigger className="h-10 w-44 rounded-full"><SelectValue placeholder={t("filter_category")} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todas as categorias</SelectItem>
-                    {Object.keys(categoryMeta).map((c) => <SelectItem key={c} value={c}>{categoryMeta[c].label}</SelectItem>)}
+                    <SelectItem value="all">{t("all_categories")}</SelectItem>
+                    {Object.keys(categoryMeta).map((c) => <SelectItem key={c} value={c}>{categoryLabel(c)}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <Select value={stockLocation} onValueChange={setStockLocation}>
-                  <SelectTrigger className="h-10 w-48 rounded-full"><SelectValue placeholder="Localização" /></SelectTrigger>
+                  <SelectTrigger className="h-10 w-48 rounded-full"><SelectValue placeholder={t("filter_location")} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todas as localizações</SelectItem>
+                    <SelectItem value="all">{t("all_locations")}</SelectItem>
                     {locations.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -384,24 +392,24 @@ const Material = () => {
                       : "border-border bg-background text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  <AlertTriangle className="h-4 w-4" strokeWidth={1.75} /> Stock baixo
+                  <AlertTriangle className="h-4 w-4" strokeWidth={1.75} /> {t("low_stock_toggle")}
                 </button>
               </div>
             ) : (
               <div className="flex flex-wrap items-center gap-2">
                 <Select value={reqDeliveryFilter} onValueChange={(v) => setReqDeliveryFilter(v as DeliveryFilter)}>
-                  <SelectTrigger className="h-10 w-44 rounded-full"><SelectValue placeholder="Entregas" /></SelectTrigger>
+                  <SelectTrigger className="h-10 w-44 rounded-full"><SelectValue placeholder={t("filter_deliveries")} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todas as entregas</SelectItem>
-                    <SelectItem value="pendente">Por completar</SelectItem>
-                    <SelectItem value="completo">Concluídas</SelectItem>
+                    <SelectItem value="all">{t("all_deliveries")}</SelectItem>
+                    <SelectItem value="pendente">{t("delivery_pending")}</SelectItem>
+                    <SelectItem value="completo">{t("delivery_complete")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={reqTeacherFilter} onValueChange={setReqTeacherFilter}>
-                  <SelectTrigger className="h-10 w-56 rounded-full"><SelectValue placeholder="Professor" /></SelectTrigger>
+                  <SelectTrigger className="h-10 w-56 rounded-full"><SelectValue placeholder={t("filter_teacher")} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todos os professores</SelectItem>
-                    {teachers.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                    <SelectItem value="all">{t("all_teachers")}</SelectItem>
+                    {teachers.map((teacher) => <SelectItem key={teacher.id} value={teacher.id}>{teacher.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -410,7 +418,7 @@ const Material = () => {
         </div>
 
         {loading ? (
-          <div className="rounded-2xl bg-card p-10 text-center text-muted-foreground shadow-card">A carregar...</div>
+          <div className="rounded-2xl bg-card p-10 text-center text-muted-foreground shadow-card">{t("loading")}</div>
         ) : tab === "stock" ? (
           <StockTable
             native={native}
@@ -444,7 +452,7 @@ const Material = () => {
             type="button"
             size="icon"
             className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-            aria-label="Novo material"
+            aria-label={t("fab_new_material")}
             onClick={() => { setEditingMaterial(null); setShowMaterialDialog(true); }}
           >
             <Plus className="h-6 w-6" />
@@ -457,7 +465,7 @@ const Material = () => {
             type="button"
             size="icon"
             className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-            aria-label="Novo pedido"
+            aria-label={t("fab_new_request")}
             onClick={() => { setEditingRequest(null); setShowRequestDialog(true); }}
           >
             <Plus className="h-6 w-6" />
@@ -507,18 +515,21 @@ const StockTable = ({
   onRemove: (id: string) => void;
   native?: boolean;
 }) => {
+  const { t } = useTranslation("pages", { keyPrefix: "material" });
+  const categoryLabel = (key: string) =>
+    t(`categories.${key}`, { defaultValue: t("categories.other") });
   return (
     <div className="overflow-hidden rounded-2xl bg-card shadow-card">
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
-        <h2 className="text-base font-bold text-foreground">Stock de Materiais</h2>
-        <span className="text-xs text-muted-foreground">{items.length} item(ns)</span>
+        <h2 className="text-base font-bold text-foreground">{t("stock_title")}</h2>
+        <span className="text-xs text-muted-foreground">{t("stock_count", { count: items.length })}</span>
       </div>
       {items.length === 0 ? (
-        <div className="p-10 text-center text-sm text-muted-foreground">Sem materiais.</div>
+        <div className="p-10 text-center text-sm text-muted-foreground">{t("stock_empty")}</div>
       ) : native ? (
         <div className="flex flex-col gap-3 p-4">
           {items.map((s) => {
-            const m = meta(s.category);
+            const m = categoryVisual(s.category);
             const Icon = m.icon;
             const low = s.quantity < s.min_quantity;
             return (
@@ -530,25 +541,25 @@ const StockTable = ({
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-foreground">{s.name}</p>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", m.color)}>{m.label}</span>
-                      <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-xs font-medium text-foreground">SKU: {s.sku ?? "—"}</span>
+                      <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", m.color)}>{categoryLabel(s.category)}</span>
+                      <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-xs font-medium text-foreground">{t("sku_prefix")} {s.sku ?? t("em_dash")}</span>
                       <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
-                        Qtd: {s.quantity} {s.unit} · mín. {s.min_quantity}
+                        {t("qty_label")} {s.quantity} {s.unit} · {t("min_label")} {s.min_quantity}
                       </span>
-                      <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">Local: {s.location ?? "—"}</span>
+                      <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">{t("loc_label")} {s.location ?? t("em_dash")}</span>
                       {low ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-pastel-pink px-2.5 py-1 text-xs font-semibold text-pastel-pink-foreground">
-                          <AlertTriangle className="h-3 w-3" strokeWidth={2} /> Stock baixo
+                          <AlertTriangle className="h-3 w-3" strokeWidth={2} /> {t("low_badge")}
                         </span>
                       ) : null}
                     </div>
                   </div>
                   {isAdmin && !hideActionsColumn ? (
                     <div className="flex shrink-0 flex-col gap-1">
-                      <button type="button" onClick={() => onEdit(s)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
+                      <button type="button" onClick={() => onEdit(s)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title={t("edit")}>
                         <Pencil className="h-4 w-4" strokeWidth={1.75} />
                       </button>
-                      <button type="button" onClick={() => onRemove(s.id)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title="Remover">
+                      <button type="button" onClick={() => onRemove(s.id)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title={t("remove")}>
                         <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                       </button>
                     </div>
@@ -563,17 +574,17 @@ const StockTable = ({
           <table className="w-full min-w-[900px]">
             <thead>
               <tr className="border-b border-border bg-muted/30 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <th className="px-6 py-3">Material</th>
-                <th className="px-6 py-3">Categoria</th>
-                <th className="px-6 py-3">SKU</th>
-                <th className="px-6 py-3 text-right">Quantidade</th>
-                <th className="px-6 py-3">Localização</th>
-                {!hideActionsColumn && <th className="px-6 py-3 text-right">Ações</th>}
+                <th className="px-6 py-3">{t("col_material")}</th>
+                <th className="px-6 py-3">{t("col_category")}</th>
+                <th className="px-6 py-3">{t("col_sku")}</th>
+                <th className="px-6 py-3 text-right">{t("col_quantity")}</th>
+                <th className="px-6 py-3">{t("col_location")}</th>
+                {!hideActionsColumn && <th className="px-6 py-3 text-right">{t("col_actions")}</th>}
               </tr>
             </thead>
             <tbody>
               {items.map((s) => {
-                const m = meta(s.category);
+                const m = categoryVisual(s.category);
                 const Icon = m.icon;
                 const low = s.quantity < s.min_quantity;
                 return (
@@ -585,35 +596,35 @@ const StockTable = ({
                         </span>
                         <div>
                           <p className="font-semibold text-foreground">{s.name}</p>
-                          <p className="text-xs text-muted-foreground">Mín. {s.min_quantity} {s.unit}</p>
+                          <p className="text-xs text-muted-foreground">{t("min_label")} {s.min_quantity} {s.unit}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={cn("rounded-full px-3 py-1 text-xs font-medium", m.color)}>{m.label}</span>
+                      <span className={cn("rounded-full px-3 py-1 text-xs font-medium", m.color)}>{categoryLabel(s.category)}</span>
                     </td>
-                    <td className="px-6 py-4 font-mono text-xs text-muted-foreground">{s.sku ?? "—"}</td>
+                    <td className="px-6 py-4 font-mono text-xs text-muted-foreground">{s.sku ?? t("em_dash")}</td>
                     <td className="px-6 py-4 text-right">
                       <div className="inline-flex items-center gap-2">
                         {low && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-pastel-pink px-2 py-0.5 text-[10px] font-semibold text-pastel-pink-foreground">
-                            <AlertTriangle className="h-3 w-3" strokeWidth={2} /> Baixo
+                            <AlertTriangle className="h-3 w-3" strokeWidth={2} /> {t("low_short")}
                           </span>
                         )}
                         <span className="font-bold text-foreground">{s.quantity}</span>
                         <span className="text-xs text-muted-foreground">{s.unit}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-muted-foreground">{s.location ?? "—"}</td>
+                    <td className="px-6 py-4 text-muted-foreground">{s.location ?? t("em_dash")}</td>
                     {!hideActionsColumn && (
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-1">
                           {isAdmin && (
                             <>
-                              <button onClick={() => onEdit(s)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
+                              <button onClick={() => onEdit(s)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title={t("edit")}>
                                 <Pencil className="h-4 w-4" strokeWidth={1.75} />
                               </button>
-                              <button onClick={() => onRemove(s.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title="Remover">
+                              <button onClick={() => onRemove(s.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title={t("remove")}>
                                 <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                               </button>
                             </>
@@ -649,21 +660,32 @@ const RequestsTable = ({
   onMarkDeliveries: (r: RequestRow) => void;
   native?: boolean;
 }) => {
-  const classroomName = (id: string | null) => classrooms.find((c) => c.id === id)?.name ?? "—";
+  const { t, i18n } = useTranslation("pages", { keyPrefix: "material" });
+  const categoryLabel = (key: string) =>
+    t(`categories.${key}`, { defaultValue: t("categories.other") });
+  const formatDateShort = (iso: string | null) =>
+    iso
+      ? new Date(iso + "T00:00:00").toLocaleDateString(dateLocaleTag(i18n.language), {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })
+      : t("em_dash");
+  const classroomName = (id: string | null) => classrooms.find((c) => c.id === id)?.name ?? t("em_dash");
   const studentName = (id: string | null) => students.find((s) => s.id === id)?.full_name ?? null;
 
   return (
     <div className="overflow-hidden rounded-2xl bg-card shadow-card">
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
-        <h2 className="text-base font-bold text-foreground">Pedidos de Material</h2>
-        <span className="text-xs text-muted-foreground">{requests.length} pedido(s)</span>
+        <h2 className="text-base font-bold text-foreground">{t("requests_title")}</h2>
+        <span className="text-xs text-muted-foreground">{t("requests_count", { count: requests.length })}</span>
       </div>
       {requests.length === 0 ? (
-        <div className="p-10 text-center text-sm text-muted-foreground">Sem pedidos.</div>
+        <div className="p-10 text-center text-sm text-muted-foreground">{t("requests_empty")}</div>
       ) : native ? (
         <div className="flex flex-col gap-3 p-4">
           {requests.map((r) => {
-            const m = meta(r.category);
+            const m = categoryVisual(r.category);
             const Icon = m.icon;
             const sName = studentName(r.student_id);
             const canEdit = isAdmin || r.requester_id === currentUserId;
@@ -680,19 +702,16 @@ const RequestsTable = ({
                       <p className="font-semibold text-foreground">{r.item_name}</p>
                       {r.description ? <p className="mt-1 text-sm text-muted-foreground line-clamp-3">{r.description}</p> : null}
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", m.color)}>{m.label}</span>
-                        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">Qtd: {r.quantity}</span>
+                        <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", m.color)}>{categoryLabel(r.category)}</span>
+                        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">{t("qty_label")} {r.quantity}</span>
                         <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
-                          Professor: {r.teacher_name ?? "—"}
+                          {t("teacher_prefix")} {r.teacher_name ?? t("em_dash")}
                         </span>
                         <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
-                          {sName ? `Aluno: ${sName}` : `Turma: ${classroomName(r.classroom_id)}`}
+                          {sName ? `${t("student_prefix")} ${sName}` : `${t("class_prefix")} ${classroomName(r.classroom_id)}`}
                         </span>
                         <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
-                          Data:{" "}
-                          {r.needed_date
-                            ? new Date(r.needed_date).toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric" })
-                            : "—"}
+                          {t("date_prefix")} {formatDateShort(r.needed_date)}
                         </span>
                         <span
                           className={cn(
@@ -705,7 +724,7 @@ const RequestsTable = ({
                           )}
                         >
                           {complete && <Check className="h-3 w-3" strokeWidth={2.25} />}
-                          Entregas: {brought} / {total}
+                          {t("deliveries_label")} {brought} / {total}
                         </span>
                       </div>
                     </div>
@@ -718,15 +737,15 @@ const RequestsTable = ({
                         onClick={() => onMarkDeliveries(r)}
                         className="inline-flex h-9 items-center gap-1.5 rounded-full bg-pastel-blue px-3 text-xs font-semibold text-pastel-blue-foreground transition-colors hover:opacity-90"
                       >
-                        <ListChecks className="h-3.5 w-3.5" strokeWidth={2} /> Marcar
+                        <ListChecks className="h-3.5 w-3.5" strokeWidth={2} /> {t("mark_deliveries")}
                       </button>
                     )}
                     {canEdit ? (
                       <>
-                        <button type="button" onClick={() => onEdit(r)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
+                        <button type="button" onClick={() => onEdit(r)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title={t("edit")}>
                           <Pencil className="h-4 w-4" strokeWidth={1.75} />
                         </button>
-                        <button type="button" onClick={() => onRemove(r.id)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title="Remover">
+                        <button type="button" onClick={() => onRemove(r.id)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title={t("remove")}>
                           <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                         </button>
                       </>
@@ -743,17 +762,17 @@ const RequestsTable = ({
           <table className="w-full min-w-[1000px]">
             <thead>
               <tr className="border-b border-border bg-muted/30 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <th className="px-6 py-3">Material</th>
-                <th className="px-6 py-3">Professor</th>
-                <th className="px-6 py-3">Destino</th>
-                <th className="px-6 py-3">Data</th>
-                <th className="px-6 py-3">Entregas</th>
-                {!hideActionsColumn && <th className="px-6 py-3 text-right">Ações</th>}
+                <th className="px-6 py-3">{t("col_material")}</th>
+                <th className="px-6 py-3">{t("col_teacher")}</th>
+                <th className="px-6 py-3">{t("col_destination")}</th>
+                <th className="px-6 py-3">{t("col_date")}</th>
+                <th className="px-6 py-3">{t("col_deliveries")}</th>
+                {!hideActionsColumn && <th className="px-6 py-3 text-right">{t("col_actions")}</th>}
               </tr>
             </thead>
             <tbody>
               {requests.map((r) => {
-                const m = meta(r.category);
+                const m = categoryVisual(r.category);
                 const Icon = m.icon;
                 const sName = studentName(r.student_id);
                 const canEdit = isAdmin || r.requester_id === currentUserId;
@@ -768,32 +787,28 @@ const RequestsTable = ({
                         </span>
                         <div>
                           <p className="font-semibold text-foreground">{r.item_name}</p>
-                          <p className="text-xs text-muted-foreground">Qtd: {r.quantity}</p>
+                          <p className="text-xs text-muted-foreground">{t("qty_label")} {r.quantity}</p>
                           {r.description && (
                             <p className="mt-1 max-w-xs text-xs text-muted-foreground line-clamp-2">{r.description}</p>
                           )}
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-foreground">{r.teacher_name ?? "—"}</td>
+                    <td className="px-6 py-4 text-foreground">{r.teacher_name ?? t("em_dash")}</td>
                     <td className="px-6 py-4">
                       {sName ? (
                         <div>
                           <p className="text-foreground">{sName}</p>
-                          <p className="text-xs text-muted-foreground">Aluno · {classroomName(r.classroom_id)}</p>
+                          <p className="text-xs text-muted-foreground">{t("student_line", { class: classroomName(r.classroom_id) })}</p>
                         </div>
                       ) : (
                         <div>
                           <p className="text-foreground">{classroomName(r.classroom_id)}</p>
-                          <p className="text-xs text-muted-foreground">Turma inteira</p>
+                          <p className="text-xs text-muted-foreground">{t("whole_class")}</p>
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-foreground">
-                      {r.needed_date
-                        ? new Date(r.needed_date).toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric" })
-                        : "—"}
-                    </td>
+                    <td className="px-6 py-4 text-foreground">{formatDateShort(r.needed_date)}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <span
@@ -809,7 +824,7 @@ const RequestsTable = ({
                           {complete && <Check className="h-3 w-3" strokeWidth={2.25} />}
                           {brought} / {total}
                         </span>
-                        <span className="text-xs text-muted-foreground">trouxeram</span>
+                        <span className="text-xs text-muted-foreground">{t("brought_word")}</span>
                       </div>
                     </td>
                     {!hideActionsColumn && (
@@ -819,18 +834,18 @@ const RequestsTable = ({
                             <button
                               onClick={() => onMarkDeliveries(r)}
                               className="inline-flex h-8 items-center gap-1.5 rounded-full bg-pastel-blue px-3 text-xs font-semibold text-pastel-blue-foreground transition-colors hover:opacity-90"
-                              title="Marcar entregas"
+                              title={t("mark_deliveries_title")}
                             >
-                              <ListChecks className="h-3.5 w-3.5" strokeWidth={2} /> Marcar
+                              <ListChecks className="h-3.5 w-3.5" strokeWidth={2} /> {t("mark_deliveries")}
                             </button>
                           )}
                           {canEdit && (
-                            <button onClick={() => onEdit(r)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Editar">
+                            <button onClick={() => onEdit(r)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title={t("edit")}>
                               <Pencil className="h-4 w-4" strokeWidth={1.75} />
                             </button>
                           )}
                           {canEdit && (
-                            <button onClick={() => onRemove(r.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title="Remover">
+                            <button onClick={() => onRemove(r.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title={t("remove")}>
                               <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                             </button>
                           )}
@@ -862,6 +877,7 @@ const DeliveryDialog = ({
   onClose: () => void;
   onSaved: () => void;
 }) => {
+  const { t } = useTranslation("pages", { keyPrefix: "material.delivery_dialog" });
   const [marks, setMarks] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
@@ -908,10 +924,10 @@ const DeliveryDialog = ({
       .upsert(payload, { onConflict: "request_id,student_id" });
     setSaving(false);
     if (error) {
-      toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+      toast({ title: t("save_error"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: "Entregas atualizadas" });
+    toast({ title: t("saved") });
     onSaved();
     onClose();
   };
@@ -920,25 +936,25 @@ const DeliveryDialog = ({
     <Dialog open={!!request} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Marcar entregas — {request.item_name}</DialogTitle>
+          <DialogTitle>{t("title", { item: request.item_name })}</DialogTitle>
           <DialogDescription>
-            Marque os alunos que trouxeram o material. {broughtCount} de {targetStudents.length} marcados.
+            {t("description", { marked: broughtCount, total: targetStudents.length })}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center gap-2">
           <Input
-            placeholder="Pesquisar aluno..."
+            placeholder={t("search_placeholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <Button type="button" variant="outline" size="sm" onClick={() => toggleAll(true)}>Todos</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => toggleAll(false)}>Nenhum</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => toggleAll(true)}>{t("all")}</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => toggleAll(false)}>{t("none")}</Button>
         </div>
 
         <div className="mt-2 max-h-72 overflow-y-auto rounded-md border border-border">
           {filtered.length === 0 ? (
-            <p className="p-4 text-center text-sm text-muted-foreground">Sem alunos.</p>
+            <p className="p-4 text-center text-sm text-muted-foreground">{t("no_students")}</p>
           ) : (
             filtered.map((s) => {
               const checked = !!marks[s.id];
@@ -950,7 +966,7 @@ const DeliveryDialog = ({
                   <span className="text-sm text-foreground">{s.full_name}</span>
                   <div className="flex items-center gap-2">
                     <span className={cn("text-xs", checked ? "text-pastel-green-foreground" : "text-muted-foreground")}>
-                      {checked ? "Trouxe" : "Não trouxe"}
+                      {checked ? t("brought") : t("not_brought")}
                     </span>
                     <Checkbox
                       checked={checked}
@@ -964,8 +980,8 @@ const DeliveryDialog = ({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
-          <Button onClick={save} disabled={saving}>{saving ? "A guardar..." : "Guardar entregas"}</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving}>{t("cancel")}</Button>
+          <Button onClick={save} disabled={saving}>{saving ? t("saving") : t("save")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

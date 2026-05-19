@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,16 +34,11 @@ interface Props {
   initial?: AbsenceRecord | null;
 }
 
-const REASONS = [
-  { value: "doenca", label: "Doença" },
-  { value: "ferias", label: "Férias" },
-  { value: "pessoal", label: "Pessoal" },
-  { value: "luto", label: "Luto" },
-  { value: "formacao", label: "Formação" },
-  { value: "outro", label: "Outro" },
-];
+const REASON_VALUES = ["doenca", "ferias", "pessoal", "luto", "formacao", "outro"] as const;
 
 export const AbsenceFormDialog = ({ open, onOpenChange, onSaved, schoolId, currentUserId, isAdmin, staff, initial }: Props) => {
+  const { t } = useTranslation("pages", { keyPrefix: "pedidos.form" });
+  const { t: tp } = useTranslation("pages", { keyPrefix: "pedidos" });
   const [profileId, setProfileId] = useState<string>("");
   const [reason, setReason] = useState<string>("doenca");
   const [startDate, setStartDate] = useState<string>("");
@@ -69,16 +65,16 @@ export const AbsenceFormDialog = ({ open, onOpenChange, onSaved, schoolId, curre
 
   const handleSubmit = async () => {
     if (!schoolId || !currentUserId) {
-      toast({ title: "Sessão inválida", variant: "destructive" });
+      toast({ title: t("invalid_session"), variant: "destructive" });
       return;
     }
     const targetProfile = isAdmin ? (profileId || currentUserId) : currentUserId;
     if (!targetProfile || !startDate || !endDate || !reason) {
-      toast({ title: "Preencha os campos obrigatórios", variant: "destructive" });
+      toast({ title: t("required_fields"), variant: "destructive" });
       return;
     }
     if (endDate < startDate) {
-      toast({ title: "Data final inválida", description: "Deve ser igual ou posterior à inicial.", variant: "destructive" });
+      toast({ title: t("invalid_end_date"), description: t("invalid_end_date_desc"), variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -95,7 +91,7 @@ export const AbsenceFormDialog = ({ open, onOpenChange, onSaved, schoolId, curre
           })
           .eq("id", initial.id);
         if (error) throw error;
-        toast({ title: "Pedido atualizado" });
+        toast({ title: t("updated") });
       } else {
         const { error } = await supabase.from("staff_absences").insert({
           profile_id: targetProfile,
@@ -108,12 +104,13 @@ export const AbsenceFormDialog = ({ open, onOpenChange, onSaved, schoolId, curre
           status: "PENDING",
         });
         if (error) throw error;
-        toast({ title: "Pedido criado" });
+        toast({ title: t("created") });
       }
       onSaved();
       onOpenChange(false);
-    } catch (e: any) {
-      toast({ title: "Erro", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      toast({ title: tp("toast_error"), description: message, variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -123,14 +120,14 @@ export const AbsenceFormDialog = ({ open, onOpenChange, onSaved, schoolId, curre
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{initial ? "Editar pedido" : "Novo pedido de ausência"}</DialogTitle>
+          <DialogTitle>{initial ? t("edit_title") : t("new_title")}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-2">
           {isAdmin && (
             <div className="grid gap-2">
-              <Label>Funcionário</Label>
+              <Label>{t("staff")}</Label>
               <Select value={profileId} onValueChange={setProfileId}>
-                <SelectTrigger><SelectValue placeholder="Selecionar funcionário" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("staff_placeholder")} /></SelectTrigger>
                 <SelectContent>
                   {staff.map((s) => (
                     <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>
@@ -140,34 +137,34 @@ export const AbsenceFormDialog = ({ open, onOpenChange, onSaved, schoolId, curre
             </div>
           )}
           <div className="grid gap-2">
-            <Label>Motivo</Label>
+            <Label>{t("reason")}</Label>
             <Select value={reason} onValueChange={setReason}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {REASONS.map((r) => (
-                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                {REASON_VALUES.map((r) => (
+                  <SelectItem key={r} value={r}>{tp(`reasons.${r}`)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
-              <Label>Data inicial</Label>
+              <Label>{t("start_date")}</Label>
               <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </div>
             <div className="grid gap-2">
-              <Label>Data final</Label>
+              <Label>{t("end_date")}</Label>
               <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           </div>
           <div className="grid gap-2">
-            <Label>Descrição</Label>
-            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Detalhes adicionais (opcional)" />
+            <Label>{t("description")}</Label>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("description_placeholder")} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={saving}>{saving ? "A guardar..." : "Guardar"}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>{t("cancel")}</Button>
+          <Button onClick={handleSubmit} disabled={saving}>{saving ? t("saving") : t("save")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

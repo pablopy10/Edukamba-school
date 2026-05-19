@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,9 +44,15 @@ interface Props {
 
 type Target = "turma" | "aluno";
 
+const categoryKeys = ["papelaria", "laboratorio", "artes", "desporto", "tecnologia", "outro"] as const;
+
 export const MaterialRequestFormDialog = ({
   open, onOpenChange, schoolId, userId, userName, request, classrooms, students, onSaved,
 }: Props) => {
+  const { t } = useTranslation("pages", { keyPrefix: "material.request_form" });
+  const { t: tCat } = useTranslation("pages", { keyPrefix: "material" });
+  const categoryLabel = (key: string) =>
+    tCat(`categories.${key}`, { defaultValue: tCat("categories.other") });
   const isEdit = !!request;
   const [saving, setSaving] = useState(false);
   const [target, setTarget] = useState<Target>("turma");
@@ -62,8 +69,8 @@ export const MaterialRequestFormDialog = ({
 
   useEffect(() => {
     if (open) {
-      const t: Target = request?.student_id ? "aluno" : "turma";
-      setTarget(t);
+      const initialTarget: Target = request?.student_id ? "aluno" : "turma";
+      setTarget(initialTarget);
       setForm({
         item_name: request?.item_name ?? "",
         category: request?.category ?? "papelaria",
@@ -79,23 +86,23 @@ export const MaterialRequestFormDialog = ({
 
   const submit = async () => {
     if (!form.item_name.trim()) {
-      toast({ title: "Indique o material", variant: "destructive" });
+      toast({ title: t("item_required"), variant: "destructive" });
       return;
     }
     if (!form.needed_date) {
-      toast({ title: "Indique o dia em que o aluno deve trazer o material", variant: "destructive" });
+      toast({ title: t("date_required"), variant: "destructive" });
       return;
     }
     if (target === "turma" && !form.classroom_id) {
-      toast({ title: "Selecione uma turma", variant: "destructive" });
+      toast({ title: t("class_required"), variant: "destructive" });
       return;
     }
     if (target === "aluno" && !form.student_id) {
-      toast({ title: "Selecione um aluno", variant: "destructive" });
+      toast({ title: t("student_required"), variant: "destructive" });
       return;
     }
     if (!schoolId || !userId) {
-      toast({ title: "Sessão inválida", variant: "destructive" });
+      toast({ title: t("invalid_session"), variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -118,10 +125,10 @@ export const MaterialRequestFormDialog = ({
       : await supabase.from("material_requests").insert(payload);
     setSaving(false);
     if (error) {
-      toast({ title: "Erro ao guardar", description: error.message, variant: "destructive" });
+      toast({ title: t("save_error"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: isEdit ? "Pedido atualizado" : "Pedido criado" });
+    toast({ title: isEdit ? t("updated") : t("created") });
     onSaved();
     onOpenChange(false);
   };
@@ -134,37 +141,34 @@ export const MaterialRequestFormDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar Pedido" : "Novo Pedido de Material"}</DialogTitle>
+          <DialogTitle>{isEdit ? t("edit_title") : t("new_title")}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-2 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <Label>Material a trazer *</Label>
+            <Label>{t("item_label")}</Label>
             <Input
               value={form.item_name}
               onChange={(e) => setForm({ ...form, item_name: e.target.value })}
-              placeholder="Ex: Régua de 30cm, livro de Matemática..."
+              placeholder={t("item_placeholder")}
             />
           </div>
           <div>
-            <Label>Categoria</Label>
+            <Label>{t("category")}</Label>
             <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="papelaria">Papelaria</SelectItem>
-                <SelectItem value="laboratorio">Laboratório</SelectItem>
-                <SelectItem value="artes">Artes</SelectItem>
-                <SelectItem value="desporto">Desporto</SelectItem>
-                <SelectItem value="tecnologia">Tecnologia</SelectItem>
-                <SelectItem value="outro">Outro</SelectItem>
+                {categoryKeys.map((c) => (
+                  <SelectItem key={c} value={c}>{categoryLabel(c)}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label>Quantidade *</Label>
+            <Label>{t("quantity")}</Label>
             <Input type="number" min={1} value={form.quantity} onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) })} />
           </div>
           <div>
-            <Label>Dia para trazer *</Label>
+            <Label>{t("needed_date")}</Label>
             <Input
               type="date"
               value={form.needed_date}
@@ -172,31 +176,31 @@ export const MaterialRequestFormDialog = ({
             />
           </div>
           <div>
-            <Label>Destinatário (Educador)</Label>
-            <Input value={form.recipient} onChange={(e) => setForm({ ...form, recipient: e.target.value })} placeholder="Ex: Sr. António Silva" />
+            <Label>{t("recipient")}</Label>
+            <Input value={form.recipient} onChange={(e) => setForm({ ...form, recipient: e.target.value })} placeholder={t("recipient_placeholder")} />
           </div>
 
           <div className="sm:col-span-2">
-            <Label>Para</Label>
+            <Label>{t("target_label")}</Label>
             <div className="mt-1 inline-flex rounded-md border border-input p-1">
               <button
                 type="button"
                 onClick={() => { setTarget("turma"); setForm((f)=>({...f, student_id: ""})); }}
                 className={`px-3 py-1.5 text-sm rounded ${target === "turma" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
-              >Turma</button>
+              >{t("target_class")}</button>
               <button
                 type="button"
                 onClick={() => setTarget("aluno")}
                 className={`px-3 py-1.5 text-sm rounded ${target === "aluno" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
-              >Aluno específico</button>
+              >{t("target_student")}</button>
             </div>
           </div>
 
           {target === "turma" && (
             <div className="sm:col-span-2">
-              <Label>Turma *</Label>
+              <Label>{t("class_label")}</Label>
               <Select value={form.classroom_id} onValueChange={(v) => setForm({ ...form, classroom_id: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecionar turma..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("class_placeholder")} /></SelectTrigger>
                 <SelectContent>
                   {sortByName(classrooms).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                 </SelectContent>
@@ -207,19 +211,19 @@ export const MaterialRequestFormDialog = ({
           {target === "aluno" && (
             <>
               <div>
-                <Label>Filtrar por Turma</Label>
+                <Label>{t("filter_class")}</Label>
                 <Select value={form.classroom_id || "all"} onValueChange={(v) => setForm({ ...form, classroom_id: v === "all" ? "" : v, student_id: "" })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="all">{t("all_classes")}</SelectItem>
                     {sortByName(classrooms).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Aluno *</Label>
+                <Label>{t("student_label")}</Label>
                 <Select value={form.student_id} onValueChange={(v) => setForm({ ...form, student_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Selecionar aluno..." /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("student_placeholder")} /></SelectTrigger>
                   <SelectContent>
                     {filteredStudents.map((s) => <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>)}
                   </SelectContent>
@@ -229,18 +233,18 @@ export const MaterialRequestFormDialog = ({
           )}
 
           <div className="sm:col-span-2">
-            <Label>Descrição / Motivo (para o educador)</Label>
+            <Label>{t("description")}</Label>
             <Textarea
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="Explique o motivo do pedido para o encarregado de educação..."
+              placeholder={t("description_placeholder")}
               rows={4}
             />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={submit} disabled={saving}>{saving ? "A guardar..." : "Guardar"}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
+          <Button onClick={submit} disabled={saving}>{saving ? t("saving") : t("save")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

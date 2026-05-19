@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,15 +30,13 @@ interface Props {
   onSaved: () => void;
 }
 
-const categories = [
-  { v: "papelaria", l: "Papelaria" },
-  { v: "laboratorio", l: "Laboratório" },
-  { v: "artes", l: "Artes" },
-  { v: "desporto", l: "Desporto" },
-  { v: "tecnologia", l: "Tecnologia" },
-];
+const categoryKeys = ["papelaria", "laboratorio", "artes", "desporto", "tecnologia"] as const;
 
 export const MaterialFormDialog = ({ open, onOpenChange, schoolId, material, onSaved }: Props) => {
+  const { t } = useTranslation("pages", { keyPrefix: "material.form" });
+  const { t: tCat } = useTranslation("pages", { keyPrefix: "material" });
+  const categoryLabel = (key: string) =>
+    tCat(`categories.${key}`, { defaultValue: tCat("categories.other") });
   const isEdit = !!material;
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -68,11 +67,11 @@ export const MaterialFormDialog = ({ open, onOpenChange, schoolId, material, onS
 
   const submit = async () => {
     if (!form.name.trim()) {
-      toast({ title: "Nome obrigatório", variant: "destructive" });
+      toast({ title: t("name_required"), variant: "destructive" });
       return;
     }
     if (!schoolId) {
-      toast({ title: "Sem escola associada", variant: "destructive" });
+      toast({ title: t("no_school"), variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -92,10 +91,10 @@ export const MaterialFormDialog = ({ open, onOpenChange, schoolId, material, onS
       : await supabase.from("materials").insert(payload);
     setSaving(false);
     if (error) {
-      toast({ title: "Erro ao guardar", description: error.message, variant: "destructive" });
+      toast({ title: t("save_error"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: isEdit ? "Material atualizado" : "Material adicionado" });
+    toast({ title: isEdit ? t("updated") : t("created") });
     onSaved();
     onOpenChange(false);
   };
@@ -104,50 +103,50 @@ export const MaterialFormDialog = ({ open, onOpenChange, schoolId, material, onS
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar Material" : "Novo Material"}</DialogTitle>
+          <DialogTitle>{isEdit ? t("edit_material") : t("new_material")}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-2 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <Label>Nome *</Label>
+            <Label>{t("name")}</Label>
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </div>
           <div>
-            <Label>Categoria</Label>
+            <Label>{t("category")}</Label>
             <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {categories.map((c) => <SelectItem key={c.v} value={c.v}>{c.l}</SelectItem>)}
+                {categoryKeys.map((c) => <SelectItem key={c} value={c}>{categoryLabel(c)}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label>SKU</Label>
+            <Label>{t("sku")}</Label>
             <Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
           </div>
           <div>
-            <Label>Quantidade (Stock)</Label>
+            <Label>{t("quantity")}</Label>
             <Input type="number" min={0} value={form.quantity} onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) })} />
           </div>
           <div>
-            <Label>Stock mínimo</Label>
+            <Label>{t("min_quantity")}</Label>
             <Input type="number" min={0} value={form.min_quantity} onChange={(e) => setForm({ ...form, min_quantity: Number(e.target.value) })} />
           </div>
           <div>
-            <Label>Unidade</Label>
-            <Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="un, kits, frascos..." />
+            <Label>{t("unit")}</Label>
+            <Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder={t("unit_placeholder")} />
           </div>
           <div>
-            <Label>Localização</Label>
-            <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Ex: Armazém A · Prateleira 2" />
+            <Label>{t("location")}</Label>
+            <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder={t("location_placeholder")} />
           </div>
           <div className="sm:col-span-2">
-            <Label>Descrição</Label>
+            <Label>{t("description")}</Label>
             <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={submit} disabled={saving}>{saving ? "A guardar..." : "Guardar"}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
+          <Button onClick={submit} disabled={saving}>{saving ? t("saving") : t("save")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

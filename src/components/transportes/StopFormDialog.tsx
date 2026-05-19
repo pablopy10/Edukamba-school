@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,7 @@ type Props = {
 };
 
 export const StopFormDialog = ({ open, onOpenChange, schoolId, routeId, initial, onSaved }: Props) => {
+  const { t } = useTranslation("pages", { keyPrefix: "transportes.stop_form" });
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -53,7 +55,7 @@ export const StopFormDialog = ({ open, onOpenChange, schoolId, routeId, initial,
 
   const submit = async () => {
     if (!form.name.trim()) {
-      toast.error("Nome da paragem obrigatório");
+      toast.error(t("name_required"));
       return;
     }
     setSaving(true);
@@ -72,10 +74,10 @@ export const StopFormDialog = ({ open, onOpenChange, schoolId, routeId, initial,
       : await supabase.from("transport_stops").insert(payload);
     setSaving(false);
     if (error) {
-      toast.error("Erro a guardar: " + error.message);
+      toast.error(t("save_error", { message: error.message }));
       return;
     }
-    toast.success(initial ? "Paragem atualizada" : "Paragem criada");
+    toast.success(initial ? t("updated") : t("created"));
     onSaved();
     onOpenChange(false);
   };
@@ -84,37 +86,37 @@ export const StopFormDialog = ({ open, onOpenChange, schoolId, routeId, initial,
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{initial ? "Editar paragem" : "Nova paragem"}</DialogTitle>
+          <DialogTitle>{initial ? t("edit_title") : t("new_title")}</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
-            <Label>Nome *</Label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex: Praça da Independência" />
+            <Label>{t("name")}</Label>
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t("name_placeholder")} />
           </div>
           <div className="md:col-span-2">
-            <Label>Morada</Label>
+            <Label>{t("address")}</Label>
             <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
           </div>
           <div>
-            <Label>Hora de recolha</Label>
+            <Label>{t("pickup_time")}</Label>
             <Input type="time" value={form.pickup_time} onChange={(e) => setForm({ ...form, pickup_time: e.target.value })} />
           </div>
           <div>
-            <Label>Hora de regresso</Label>
+            <Label>{t("dropoff_time")}</Label>
             <Input type="time" value={form.dropoff_time} onChange={(e) => setForm({ ...form, dropoff_time: e.target.value })} />
           </div>
           <div>
-            <Label>Ordem</Label>
+            <Label>{t("order")}</Label>
             <Input type="number" min={1} value={form.position} onChange={(e) => setForm({ ...form, position: Number(e.target.value) })} />
           </div>
           <div className="md:col-span-2">
-            <Label>Notas</Label>
+            <Label>{t("notes")}</Label>
             <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={submit} disabled={saving}>{saving ? "A guardar..." : "Guardar"}</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
+          <Button onClick={submit} disabled={saving}>{saving ? t("saving") : t("save")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

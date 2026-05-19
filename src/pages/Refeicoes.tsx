@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +66,8 @@ type MealEnrollmentRow = {
 };
 
 const Refeicoes = () => {
+  const { t, i18n } = useTranslation("pages", { keyPrefix: "refeicoes" });
+  const locale = i18n.language?.startsWith("fr") ? "fr-FR" : i18n.language?.startsWith("en") ? "en-GB" : "pt-PT";
   const [searchParams] = useSearchParams();
   const native = isNativeMobileApp();
   const [schoolId, setSchoolId] = useState<string | null>(null);
@@ -201,7 +204,7 @@ const Refeicoes = () => {
   const saveProgram = async () => {
     if (!canManageMealFinance) return;
     if (!schoolId || !progForm.name.trim()) {
-      toast.error("Indique o nome do plano");
+      toast.error(t("toast_program_name"));
       return;
     }
     const payload = {
@@ -214,11 +217,11 @@ const Refeicoes = () => {
     if (editProg) {
       const { error } = await supabase.from("meal_programs").update(payload).eq("id", editProg.id);
       if (error) toast.error(error.message);
-      else toast.success("Plano actualizado");
+      else toast.success(t("toast_program_updated"));
     } else {
       const { error } = await supabase.from("meal_programs").insert(payload);
       if (error) toast.error(error.message);
-      else toast.success("Plano criado");
+      else toast.success(t("toast_program_created"));
     }
     setProgOpen(false);
     loadAll();
@@ -228,7 +231,7 @@ const Refeicoes = () => {
     if (!deleteProgId) return;
     const { error } = await supabase.from("meal_programs").delete().eq("id", deleteProgId);
     if (error) toast.error(error.message);
-    else toast.success("Plano removido");
+    else toast.success(t("toast_program_removed"));
     setDeleteProgId(null);
     loadAll();
   };
@@ -263,7 +266,7 @@ const Refeicoes = () => {
 
   const saveEnrollment = async () => {
     if (!schoolId || !enrollForm.student_id || !enrollForm.meal_program_id) {
-      toast.error("Seleccione aluno e plano");
+      toast.error(t("toast_select_student_plan"));
       return;
     }
     const row = {
@@ -279,11 +282,11 @@ const Refeicoes = () => {
     if (editEnroll) {
       const { error } = await supabase.from("meal_enrollments").update(row).eq("id", editEnroll.id);
       if (error) toast.error(error.message);
-      else toast.success("Inscrição actualizada");
+      else toast.success(t("toast_enrollment_updated"));
     } else {
       const { error } = await supabase.from("meal_enrollments").insert(row);
       if (error) toast.error(error.message);
-      else toast.success("Inscrição criada");
+      else toast.success(t("toast_enrollment_created"));
     }
     setEnrollOpen(false);
     loadAll();
@@ -293,7 +296,7 @@ const Refeicoes = () => {
     if (!deleteEnrollId) return;
     const { error } = await supabase.from("meal_enrollments").delete().eq("id", deleteEnrollId);
     if (error) toast.error(error.message);
-    else toast.success("Inscrição removida");
+    else toast.success(t("toast_enrollment_removed"));
     setDeleteEnrollId(null);
     loadAll();
   };
@@ -301,7 +304,7 @@ const Refeicoes = () => {
   const handleRegenerateFees = async (enrollmentId: string) => {
     const { error, data } = await supabase.rpc("generate_meal_fees", { _enrollment_id: enrollmentId });
     if (error) toast.error(error.message);
-    else toast.success(`Cobranças geradas: ${data}`);
+    else toast.success(t("toast_fees_generated", { data }));
     loadAll();
   };
 
@@ -319,30 +322,30 @@ const Refeicoes = () => {
           <div>
             <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-foreground">
               <Utensils className="h-8 w-8 text-primary" />
-              Refeições
+              {t("title")}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Regras de cobrança, inscrições no refeitório e mensalidades (pagamentos, validação e lembretes).
+              {t("subtitle")}
             </p>
           </div>
           {canEnroll && !native && tab === "inscricoes" && (
             <Button onClick={openNewEnroll} disabled={programs.length === 0}>
-              <Plus className="mr-2 h-4 w-4" /> Inscrever aluno
+              <Plus className="mr-2 h-4 w-4" /> {t("enroll_student")}
             </Button>
           )}
         </div>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="w-full">
           <TabsList className="flex h-auto w-full flex-wrap gap-1">
-            {!isParent && <TabsTrigger value="regras">Regras de cobranças</TabsTrigger>}
+            {!isParent && <TabsTrigger value="regras">{t("tab_rules")}</TabsTrigger>}
             <TabsTrigger value="inscricoes">
               <Users className="mr-2 h-4 w-4" />
-              Inscrições
+              {t("tab_enrollments")}
             </TabsTrigger>
-            <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
+            <TabsTrigger value="pagamentos">{t("tab_payments")}</TabsTrigger>
             <TabsTrigger value="autorizacoes">
               <FileSignature className="mr-2 h-4 w-4" />
-              Autorizações
+              {t("tab_authorizations")}
             </TabsTrigger>
           </TabsList>
 
@@ -352,34 +355,34 @@ const Refeicoes = () => {
                 <Card className="p-4">
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <h2 className="text-lg font-semibold">Planos de refeição</h2>
-                      <p className="text-sm text-muted-foreground">Crie planos (ex.: refeitório geral, almoço) antes de definir regras e inscrições.</p>
+                      <h2 className="text-lg font-semibold">{t("programs_title")}</h2>
+                      <p className="text-sm text-muted-foreground">{t("programs_hint")}</p>
                     </div>
                     <Button type="button" onClick={openNewProgram}>
-                      <Plus className="mr-2 h-4 w-4" /> Novo plano
+                      <Plus className="mr-2 h-4 w-4" /> {t("new_program")}
                     </Button>
                   </div>
                   {loading ? (
-                    <p className="mt-4 text-sm text-muted-foreground">A carregar…</p>
+                    <p className="mt-4 text-sm text-muted-foreground">{t("loading")}</p>
                   ) : programs.length === 0 ? (
-                    <p className="mt-4 text-sm text-muted-foreground">Sem planos. Adicione pelo menos um.</p>
+                    <p className="mt-4 text-sm text-muted-foreground">{t("no_programs")}</p>
                   ) : (
                     <Table className="mt-4">
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Nome</TableHead>
-                          <TableHead>Valor base (AOA)</TableHead>
-                          <TableHead>Estado</TableHead>
-                          {canManageMealFinance ? <TableHead className="text-right">Ações</TableHead> : null}
+                          <TableHead>{t("col_name")}</TableHead>
+                          <TableHead>{t("col_base_fee")}</TableHead>
+                          <TableHead>{t("col_status")}</TableHead>
+                          {canManageMealFinance ? <TableHead className="text-right">{t("col_actions")}</TableHead> : null}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {programs.map((p) => (
                           <TableRow key={p.id}>
                             <TableCell className="font-medium">{p.name}</TableCell>
-                            <TableCell>{Number(p.default_monthly_fee ?? 0).toLocaleString("pt-PT")}</TableCell>
+                            <TableCell>{Number(p.default_monthly_fee ?? 0).toLocaleString(locale)}</TableCell>
                             <TableCell>
-                              <Badge variant={p.is_active ? "default" : "secondary"}>{p.is_active ? "Activo" : "Inactivo"}</Badge>
+                              <Badge variant={p.is_active ? "default" : "secondary"}>{p.is_active ? t("status_active") : t("status_inactive")}</Badge>
                             </TableCell>
                             {canManageMealFinance ? (
                               <TableCell className="text-right">
@@ -405,30 +408,30 @@ const Refeicoes = () => {
           <TabsContent value="inscricoes" className="mt-4">
             {role === "TEACHER" && homeroomStudentIds.length === 0 && (
               <p className="mb-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                Só vê aqui os seus alunos (turmas em que está como diretor de turma).
+                {t("teacher_homeroom_hint")}
               </p>
             )}
             <div className="mb-4 flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold">Alunos inscritos</h2>
+              <h2 className="text-lg font-semibold">{t("enrollments_title")}</h2>
               {canEnroll && !native && (isParent ? programs.length > 0 : true) && (
                 <Button onClick={openNewEnroll} disabled={programs.length === 0}>
-                  <Plus className="mr-2 h-4 w-4" /> Nova inscrição
+                  <Plus className="mr-2 h-4 w-4" /> {t("new_enrollment")}
                 </Button>
               )}
             </div>
             {loading ? (
-              <p className="text-muted-foreground">A carregar…</p>
+              <p className="text-muted-foreground">{t("loading")}</p>
             ) : (
               <Card>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Aluno</TableHead>
-                      <TableHead>Plano</TableHead>
-                      <TableHead>Início</TableHead>
-                      <TableHead>Estado</TableHead>
+                      <TableHead>{t("col_student")}</TableHead>
+                      <TableHead>{t("col_plan")}</TableHead>
+                      <TableHead>{t("col_start")}</TableHead>
+                      <TableHead>{t("col_status")}</TableHead>
                       {(canManageMealFinance || role === "TEACHER") && (
-                        <TableHead className="text-right">Ações</TableHead>
+                        <TableHead className="text-right">{t("col_actions")}</TableHead>
                       )}
                     </TableRow>
                   </TableHeader>
@@ -436,21 +439,21 @@ const Refeicoes = () => {
                     {visibleEnrollments.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={enrollmentColSpan} className="py-8 text-center text-muted-foreground">
-                          Sem inscrições.
+                          {t("no_enrollments")}
                         </TableCell>
                       </TableRow>
                     ) : (
                       visibleEnrollments.map((e) => (
                         <TableRow key={e.id}>
-                          <TableCell className="font-medium">{e.student?.full_name ?? "—"}</TableCell>
-                          <TableCell>{e.meal_program?.name ?? "—"}</TableCell>
+                          <TableCell className="font-medium">{e.student?.full_name ?? t("em_dash")}</TableCell>
+                          <TableCell>{e.meal_program?.name ?? t("em_dash")}</TableCell>
                           <TableCell>{e.start_date}</TableCell>
                           <TableCell>
-                            <Badge variant={e.status === "ACTIVE" ? "default" : "secondary"}>{e.status === "ACTIVE" ? "Activa" : e.status}</Badge>
+                            <Badge variant={e.status === "ACTIVE" ? "default" : "secondary"}>{e.status === "ACTIVE" ? t("status_active") : e.status}</Badge>
                           </TableCell>
                           {(canManageMealFinance || role === "TEACHER") && (
                             <TableCell className="text-right">
-                              <Button size="sm" variant="outline" title="Regenerar cobranças" onClick={() => void handleRegenerateFees(e.id)}>
+                              <Button size="sm" variant="outline" title={t("regenerate_fees_title")} onClick={() => void handleRegenerateFees(e.id)}>
                                 <Wallet className="h-4 w-4" />
                               </Button>
                               <Button size="sm" variant="outline" className="ml-1" onClick={() => openEditEnroll(e)}>
@@ -498,7 +501,7 @@ const Refeicoes = () => {
             onClick={openNewEnroll}
             disabled={programs.length === 0}
           >
-            <Plus className="h-5 w-5" /> Inscrever
+            <Plus className="h-5 w-5" /> {t("enroll_short")}
           </Button>
         </NativeMobileFabPortal>
       )}
@@ -506,30 +509,30 @@ const Refeicoes = () => {
       <Dialog open={progOpen} onOpenChange={setProgOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editProg ? "Editar plano" : "Novo plano"}</DialogTitle>
-            <DialogDescription>Define o nome e o valor base quando não há regra específica.</DialogDescription>
+            <DialogTitle>{editProg ? t("program_dialog_edit") : t("program_dialog_new")}</DialogTitle>
+            <DialogDescription>{t("program_dialog_desc")}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-2">
-              <Label>Nome</Label>
-              <Input value={progForm.name} onChange={(e) => setProgForm({ ...progForm, name: e.target.value })} placeholder="Ex.: Refeitório escolar" />
+              <Label>{t("program_name")}</Label>
+              <Input value={progForm.name} onChange={(e) => setProgForm({ ...progForm, name: e.target.value })} placeholder={t("program_name_placeholder")} />
             </div>
             <div className="grid gap-2">
-              <Label>Ano letivo (opcional)</Label>
+              <Label>{t("program_year")}</Label>
               <Select value={progForm.academic_year_id || "__none"} onValueChange={(v) => setProgForm({ ...progForm, academic_year_id: v === "__none" ? "" : v })}>
-                <SelectTrigger><SelectValue placeholder="Todos / activo" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("program_year_placeholder")} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none">(Não associar)</SelectItem>
+                  <SelectItem value="__none">{t("program_year_none")}</SelectItem>
                   {years.map((y) => (
                     <SelectItem key={y.id} value={y.id}>
-                      {y.label}{y.is_active ? " (activo)" : ""}
+                      {y.label}{y.is_active ? t("program_year_active_suffix") : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Valor mensal base (AOA)</Label>
+              <Label>{t("program_monthly_fee")}</Label>
               <Input type="number" min={0} value={progForm.default_monthly_fee} onChange={(e) => setProgForm({ ...progForm, default_monthly_fee: e.target.value })} />
             </div>
             <div className="flex items-center gap-2 pt-1">
@@ -539,13 +542,13 @@ const Refeicoes = () => {
                 onCheckedChange={(c) => setProgForm({ ...progForm, is_active: !!c })}
               />
               <Label htmlFor="meal-prog-active" className="font-normal text-muted-foreground">
-                Plano activo
+                {t("program_active")}
               </Label>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setProgOpen(false)}>Cancelar</Button>
-            <Button onClick={() => void saveProgram()}>Guardar</Button>
+            <Button variant="outline" onClick={() => setProgOpen(false)}>{t("cancel")}</Button>
+            <Button onClick={() => void saveProgram()}>{t("save")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -553,18 +556,18 @@ const Refeicoes = () => {
       <Dialog open={enrollOpen} onOpenChange={setEnrollOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editEnroll ? "Editar inscrição" : "Nova inscrição"}</DialogTitle>
-            <DialogDescription>Inscrição activa no plano seleccionado; as cobranças são geradas automaticamente.</DialogDescription>
+            <DialogTitle>{editEnroll ? t("enrollment_dialog_edit") : t("enrollment_dialog_new")}</DialogTitle>
+            <DialogDescription>{t("enrollment_dialog_desc")}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-2">
-              <Label>Aluno</Label>
+              <Label>{t("enrollment_student")}</Label>
               <Select
                 value={enrollForm.student_id}
                 onValueChange={(v) => setEnrollForm({ ...enrollForm, student_id: v })}
                 disabled={!!editEnroll && (role === "TEACHER" || isParent)}
               >
-                <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("select_placeholder")} /></SelectTrigger>
                 <SelectContent>
                   {enrollStudentOptions.map((s) => (
                     <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>
@@ -573,9 +576,9 @@ const Refeicoes = () => {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Plano</Label>
+              <Label>{t("enrollment_plan")}</Label>
               <Select value={enrollForm.meal_program_id} onValueChange={(v) => setEnrollForm({ ...enrollForm, meal_program_id: v })}>
-                <SelectTrigger><SelectValue placeholder="Plano" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("plan_placeholder")} /></SelectTrigger>
                 <SelectContent>
                   {programs.filter((p) => p.is_active).map((p) => (
                     <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
@@ -585,32 +588,32 @@ const Refeicoes = () => {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="grid gap-2">
-                <Label>Início</Label>
+                <Label>{t("enrollment_start")}</Label>
                 <Input type="date" value={enrollForm.start_date} onChange={(e) => setEnrollForm({ ...enrollForm, start_date: e.target.value })} />
               </div>
               <div className="grid gap-2">
-                <Label>Fim (opcional)</Label>
+                <Label>{t("enrollment_end_optional")}</Label>
                 <Input type="date" value={enrollForm.end_date} onChange={(e) => setEnrollForm({ ...enrollForm, end_date: e.target.value })} />
               </div>
             </div>
             <div className="grid gap-2">
-              <Label>Valor mensal manual (opcional)</Label>
+              <Label>{t("enrollment_fee_override")}</Label>
               <Input
                 type="number"
                 min={0}
-                placeholder="Usar plano / regra se vazio"
+                placeholder={t("enrollment_fee_placeholder")}
                 value={enrollForm.monthly_fee_override}
                 onChange={(e) => setEnrollForm({ ...enrollForm, monthly_fee_override: e.target.value })}
               />
             </div>
             <div className="grid gap-2">
-              <Label>Notas</Label>
+              <Label>{t("enrollment_notes")}</Label>
               <Input value={enrollForm.notes} onChange={(e) => setEnrollForm({ ...enrollForm, notes: e.target.value })} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEnrollOpen(false)}>Cancelar</Button>
-            <Button onClick={() => void saveEnrollment()}>Guardar</Button>
+            <Button variant="outline" onClick={() => setEnrollOpen(false)}>{t("cancel")}</Button>
+            <Button onClick={() => void saveEnrollment()}>{t("save")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -618,12 +621,12 @@ const Refeicoes = () => {
       <AlertDialog open={!!deleteProgId} onOpenChange={(o) => !o && setDeleteProgId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Apagar plano?</AlertDialogTitle>
-            <AlertDialogDescription>Inscrições e regras associadas podem ser afectadas.</AlertDialogDescription>
+            <AlertDialogTitle>{t("confirm_delete_program_title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("confirm_delete_program_desc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void handleDeleteProgram()}>Apagar</AlertDialogAction>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleDeleteProgram()}>{t("delete")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -631,11 +634,11 @@ const Refeicoes = () => {
       <AlertDialog open={!!deleteEnrollId} onOpenChange={(o) => !o && setDeleteEnrollId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover inscrição?</AlertDialogTitle>
+            <AlertDialogTitle>{t("confirm_delete_enrollment_title")}</AlertDialogTitle>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void handleDeleteEnroll()}>Remover</AlertDialogAction>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleDeleteEnroll()}>{t("remove")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

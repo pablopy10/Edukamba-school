@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +52,8 @@ export const TransportEnrollmentDialog = ({
   isParent,
   childIds,
 }: Props) => {
+  const { t } = useTranslation("pages", { keyPrefix: "transportes.enrollment_form" });
+  const { t: tt } = useTranslation("pages", { keyPrefix: "transportes" });
   const [saving, setSaving] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
   const [stops, setStops] = useState<Stop[]>([]);
@@ -120,7 +123,7 @@ export const TransportEnrollmentDialog = ({
 
   const submit = async () => {
     if (!form.route_id || !form.student_id) {
-      toast.error("Selecione rota e aluno");
+      toast.error(t("select_route_student"));
       return;
     }
     setSaving(true);
@@ -143,7 +146,7 @@ export const TransportEnrollmentDialog = ({
       const { error } = await supabase.from("transport_enrollments").update(payload).eq("id", initial.id);
       if (error) {
         setSaving(false);
-        toast.error("Erro: " + error.message);
+        toast.error(t("error_prefix", { message: error.message }));
         return;
       }
     } else {
@@ -154,7 +157,7 @@ export const TransportEnrollmentDialog = ({
         .single();
       if (error) {
         setSaving(false);
-        toast.error("Erro: " + error.message);
+        toast.error(t("error_prefix", { message: error.message }));
         return;
       }
       enrollmentId = (data as any).id;
@@ -163,12 +166,12 @@ export const TransportEnrollmentDialog = ({
     if (generateFees && enrollmentId) {
       const { error: feeErr } = await supabase.rpc("generate_transport_fees", { _enrollment_id: enrollmentId });
       if (feeErr) {
-        toast.error("Inscrição guardada, mas erro a gerar mensalidades: " + feeErr.message);
+        toast.error(t("fees_partial_error", { message: feeErr.message }));
       } else {
-        toast.success("Mensalidades de transporte geradas");
+        toast.success(t("fees_generated"));
       }
     } else {
-      toast.success(initial ? "Inscrição atualizada" : "Inscrição criada");
+      toast.success(initial ? t("updated") : t("created"));
     }
 
     setSaving(false);
@@ -182,13 +185,13 @@ export const TransportEnrollmentDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>{initial ? "Editar inscrição" : "Inscrever aluno no transporte"}</DialogTitle>
+          <DialogTitle>{initial ? t("edit_title") : t("new_title")}</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 overflow-y-auto flex-1 pr-2 -mr-2">
           <div>
-            <Label>Rota *</Label>
+            <Label>{t("route")}</Label>
             <Select value={form.route_id} onValueChange={(v) => setForm({ ...form, route_id: v, pickup_stop_id: "", dropoff_stop_id: "" })}>
-              <SelectTrigger><SelectValue placeholder="Escolher rota" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("choose_route")} /></SelectTrigger>
               <SelectContent>
                 {routes.map((r) => (
                   <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
@@ -197,9 +200,9 @@ export const TransportEnrollmentDialog = ({
             </Select>
           </div>
           <div>
-            <Label>Aluno *</Label>
+            <Label>{t("student")}</Label>
             <Select value={form.student_id} onValueChange={(v) => setForm({ ...form, student_id: v })}>
-              <SelectTrigger><SelectValue placeholder="Escolher aluno" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("choose_student")} /></SelectTrigger>
               <SelectContent>
                 {students.map((s) => (
                   <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>
@@ -208,31 +211,31 @@ export const TransportEnrollmentDialog = ({
             </Select>
           </div>
           <div>
-            <Label>Direção</Label>
+            <Label>{t("direction")}</Label>
             <Select value={form.direction} onValueChange={(v) => setForm({ ...form, direction: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="PICKUP">Apenas ida (recolha)</SelectItem>
-                <SelectItem value="DROPOFF">Apenas regresso</SelectItem>
-                <SelectItem value="BOTH">Ida e regresso</SelectItem>
+                <SelectItem value="PICKUP">{t("direction_pickup")}</SelectItem>
+                <SelectItem value="DROPOFF">{t("direction_dropoff")}</SelectItem>
+                <SelectItem value="BOTH">{t("direction_both")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label>Estado</Label>
+            <Label>{t("status")}</Label>
             <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="ACTIVE">Ativa</SelectItem>
-                <SelectItem value="INACTIVE">Inativa</SelectItem>
-                <SelectItem value="CANCELLED">Cancelada</SelectItem>
+                <SelectItem value="ACTIVE">{tt("enrollment_status.ACTIVE")}</SelectItem>
+                <SelectItem value="INACTIVE">{tt("enrollment_status.INACTIVE")}</SelectItem>
+                <SelectItem value="CANCELLED">{tt("enrollment_status.CANCELLED")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label>Paragem de recolha</Label>
+            <Label>{t("pickup_stop")}</Label>
             <Select value={form.pickup_stop_id} onValueChange={(v) => setForm({ ...form, pickup_stop_id: v })}>
-              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={tt("em_dash")} /></SelectTrigger>
               <SelectContent>
                 {stops.map((s) => (
                   <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
@@ -241,9 +244,9 @@ export const TransportEnrollmentDialog = ({
             </Select>
           </div>
           <div>
-            <Label>Paragem de regresso</Label>
+            <Label>{t("dropoff_stop")}</Label>
             <Select value={form.dropoff_stop_id} onValueChange={(v) => setForm({ ...form, dropoff_stop_id: v })}>
-              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={tt("em_dash")} /></SelectTrigger>
               <SelectContent>
                 {stops.map((s) => (
                   <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
@@ -252,15 +255,15 @@ export const TransportEnrollmentDialog = ({
             </Select>
           </div>
           <div>
-            <Label>Início</Label>
+            <Label>{t("start")}</Label>
             <Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
           </div>
           <div>
-            <Label>Fim (opcional)</Label>
+            <Label>{t("end_optional")}</Label>
             <Input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} />
           </div>
           <div className="md:col-span-2">
-            <Label>Mensalidade personalizada (deixar vazio para usar a da rota: {selectedRoute?.monthly_fee ?? 0})</Label>
+            <Label>{t("custom_fee", { fee: selectedRoute?.monthly_fee ?? 0 })}</Label>
             <Input
               type="number"
               min={0}
@@ -270,19 +273,19 @@ export const TransportEnrollmentDialog = ({
             />
           </div>
           <div className="md:col-span-2">
-            <Label>Notas</Label>
+            <Label>{t("notes")}</Label>
             <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
           </div>
           {!isParent && (
             <div className="md:col-span-2 flex items-center gap-3 rounded-lg bg-muted/40 p-3">
               <Switch checked={generateFees} onCheckedChange={setGenerateFees} />
-              <Label>Gerar mensalidades automaticamente após guardar</Label>
+              <Label>{t("auto_generate_fees")}</Label>
             </div>
           )}
         </div>
         <DialogFooter className="flex-shrink-0">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={submit} disabled={saving}>{saving ? "A guardar..." : "Guardar"}</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
+          <Button onClick={submit} disabled={saving}>{saving ? t("saving") : t("save")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
