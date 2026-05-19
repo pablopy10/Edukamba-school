@@ -476,7 +476,7 @@ export function ModuleAuthorizationsPanel({
         toast.error(e instanceof Error ? e.message : tr("toast_pdf_error"));
       }
     },
-    [module, moduleLabel, schoolDisplayName, t],
+    [module, moduleLabel, schoolDisplayName, tr],
   );
 
   const handleDownloadSubmissionPdf = useCallback(
@@ -516,7 +516,7 @@ export function ModuleAuthorizationsPanel({
         toast.error(e instanceof Error ? e.message : tr("toast_pdf_error"));
       }
     },
-    [module, moduleLabel, schoolDisplayName, templates, t],
+    [module, moduleLabel, schoolDisplayName, templates, tr],
   );
 
   const openNewTemplate = () => {
