@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { dateLocaleTag } from "@/lib/i18nDateLocale";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -21,17 +23,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Pencil, Plus, Trash2, Users } from "lucide-react";
 import { canValidateSchoolPaymentProofs } from "@/lib/schoolStaffRoles";
 
-const MONTH_NAMES_PT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-
 type FeeRecurrence = "monthly" | "quarterly" | "semester" | "yearly";
 type ChargeTargetScope = "all_enrolled" | "classrooms" | "students";
-
-const RECURRENCE_LABELS: Record<FeeRecurrence, string> = {
-  monthly: "Mensal",
-  quarterly: "Trimestral",
-  semester: "Semestral",
-  yearly: "Anual",
-};
 
 function recurrenceStepMonths(r: FeeRecurrence): number {
   if (r === "quarterly") return 3;
@@ -128,38 +121,6 @@ type EventRuleRow = {
 
 type RuleRow = ActivityRuleRow | TransportRuleRow | MealRuleRow | EventRuleRow;
 
-function formatTarget(r: RuleRow): string {
-  const ts = r.target_scope || "all_enrolled";
-  if (ts === "students") {
-    let n =
-      "activity_id" in r
-        ? r.activity_charge_rule_students?.length
-        : "route_id" in r
-          ? r.transport_charge_rule_students?.length
-          : "meal_program_id" in r
-            ? r.meal_charge_rule_students?.length
-            : r.event_charge_rule_students?.length;
-    return `${n ?? 0} aluno(s)`;
-  }
-  if (ts === "classrooms") {
-    let n =
-      "activity_id" in r
-        ? r.activity_charge_rule_classrooms?.length
-        : "route_id" in r
-          ? r.transport_charge_rule_classrooms?.length
-          : "meal_program_id" in r
-            ? r.meal_charge_rule_classrooms?.length
-            : r.event_charge_rule_classrooms?.length;
-    return `${n ?? 0} turma(s)`;
-  }
-  return "Todos os inscritos";
-}
-
-function formatRecurrenceLabel(r: string | undefined): string {
-  const k = (r as FeeRecurrence) || "monthly";
-  return RECURRENCE_LABELS[k] ?? String(r ?? "");
-}
-
 type Props = {
   variant: "activity" | "transport" | "meal" | "event";
   schoolId: string | null;
@@ -167,6 +128,60 @@ type Props = {
 };
 
 export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
+  const { t, i18n } = useTranslation("pages", { keyPrefix: "domain_charge_rules" });
+  const { t: tPages } = useTranslation("pages");
+  const { t: tCommon } = useTranslation("common");
+
+  const monthNamesShort = useMemo(() => {
+    const arr = tCommon("dashboard.chart_months_short", { returnObjects: true });
+    return Array.isArray(arr) && arr.length === 12 ? (arr as string[]) : ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  }, [tCommon, i18n.language]);
+
+  const recurrenceLabels = useMemo(
+    (): Record<FeeRecurrence, string> => ({
+      monthly: tPages("pagamentos.recurrence.monthly"),
+      quarterly: tPages("pagamentos.recurrence.quarterly"),
+      semester: tPages("pagamentos.recurrence.semester"),
+      yearly: tPages("pagamentos.recurrence.yearly"),
+    }),
+    [tPages, i18n.language],
+  );
+
+  const formatTarget = (r: RuleRow) => {
+    const ts = r.target_scope || "all_enrolled";
+    if (ts === "students") {
+      const n =
+        "activity_id" in r
+          ? r.activity_charge_rule_students?.length
+          : "route_id" in r
+            ? r.transport_charge_rule_students?.length
+            : "meal_program_id" in r
+              ? r.meal_charge_rule_students?.length
+              : r.event_charge_rule_students?.length;
+      const count = n ?? 0;
+      return t(count === 1 ? "target_students_one" : "target_students_other", { count });
+    }
+    if (ts === "classrooms") {
+      const n =
+        "activity_id" in r
+          ? r.activity_charge_rule_classrooms?.length
+          : "route_id" in r
+            ? r.transport_charge_rule_classrooms?.length
+            : "meal_program_id" in r
+              ? r.meal_charge_rule_classrooms?.length
+              : r.event_charge_rule_classrooms?.length;
+      const count = n ?? 0;
+      return t(count === 1 ? "target_classrooms_one" : "target_classrooms_other", { count });
+    }
+    return t("target_all_enrolled");
+  };
+
+  const formatRecurrenceLabel = (r: string | undefined) => {
+    const k = (r as FeeRecurrence) || "monthly";
+    return recurrenceLabels[k] ?? String(r ?? "");
+  };
+
+  const localeTag = dateLocaleTag(i18n.language);
   const canManage = canValidateSchoolPaymentProofs(role);
   const [years, setYears] = useState<AcademicYear[]>([]);
   const [activeYearId, setActiveYearId] = useState<string | null>(null);
@@ -382,14 +397,14 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
       if (editingRule && "activity_id" in editingRule) {
         const { error } = await supabase.from("activity_charge_rules").update(payload).eq("id", editingRule.id);
         if (error) {
-          toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+          toast({ title: t("toast_save_error"), description: error.message, variant: "destructive" });
           return;
         }
         ruleId = editingRule.id;
       } else {
         const { data: ins, error } = await supabase.from("activity_charge_rules").insert(payload).select("id").single();
         if (error) {
-          toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+          toast({ title: t("toast_save_error"), description: error.message, variant: "destructive" });
           return;
         }
         ruleId = ins?.id ?? "";
@@ -401,7 +416,7 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
           .from("activity_charge_rule_classrooms")
           .insert(ruleForm.classroom_ids.map((cid) => ({ charge_rule_id: ruleId, classroom_id: cid })));
         if (ce) {
-          toast({ title: "Erro ao guardar turmas", description: ce.message, variant: "destructive" });
+          toast({ title: t("toast_save_classrooms_error"), description: ce.message, variant: "destructive" });
           return;
         }
       }
@@ -410,7 +425,7 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
           .from("activity_charge_rule_students")
           .insert(ruleForm.student_ids.map((sid) => ({ charge_rule_id: ruleId, student_id: sid })));
         if (se) {
-          toast({ title: "Erro ao guardar alunos", description: se.message, variant: "destructive" });
+          toast({ title: t("toast_save_students_error"), description: se.message, variant: "destructive" });
           return;
         }
       }
@@ -419,14 +434,14 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
       if (editingRule && "route_id" in editingRule) {
         const { error } = await supabase.from("transport_charge_rules").update(payload).eq("id", editingRule.id);
         if (error) {
-          toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+          toast({ title: t("toast_save_error"), description: error.message, variant: "destructive" });
           return;
         }
         ruleId = editingRule.id;
       } else {
         const { data: ins, error } = await supabase.from("transport_charge_rules").insert(payload).select("id").single();
         if (error) {
-          toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+          toast({ title: t("toast_save_error"), description: error.message, variant: "destructive" });
           return;
         }
         ruleId = ins?.id ?? "";
@@ -438,7 +453,7 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
           .from("transport_charge_rule_classrooms")
           .insert(ruleForm.classroom_ids.map((cid) => ({ charge_rule_id: ruleId, classroom_id: cid })));
         if (ce) {
-          toast({ title: "Erro ao guardar turmas", description: ce.message, variant: "destructive" });
+          toast({ title: t("toast_save_classrooms_error"), description: ce.message, variant: "destructive" });
           return;
         }
       }
@@ -447,7 +462,7 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
           .from("transport_charge_rule_students")
           .insert(ruleForm.student_ids.map((sid) => ({ charge_rule_id: ruleId, student_id: sid })));
         if (se) {
-          toast({ title: "Erro ao guardar alunos", description: se.message, variant: "destructive" });
+          toast({ title: t("toast_save_students_error"), description: se.message, variant: "destructive" });
           return;
         }
       }
@@ -456,14 +471,14 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
       if (editingRule && "event_id" in editingRule) {
         const { error } = await supabase.from("event_charge_rules").update(payload).eq("id", editingRule.id);
         if (error) {
-          toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+          toast({ title: t("toast_save_error"), description: error.message, variant: "destructive" });
           return;
         }
         ruleId = editingRule.id;
       } else {
         const { data: ins, error } = await supabase.from("event_charge_rules").insert(payload).select("id").single();
         if (error) {
-          toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+          toast({ title: t("toast_save_error"), description: error.message, variant: "destructive" });
           return;
         }
         ruleId = ins?.id ?? "";
@@ -475,7 +490,7 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
           .from("event_charge_rule_classrooms")
           .insert(ruleForm.classroom_ids.map((cid) => ({ charge_rule_id: ruleId, classroom_id: cid })));
         if (ce) {
-          toast({ title: "Erro ao guardar turmas", description: ce.message, variant: "destructive" });
+          toast({ title: t("toast_save_classrooms_error"), description: ce.message, variant: "destructive" });
           return;
         }
       }
@@ -484,7 +499,7 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
           .from("event_charge_rule_students")
           .insert(ruleForm.student_ids.map((sid) => ({ charge_rule_id: ruleId, student_id: sid })));
         if (se) {
-          toast({ title: "Erro ao guardar alunos", description: se.message, variant: "destructive" });
+          toast({ title: t("toast_save_students_error"), description: se.message, variant: "destructive" });
           return;
         }
       }
@@ -493,14 +508,14 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
       if (editingRule && "meal_program_id" in editingRule) {
         const { error } = await supabase.from("meal_charge_rules").update(payload).eq("id", editingRule.id);
         if (error) {
-          toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+          toast({ title: t("toast_save_error"), description: error.message, variant: "destructive" });
           return;
         }
         ruleId = editingRule.id;
       } else {
         const { data: ins, error } = await supabase.from("meal_charge_rules").insert(payload).select("id").single();
         if (error) {
-          toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+          toast({ title: t("toast_save_error"), description: error.message, variant: "destructive" });
           return;
         }
         ruleId = ins?.id ?? "";
@@ -512,7 +527,7 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
           .from("meal_charge_rule_classrooms")
           .insert(ruleForm.classroom_ids.map((cid) => ({ charge_rule_id: ruleId, classroom_id: cid })));
         if (ce) {
-          toast({ title: "Erro ao guardar turmas", description: ce.message, variant: "destructive" });
+          toast({ title: t("toast_save_classrooms_error"), description: ce.message, variant: "destructive" });
           return;
         }
       }
@@ -521,20 +536,20 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
           .from("meal_charge_rule_students")
           .insert(ruleForm.student_ids.map((sid) => ({ charge_rule_id: ruleId, student_id: sid })));
         if (se) {
-          toast({ title: "Erro ao guardar alunos", description: se.message, variant: "destructive" });
+          toast({ title: t("toast_save_students_error"), description: se.message, variant: "destructive" });
           return;
         }
       }
     }
 
-    toast({ title: editingRule ? "Regra actualizada" : "Regra criada" });
+    toast({ title: editingRule ? t("toast_updated") : t("toast_created") });
     setRuleDialog(false);
     await load();
   };
 
   const confirmDelete = async () => {
     if (!deleteRule) return;
-    const t =
+    const tableName =
       variant === "activity"
         ? "activity_charge_rules"
         : variant === "transport"
@@ -542,21 +557,21 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
           : variant === "event"
             ? "event_charge_rules"
             : "meal_charge_rules";
-    const { error } = await supabase.from(t).delete().eq("id", deleteRule);
-    if (error) toast({ title: "Erro a apagar", description: error.message, variant: "destructive" });
-    else toast({ title: "Regra apagada" });
+    const { error } = await supabase.from(tableName).delete().eq("id", deleteRule);
+    if (error) toast({ title: t("toast_delete_error"), description: error.message, variant: "destructive" });
+    else toast({ title: t("toast_deleted") });
     setDeleteRule(null);
     await load();
   };
 
   const entityLabel =
     variant === "activity"
-      ? "Atividade"
+      ? t("entity_activity")
       : variant === "transport"
-        ? "Rota"
+        ? t("entity_transport")
         : variant === "event"
-          ? "Evento"
-          : "Plano de refeições";
+          ? t("entity_event")
+          : t("entity_meal");
   const options = variant === "activity" ? activities : variant === "transport" ? routes : variant === "event" ? schoolEvents : mealPrograms;
 
   return (
@@ -564,20 +579,20 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
       <Card>
         <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <CardTitle>Regras de cobranças</CardTitle>
+            <CardTitle>{t("title")}</CardTitle>
             <CardDescription>
               {variant === "activity"
-                ? "Valor por período, recorrência e alvo (todos os inscritos, turmas ou alunos). Ao guardar uma inscrição, as mensalidades passam a seguir estas regras quando aplicáveis; caso contrário mantém-se o valor configurado na atividade."
+                ? t("desc_activity")
                 : variant === "transport"
-                  ? "Valor por período, recorrência e alvo. Quando há regra aplicável à inscrição, as mensalidades seguem estas definições; caso contrário usa-se o valor da rota ou o override por aluno."
+                  ? t("desc_transport")
                   : variant === "event"
-                    ? "Valor de cobrança por aluno (uma parcela) com alvo dentro do público do evento. Depois de guardar a regra, as cobranças são criadas/atualizadas automaticamente conforme turmas ou alunos escolhidos."
-                    : "Valor por período, recorrência e alvo. Se existir regra para o plano e o aluno, as cobranças seguem estas definições; caso contrário usa-se o valor por omissão do plano ou o valor manual na inscrição."}
+                    ? t("desc_event")
+                    : t("desc_meal")}
             </CardDescription>
           </div>
           {canManage && (
             <Button type="button" onClick={openNew} className="gap-2 shrink-0" disabled={options.length === 0}>
-              <Plus className="h-4 w-4" /> Nova regra
+              <Plus className="h-4 w-4" /> {t("new_rule")}
             </Button>
           )}
         </CardHeader>
@@ -585,18 +600,18 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
           {loading ? (
             <div className="flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin" /></div>
           ) : rules.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-6 text-center">Nenhuma regra definida ainda.</p>
+            <p className="text-sm text-muted-foreground py-6 text-center">{t("empty")}</p>
           ) : (
             <div className="overflow-x-auto rounded-md border border-border">
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 text-muted-foreground">
                   <tr className="text-left">
                     <th className="p-3">{entityLabel}</th>
-                    <th className="p-3">Alvo</th>
-                    <th className="p-3">Valor / período</th>
-                    <th className="p-3">Recorrência</th>
-                    <th className="p-3">Ano letivo</th>
-                    {canManage && <th className="p-3 text-right">Ações</th>}
+                    <th className="p-3">{t("col_target")}</th>
+                    <th className="p-3">{t("col_value_period")}</th>
+                    <th className="p-3">{t("col_recurrence")}</th>
+                    <th className="p-3">{t("col_school_year")}</th>
+                    {canManage && <th className="p-3 text-right">{t("col_actions")}</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -611,25 +626,25 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
                             : r.event_id;
                     const ename =
                       variant === "activity"
-                        ? activities.find((x) => x.id === eid)?.name ?? "—"
+                        ? activities.find((x) => x.id === eid)?.name ?? t("em_dash")
                         : variant === "transport"
-                          ? routes.find((x) => x.id === eid)?.name ?? "—"
+                          ? routes.find((x) => x.id === eid)?.name ?? t("em_dash")
                           : variant === "event"
-                            ? schoolEvents.find((x) => x.id === eid)?.name ?? "—"
-                            : mealPrograms.find((x) => x.id === eid)?.name ?? "—";
+                            ? schoolEvents.find((x) => x.id === eid)?.name ?? t("em_dash")
+                            : mealPrograms.find((x) => x.id === eid)?.name ?? t("em_dash");
                     const yr = r.academic_year_id ? years.find((y) => y.id === r.academic_year_id)?.label : null;
                     return (
                       <tr key={r.id} className="border-t border-border">
                         <td className="p-3 font-medium">{ename}</td>
                         <td className="p-3">{formatTarget(r)}</td>
-                        <td className="p-3">{Number(r.monthly_amount ?? 0).toLocaleString("pt-PT")} Kz</td>
+                        <td className="p-3">{Number(r.monthly_amount ?? 0).toLocaleString(localeTag)} Kz</td>
                         <td className="p-3">
                           <Badge variant="secondary">{formatRecurrenceLabel(r.recurrence)}</Badge>
                           {r.generate_all_upfront && (
-                            <span className="ml-2 text-xs text-muted-foreground">· tudo gerado já</span>
+                            <span className="ml-2 text-xs text-muted-foreground">{t("generated_upfront_suffix")}</span>
                           )}
                         </td>
-                        <td className="p-3 text-muted-foreground">{yr ?? "(activo)"}</td>
+                        <td className="p-3 text-muted-foreground">{yr ?? t("year_active")}</td>
                         {canManage && (
                           <td className="p-3 text-right">
                             <Button type="button" size="sm" variant="ghost" className="gap-1" onClick={() => openEdit(r)}>
@@ -653,14 +668,14 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
       <Dialog open={ruleDialog} onOpenChange={setRuleDialog}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingRule ? "Editar regra" : "Nova regra"}</DialogTitle>
-            <DialogDescription>Defina o valor por período de cobrança e a recorrência (como nas propinas).</DialogDescription>
+            <DialogTitle>{editingRule ? t("dialog_edit") : t("dialog_new")}</DialogTitle>
+            <DialogDescription>{t("dialog_desc")}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-2">
               <Label>{entityLabel}</Label>
               <Select value={ruleForm.entity_id} onValueChange={(v) => setRuleForm((f) => ({ ...f, entity_id: v }))}>
-                <SelectTrigger><SelectValue placeholder={`Escolher ${entityLabel.toLowerCase()}`} /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("choose_entity", { entity: entityLabel })} /></SelectTrigger>
                 <SelectContent>
                   {options.map((o) => (
                     <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
@@ -670,20 +685,20 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
             </div>
 
             <div className="grid gap-2">
-              <Label>Alvo da cobrança</Label>
+              <Label>{t("charge_target")}</Label>
               <Select value={ruleForm.target_scope} onValueChange={(v) => setRuleForm((f) => ({ ...f, target_scope: v as ChargeTargetScope }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all_enrolled">Todos os alunos inscritos</SelectItem>
-                  <SelectItem value="classrooms">Turmas específicas</SelectItem>
-                  <SelectItem value="students">Alunos específicos</SelectItem>
+                  <SelectItem value="all_enrolled">{t("target_all_enrolled_option")}</SelectItem>
+                  <SelectItem value="classrooms">{t("target_classrooms_option")}</SelectItem>
+                  <SelectItem value="students">{t("target_students_option")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {ruleForm.target_scope === "classrooms" && (
               <div className="grid gap-2">
-                <Label className="flex items-center gap-2"><Users className="h-4 w-4" /> Turmas</Label>
+                <Label className="flex items-center gap-2"><Users className="h-4 w-4" /> {t("classrooms_label")}</Label>
                 <ScrollArea className="h-40 rounded-md border border-border p-3">
                   {classroomsForYear.map((c) => (
                     <label key={c.id} className="flex cursor-pointer items-center gap-2 py-1">
@@ -707,7 +722,7 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
 
             {ruleForm.target_scope === "students" && (
               <div className="grid gap-2">
-                <Label>Alunos</Label>
+                <Label>{t("students_label")}</Label>
                 <ScrollArea className="h-40 rounded-md border border-border p-3">
                   {students.map((s) => (
                     <label key={s.id} className="flex cursor-pointer items-center gap-2 py-1">
@@ -729,22 +744,22 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
 
             <div className="grid grid-cols-2 gap-2">
               <div className="grid gap-2">
-                <Label>Valor por período (Kz)</Label>
+                <Label>{t("amount_per_period")}</Label>
                 <Input type="number" min={0} value={ruleForm.monthly_amount} onChange={(e) => setRuleForm((f) => ({ ...f, monthly_amount: e.target.value }))} />
               </div>
               <div className="grid gap-2">
-                <Label>Dia limite</Label>
+                <Label>{t("due_day")}</Label>
                 <Input type="number" min={1} max={28} value={ruleForm.due_day} onChange={(e) => setRuleForm((f) => ({ ...f, due_day: e.target.value }))} />
               </div>
             </div>
 
             <div className="grid gap-2">
-              <Label>Recorrência</Label>
+              <Label>{t("recurrence_label")}</Label>
               <Select value={ruleForm.recurrence} onValueChange={(v) => setRuleForm((f) => ({ ...f, recurrence: v as FeeRecurrence }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(Object.keys(RECURRENCE_LABELS) as FeeRecurrence[]).map((k) => (
-                    <SelectItem key={k} value={k}>{RECURRENCE_LABELS[k]}</SelectItem>
+                  {(Object.keys(recurrenceLabels) as FeeRecurrence[]).map((k) => (
+                    <SelectItem key={k} value={k}>{recurrenceLabels[k]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -752,11 +767,11 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
 
             <div className="grid grid-cols-2 gap-2">
               <div className="grid gap-2">
-                <Label>Mês início período</Label>
+                <Label>{t("start_month")}</Label>
                 <Select value={ruleForm.start_month} onValueChange={(v) => setRuleForm((f) => ({ ...f, start_month: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {MONTH_NAMES_PT.map((label, idx) => {
+                    {monthNamesShort.map((label, idx) => {
                       const v = String(idx + 1);
                       return <SelectItem key={v} value={v}>{label}</SelectItem>;
                     })}
@@ -764,11 +779,11 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label>Mês fim período</Label>
+                <Label>{t("end_month")}</Label>
                 <Select value={ruleForm.end_month} onValueChange={(v) => setRuleForm((f) => ({ ...f, end_month: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {MONTH_NAMES_PT.map((label, idx) => {
+                    {monthNamesShort.map((label, idx) => {
                       const v = String(idx + 1);
                       return <SelectItem key={v} value={v}>{label}</SelectItem>;
                     })}
@@ -776,26 +791,24 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
                 </Select>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              O número de cobranças é calculado entre o mês início e fim de acordo com a recorrência (como nas propinas).
-            </p>
+            <p className="text-xs text-muted-foreground">{t("periods_hint")}</p>
 
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
               <div>
-                <Label className="text-sm font-medium">Gerar todas as parcelas já</Label>
-                <p className="text-xs text-muted-foreground">Equivalente à opção das propinas: cria todos os períodos de uma vez.</p>
+                <Label className="text-sm font-medium">{t("generate_all_upfront_label")}</Label>
+                <p className="text-xs text-muted-foreground">{t("generate_all_upfront_hint")}</p>
               </div>
               <Switch checked={ruleForm.generate_all_upfront} onCheckedChange={(v) => setRuleForm((f) => ({ ...f, generate_all_upfront: v }))} />
             </div>
 
             <div className="grid gap-2">
-              <Label>Notas (opcional)</Label>
+              <Label>{t("notes_optional")}</Label>
               <Textarea rows={2} value={ruleForm.notes} onChange={(e) => setRuleForm((f) => ({ ...f, notes: e.target.value }))} />
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={() => setRuleDialog(false)}>Cancelar</Button>
-            <Button type="button" onClick={() => void saveRule()}>Guardar</Button>
+            <Button type="button" variant="outline" onClick={() => setRuleDialog(false)}>{t("cancel")}</Button>
+            <Button type="button" onClick={() => void saveRule()}>{t("save")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -803,12 +816,12 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
       <AlertDialog open={!!deleteRule} onOpenChange={(o) => !o && setDeleteRule(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Apagar regra?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação não remove cobranças já geradas.</AlertDialogDescription>
+            <AlertDialogTitle>{t("delete_title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("delete_desc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void confirmDelete()}>Apagar</AlertDialogAction>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmDelete()}>{t("delete_confirm")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

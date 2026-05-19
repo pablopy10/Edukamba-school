@@ -1,0 +1,18 @@
+{
+  "tab_charges_list": "Charge list",
+  "activity_title": "Extracurricular — payments",
+  "activity_subtitle_parent": "Charges for your children’s extracurricular activities.",
+  "activity_subtitle_staff": "Extracurricular charge list, reminders and payment recording / validation.",
+  "transport_title": "Transport — payments",
+  "transport_subtitle_parent": "Transport charges for your children.",
+  "transport_subtitle_staff": "Transport fees, reminders and validation.",
+  "meal_title": "Meals — payments",
+  "meal_subtitle_parent": "Meal charges for your children.",
+  "meal_subtitle_staff": "Meal fees, reminders and validation.",
+  "event_title": "Events — payments",
+  "event_subtitle_parent": "Event participation charges for your children.",
+  "event_subtitle_staff": "Charges set by each event’s rules, reminders and payment validation.",
+  "enrollment_title": "Enrolments — charges",
+  "enrollment_subtitle_parent": "Enrolment or renewal costs for your children.",
+  "enrollment_subtitle_staff": "Enrolment and renewal costs, reminders and payment validation."
+}

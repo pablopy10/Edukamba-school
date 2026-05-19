@@ -1,0 +1,18 @@
+{
+  "tab_charges_list": "Lista de cobranças",
+  "activity_title": "Extracurriculares — pagamentos",
+  "activity_subtitle_parent": "Cobranças das actividades extracurriculares do(s) seu(s) educando(s).",
+  "activity_subtitle_staff": "Lista de cobranças extracurriculares, lembretes e registo / validação de pagamentos.",
+  "transport_title": "Transporte — pagamentos",
+  "transport_subtitle_parent": "Cobranças de transporte do(s) seu(s) educando(s).",
+  "transport_subtitle_staff": "Mensalidades de transporte, lembretes e validação.",
+  "meal_title": "Refeições — pagamentos",
+  "meal_subtitle_parent": "Cobranças de refeições do(s) seu(s) educando(s).",
+  "meal_subtitle_staff": "Mensalidades de refeições, lembretes e validação.",
+  "event_title": "Eventos — pagamentos",
+  "event_subtitle_parent": "Cobranças de participação em eventos do(s) seu(s) educando(s).",
+  "event_subtitle_staff": "Cobranças definidas pelas regras de cada evento, lembretes e validação de pagamentos.",
+  "enrollment_title": "Matrículas — cobranças",
+  "enrollment_subtitle_parent": "Custos de matrícula ou renovação dos seus educandos.",
+  "enrollment_subtitle_staff": "Custos de matrícula e renovação, lembretes e validação de pagamentos."
+}

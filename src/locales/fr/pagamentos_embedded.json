@@ -1,0 +1,18 @@
+{
+  "tab_charges_list": "Liste des facturations",
+  "activity_title": "Extrascolaire — paiements",
+  "activity_subtitle_parent": "Facturations des activités extrascolaires de votre/vos enfant(s).",
+  "activity_subtitle_staff": "Liste des facturations extrascolaires, rappels et enregistrement / validation des paiements.",
+  "transport_title": "Transport — paiements",
+  "transport_subtitle_parent": "Facturations de transport de votre/vos enfant(s).",
+  "transport_subtitle_staff": "Mensualités de transport, rappels et validation.",
+  "meal_title": "Repas — paiements",
+  "meal_subtitle_parent": "Facturations de repas de votre/vos enfant(s).",
+  "meal_subtitle_staff": "Mensualités de repas, rappels et validation.",
+  "event_title": "Événements — paiements",
+  "event_subtitle_parent": "Facturations de participation aux événements de votre/vos enfant(s).",
+  "event_subtitle_staff": "Facturations définies par les règles de chaque événement, rappels et validation.",
+  "enrollment_title": "Inscriptions — facturations",
+  "enrollment_subtitle_parent": "Frais d’inscription ou de renouvellement de votre/vos enfant(s).",
+  "enrollment_subtitle_staff": "Frais d’inscription et de renouvellement, rappels et validation des paiements."
+}

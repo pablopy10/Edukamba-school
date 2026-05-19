@@ -351,6 +351,12 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     [tPages],
   );
 
+  const embeddedT = useCallback(
+    (key: string, options?: Record<string, unknown>) =>
+      tPages(`pagamentos_embedded.${key}`, options ?? ({} as Record<string, unknown>)),
+    [tPages],
+  );
+
   const tuitionOnly = financePage === "tuition";
   const activityChargesOnly = financePage === "activityCharges";
   const transportChargesOnly = financePage === "transportCharges";
@@ -363,6 +369,18 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     mealChargesOnly ||
     eventChargesOnly ||
     enrollmentChargesOnly;
+
+  const embeddedVariantKey = activityChargesOnly
+    ? "activity"
+    : transportChargesOnly
+      ? "transport"
+      : mealChargesOnly
+        ? "meal"
+        : eventChargesOnly
+          ? "event"
+          : enrollmentChargesOnly
+            ? "enrollment"
+            : null;
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const { role } = useUserRole();
   const { user } = useAuth();
@@ -2931,17 +2949,9 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             <h1 className="text-2xl font-bold tracking-tight">
               {tuitionOnly
                 ? tuitionT("page_title")
-                : enrollmentChargesOnly
-                  ? "Matrículas — cobranças"
-                  : activityChargesOnly
-                    ? "Extracurriculares — pagamentos"
-                    : transportChargesOnly
-                      ? "Transporte — pagamentos"
-                      : mealChargesOnly
-                        ? "Refeições — pagamentos"
-                        : eventChargesOnly
-                          ? "Eventos — pagamentos"
-                          : "Pagamentos"}
+                : embeddedVariantKey
+                  ? embeddedT(`${embeddedVariantKey}_title`)
+                  : "Pagamentos"}
             </h1>
             <p className="text-sm text-muted-foreground">
               {tuitionOnly
@@ -2950,27 +2960,11 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                     ? tuitionT("subtitle_parent_attachment")
                     : tuitionT("subtitle_parent_in_person")
                   : tuitionT("subtitle_staff")
-                : enrollmentChargesOnly
+                : embeddedVariantKey
                   ? isParent
-                    ? "Custos de matrícula ou renovação dos seus educandos."
-                    : "Custos de matrícula e renovação, lembretes e validação de pagamentos."
-                  : activityChargesOnly
-                    ? isParent
-                      ? "Cobranças das actividades extracurriculares do(s) seu(s) educando(s)."
-                      : "Lista de cobranças extracurriculares, lembretes e registo / validação de pagamentos."
-                    : transportChargesOnly
-                      ? isParent
-                        ? "Cobranças de transporte do(s) seu(s) educando(s)."
-                        : "Mensalidades de transporte, lembretes e validação."
-                      : mealChargesOnly
-                        ? isParent
-                          ? "Cobranças de refeições do(s) seu(s) educando(s)."
-                          : "Mensalidades de refeições, lembretes e validação."
-                        : eventChargesOnly
-                          ? isParent
-                            ? "Cobranças de participação em eventos do(s) seu(s) educando(s)."
-                            : "Cobranças definidas pelas regras de cada evento, lembretes e validação de pagamentos."
-                          : ""}
+                    ? embeddedT(`${embeddedVariantKey}_subtitle_parent`)
+                    : embeddedT(`${embeddedVariantKey}_subtitle_staff`)
+                  : ""}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -2999,11 +2993,11 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
               </>
             ) : (
               <>
-                {enrollmentChargesOnly ? <TabsTrigger value="enrollment-fees">Lista de cobranças</TabsTrigger> : null}
-                {activityChargesOnly ? <TabsTrigger value="activity-fees">Lista de cobranças</TabsTrigger> : null}
-                {transportChargesOnly ? <TabsTrigger value="transport-fees">Lista de cobranças</TabsTrigger> : null}
-                {mealChargesOnly ? <TabsTrigger value="meal-fees">Lista de cobranças</TabsTrigger> : null}
-                {eventChargesOnly ? <TabsTrigger value="event-fees">Lista de cobranças</TabsTrigger> : null}
+                {enrollmentChargesOnly ? <TabsTrigger value="enrollment-fees">{embeddedT("tab_charges_list")}</TabsTrigger> : null}
+                {activityChargesOnly ? <TabsTrigger value="activity-fees">{embeddedT("tab_charges_list")}</TabsTrigger> : null}
+                {transportChargesOnly ? <TabsTrigger value="transport-fees">{embeddedT("tab_charges_list")}</TabsTrigger> : null}
+                {mealChargesOnly ? <TabsTrigger value="meal-fees">{embeddedT("tab_charges_list")}</TabsTrigger> : null}
+                {eventChargesOnly ? <TabsTrigger value="event-fees">{embeddedT("tab_charges_list")}</TabsTrigger> : null}
               </>
             )}
           </TabsList>

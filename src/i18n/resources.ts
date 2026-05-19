@@ -16,6 +16,15 @@ import frTransportes from "@/locales/fr/transportes.json";
 import ptRefeicoes from "@/locales/pt/refeicoes.json";
 import enRefeicoes from "@/locales/en/refeicoes.json";
 import frRefeicoes from "@/locales/fr/refeicoes.json";
+import ptDomainChargeRules from "@/locales/pt/domain_charge_rules.json";
+import enDomainChargeRules from "@/locales/en/domain_charge_rules.json";
+import frDomainChargeRules from "@/locales/fr/domain_charge_rules.json";
+import ptPagamentosEmbedded from "@/locales/pt/pagamentos_embedded.json";
+import enPagamentosEmbedded from "@/locales/en/pagamentos_embedded.json";
+import frPagamentosEmbedded from "@/locales/fr/pagamentos_embedded.json";
+import ptModuleAuthorizations from "@/locales/pt/module_authorizations.json";
+import enModuleAuthorizations from "@/locales/en/module_authorizations.json";
+import frModuleAuthorizations from "@/locales/fr/module_authorizations.json";
 
 const mergePages = (
   base: typeof ptPages,
@@ -24,6 +33,9 @@ const mergePages = (
     material: typeof ptMaterial;
     transportes: typeof ptTransportes;
     refeicoes: typeof ptRefeicoes;
+    domain_charge_rules: typeof ptDomainChargeRules;
+    pagamentos_embedded: typeof ptPagamentosEmbedded;
+    module_authorizations: typeof ptModuleAuthorizations;
   },
 ) => ({ ...base, ...extras });
 
@@ -35,6 +47,9 @@ export const resources = {
       material: ptMaterial,
       transportes: ptTransportes,
       refeicoes: ptRefeicoes,
+      domain_charge_rules: ptDomainChargeRules,
+      pagamentos_embedded: ptPagamentosEmbedded,
+      module_authorizations: ptModuleAuthorizations,
     }),
   },
   en: {
@@ -44,6 +59,9 @@ export const resources = {
       material: enMaterial,
       transportes: enTransportes,
       refeicoes: enRefeicoes,
+      domain_charge_rules: enDomainChargeRules,
+      pagamentos_embedded: enPagamentosEmbedded,
+      module_authorizations: enModuleAuthorizations,
     }),
   },
   fr: {
@@ -53,6 +71,9 @@ export const resources = {
       material: frMaterial,
       transportes: frTransportes,
       refeicoes: frRefeicoes,
+      domain_charge_rules: frDomainChargeRules,
+      pagamentos_embedded: frPagamentosEmbedded,
+      module_authorizations: frModuleAuthorizations,
     }),
   },
 } as const;

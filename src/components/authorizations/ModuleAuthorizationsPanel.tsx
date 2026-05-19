@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useTranslation } from "react-i18next";
 import { nanoid } from "nanoid";
 import {
   FileSignature,
@@ -285,6 +286,7 @@ export function ModuleAuthorizationsPanel({
   childIds,
   canManageTemplates,
 }: Props) {
+  const { t } = useTranslation("pages", { keyPrefix: "module_authorizations" });
   const { selectedYearId, selectedYear } = useAcademicYear();
   const [innerTab, setInnerTab] = useState<"preencher" | "historico">("preencher");
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
@@ -1299,10 +1301,10 @@ export function ModuleAuthorizationsPanel({
           <Tabs value={innerTab} onValueChange={(v) => setInnerTab(v as typeof innerTab)}>
             <TabsList className="h-auto flex-wrap gap-1">
               <TabsTrigger value="preencher" className="gap-2">
-                <Send className="h-4 w-4" /> Preencher
+                <Send className="h-4 w-4" /> {t("tab_fill")}
               </TabsTrigger>
               <TabsTrigger value="historico" className="gap-2">
-                <User className="h-4 w-4" /> Histórico recente
+                <User className="h-4 w-4" /> {t("tab_recent_history")}
               </TabsTrigger>
             </TabsList>
 
