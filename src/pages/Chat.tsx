@@ -536,7 +536,7 @@ const Chat = () => {
             : "h-[calc(100vh-12rem)] grid-cols-1 md:grid-cols-[320px_1fr]",
         )}>
           {/* Sidebar */}
-          <aside className="flex flex-col border-r border-border">
+          <aside className="flex min-h-0 flex-col border-r border-border">
             <div className="flex items-center justify-between gap-2 border-b border-border p-4">
               <h2 className="text-sm font-semibold text-foreground">{t("conversations")}</h2>
               <button
@@ -560,7 +560,7 @@ const Chat = () => {
                 />
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto sidebar-scroll">
+            <div className="sidebar-scroll min-h-0 flex-1 overflow-y-auto">
               {loading && (
                 <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               )}
@@ -618,8 +618,8 @@ const Chat = () => {
           </aside>
 
           {/* Main panel — desktop only */}
-          <section className={cn("flex-col", isMobileLayout ? "hidden" : "flex")}>
-            <header className="flex items-center justify-between gap-3 border-b border-border p-4">
+          <section className={cn("flex min-h-0 flex-col", isMobileLayout ? "hidden" : "flex")}>
+            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border p-4">
               {active ? (
                 <>
                   <div className="flex items-center gap-3">
@@ -641,7 +641,7 @@ const Chat = () => {
             </header>
 
             {/* Messages */}
-            <div ref={scrollRef} className="sidebar-scroll flex-1 overflow-y-auto bg-muted/30 p-6">
+            <div ref={scrollRef} className="sidebar-scroll min-h-0 flex-1 overflow-y-auto bg-muted/30 p-6">
               <div className="mx-auto flex max-w-2xl flex-col gap-3">
                 {active && thread.map((m) => {
                   const mine = m.sender_id === user?.id;
@@ -659,7 +659,7 @@ const Chat = () => {
                             aria-label={t("image_preview_open_aria")}
                           >
                             {signedUrls[m.id] ? (
-                              <img src={signedUrls[m.id]} alt={m.file_name ?? t("image_alt")} className="max-h-64 w-full rounded-lg object-cover" />
+                              <img src={signedUrls[m.id]} alt={m.file_name ?? t("image_alt")} className="max-h-64 max-w-full rounded-lg object-cover" />
                             ) : (
                               <div className="flex h-40 w-60 items-center justify-center rounded-lg bg-muted">
                                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -712,7 +712,7 @@ const Chat = () => {
             </div>
 
             {/* Composer */}
-            <div className="border-t border-border bg-card p-3">
+            <div className="shrink-0 border-t border-border bg-card p-3">
               <div className="flex items-end gap-2">
                 <Popover>
                   <PopoverTrigger asChild>
@@ -803,7 +803,7 @@ const Chat = () => {
             }
           }}
         >
-          <DialogContent className="fixed inset-0 z-[150] flex h-[100dvh] w-full max-w-none flex-col gap-0 rounded-none border-0 p-0 [transform:none] pl-[max(0.75rem,var(--sal-r))] pr-[max(0.75rem,var(--sar-r))]">
+          <DialogContent className="fixed inset-0 z-[150] flex h-[100dvh] min-h-0 w-full max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 p-0 [transform:none] pl-[max(0.75rem,var(--sal-r))] pr-[max(0.75rem,var(--sar-r))]">
             <DialogHeader className="sr-only">
               <DialogTitle>{active?.full_name ?? t("mobile_conversation_title")}</DialogTitle>
               <DialogDescription>{t("mobile_conversation_desc", { name: active?.full_name ?? t("mobile_default_user") })}</DialogDescription>
@@ -850,7 +850,7 @@ const Chat = () => {
                             aria-label={t("image_preview_open_aria")}
                           >
                             {signedUrls[m.id] ? (
-                              <img src={signedUrls[m.id]} alt={m.file_name ?? t("image_alt")} className="max-h-64 w-full rounded-lg object-cover" />
+                              <img src={signedUrls[m.id]} alt={m.file_name ?? t("image_alt")} className="max-h-64 max-w-full rounded-lg object-cover" />
                             ) : (
                               <div className="flex h-40 w-60 items-center justify-center rounded-lg bg-muted">
                                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
