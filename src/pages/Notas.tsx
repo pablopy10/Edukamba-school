@@ -16,7 +16,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { showPageKpiCards } from "@/lib/nativeApp";
 import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
-import { QUERY_DAY_MS } from "@/lib/queryClient";
 import { PublishResultsDialog } from "@/components/matriculas/PublishResultsDialog";
 import {
   academicTermsQueryKey,
@@ -76,9 +75,6 @@ type AtRiskStudent = {
   reasons: string[];
 };
 
-const formatDatePt = (iso: string) =>
-  new Date(iso + "T12:00:00").toLocaleDateString("pt-PT", { day: "2-digit", month: "short", year: "numeric" });
-
 const todayIsoLocal = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -110,7 +106,7 @@ function assessmentFromTeacherGrade(g: TeacherGradeRowRaw) {
   return Array.isArray(a) ? (a[0] ?? null) : a;
 }
 
-function mapTeacherRawToDisplay(raw: TeacherGradeRowRaw[]): GradeDisplayRow[] {
+function mapTeacherRawToDisplay(raw: TeacherGradeRowRaw[], locale: string): GradeDisplayRow[] {
   const mapped: GradeDisplayRow[] = raw
     .map((g) => {
       const ass = assessmentFromTeacherGrade(g);
@@ -131,12 +127,19 @@ function mapTeacherRawToDisplay(raw: TeacherGradeRowRaw[]): GradeDisplayRow[] {
   mapped.sort((a, b) => {
     const d = new Date(b.date).getTime() - new Date(a.date).getTime();
     if (d !== 0) return d;
-    return `${a.studentName}:${a.subjectName}`.localeCompare(`${b.studentName}:${b.subjectName}`);
+    return `${a.studentName}:${a.subjectName}`.localeCompare(`${b.studentName}:${b.subjectName}`, locale);
   });
   return mapped;
 }
 
 const Notas = () => {
+  const { t, i18n } = useTranslation("pages", { keyPrefix: "notas" });
+  const dateLocaleTag =
+    i18n.language?.startsWith("fr") ? "fr-FR" : i18n.language?.startsWith("pt") ? "pt-PT" : "en-GB";
+  const collatorLocale = i18n.resolvedLanguage || i18n.language || undefined;
+  const formatGradeDate = (iso: string) =>
+    new Date(iso + "T12:00:00").toLocaleDateString(dateLocaleTag, { day: "2-digit", month: "short", year: "numeric" });
+
   const persistRestoring = useIsRestoring();
   const { user } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
@@ -219,19 +222,19 @@ const Notas = () => {
     if (isTeacher) {
       return (teacherTurmasPack?.classrooms ?? [])
         .map((c) => ({ id: c.id, name: c.name }))
-        .sort((a, b) => a.name.localeCompare(b.name, "pt"));
+        .sort((a, b) => a.name.localeCompare(b.name, collatorLocale));
     }
     return privilegedClassrooms;
-  }, [isTeacher, teacherTurmasPack, privilegedClassrooms]);
+  }, [isTeacher, teacherTurmasPack, privilegedClassrooms, collatorLocale]);
 
   const canPickClassroom = isPrivileged || isTeacher;
   const lockedClassroomLabel = useMemo(() => {
     if (isStudent && studentClassroomName) return studentClassroomName;
     if (isParent && selectedChild?.classroom_name) return selectedChild.classroom_name;
     if (isParent && selectedChild?.classroom_id === null && selectedChild.full_name)
-      return "Turma por atribuir";
+      return t("class_to_assign");
     return null;
-  }, [isStudent, isParent, studentClassroomName, selectedChild]);
+  }, [isStudent, isParent, studentClassroomName, selectedChild, t]);
 
   const loadSchool = useCallback(async () => {
     if (!user?.id) return null;
@@ -352,8 +355,8 @@ const Notas = () => {
         .filter((s) => s.avg < 10)
         .map((s) => s.name);
       const reasons: string[] = [];
-      if (overallAvg < 10) reasons.push(`média global de ${overallAvg.toFixed(1)} val.`);
-      if (negativeSubjects.length >= 2) reasons.push(`negativa em ${negativeSubjects.length} disciplinas`);
+      if (overallAvg < 10) reasons.push(t("risk_reason_avg", { avg: overallAvg.toFixed(1) }));
+      if (negativeSubjects.length >= 2) reasons.push(t("risk_reason_subjects", { count: negativeSubjects.length }));
       if (reasons.length > 0) {
         result.push({
           studentId,
@@ -365,14 +368,14 @@ const Notas = () => {
         });
       }
     });
-    return result.sort((a, b) => a.studentName.localeCompare(b.studentName, "pt"));
-  }, [isPrivileged, allYearRows]);
+    return result.sort((a, b) => a.studentName.localeCompare(b.studentName, collatorLocale));
+  }, [isPrivileged, allYearRows, t, collatorLocale]);
 
-  const termsKey = useMemo(() => terms.map((t) => t.id).join(","), [terms]);
+  const termsKey = useMemo(() => terms.map((term) => term.id).join(","), [terms]);
 
   const effectiveTermId = useMemo((): string | null => {
     if (!terms.length) return null;
-    if (selectedTermId !== null && terms.some((t) => t.id === selectedTermId)) return selectedTermId;
+    if (selectedTermId !== null && terms.some((term) => term.id === selectedTermId)) return selectedTermId;
     return resolveDefaultTermId(terms);
   }, [terms, selectedTermId, termsKey]);
 
@@ -423,9 +426,9 @@ const Notas = () => {
   });
 
   const teacherDisciplineLabel =
-    teacherSubjectDetail?.name ?? (teacherSubjectId ? "…" : "Disciplina não definida");
+    teacherSubjectDetail?.name ?? (teacherSubjectId ? t("subject_not_set_loading") : t("subject_not_set"));
 
-  const teacherRows = useMemo(() => mapTeacherRawToDisplay(teacherGradeRaw), [teacherGradeRaw]);
+  const teacherRows = useMemo(() => mapTeacherRawToDisplay(teacherGradeRaw, collatorLocale), [teacherGradeRaw, collatorLocale]);
 
   /** Ao mudar a lista de trimestres, descarta seleção antiga só se já não existir. */
   useEffect(() => {
@@ -433,7 +436,7 @@ const Notas = () => {
       setSelectedTermId(null);
       return;
     }
-    setSelectedTermId((prev) => (prev !== null && terms.some((t) => t.id === prev) ? prev : null));
+    setSelectedTermId((prev) => (prev !== null && terms.some((term) => term.id === prev) ? prev : null));
   }, [termsKey]);
 
   const classroomOptsKey = useMemo(() => classroomOpts.map((c) => c.id).join(","), [classroomOpts]);
@@ -524,7 +527,7 @@ const Notas = () => {
     const { data, error } = await query;
 
     if (error) {
-      toast({ title: "Erro a carregar notas", description: error.message, variant: "destructive" });
+      toast({ title: t("toast_load_error_title"), description: error.message, variant: "destructive" });
       setRows([]);
       setLoading(false);
       return;
@@ -552,7 +555,7 @@ const Notas = () => {
     mapped.sort((a, b) => {
       const d = new Date(b.date).getTime() - new Date(a.date).getTime();
       if (d !== 0) return d;
-      return `${a.studentName}:${a.subjectName}`.localeCompare(`${b.studentName}:${b.subjectName}`);
+      return `${a.studentName}:${a.subjectName}`.localeCompare(`${b.studentName}:${b.subjectName}`, collatorLocale);
     });
 
     setRows(mapped);
@@ -574,6 +577,8 @@ const Notas = () => {
     terms.length,
     termsKey,
     effectiveTermId,
+    collatorLocale,
+    t,
   ]);
 
   useEffect(() => {
@@ -630,8 +635,8 @@ const Notas = () => {
     displayRows.forEach((r) => {
       if (!m.has(r.subjectName)) m.set(r.subjectName, r.subjectName);
     });
-    return Array.from(m.keys()).sort((a, b) => a.localeCompare(b, "pt"));
-  }, [displayRows]);
+    return Array.from(m.keys()).sort((a, b) => a.localeCompare(b, collatorLocale));
+  }, [displayRows, collatorLocale]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -661,9 +666,9 @@ const Notas = () => {
       {showPageKpiCards() && (
         <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Notas</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("title")}</h1>
             <p className="text-sm text-muted-foreground">
-              Consulte as notas por trimestre, turma e disciplina, no ano letivo seleccionado.
+              {t("subtitle")}
             </p>
           </div>
           {isPrivileged && (
@@ -672,7 +677,7 @@ const Notas = () => {
               className="flex h-11 w-fit shrink-0 items-center gap-2 rounded-full bg-pastel-green px-5 text-sm font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
             >
               <GraduationCap className="h-4 w-4" strokeWidth={2.25} />
-              Publicar resultados
+              {t("publish_results")}
             </button>
           )}
         </div>
@@ -682,7 +687,7 @@ const Notas = () => {
         <div className="flex items-center justify-between gap-2 pt-2">
           <div className="flex items-center gap-2">
             <Table2 className="h-6 w-6 text-pastel-blue-foreground" strokeWidth={1.75} />
-            <h1 className="text-xl font-bold text-foreground">Notas</h1>
+            <h1 className="text-xl font-bold text-foreground">{t("title")}</h1>
           </div>
           {isPrivileged && (
             <button
@@ -690,7 +695,7 @@ const Notas = () => {
               className="flex h-9 items-center gap-1.5 rounded-full bg-pastel-green px-4 text-xs font-semibold text-pastel-green-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
             >
               <GraduationCap className="h-3.5 w-3.5" strokeWidth={2.25} />
-              Publicar resultados
+              {t("publish_results")}
             </button>
           )}
         </div>
@@ -698,7 +703,7 @@ const Notas = () => {
 
       {!resolvedYearId && (
         <div className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground shadow-soft">
-          Seleccione um ano letivo no topo da página para ver as notas.
+          {t("pick_year_warning")}
         </div>
       )}
 
@@ -707,9 +712,9 @@ const Notas = () => {
           {/* Tab bar — only show "Alunos em risco" tab for privileged users */}
           {isPrivileged && (
             <TabsList className="mb-2">
-              <TabsTrigger value="resultados">Resultados</TabsTrigger>
+              <TabsTrigger value="resultados">{t("tab_results")}</TabsTrigger>
               <TabsTrigger value="risco" className="gap-1.5">
-                Alunos em risco
+                {t("tab_at_risk")}
                 {!atRiskLoading && atRiskStudents.length > 0 && (
                   <span className="rounded-full bg-pastel-pink px-1.5 py-0.5 text-[10px] font-semibold text-pastel-pink-foreground">
                     {atRiskStudents.length}
@@ -725,21 +730,21 @@ const Notas = () => {
             <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-soft sm:p-5">
               <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
                 <div className="flex min-w-[160px] flex-1 flex-col gap-1.5">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Trimestre</span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("term_label")}</span>
                   {termsPending && terms.length === 0 ? (
                     <div className="h-11 animate-pulse rounded-xl bg-muted/60" />
                   ) : terms.length === 0 ? (
                     <div className={cn("flex h-11 items-center rounded-xl border border-border bg-muted/40 px-3 text-xs text-muted-foreground")}>
-                      Sem trimestres definidos neste ano letivo
+                      {t("no_terms_in_year")}
                     </div>
                   ) : (
                     <Select value={effectiveTermId ?? terms[0].id} onValueChange={(v) => setSelectedTermId(v)}>
                       <SelectTrigger className="h-11 rounded-xl border-border bg-background">
-                        <SelectValue placeholder="Trimestre" />
+                        <SelectValue placeholder={t("term_placeholder")} />
                       </SelectTrigger>
                       <SelectContent>
-                        {terms.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                        {terms.map((term) => (
+                          <SelectItem key={term.id} value={term.id}>{term.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -747,11 +752,11 @@ const Notas = () => {
                 </div>
 
                 <div className="flex min-w-[200px] flex-1 flex-col gap-1.5">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Turma</span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("class_label")}</span>
                   {canPickClassroom ? (
                     isTeacher && classroomOpts.length === 0 ? (
                       <div className={cn("flex h-11 items-center rounded-xl border border-border bg-muted/40 px-3 text-sm text-muted-foreground")}>
-                        Sem turmas com horário neste ano letivo
+                        {t("no_teacher_classes")}
                       </div>
                     ) : (
                       <Select
@@ -760,10 +765,10 @@ const Notas = () => {
                         disabled={isTeacher && classroomOpts.length === 0}
                       >
                         <SelectTrigger className="h-11 rounded-xl border-border bg-background">
-                          <SelectValue placeholder="Turma" />
+                          <SelectValue placeholder={t("class_placeholder")} />
                         </SelectTrigger>
                         <SelectContent>
-                          {isPrivileged && <SelectItem value="all">Todas as turmas visíveis</SelectItem>}
+                          {isPrivileged && <SelectItem value="all">{t("all_visible_classes")}</SelectItem>}
                           {classroomOpts.map((c) => (
                             <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                           ))}
@@ -772,13 +777,13 @@ const Notas = () => {
                     )
                   ) : (
                     <div className={cn("flex h-11 items-center rounded-xl border border-border bg-muted/40 px-3 text-sm font-medium text-foreground")}>
-                      {lockedClassroomLabel ?? "—"}
+                      {lockedClassroomLabel ?? t("em_dash")}
                     </div>
                   )}
                 </div>
 
                 <div className="flex min-w-[180px] flex-1 flex-col gap-1.5">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Disciplina</span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("subject_label")}</span>
                   {isTeacher ? (
                     teacherSubjectId ? (
                       <Select value={teacherSubjectId} disabled>
@@ -791,16 +796,16 @@ const Notas = () => {
                       </Select>
                     ) : (
                       <div className={cn("flex h-11 items-center rounded-xl border border-border bg-muted/40 px-3 text-sm font-medium text-foreground")}>
-                        Disciplina não definida
+                        {t("subject_not_set")}
                       </div>
                     )
                   ) : (
                     <Select value={subjectFilter} onValueChange={setSubjectFilter}>
                       <SelectTrigger className="h-11 rounded-xl border-border bg-background">
-                        <SelectValue placeholder="Disciplina" />
+                        <SelectValue placeholder={t("subject_placeholder")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Todas</SelectItem>
+                        <SelectItem value="all">{t("all_subjects")}</SelectItem>
                         {subjectsInData.map((s) => (
                           <SelectItem key={s} value={s}>{s}</SelectItem>
                         ))}
@@ -815,7 +820,7 @@ const Notas = () => {
                     type="search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Pesquisar aluno, disciplina, avaliação…"
+                    placeholder={t("search_placeholder")}
                     className="h-11 w-full rounded-xl border border-border bg-background pl-10 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
@@ -823,8 +828,7 @@ const Notas = () => {
 
               {isParent && selectedChild && (
                 <p className="text-xs text-muted-foreground">
-                  A mostrar notas de <span className="font-medium text-foreground">{selectedChild.full_name}</span>. Para
-                  alterar o educando, use o selector no topo da página.
+                  {t("parent_banner", { name: selectedChild.full_name })}
                 </p>
               )}
             </div>
@@ -834,28 +838,28 @@ const Notas = () => {
               {tableLoading ? (
                 <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
                   <Loader2 className="h-6 w-6 animate-spin" />
-                  <span className="text-sm">A carregar…</span>
+                  <span className="text-sm">{t("loading")}</span>
                 </div>
               ) : filtered.length === 0 ? (
-                <p className="py-16 text-center text-sm text-muted-foreground">Sem notas para mostrar com estes filtros.</p>
+                <p className="py-16 text-center text-sm text-muted-foreground">{t("empty")}</p>
               ) : (
                 <div className="table-scroll overflow-x-auto">
                   <table className="w-full min-w-[640px] text-left text-sm">
                     <thead>
                       <tr className="border-b border-border bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        <th className="whitespace-nowrap px-4 py-3">Data</th>
-                        {showStudentColumn && <th className="whitespace-nowrap px-4 py-3">Aluno</th>}
-                        <th className="whitespace-nowrap px-4 py-3">Turma</th>
-                        <th className="whitespace-nowrap px-4 py-3">Disciplina</th>
-                        <th className="min-w-[140px] px-4 py-3">Avaliação</th>
-                        <th className="whitespace-nowrap px-4 py-3 text-right">Nota</th>
-                        <th className="hidden min-w-[120px] px-4 py-3 lg:table-cell">Comentário</th>
+                        <th className="whitespace-nowrap px-4 py-3">{t("col_date")}</th>
+                        {showStudentColumn && <th className="whitespace-nowrap px-4 py-3">{t("col_student")}</th>}
+                        <th className="whitespace-nowrap px-4 py-3">{t("col_class")}</th>
+                        <th className="whitespace-nowrap px-4 py-3">{t("col_subject")}</th>
+                        <th className="min-w-[140px] px-4 py-3">{t("col_assessment")}</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-right">{t("col_grade")}</th>
+                        <th className="hidden min-w-[120px] px-4 py-3 lg:table-cell">{t("col_comment")}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {filtered.map((r) => (
                         <tr key={r.id} className="bg-card transition-colors hover:bg-muted/30">
-                          <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{formatDatePt(r.date)}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{formatGradeDate(r.date)}</td>
                           {showStudentColumn && <td className="px-4 py-3 font-medium text-foreground">{r.studentName}</td>}
                           <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{r.classroomName}</td>
                           <td className="px-4 py-3">
@@ -866,10 +870,10 @@ const Notas = () => {
                           <td className="px-4 py-3 text-foreground">{r.assessmentTitle}</td>
                           <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums text-foreground">
                             {Number(r.score).toFixed(1)}
-                            <span className="text-xs font-normal text-muted-foreground"> / 20</span>
+                            <span className="text-xs font-normal text-muted-foreground">{t("grade_out_of_short")}</span>
                           </td>
                           <td className="hidden max-w-[220px] truncate px-4 py-3 text-muted-foreground lg:table-cell">
-                            {r.teacher_comment ?? "—"}
+                            {r.teacher_comment ?? t("em_dash")}
                           </td>
                         </tr>
                       ))}
@@ -887,7 +891,7 @@ const Notas = () => {
                 <div className="mb-3 flex items-center gap-2">
                   <AlertTriangle className="h-5 w-5 shrink-0 text-pastel-pink-foreground" strokeWidth={2} />
                   <h2 className="text-sm font-semibold text-foreground">
-                    Alunos em risco de reprovar
+                    {t("at_risk_title")}
                     {!atRiskLoading && (
                       <span className={cn(
                         "ml-2 rounded-full px-2 py-0.5 text-xs",
@@ -901,26 +905,26 @@ const Notas = () => {
                   </h2>
                 </div>
                 <p className="mb-3 text-xs text-muted-foreground">
-                  Alunos com média global inferior a 10 ou com média negativa em 2 ou mais disciplinas (calculado com todas as notas do ano lectivo).
+                  {t("at_risk_explainer")}
                 </p>
                 {atRiskLoading ? (
                   <div className="flex items-center gap-2 py-6 text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm">A calcular…</span>
+                    <span className="text-sm">{t("at_risk_computing")}</span>
                   </div>
                 ) : atRiskStudents.length === 0 ? (
                   <p className="py-4 text-sm text-muted-foreground">
-                    Nenhum aluno em risco de reprovar com as notas actuais.
+                    {t("at_risk_empty")}
                   </p>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[480px] text-left text-sm">
                       <thead>
                         <tr className="border-b border-border text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          <th className="py-2 pr-4">Aluno</th>
-                          <th className="py-2 pr-4">Turma</th>
-                          <th className="py-2 pr-4 text-right">Média global</th>
-                          <th className="py-2">Motivo</th>
+                          <th className="py-2 pr-4">{t("at_risk_col_student")}</th>
+                          <th className="py-2 pr-4">{t("at_risk_col_class")}</th>
+                          <th className="py-2 pr-4 text-right">{t("at_risk_col_average")}</th>
+                          <th className="py-2">{t("at_risk_col_reason")}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
@@ -930,13 +934,13 @@ const Notas = () => {
                             <td className="py-2 pr-4 text-muted-foreground">{s.classroomName}</td>
                             <td className="py-2 pr-4 text-right font-semibold tabular-nums text-pastel-pink-foreground">
                               {s.overallAvg.toFixed(1)}
-                              <span className="text-xs font-normal text-muted-foreground"> / 20</span>
+                              <span className="text-xs font-normal text-muted-foreground">{t("grade_out_of_short")}</span>
                             </td>
                             <td className="py-2">
                               <div className="flex flex-wrap gap-1">
-                                {s.reasons.map((r) => (
-                                  <span key={r} className="rounded-full bg-pastel-pink/60 px-2 py-0.5 text-xs text-pastel-pink-foreground">
-                                    {r}
+                                {s.reasons.map((reason, idx) => (
+                                  <span key={`${s.studentId}-${idx}`} className="rounded-full bg-pastel-pink/60 px-2 py-0.5 text-xs text-pastel-pink-foreground">
+                                    {reason}
                                   </span>
                                 ))}
                               </div>

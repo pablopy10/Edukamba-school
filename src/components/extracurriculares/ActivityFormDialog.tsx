@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 export type ActivityRow = {
   id: string;
@@ -31,25 +32,6 @@ export type ActivityRow = {
   billing_frequency: string;
 };
 
-const CATEGORIES = [
-  { value: "musica", label: "Música" },
-  { value: "desporto", label: "Desporto" },
-  { value: "arte", label: "Arte" },
-  { value: "tecnologia", label: "Tecnologia" },
-  { value: "academico", label: "Académico" },
-  { value: "teatro", label: "Teatro" },
-];
-
-const WEEKDAYS = [
-  { value: 1, label: "Seg" },
-  { value: 2, label: "Ter" },
-  { value: 3, label: "Qua" },
-  { value: 4, label: "Qui" },
-  { value: 5, label: "Sex" },
-  { value: 6, label: "Sáb" },
-  { value: 0, label: "Dom" },
-];
-
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -60,6 +42,7 @@ type Props = {
 };
 
 export function ActivityFormDialog({ open, onOpenChange, schoolId, academicYear, activity, onSaved }: Props) {
+  const { t } = useTranslation("pages", { keyPrefix: "extracurriculares" });
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -78,6 +61,27 @@ export function ActivityFormDialog({ open, onOpenChange, schoolId, academicYear,
     enrollment_fee: 0,
     billing_frequency: "unica",
   });
+
+  const categoryOptions = useMemo(
+    () => [
+      { value: "musica", label: t("cat_music") },
+      { value: "desporto", label: t("cat_sports") },
+      { value: "arte", label: t("cat_art") },
+      { value: "tecnologia", label: t("cat_technology") },
+      { value: "academico", label: t("cat_academic") },
+      { value: "teatro", label: t("cat_theater") },
+    ],
+    [t],
+  );
+
+  const weekdayOptions = useMemo(
+    () =>
+      ([1, 2, 3, 4, 5, 6, 0] as const).map((value) => ({
+        value,
+        label: t(`activity_form.weekday_short_${value}` as const),
+      })),
+    [t],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -130,24 +134,24 @@ export function ActivityFormDialog({ open, onOpenChange, schoolId, academicYear,
 
   const handleSave = async () => {
     if (!form.name.trim()) {
-      toast.error("Indique o nome da atividade.");
+      toast.error(t("activity_form.toast_name_required"));
       return;
     }
     if (!schoolId) {
-      toast.error("Escola não identificada.");
+      toast.error(t("activity_form.toast_school_unknown"));
       return;
     }
     if (form.is_recurring) {
       if (form.weekdays.length === 0) {
-        toast.error("Selecione pelo menos um dia da semana.");
+        toast.error(t("activity_form.toast_weekdays_required"));
         return;
       }
       if (!form.start_date || !form.end_date) {
-        toast.error("Indique o período de validade.");
+        toast.error(t("activity_form.toast_period_required"));
         return;
       }
     } else if (!form.single_date) {
-      toast.error("Indique a data da atividade.");
+      toast.error(t("activity_form.toast_single_date_required"));
       return;
     }
 
@@ -181,7 +185,7 @@ export function ActivityFormDialog({ open, onOpenChange, schoolId, academicYear,
       toast.error(error.message);
       return;
     }
-    toast.success(activity ? "Atividade atualizada." : "Atividade criada.");
+    toast.success(activity ? t("activity_form.toast_saved_updated") : t("activity_form.toast_saved_created"));
     onOpenChange(false);
     onSaved();
   };
@@ -190,29 +194,33 @@ export function ActivityFormDialog({ open, onOpenChange, schoolId, academicYear,
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{activity ? "Editar atividade" : "Nova atividade"}</DialogTitle>
+          <DialogTitle>{activity ? t("activity_form.title_edit") : t("activity_form.title_new")}</DialogTitle>
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
           <div className="grid gap-2">
-            <Label htmlFor="name">Nome *</Label>
+            <Label htmlFor="name">{t("activity_form.label_name")}</Label>
             <Input id="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
-              <Label>Categoria *</Label>
+              <Label>{t("activity_form.label_category")}</Label>
               <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
-                  {CATEGORIES.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                  {categoryOptions.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>
+                      {c.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="capacity">Capacidade</Label>
+              <Label htmlFor="capacity">{t("activity_form.label_capacity")}</Label>
               <Input
                 id="capacity"
                 type="number"
@@ -225,33 +233,40 @@ export function ActivityFormDialog({ open, onOpenChange, schoolId, academicYear,
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
-              <Label htmlFor="responsible">Responsável</Label>
-              <Input id="responsible" value={form.responsible} onChange={(e) => setForm({ ...form, responsible: e.target.value })} />
+              <Label htmlFor="responsible">{t("activity_form.label_responsible")}</Label>
+              <Input
+                id="responsible"
+                value={form.responsible}
+                onChange={(e) => setForm({ ...form, responsible: e.target.value })}
+              />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="location">Local</Label>
+              <Label htmlFor="location">{t("activity_form.label_location")}</Label>
               <Input id="location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
-              <Label htmlFor="start">Hora de início</Label>
-              <Input id="start" type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />
+              <Label htmlFor="start">{t("activity_form.label_start_time")}</Label>
+              <Input
+                id="start"
+                type="time"
+                value={form.start_time}
+                onChange={(e) => setForm({ ...form, start_time: e.target.value })}
+              />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="end">Hora de fim</Label>
+              <Label htmlFor="end">{t("activity_form.label_end_time")}</Label>
               <Input id="end" type="time" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} />
             </div>
           </div>
 
           <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3">
             <div>
-              <Label className="text-sm font-semibold">Atividade recorrente</Label>
+              <Label className="text-sm font-semibold">{t("activity_form.recurring_title")}</Label>
               <p className="text-xs text-muted-foreground">
-                {form.is_recurring
-                  ? "Repete-se nos dias da semana selecionados até ao fim do ano letivo."
-                  : "Acontece numa data única."}
+                {form.is_recurring ? t("activity_form.recurring_hint_on") : t("activity_form.recurring_hint_off")}
               </p>
             </div>
             <Switch checked={form.is_recurring} onCheckedChange={(v) => setForm({ ...form, is_recurring: v })} />
@@ -260,9 +275,9 @@ export function ActivityFormDialog({ open, onOpenChange, schoolId, academicYear,
           {form.is_recurring ? (
             <>
               <div className="grid gap-2">
-                <Label>Dias da semana *</Label>
+                <Label>{t("activity_form.label_weekdays")}</Label>
                 <div className="flex flex-wrap gap-2">
-                  {WEEKDAYS.map((d) => {
+                  {weekdayOptions.map((d) => {
                     const active = form.weekdays.includes(d.value);
                     return (
                       <button
@@ -284,7 +299,7 @@ export function ActivityFormDialog({ open, onOpenChange, schoolId, academicYear,
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-2">
-                  <Label htmlFor="start_date">Início *</Label>
+                  <Label htmlFor="start_date">{t("activity_form.label_start_date")}</Label>
                   <Input
                     id="start_date"
                     type="date"
@@ -293,19 +308,14 @@ export function ActivityFormDialog({ open, onOpenChange, schoolId, academicYear,
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="end_date">Fim (último dia do ano letivo) *</Label>
-                  <Input
-                    id="end_date"
-                    type="date"
-                    value={form.end_date}
-                    onChange={(e) => setForm({ ...form, end_date: e.target.value })}
-                  />
+                  <Label htmlFor="end_date">{t("activity_form.label_end_date")}</Label>
+                  <Input id="end_date" type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} />
                 </div>
               </div>
             </>
           ) : (
             <div className="grid gap-2">
-              <Label htmlFor="single_date">Data *</Label>
+              <Label htmlFor="single_date">{t("activity_form.label_single_date")}</Label>
               <Input
                 id="single_date"
                 type="date"
@@ -316,7 +326,7 @@ export function ActivityFormDialog({ open, onOpenChange, schoolId, academicYear,
           )}
 
           <div className="grid gap-2">
-            <Label htmlFor="description">Descrição</Label>
+            <Label htmlFor="description">{t("activity_form.label_description")}</Label>
             <Textarea
               id="description"
               rows={3}
@@ -326,10 +336,10 @@ export function ActivityFormDialog({ open, onOpenChange, schoolId, academicYear,
           </div>
 
           <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
-            <Label className="text-sm font-semibold">Inscrição & cobrança</Label>
+            <Label className="text-sm font-semibold">{t("activity_form.section_fee")}</Label>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="enrollment_fee">Valor de inscrição (Kz)</Label>
+                <Label htmlFor="enrollment_fee">{t("activity_form.label_enrollment_fee")}</Label>
                 <Input
                   id="enrollment_fee"
                   type="number"
@@ -338,19 +348,21 @@ export function ActivityFormDialog({ open, onOpenChange, schoolId, academicYear,
                   value={form.enrollment_fee}
                   onChange={(e) => setForm({ ...form, enrollment_fee: parseFloat(e.target.value) || 0 })}
                 />
-                <p className="text-[11px] text-muted-foreground">0 = atividade gratuita</p>
+                <p className="text-[11px] text-muted-foreground">{t("activity_form.hint_free_fee")}</p>
               </div>
               {form.is_recurring && (
                 <div className="grid gap-2">
-                  <Label>Frequência de cobrança</Label>
+                  <Label>{t("activity_form.billing_frequency_label")}</Label>
                   <Select
                     value={form.billing_frequency}
                     onValueChange={(v) => setForm({ ...form, billing_frequency: v })}
                   >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="unica">Única (uma só cobrança)</SelectItem>
-                      <SelectItem value="mensal">Mensal (durante o período)</SelectItem>
+                      <SelectItem value="unica">{t("activity_form.billing_once")}</SelectItem>
+                      <SelectItem value="mensal">{t("activity_form.billing_monthly")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -360,8 +372,12 @@ export function ActivityFormDialog({ open, onOpenChange, schoolId, academicYear,
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving}>{saving ? "A guardar..." : "Guardar"}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+            {t("activity_form.cancel")}
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? t("activity_form.saving") : t("activity_form.save")}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

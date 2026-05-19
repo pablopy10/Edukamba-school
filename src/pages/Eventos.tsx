@@ -54,30 +54,75 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useTranslation } from "react-i18next";
 
 type EventType = "academico" | "cultural" | "desportivo" | "reuniao" | "comunicado";
 
-const typeMeta: Record<string, { label: string; color: string; icon: typeof PartyPopper }> = {
-  academico: { label: "Académico", color: "bg-pastel-blue text-pastel-blue-foreground", icon: GraduationCap },
-  cultural: { label: "Cultural", color: "bg-pastel-pink text-pastel-pink-foreground", icon: PartyPopper },
-  desportivo: { label: "Desportivo", color: "bg-pastel-green text-pastel-green-foreground", icon: Trophy },
-  reuniao: { label: "Reunião", color: "bg-pastel-lilac text-pastel-lilac-foreground", icon: Users },
-  comunicado: { label: "Comunicado", color: "bg-pastel-yellow text-pastel-yellow-foreground", icon: Megaphone },
+const EVENT_TYPE_UI: Record<EventType, { color: string; icon: typeof PartyPopper }> = {
+  academico: { color: "bg-pastel-blue text-pastel-blue-foreground", icon: GraduationCap },
+  cultural: { color: "bg-pastel-pink text-pastel-pink-foreground", icon: PartyPopper },
+  desportivo: { color: "bg-pastel-green text-pastel-green-foreground", icon: Trophy },
+  reuniao: { color: "bg-pastel-lilac text-pastel-lilac-foreground", icon: Users },
+  comunicado: { color: "bg-pastel-yellow text-pastel-yellow-foreground", icon: Megaphone },
 };
 
 type View = "calendario" | "lista";
 type TypeFilter = EventType | "all";
 
-const monthNames = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
-];
-const weekdayLabels = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+function intlLocaleForI18nLang(lang: string) {
+  if (lang === "en") return "en-GB";
+  if (lang === "fr") return "fr-FR";
+  return "pt-PT";
+}
 
-const formatDateLong = (iso: string) => {
-  const d = new Date(iso + "T00:00:00");
-  return `${d.getDate().toString().padStart(2, "0")} ${monthNames[d.getMonth()].slice(0, 3)} ${d.getFullYear()}`;
-};
+type EventTypeBadgeMeta = { label: string; color: string; icon: typeof PartyPopper };
+
+function useSchoolEventStrings() {
+  const { t, i18n } = useTranslation("pages", { keyPrefix: "eventos" });
+  const localeTag = useMemo(() => intlLocaleForI18nLang(i18n.language ?? "pt"), [i18n.language]);
+
+  const formatDateLong = useCallback((iso: string) => {
+    const d = new Date(iso + "T00:00:00");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mon = new Intl.DateTimeFormat(localeTag, { month: "short" }).format(d);
+    return `${dd} ${mon} ${d.getFullYear()}`;
+  }, [localeTag]);
+
+  const formatMonthYear = useCallback(
+    (d: Date) => new Intl.DateTimeFormat(localeTag, { month: "long", year: "numeric" }).format(d),
+    [localeTag],
+  );
+
+  const monthLabelsShort = useMemo(
+    () =>
+      Array.from({ length: 12 }, (_, m) =>
+        new Intl.DateTimeFormat(localeTag, { month: "short" }).format(new Date(2020, m, 15)),
+      ),
+    [localeTag],
+  );
+
+  const weekdayLabelsMon = useMemo(() => {
+    const monday = new Date(2024, 0, 1);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      return new Intl.DateTimeFormat(localeTag, { weekday: "short" }).format(d);
+    });
+  }, [localeTag]);
+
+  const typeMeta: Record<EventType, EventTypeBadgeMeta> = useMemo(
+    () => ({
+      academico: { label: t("type_academic"), ...EVENT_TYPE_UI.academico },
+      cultural: { label: t("type_cultural"), ...EVENT_TYPE_UI.cultural },
+      desportivo: { label: t("type_sports"), ...EVENT_TYPE_UI.desportivo },
+      reuniao: { label: t("type_meeting"), ...EVENT_TYPE_UI.reuniao },
+      comunicado: { label: t("type_notice"), ...EVENT_TYPE_UI.comunicado },
+    }),
+    [t],
+  );
+
+  return { t, formatDateLong, formatMonthYear, monthLabelsShort, weekdayLabelsMon, typeMeta };
+}
 
 const formatTime = (t: string | null) => (t ? t.slice(0, 5) : "");
 
@@ -86,6 +131,7 @@ type RsvpResponse = "presente" | "ausente" | "unset";
 const makeRsvpKey = (eventId: string, studentId: string) => `${eventId}::${studentId}`;
 
 const Eventos = () => {
+  const { t, formatDateLong, monthLabelsShort, weekdayLabelsMon, typeMeta } = useSchoolEventStrings();
   const native = isNativeMobileApp();
   const [searchParams] = useSearchParams();
   const { selectedYearId } = useAcademicYear();
@@ -145,7 +191,7 @@ const Eventos = () => {
       .order("event_date", { ascending: false });
     setLoading(false);
     if (error) {
-      toast.error("Erro ao carregar eventos: " + error.message);
+      toast.error(`${t("toast_load_error_prefix")} ${error.message}`);
       return;
     }
     setEvents((data ?? []) as EventRow[]);
@@ -205,7 +251,7 @@ const Eventos = () => {
   const upsertPresence = useCallback(
     async (eventId: string, studentId: string, response: RsvpResponse) => {
       if (!userId) {
-        toast.error("Sessão inválida.");
+        toast.error(t("toast_invalid_session"));
         return;
       }
       const k = makeRsvpKey(eventId, studentId);
@@ -226,17 +272,17 @@ const Eventos = () => {
       );
       if (error) {
         setRsvpMap((m) => ({ ...m, [k]: prev }));
-        toast.error("Erro ao guardar presença: " + error.message);
+        toast.error(`${t("toast_presence_save_error_prefix")} ${error.message}`);
       }
       setRsvpSavingKey(null);
     },
-    [userId],
+    [userId, t],
   );
 
   const upsertProfileSelfRsvp = useCallback(
     async (eventId: string, response: RsvpResponse) => {
       if (!userId) {
-        toast.error("Sessão inválida.");
+        toast.error(t("toast_invalid_session"));
         return;
       }
       const k = `prof::${eventId}`;
@@ -257,11 +303,11 @@ const Eventos = () => {
       );
       if (error) {
         setProfileSelfRsvpMap((m) => ({ ...m, [eventId]: prev }));
-        toast.error("Erro ao guardar presença: " + error.message);
+        toast.error(`${t("toast_presence_save_error_prefix")} ${error.message}`);
       }
       setProfileRsvpSavingKey(null);
     },
-    [userId],
+    [userId, t],
   );
 
   useEffect(() => {
@@ -501,9 +547,9 @@ const Eventos = () => {
     if (!deleteId) return;
     const { error } = await supabase.from("events").delete().eq("id", deleteId);
     if (error) {
-      toast.error("Erro ao remover: " + error.message);
+      toast.error(`${t("toast_delete_error_prefix")} ${error.message}`);
     } else {
-      toast.success("Evento removido.");
+      toast.success(t("toast_deleted_success"));
       loadEvents();
     }
     setDeleteId(null);
@@ -518,10 +564,8 @@ const Eventos = () => {
       <div className={cn("flex flex-col gap-6", showFabSlot && "relative pb-28")}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Eventos</h1>
-            <p className="text-sm text-muted-foreground">
-              Acompanhe e organize todos os eventos da escola.
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("page_title")}</h1>
+            <p className="text-sm text-muted-foreground">{t("page_subtitle")}</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {!native && (
@@ -536,7 +580,7 @@ const Eventos = () => {
                 )}
               >
                 <CalendarDays className="h-4 w-4" strokeWidth={1.75} />
-                Calendário
+                {t("view_calendar")}
               </button>
               <button
                 onClick={() => setView("lista")}
@@ -548,7 +592,7 @@ const Eventos = () => {
                 )}
               >
                 <List className="h-4 w-4" strokeWidth={1.75} />
-                Lista
+                {t("view_list")}
               </button>
             </div>
             )}
@@ -559,7 +603,7 @@ const Eventos = () => {
                 className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
               >
                 <Plus className="h-4 w-4" strokeWidth={2.25} />
-                Novo Evento
+                {t("new_event")}
               </button>
             )}
           </div>
@@ -568,10 +612,10 @@ const Eventos = () => {
         {showPageKpiCards() && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
-            { label: "Total", value: stats.total, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
-            { label: "Académicos", value: stats.academicos, color: "bg-pastel-blue text-pastel-blue-foreground" },
-            { label: "Culturais", value: stats.culturais, color: "bg-pastel-pink text-pastel-pink-foreground" },
-            { label: "Desportivos", value: stats.desportivos, color: "bg-pastel-green text-pastel-green-foreground" },
+            { label: t("kpi_total"), value: stats.total, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
+            { label: t("kpi_academic"), value: stats.academicos, color: "bg-pastel-blue text-pastel-blue-foreground" },
+            { label: t("kpi_cultural"), value: stats.culturais, color: "bg-pastel-pink text-pastel-pink-foreground" },
+            { label: t("kpi_sports"), value: stats.desportivos, color: "bg-pastel-green text-pastel-green-foreground" },
           ].map((s) => (
             <div key={s.label} className="rounded-2xl bg-card p-5 shadow-card">
               <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", s.color)}>
@@ -589,13 +633,13 @@ const Eventos = () => {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Pesquisar evento, local ou organizador..."
+              placeholder={t("search_placeholder")}
               className="h-10 w-full rounded-full border border-border bg-background pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-pastel-blue/40"
             />
           </div>
           {native && (
             <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
-              {monthNames.map((name, idx) => (
+              {monthLabelsShort.map((name, idx) => (
                 <button
                   key={idx}
                   onClick={() => setMonthFilter(idx)}
@@ -606,23 +650,23 @@ const Eventos = () => {
                       : "bg-muted text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  {name.slice(0, 3)}
+                  {name}
                 </button>
               ))}
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2">
             <TypeChip active={typeFilter === "all"} onClick={() => setTypeFilter("all")} className="bg-muted text-foreground">
-              Todos
+              {t("filter_all_types")}
             </TypeChip>
-            {(Object.keys(typeMeta) as EventType[]).map((t) => (
+            {(Object.keys(typeMeta) as EventType[]).map((evType) => (
               <TypeChip
-                key={t}
-                active={typeFilter === t}
-                onClick={() => setTypeFilter(t)}
-                className={typeMeta[t].color}
+                key={evType}
+                active={typeFilter === evType}
+                onClick={() => setTypeFilter(evType)}
+                className={typeMeta[evType].color}
               >
-                {typeMeta[t].label}
+                {typeMeta[evType].label}
               </TypeChip>
             ))}
           </div>
@@ -630,7 +674,7 @@ const Eventos = () => {
 
         {loading ? (
           <div className="rounded-2xl bg-card p-12 text-center text-sm text-muted-foreground shadow-card">
-            A carregar eventos...
+            {t("loading_events")}
           </div>
         ) : native ? (
           <EventsCardsView
@@ -685,20 +729,20 @@ const Eventos = () => {
       >
         <TabsList className="h-auto w-full flex-wrap justify-start gap-2 rounded-2xl border border-border bg-card p-2 shadow-soft">
           <TabsTrigger value="eventos" className="rounded-full px-5">
-            Eventos
+            {t("tab_events")}
           </TabsTrigger>
           {canFinanceChargeRules && (
             <TabsTrigger value="regras" className="rounded-full px-5">
-              Regras de cobranças
+              {t("tab_charge_rules")}
             </TabsTrigger>
           )}
           <TabsTrigger value="pagamentos" className="rounded-full px-5">
             <Wallet className="mr-2 hidden h-4 w-4 sm:inline" strokeWidth={1.75} />
-            Pagamentos
+            {t("tab_payments")}
           </TabsTrigger>
           <TabsTrigger value="autorizacoes" className="rounded-full px-5">
             <FileSignature className="mr-2 hidden h-4 w-4 sm:inline" strokeWidth={1.75} />
-            Autorizações
+            {t("tab_authorizations")}
           </TabsTrigger>
         </TabsList>
         <TabsContent value="eventos" className="mt-0 space-y-0 focus-visible:outline-none">
@@ -731,7 +775,7 @@ const Eventos = () => {
             type="button"
             size="icon"
             className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-            aria-label="Novo evento"
+            aria-label={t("fab_new_event_aria")}
             onClick={handleNew}
           >
             <Plus className="h-6 w-6" />
@@ -751,14 +795,14 @@ const Eventos = () => {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover evento?</AlertDialogTitle>
+            <AlertDialogTitle>{t("delete_dialog_title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação não pode ser desfeita.
+              {t("delete_dialog_desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>Remover</AlertDialogAction>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>{t("delete_confirm")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -798,6 +842,7 @@ function EventSelfProfilePresence({
   layout: "card" | "inline";
   bundle: ProfileSelfPresenceBundle;
 }) {
+  const { t } = useTranslation("pages", { keyPrefix: "eventos" });
   const p = parseEventAudience(event.audience);
   const inEducScope = guardianInEducatorsAudience(
     p,
@@ -820,9 +865,9 @@ function EventSelfProfilePresence({
   const current = bundle.responses[event.id] ?? "unset";
   const busy = bundle.savingKey === `prof::${event.id}`;
   const labels: Record<RsvpResponse, string> = {
-    presente: "Presente",
-    ausente: "Ausente",
-    unset: "Por definir",
+    presente: t("rsvp_present"),
+    ausente: t("rsvp_absent"),
+    unset: t("rsvp_unset"),
   };
 
   return (
@@ -834,7 +879,7 @@ function EventSelfProfilePresence({
             : "text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
         }
       >
-        A minha presença
+        {t("col_my_presence")}
       </p>
       <div className="flex flex-wrap gap-1">
         {(["presente", "ausente", "unset"] as const).map((resp) => (
@@ -867,6 +912,7 @@ function EventParentPresence({
   layout: "card" | "inline";
   bundle: ParentPresenceBundle;
 }) {
+  const { t } = useTranslation("pages", { keyPrefix: "eventos" });
   const { kids, loadingKids, rsvpMap, savingKey, upsertPresence } = bundle;
   const aud = parseEventAudience(event.audience);
   if (!audienceUsesStudentRsvp(aud)) return null;
@@ -894,23 +940,21 @@ function EventParentPresence({
             : "text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
         }
       >
-        Presença
+        {t("presence_heading")}
       </p>
       {loadingKids ? (
-        <p className="text-[11px] text-muted-foreground">A carregar…</p>
+        <p className="text-[11px] text-muted-foreground">{t("presence_loading")}</p>
       ) : scopedKids.length === 0 ? (
-        <p className="text-[11px] text-muted-foreground">
-          Sem educandos nestas turmas para declarar presença neste evento.
-        </p>
+        <p className="text-[11px] text-muted-foreground">{t("presence_no_eligible_children")}</p>
       ) : (
         scopedKids.map((child) => {
           const ka = makeRsvpKey(event.id, child.id);
           const current = rsvpMap[ka] ?? "unset";
           const busy = savingKey === ka;
           const labels: Record<RsvpResponse, string> = {
-            presente: "Presente",
-            ausente: "Ausente",
-            unset: "Por definir",
+            presente: t("rsvp_present"),
+            ausente: t("rsvp_absent"),
+            unset: t("rsvp_unset"),
           };
           return (
             <div
@@ -995,20 +1039,23 @@ const EventsCardsView = ({
   profileSelfPresence?: ProfileSelfPresenceBundle;
   staffAttendance?: StaffAttendanceBundle;
 }) => {
+  const { t, formatDateLong, typeMeta } = useSchoolEventStrings();
   const sorted = [...items].sort((a, b) => b.event_date.localeCompare(a.event_date));
 
   return (
     <div className="overflow-hidden rounded-2xl bg-card shadow-card">
       <div className="flex items-center justify-between border-b border-border px-4 py-4 sm:px-6">
-        <h2 className="text-base font-bold text-foreground">Eventos</h2>
-        <span className="text-xs text-muted-foreground">{sorted.length} resultado(s)</span>
+        <h2 className="text-base font-bold text-foreground">{t("page_title")}</h2>
+        <span className="text-xs text-muted-foreground">
+          {t("results_count", { count: sorted.length })}
+        </span>
       </div>
       <div className="flex flex-col gap-3 p-4">
         {sorted.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">Sem eventos para os filtros aplicados.</p>
+          <p className="py-10 text-center text-sm text-muted-foreground">{t("empty_filtered")}</p>
         ) : (
           sorted.map((e) => {
-            const meta = typeMeta[e.type] ?? typeMeta.academico;
+            const meta = typeMeta[e.type as EventType] ?? typeMeta.academico;
             const Icon = meta.icon;
             return (
               <div key={e.id} className="rounded-xl border border-border bg-background p-3 shadow-soft">
@@ -1044,7 +1091,7 @@ const EventsCardsView = ({
                   )}
                 </div>
                 <p className="mt-2 text-[11px] text-muted-foreground">
-                  Público:{" "}
+                  {t("audience_prefix")}{" "}
                   <span className="font-medium text-foreground">{formatEventAudienceSummary(e.audience, audienceRoomNames)}</span>
                 </p>
                 {parentPresence && (
@@ -1076,14 +1123,14 @@ const EventsCardsView = ({
                       onClick={() => onEdit(e)}
                       className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground hover:bg-accent"
                     >
-                      <Pencil className="h-3 w-3" /> Editar
+                      <Pencil className="h-3 w-3" /> {t("edit")}
                     </button>
                     <button
                       type="button"
                       onClick={() => onDelete(e.id)}
                       className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/20"
                     >
-                      <Trash2 className="h-3 w-3" /> Remover
+                      <Trash2 className="h-3 w-3" /> {t("remove")}
                     </button>
                   </div>
                 )}
@@ -1124,6 +1171,7 @@ const CalendarView = ({
   profileSelfPresence?: ProfileSelfPresenceBundle;
   staffAttendance?: StaffAttendanceBundle;
 }) => {
+  const { t, formatDateLong, formatMonthYear, weekdayLabelsMon, typeMeta } = useSchoolEventStrings();
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
 
@@ -1165,7 +1213,7 @@ const CalendarView = ({
               <ChevronLeft className="h-4 w-4" strokeWidth={1.75} />
             </button>
             <h2 className="text-base font-bold text-foreground">
-              {monthNames[month]} {year}
+              {formatMonthYear(new Date(year, month, 1))}
             </h2>
             <button
               onClick={() => setCursor(new Date(year, month + 1, 1))}
@@ -1181,15 +1229,15 @@ const CalendarView = ({
             }}
             className="rounded-full bg-muted px-4 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-accent"
           >
-            Hoje
+            {t("today")}
           </button>
         </div>
 
         <div className="p-4">
           <div className="mb-2 grid grid-cols-7 gap-2">
-            {weekdayLabels.map((d) => (
+            {weekdayLabelsMon.map((d, i) => (
               <div
-                key={d}
+                key={`${d}-${i}`}
                 className="rounded-xl bg-muted py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
               >
                 {d}
@@ -1237,7 +1285,7 @@ const CalendarView = ({
                         key={e.id}
                         className={cn(
                           "truncate rounded-md px-1.5 py-0.5 text-[10px] font-semibold",
-                          (typeMeta[e.type] ?? typeMeta.academico).color,
+                          (typeMeta[e.type as EventType] ?? typeMeta.academico).color,
                         )}
                       >
                         {e.title}
@@ -1245,7 +1293,7 @@ const CalendarView = ({
                     ))}
                     {dayEvents.length > 2 && (
                       <span className="text-[10px] font-medium text-muted-foreground">
-                        +{dayEvents.length - 2} mais
+                        {t("more_count", { count: dayEvents.length - 2 })}
                       </span>
                     )}
                   </div>
@@ -1259,22 +1307,22 @@ const CalendarView = ({
       <div className="rounded-2xl bg-card p-5 shadow-card">
         <div className="mb-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Detalhe do dia
+            {t("detail_day_heading")}
           </p>
           <h3 className="mt-1 text-base font-bold text-foreground">
-            {selectedDate ? formatDateLong(selectedDate) : "Selecione uma data"}
+            {selectedDate ? formatDateLong(selectedDate) : t("pick_a_date")}
           </h3>
         </div>
 
         {selectedDate && selectedEvents.length === 0 && (
           <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
-            Sem eventos neste dia.
+            {t("no_events_day")}
           </div>
         )}
 
         <div className="flex flex-col gap-3">
           {selectedEvents.map((e) => {
-            const meta = typeMeta[e.type] ?? typeMeta.academico;
+            const meta = typeMeta[e.type as EventType] ?? typeMeta.academico;
             const Icon = meta.icon;
             return (
               <div key={e.id} className="rounded-xl border border-border bg-background p-3">
@@ -1307,7 +1355,7 @@ const CalendarView = ({
                   )}
                 </div>
                 <p className="mt-2 text-[11px] text-muted-foreground">
-                  Público:{" "}
+                  {t("audience_prefix")}{" "}
                   <span className="font-medium text-foreground">{formatEventAudienceSummary(e.audience, audienceRoomNames)}</span>
                 </p>
                 {parentPresence && (
@@ -1338,13 +1386,13 @@ const CalendarView = ({
                       onClick={() => onEdit(e)}
                       className="inline-flex h-7 items-center gap-1 rounded-full bg-muted px-3 text-[11px] font-medium text-foreground hover:bg-accent"
                     >
-                      <Pencil className="h-3 w-3" /> Editar
+                      <Pencil className="h-3 w-3" /> {t("edit")}
                     </button>
                     <button
                       onClick={() => onDelete(e.id)}
                       className="inline-flex h-7 items-center gap-1 rounded-full bg-destructive/10 px-3 text-[11px] font-medium text-destructive hover:bg-destructive/20"
                     >
-                      <Trash2 className="h-3 w-3" /> Remover
+                      <Trash2 className="h-3 w-3" /> {t("remove")}
                     </button>
                   </div>
                 )}
@@ -1379,6 +1427,7 @@ const ListView = ({
   profileSelfPresence?: ProfileSelfPresenceBundle;
   staffAttendance?: StaffAttendanceBundle;
 }) => {
+  const { t, formatDateLong, typeMeta } = useSchoolEventStrings();
   const sorted = [...items].sort((a, b) => b.event_date.localeCompare(a.event_date));
   const presenceCol = !!parentPresence;
   const selfCol = !!profileSelfPresence;
@@ -1388,28 +1437,28 @@ const ListView = ({
   return (
     <div className="overflow-hidden rounded-2xl bg-card shadow-card">
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
-        <h2 className="text-base font-bold text-foreground">Lista de Eventos</h2>
-        <span className="text-xs text-muted-foreground">{sorted.length} resultado(s)</span>
+        <h2 className="text-base font-bold text-foreground">{t("list_heading")}</h2>
+        <span className="text-xs text-muted-foreground">{t("results_count", { count: sorted.length })}</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[900px]">
           <thead>
             <tr className="border-b border-border bg-muted/30 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <th className="px-6 py-3">Data</th>
-              <th className="px-6 py-3">Evento</th>
-              <th className="px-6 py-3">Tipo</th>
-              <th className="px-6 py-3">Local</th>
-              <th className="px-6 py-3">Organizador</th>
-              <th className="px-6 py-3">Público</th>
-              {presenceCol && <th className="px-6 py-3">Presença (alunos)</th>}
-              {selfCol && <th className="px-6 py-3 whitespace-nowrap">A minha presença</th>}
-              {staffCol && <th className="px-6 py-3 whitespace-nowrap">Listas presença</th>}
-              {!hideActionsColumn && <th className="px-6 py-3 text-right">Ações</th>}
+              <th className="px-6 py-3">{t("col_date")}</th>
+              <th className="px-6 py-3">{t("col_event")}</th>
+              <th className="px-6 py-3">{t("col_type")}</th>
+              <th className="px-6 py-3">{t("col_location")}</th>
+              <th className="px-6 py-3">{t("col_organizer")}</th>
+              <th className="px-6 py-3">{t("col_audience")}</th>
+              {presenceCol && <th className="px-6 py-3">{t("col_presence_students")}</th>}
+              {selfCol && <th className="px-6 py-3 whitespace-nowrap">{t("col_my_presence")}</th>}
+              {staffCol && <th className="px-6 py-3 whitespace-nowrap">{t("col_staff_rosters")}</th>}
+              {!hideActionsColumn && <th className="px-6 py-3 text-right">{t("col_actions_right")}</th>}
             </tr>
           </thead>
           <tbody>
             {sorted.map((e) => {
-              const meta = typeMeta[e.type] ?? typeMeta.academico;
+              const meta = typeMeta[e.type as EventType] ?? typeMeta.academico;
               const Icon = meta.icon;
               return (
                 <tr key={e.id} className="border-b border-border/60 text-sm transition-colors hover:bg-muted/30">
@@ -1479,14 +1528,14 @@ const ListView = ({
                             <button
                               onClick={() => onEdit(e)}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                              title="Editar"
+                              title={t("edit")}
                             >
                               <Pencil className="h-4 w-4" strokeWidth={1.75} />
                             </button>
                             <button
                               onClick={() => onDelete(e.id)}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                              title="Remover"
+                              title={t("remove")}
                             >
                               <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                             </button>
@@ -1501,7 +1550,7 @@ const ListView = ({
             {sorted.length === 0 && (
               <tr>
                 <td colSpan={emptyColSpan} className="px-6 py-12 text-center text-sm text-muted-foreground">
-                  Sem eventos para os filtros aplicados.
+                  {t("empty_filtered")}
                 </td>
               </tr>
             )}

@@ -82,10 +82,12 @@ type FeeRule = {
   fee_rule_students?: { student_id: string }[] | null;
 };
 
-function formatFeeRuleTarget(r: FeeRule): string {
+function formatFeeRuleTarget(r: FeeRule, tuitionT: (key: string, options?: Record<string, unknown>) => string): string {
   const ts = r.target_scope || "grade_level";
-  if (ts === "students") return `${r.fee_rule_students?.length ?? 0} aluno(s)`;
-  if (ts === "classrooms") return `${r.fee_rule_classrooms?.length ?? 0} turma(s)`;
+  const nStudents = r.fee_rule_students?.length ?? 0;
+  if (ts === "students") return tuitionT("fee_target_student", { count: nStudents });
+  const nRooms = r.fee_rule_classrooms?.length ?? 0;
+  if (ts === "classrooms") return tuitionT("fee_target_class", { count: nRooms });
   return r.grade_level ?? "—";
 }
 
@@ -337,6 +339,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       semester: tPages("pagamentos.recurrence.semester"),
       yearly: tPages("pagamentos.recurrence.yearly"),
     }),
+    [tPages],
+  );
+
+  const dateLocaleTag =
+    i18n.language?.startsWith("fr") ? "fr-FR" : i18n.language?.startsWith("pt") ? "pt-PT" : "en-GB";
+
+  const tuitionT = useCallback(
+    (key: string, options?: Record<string, unknown>) =>
+      tPages(`pagamentos.propinas.${key}`, options ?? ({} as Record<string, unknown>)),
     [tPages],
   );
 
@@ -1982,7 +1993,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     setRemindingFeeId(fee.id);
     const monthLabel = fee.month_index ? monthNamesLong[fee.month_index - 1] : "";
     const title = `Lembrete de propina ${monthLabel}`.trim();
-    const description = `A propina de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`;
+    const description = `A propina de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString(dateLocaleTag)}. Por favor regularize o pagamento.`;
     const { error } = await supabase.from("notifications").insert({
       recipient_id: parentId,
       school_id: schoolId,
@@ -2011,7 +2022,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       recipient_id: f.student!.parent_id!,
       school_id: schoolId!,
       title: `Lembrete de propina ${f.month_index ? monthNamesLong[f.month_index - 1] : ""}`.trim(),
-      description: `A propina de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      description: `A propina de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString(dateLocaleTag)}. Por favor regularize o pagamento.`,
       category: "pagamento",
       link: "https://www.edukamba.com/pagamentos",
     }));
@@ -2038,7 +2049,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     const rows = fees.map((f) => {
       const monthLabel = f.month_index ? monthNamesLong[f.month_index - 1] : "";
       const title = `Lembrete de propina ${monthLabel}`.trim();
-      const description = `A propina de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`;
+      const description = `A propina de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString(dateLocaleTag)}. Por favor regularize o pagamento.`;
       return {
         recipient_id: f.student!.parent_id!,
         school_id: schoolId,
@@ -2180,7 +2191,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     }
     setRemindingActFeeId(fee.id);
     const title = `Lembrete — ${fee.activity?.name ?? "Atividade"}`;
-    const description = `A cobrança da atividade ${fee.activity?.name ?? ""} de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`;
+    const description = `A cobrança da atividade ${fee.activity?.name ?? ""} de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString(dateLocaleTag)}. Por favor regularize o pagamento.`;
     const { error } = await supabase.from("notifications").insert({
       recipient_id: parentId,
       school_id: schoolId,
@@ -2209,7 +2220,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       recipient_id: f.student!.parent_id!,
       school_id: schoolId!,
       title: `Lembrete — ${f.activity?.name ?? "Atividade"}`,
-      description: `A cobrança da atividade ${f.activity?.name ?? ""} de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      description: `A cobrança da atividade ${f.activity?.name ?? ""} de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString(dateLocaleTag)}. Por favor regularize o pagamento.`,
       category: "pagamento",
       link: "https://www.edukamba.com/pagamentos",
     }));
@@ -2329,7 +2340,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     }
     setRemindingTrFeeId(fee.id);
     const title = `Lembrete — Transporte (${fee.route?.name ?? "rota"})`;
-    const description = `A cobrança do transporte de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`;
+    const description = `A cobrança do transporte de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString(dateLocaleTag)}. Por favor regularize o pagamento.`;
     const { error } = await supabase.from("notifications").insert({
       recipient_id: parentId,
       school_id: schoolId,
@@ -2358,7 +2369,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       recipient_id: f.student!.parent_id!,
       school_id: schoolId!,
       title: `Lembrete — Transporte (${f.route?.name ?? "rota"})`,
-      description: `A cobrança do transporte de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      description: `A cobrança do transporte de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString(dateLocaleTag)}. Por favor regularize o pagamento.`,
       category: "pagamento",
       link: "https://www.edukamba.com/pagamentos",
     }));
@@ -2483,7 +2494,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     }
     setRemindingMeFeeId(fee.id);
     const title = `Lembrete — Refeições (${fee.meal_program?.name ?? "plano"})`;
-    const description = `A cobrança de refeições (${fee.meal_program?.name ?? "plano"}) de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`;
+    const description = `A cobrança de refeições (${fee.meal_program?.name ?? "plano"}) de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} venceu em ${new Date(fee.due_date).toLocaleDateString(dateLocaleTag)}. Por favor regularize o pagamento.`;
     const { error } = await supabase.from("notifications").insert({
       recipient_id: parentId,
       school_id: schoolId,
@@ -2512,7 +2523,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       recipient_id: f.student!.parent_id!,
       school_id: schoolId!,
       title: `Lembrete — Refeições (${f.meal_program?.name ?? "plano"})`,
-      description: `A cobrança de refeições de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      description: `A cobrança de refeições de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString(dateLocaleTag)}. Por favor regularize o pagamento.`,
       category: "pagamento",
       link: "https://www.edukamba.com/pagamentos",
     }));
@@ -2637,7 +2648,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     }
     setRemindingEvFeeId(fee.id);
     const title = `Lembrete — Evento (${fee.event?.title ?? "evento"})`;
-    const description = `A cobrança do evento «${fee.event?.title ?? "evento"}» de ${fee.student?.full_name ?? "o aluno"} (${fmtAOA(Number(fee.amount_due))}) venceu em ${new Date(fee.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`;
+    const description = `A cobrança do evento «${fee.event?.title ?? "evento"}» de ${fee.student?.full_name ?? "o aluno"} (${fmtAOA(Number(fee.amount_due))}) venceu em ${new Date(fee.due_date).toLocaleDateString(dateLocaleTag)}. Por favor regularize o pagamento.`;
     const { error } = await supabase.from("notifications").insert({
       recipient_id: parentId,
       school_id: schoolId,
@@ -2666,7 +2677,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       recipient_id: f.student!.parent_id!,
       school_id: schoolId!,
       title: `Lembrete — Evento (${f.event?.title ?? "evento"})`,
-      description: `A cobrança do evento «${f.event?.title ?? "evento"}» de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString("pt-PT")}. Por favor regularize o pagamento.`,
+      description: `A cobrança do evento «${f.event?.title ?? "evento"}» de ${f.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(f.amount_due))} venceu em ${new Date(f.due_date).toLocaleDateString(dateLocaleTag)}. Por favor regularize o pagamento.`,
       category: "pagamento",
       link: "https://www.edukamba.com/eventos?tab=pagamentos",
     }));
@@ -2843,7 +2854,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     setRemindingEnFeeId(fee.id);
     const label = fee.fee_type === "RENEWAL" ? "renovação de matrícula" : "matrícula";
     const title = `Lembrete — ${label}`;
-    const description = `A ${label} de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} está por pagar (vencimento: ${new Date(fee.due_date).toLocaleDateString("pt-PT")}).`;
+    const description = `A ${label} de ${fee.student?.full_name ?? "o aluno"} no valor de ${fmtAOA(Number(fee.amount_due))} está por pagar (vencimento: ${new Date(fee.due_date).toLocaleDateString(dateLocaleTag)}).`;
     const { error } = await supabase.from("notifications").insert({
       recipient_id: parentId,
       school_id: schoolId,
@@ -2919,7 +2930,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           <div>
             <h1 className="text-2xl font-bold tracking-tight">
               {tuitionOnly
-                ? "Propinas"
+                ? tuitionT("page_title")
                 : enrollmentChargesOnly
                   ? "Matrículas — cobranças"
                   : activityChargesOnly
@@ -2936,9 +2947,9 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
               {tuitionOnly
                 ? isParent
                   ? usarAnexoEncarregado
-                    ? "Consulte as propinas do(s) seu(s) educando(s). Pode anexar comprovativos quando aplicável."
-                    : "Consulte as propinas. O pagamento é efectuado presencialmente na escola quando assim for comunicado."
-                  : "Regras de cobrança, geração anual e lista de propinas (validação, lembretes)."
+                    ? tuitionT("subtitle_parent_attachment")
+                    : tuitionT("subtitle_parent_in_person")
+                  : tuitionT("subtitle_staff")
                 : enrollmentChargesOnly
                   ? isParent
                     ? "Custos de matrícula ou renovação dos seus educandos."
@@ -2965,13 +2976,14 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           <div className="flex flex-wrap items-center gap-2">
             {tuitionOnly && !isParent && (
               <Button onClick={() => setGenerateOpen(true)} className="gap-2">
-                <PlayCircle className="h-4 w-4" /> Gerar propinas do ano
+                <PlayCircle className="h-4 w-4" /> {tuitionT("generate_year_button")}
               </Button>
             )}
             {isParent && (
               <Button variant="outline" size="sm" className="gap-2" asChild>
                 <Link to="/propinas/historico">
-                  <FileText className="h-4 w-4" /> Histórico e faturas
+                  <FileText className="h-4 w-4" />{" "}
+                  {tuitionOnly ? tuitionT("history_invoices_link") : tPages("pagamentos.parent_history_invoices")}
                 </Link>
               </Button>
             )}
@@ -2982,8 +2994,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           <TabsList className={chargesEmbeddedOnly ? "sr-only" : undefined}>
             {tuitionOnly ? (
               <>
-                {!isParent && <TabsTrigger value="rules">Regras de cobranças</TabsTrigger>}
-                <TabsTrigger value="fees">Propinas</TabsTrigger>
+                {!isParent && <TabsTrigger value="rules">{tuitionT("tab_rules")}</TabsTrigger>}
+                <TabsTrigger value="fees">{tuitionT("tab_fees")}</TabsTrigger>
               </>
             ) : (
               <>
@@ -3003,15 +3015,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             {!isParent && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total recebido</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{tuitionT("kpi_total_received")}</CardTitle></CardHeader>
                 <CardContent><p className="text-2xl font-bold text-pastel-green-foreground">{fmtAOA(feeStats.paid)}</p></CardContent>
               </Card>
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em dívida</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{tuitionT("kpi_outstanding")}</CardTitle></CardHeader>
                 <CardContent><p className="text-2xl font-bold text-pastel-yellow-foreground">{fmtAOA(feeStats.pending)}</p></CardContent>
               </Card>
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em atraso</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{tuitionT("kpi_overdue_amount")}</CardTitle></CardHeader>
                 <CardContent><p className="text-2xl font-bold text-destructive">{fmtAOA(feeStats.overdue)}</p></CardContent>
               </Card>
             </div>
@@ -3023,10 +3035,10 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
                       <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-                        <FileText className="h-4 w-4" /> Comprovativos a validar
+                        <FileText className="h-4 w-4" /> {tuitionT("pending_proofs_title")}
                         <Badge variant="secondary">{pendingValidations.length}</Badge>
                       </CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">Pagamentos por transferência ou multicaixa enviados pelos encarregados para validação pela escola.</p>
+                      <p className="text-sm text-muted-foreground mt-1">{tuitionT("pending_proofs_hint")}</p>
                     </div>
                     <Button
                       type="button"
@@ -3036,7 +3048,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                       onClick={() => void bulkValidateFees()}
                     >
                       {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                      Validar seleccionados
+                      {tuitionT("bulk_validate_selected")}
                     </Button>
                   </div>
                 </CardHeader>
@@ -3058,15 +3070,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   return next;
                                 });
                               }}
-                              aria-label="Seleccionar todos"
+                              aria-label={tuitionT("select_all_aria")}
                             />
                           </th>
-                          <th className="py-2 px-2">Aluno</th>
-                          <th className="py-2 px-2">Mês</th>
-                          <th className="py-2 px-2">Valor pago</th>
-                          <th className="py-2 px-2">Método</th>
-                          <th className="py-2 px-2">Submetido</th>
-                          <th className="py-2 px-2 text-right">Ações</th>
+                          <th className="py-2 px-2">{tuitionT("col_student")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_month")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_amount_paid")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_method")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_submitted")}</th>
+                          <th className="py-2 px-2 text-right">{tuitionT("col_actions_right")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3083,12 +3095,12 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                             <td className="py-2 px-2">{fee.month_index ? monthNamesLong[fee.month_index - 1] : "—"}</td>
                             <td className="py-2 px-2 font-semibold">{fmtAOA(Number(payment.amount_paid))}</td>
                             <td className="py-2 px-2 capitalize text-muted-foreground">{payment.method ?? "—"}</td>
-                            <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString("pt-PT") : "—"}</td>
+                            <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString(dateLocaleTag) : "—"}</td>
                             <td className="py-2 px-2">
                               <div className="flex flex-wrap justify-end gap-2">
                                 {payment.proof_url && (
                                   <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(payment.proof_url!)}>
-                                    <Eye className="h-3.5 w-3.5" /> Ver
+                                    <Eye className="h-3.5 w-3.5" /> {tuitionT("view")}
                                   </Button>
                                 )}
                                 <Button
@@ -3098,7 +3110,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   onClick={() => validatePayment(fee, payment)}
                                 >
                                   {validatingId === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                  Validar
+                                  {tuitionT("validate")}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -3107,7 +3119,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   disabled={bulkValidating || bulkRemindingTuition || validatingId === payment.id}
                                   onClick={() => { setRejectDialog(payment); setRejectReason(""); }}
                                 >
-                                  <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                  <XCircle className="h-3.5 w-3.5" /> {tuitionT("reject")}
                                 </Button>
                               </div>
                             </td>
@@ -3123,8 +3135,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             <Card>
               <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <CardTitle>Lista de propinas</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">Controla o estado das propinas e envia lembretes aos encarregados.</p>
+                  <CardTitle>{tuitionT("fees_list_title")}</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">{tuitionT("fees_list_hint")}</p>
                 </div>
                 {!isParent && (
                   <div className="flex flex-wrap items-center gap-2">
@@ -3141,7 +3153,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                         onClick={() => void bulkValidateFees()}
                       >
                         {bulkValidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                        Validar seleccionados
+                        {tuitionT("bulk_validate_selected")}
                       </Button>
                     )}
                     {filteredFees.some((f) => !f.is_paid) && (
@@ -3158,7 +3170,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                         onClick={() => void sendBulkRemindersForSelectedTuitionFees()}
                       >
                         {bulkRemindingTuition ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-4 w-4" />}
-                        Cobrar seleccionados
+                        {tuitionT("charge_selected")}
                       </Button>
                     )}
                     <Button
@@ -3168,7 +3180,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                       className="gap-2"
                       disabled={bulkRemindingTuition || bulkValidating}
                     >
-                      <Bell className="h-4 w-4" /> Enviar lembretes (filtro atual)
+                      <Bell className="h-4 w-4" /> {tuitionT("send_reminders_current_filter")}
                     </Button>
                   </div>
                 )}
@@ -3177,28 +3189,28 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input className="pl-9" placeholder="Pesquisar aluno..." value={feeSearch} onChange={(e) => setFeeSearch(e.target.value)} />
+                    <Input className="pl-9" placeholder={tuitionT("search_student_placeholder")} value={feeSearch} onChange={(e) => setFeeSearch(e.target.value)} />
                   </div>
                   <Select value={feeFilter} onValueChange={(v) => setFeeFilter(v as typeof feeFilter)}>
                     <SelectTrigger className="md:w-44"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todas</SelectItem>
-                      <SelectItem value="pending">Não pagas</SelectItem>
-                      <SelectItem value="overdue">Em atraso</SelectItem>
-                      <SelectItem value="paid">Pagas</SelectItem>
+                      <SelectItem value="all">{tuitionT("filter_all")}</SelectItem>
+                      <SelectItem value="pending">{tuitionT("filter_unpaid")}</SelectItem>
+                      <SelectItem value="overdue">{tuitionT("filter_overdue")}</SelectItem>
+                      <SelectItem value="paid">{tuitionT("filter_paid")}</SelectItem>
                     </SelectContent>
                   </Select>
                   <Select value={feeYearFilter} onValueChange={setFeeYearFilter}>
-                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Ano letivo" /></SelectTrigger>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder={tuitionT("school_year_placeholder")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todos os anos</SelectItem>
+                      <SelectItem value="all">{tuitionT("all_years")}</SelectItem>
                       {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <Select value={feeClassroomFilter} onValueChange={setFeeClassroomFilter} disabled={isParent}>
-                    <SelectTrigger className="md:w-52"><SelectValue placeholder="Turma" /></SelectTrigger>
+                    <SelectTrigger className="md:w-52"><SelectValue placeholder={tuitionT("class_placeholder")} /></SelectTrigger>
                     <SelectContent>
-                      {!isParent && <SelectItem value="all">Todas as turmas</SelectItem>}
+                      {!isParent && <SelectItem value="all">{tuitionT("all_classes")}</SelectItem>}
                       {(isParent
                         ? classrooms.filter((c) => parentClassroomIds.includes(c.id))
                         : classrooms
@@ -3210,7 +3222,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 {loading ? (
                   <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
                 ) : filteredFees.length === 0 ? (
-                  <p className="text-center py-10 text-muted-foreground">Sem propinas a apresentar.</p>
+                  <p className="text-center py-10 text-muted-foreground">{tuitionT("no_fees_to_show")}</p>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -3236,20 +3248,20 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                     return next;
                                   });
                                 }}
-                                aria-label="Seleccionar todas as linhas não pagas (filtro atual)"
+                                aria-label={tuitionT("select_all_unpaid_aria")}
                               />
                             </th>
                           )}
-                          <th className="py-2 px-2">Aluno</th>
-                          <th className="py-2 px-2">Turma</th>
-                          <th className="py-2 px-2">Mês</th>
-                          <th className="py-2 px-2">Vencimento</th>
-                          <th className="py-2 px-2">Valor</th>
-                          <th className="py-2 px-2">Estado</th>
-                          <th className="py-2 px-2 text-center w-12" title="Factura-recibo fiscal (FACTURA‑RECIBO AGT)">
-                            FT
+                          <th className="py-2 px-2">{tuitionT("col_student")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_class")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_month")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_due")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_value")}</th>
+                          <th className="py-2 px-2">{tuitionT("col_status")}</th>
+                          <th className="py-2 px-2 text-center w-12" title="FACTURA‑RECIBO AGT">
+                            {tuitionT("col_ft_abbr")}
                           </th>
-                          <th className="py-2 px-2 text-right">Ação</th>
+                          <th className="py-2 px-2 text-right">{tuitionT("col_action_right")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3275,19 +3287,19 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{f.student?.classroom?.name ?? "—"}</td>
                               <td className="py-2 px-2">{f.month_index ? monthNamesLong[f.month_index - 1] : "—"}</td>
-                              <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
+                              <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString(dateLocaleTag)}</td>
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
-                                  <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">Pago</Badge>
+                                  <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">{tuitionT("status_paid")}</Badge>
                                 ) : pendingValidation ? (
-                                  <Badge className="bg-pastel-blue text-pastel-blue-foreground hover:bg-pastel-blue">A validar</Badge>
+                                  <Badge className="bg-pastel-blue text-pastel-blue-foreground hover:bg-pastel-blue">{tuitionT("status_pending_validation")}</Badge>
                                 ) : rejected ? (
-                                  <Badge variant="outline" className="border-destructive text-destructive">Rejeitado</Badge>
+                                  <Badge variant="outline" className="border-destructive text-destructive">{tuitionT("status_rejected")}</Badge>
                                 ) : overdue ? (
-                                  <Badge variant="destructive">Em atraso</Badge>
+                                  <Badge variant="destructive">{tuitionT("status_overdue")}</Badge>
                                 ) : (
-                                  <Badge variant="secondary">Pendente</Badge>
+                                  <Badge variant="secondary">{tuitionT("status_pending")}</Badge>
                                 )}
                               </td>
                               <td className="py-2 px-2 align-middle text-center">{invoiceIconForValidatedPayment(!!f.is_paid, pay)}</td>
@@ -3297,7 +3309,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                     <>
                                       {pay.proof_url && (
                                         <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
-                                          <Eye className="h-3.5 w-3.5" /> Ver
+                                          <Eye className="h-3.5 w-3.5" /> {tuitionT("view")}
                                         </Button>
                                       )}
                                       {canValidatePaymentProofs && (
@@ -3309,7 +3321,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                             onClick={() => validatePayment(f, pay)}
                                           >
                                             {validatingId === pay.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                            Validar
+                                            {tuitionT("validate")}
                                           </Button>
                                           <Button
                                             size="sm"
@@ -3318,7 +3330,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                             disabled={bulkValidating || bulkRemindingTuition || validatingId === pay.id}
                                             onClick={() => { setRejectDialog(pay); setRejectReason(""); }}
                                           >
-                                            <XCircle className="h-3.5 w-3.5" /> Rejeitar
+                                            <XCircle className="h-3.5 w-3.5" /> {tuitionT("reject")}
                                           </Button>
                                         </>
                                       )}
@@ -3326,25 +3338,25 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   )}
                                   {pendingValidation && pay && isParent && pay.proof_url && (
                                     <Button size="sm" variant="outline" className="gap-1" onClick={() => viewProof(pay.proof_url!)}>
-                                      <Eye className="h-3.5 w-3.5" /> Ver comprovativo
+                                      <Eye className="h-3.5 w-3.5" /> {tuitionT("view_proof")}
                                     </Button>
                                   )}
                                   {!f.is_paid && !pendingValidation && (
                                     <>
                                       {(!isParent || usarAnexoEncarregado) && (
                                         <Button size="sm" variant="outline" className="gap-2" onClick={() => openRecordForFee(f)}>
-                                          <Upload className="h-3.5 w-3.5" /> {isParent ? "Anexar comprovativo" : "Registar pagamento"}
+                                          <Upload className="h-3.5 w-3.5" /> {isParent ? tuitionT("attach_proof") : tuitionT("record_payment")}
                                         </Button>
                                       )}
                                       {isParent && !usarAnexoEncarregado && (
                                         <span className="rounded-md border border-muted bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
-                                          Pagamento presencial na escola
+                                          {tuitionT("in_person_payment_hint")}
                                         </span>
                                       )}
                                       {!isParent && (
                                         <Button size="sm" variant="outline" className="gap-2" onClick={() => sendReminder(f)} disabled={remindingFeeId === f.id || !f.student?.parent_id || bulkRemindingTuition}>
                                           {remindingFeeId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
-                                          Cobrar
+                                          {tuitionT("charge_single")}
                                         </Button>
                                       )}
                                     </>
@@ -3357,7 +3369,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                       </tbody>
                     </table>
                     {filteredFees.length > 200 && (
-                      <p className="text-xs text-muted-foreground text-center py-3">A mostrar 200 de {filteredFees.length}. Refina os filtros para ver as restantes.</p>
+                      <p className="text-xs text-muted-foreground text-center py-3">{tuitionT("showing_200_of", { total: filteredFees.length })}</p>
                     )}
                   </div>
                 )}
@@ -3457,7 +3469,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                             <td className="py-2 px-2">{fee.activity?.name ?? "—"}</td>
                             <td className="py-2 px-2 font-semibold">{fmtAOA(Number(payment.amount_paid))}</td>
                             <td className="py-2 px-2 capitalize text-muted-foreground">{payment.method ?? "—"}</td>
-                            <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString("pt-PT") : "—"}</td>
+                            <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString(dateLocaleTag) : "—"}</td>
                             <td className="py-2 px-2">
                               <div className="flex flex-wrap justify-end gap-2">
                                 {payment.proof_url && (
@@ -3628,7 +3640,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
                               <td className="py-2 px-2">{f.activity?.name ?? "—"}</td>
                               <td className="py-2 px-2">{f.month_index ? monthNamesLong[f.month_index - 1] : "—"}</td>
-                              <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
+                              <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString(dateLocaleTag)}</td>
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
@@ -3805,7 +3817,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                             <td className="py-2 px-2">{fee.route?.name ?? "—"}</td>
                             <td className="py-2 px-2 font-semibold">{fmtAOA(Number(payment.amount_paid))}</td>
                             <td className="py-2 px-2 capitalize text-muted-foreground">{payment.method ?? "—"}</td>
-                            <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString("pt-PT") : "—"}</td>
+                            <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString(dateLocaleTag) : "—"}</td>
                             <td className="py-2 px-2">
                               <div className="flex flex-wrap justify-end gap-2">
                                 {payment.proof_url && (
@@ -3976,7 +3988,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
                               <td className="py-2 px-2">{f.route?.name ?? "—"}</td>
                               <td className="py-2 px-2">{f.month_index ? monthNamesLong[f.month_index - 1] : "—"}</td>
-                              <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
+                              <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString(dateLocaleTag)}</td>
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
@@ -4153,7 +4165,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                             <td className="py-2 px-2">{fee.meal_program?.name ?? "—"}</td>
                             <td className="py-2 px-2 font-semibold">{fmtAOA(Number(payment.amount_paid))}</td>
                             <td className="py-2 px-2 capitalize text-muted-foreground">{payment.method ?? "—"}</td>
-                            <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString("pt-PT") : "—"}</td>
+                            <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString(dateLocaleTag) : "—"}</td>
                             <td className="py-2 px-2">
                               <div className="flex flex-wrap justify-end gap-2">
                                 {payment.proof_url && (
@@ -4324,7 +4336,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
                               <td className="py-2 px-2">{f.meal_program?.name ?? "—"}</td>
                               <td className="py-2 px-2">{f.month_index ? monthNamesLong[f.month_index - 1] : "—"}</td>
-                              <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
+                              <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString(dateLocaleTag)}</td>
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
@@ -4501,7 +4513,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                             <td className="py-2 px-2">{fee.event?.title ?? "—"}</td>
                             <td className="py-2 px-2 font-semibold">{fmtAOA(Number(payment.amount_paid))}</td>
                             <td className="py-2 px-2 capitalize text-muted-foreground">{payment.method ?? "—"}</td>
-                            <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString("pt-PT") : "—"}</td>
+                            <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString(dateLocaleTag) : "—"}</td>
                             <td className="py-2 px-2">
                               <div className="flex flex-wrap justify-end gap-2">
                                 {payment.proof_url && (
@@ -4674,12 +4686,12 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                 <span className="font-medium">{f.event?.title ?? "—"}</span>
                                 {f.event?.event_date ? (
                                   <span className="block text-xs text-muted-foreground">
-                                    {new Date(f.event.event_date + "T12:00:00").toLocaleDateString("pt-PT")}
+                                    {new Date(f.event.event_date + "T12:00:00").toLocaleDateString(dateLocaleTag)}
                                   </span>
                                 ) : null}
                               </td>
                               <td className="py-2 px-2">{f.month_index ? monthNamesLong[f.month_index - 1] : "—"}</td>
-                              <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
+                              <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString(dateLocaleTag)}</td>
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
@@ -4856,7 +4868,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                             <td className="py-2 px-2">{fee.fee_type === "RENEWAL" ? "Renovação" : "Matrícula"}</td>
                             <td className="py-2 px-2 font-semibold">{fmtAOA(Number(payment.amount_paid))}</td>
                             <td className="py-2 px-2 capitalize text-muted-foreground">{payment.method ?? "—"}</td>
-                            <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString("pt-PT") : "—"}</td>
+                            <td className="py-2 px-2 text-muted-foreground">{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString(dateLocaleTag) : "—"}</td>
                             <td className="py-2 px-2">
                               <div className="flex flex-wrap justify-end gap-2">
                                 {payment.proof_url && (
@@ -5021,7 +5033,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <td className="py-2 px-2 font-medium">{f.student?.full_name ?? "—"}</td>
                               <td className="py-2 px-2">{f.fee_type === "RENEWAL" ? "Renovação" : "Matrícula"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{f.academic_year?.label ?? "—"}</td>
-                              <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
+                              <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString(dateLocaleTag)}</td>
                               <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
@@ -5114,58 +5126,57 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             <Card className="border-border/80 shadow-card">
               <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-1">
-                  <CardTitle>Regras de cobranças</CardTitle>
+                  <CardTitle>{tuitionT("rules_title")}</CardTitle>
                   <p className="text-sm text-muted-foreground max-w-xl">
-                    Configure o aluno ou as turmas, o valor por período, a recorrência e o calendário de vencimentos.
-                    Por omissão, os pagamentos geram-se à medida que chegam os períodos (não tudo de uma vez).
+                    {tuitionT("rules_intro")}
                   </p>
                 </div>
                 <Button onClick={openNewRule} size="sm" className="gap-2 shrink-0">
-                  <Plus className="h-4 w-4" /> Nova regra
+                  <Plus className="h-4 w-4" /> {tuitionT("new_rule")}
                 </Button>
               </CardHeader>
               <CardContent>
                 {loading ? (
                   <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
                 ) : rules.length === 0 ? (
-                  <p className="text-center py-10 text-muted-foreground">Sem regras definidas.</p>
+                  <p className="text-center py-10 text-muted-foreground">{tuitionT("no_rules")}</p>
                 ) : (
                   <div className="overflow-x-auto rounded-xl border border-border bg-muted/20">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b bg-card text-left text-muted-foreground">
-                          <th className="py-3 px-3 font-medium">Alvo</th>
-                          <th className="py-3 px-3 font-medium">Recorrência</th>
-                          <th className="py-3 px-3 font-medium">Valor</th>
-                          <th className="py-3 px-3 font-medium">Vencimento</th>
-                          <th className="py-3 px-3 font-medium">Período</th>
-                          <th className="py-3 px-3 font-medium">Tudo de uma vez</th>
-                          <th className="py-3 px-3 text-right font-medium">Ações</th>
+                          <th className="py-3 px-3 font-medium">{tuitionT("tbl_target")}</th>
+                          <th className="py-3 px-3 font-medium">{tuitionT("tbl_recurrence")}</th>
+                          <th className="py-3 px-3 font-medium">{tuitionT("tbl_value")}</th>
+                          <th className="py-3 px-3 font-medium">{tuitionT("tbl_due")}</th>
+                          <th className="py-3 px-3 font-medium">{tuitionT("tbl_period")}</th>
+                          <th className="py-3 px-3 font-medium">{tuitionT("tbl_all_at_once")}</th>
+                          <th className="py-3 px-3 text-right font-medium">{tuitionT("tbl_actions_right")}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {rules.map((r) => (
                           <tr key={r.id} className="border-b border-border/60 bg-card hover:bg-muted/40">
-                            <td className="py-2.5 px-3 font-medium">{formatFeeRuleTarget(r)}</td>
+                            <td className="py-2.5 px-3 font-medium">{formatFeeRuleTarget(r, tuitionT)}</td>
                             <td className="py-2.5 px-3">{formatRecurrenceLabel(r.recurrence, recurrenceLabels)}</td>
                             <td className="py-2.5 px-3">{fmtAOA(Number(r.monthly_amount))}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap">Dia {r.due_day}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap">{tuitionT("due_day_short", { day: r.due_day })}</td>
                             <td className="py-2.5 px-3 text-muted-foreground">
                               {monthNamesLong[r.start_month - 1]}
-                              {r.end_month != null ? ` → ${monthNamesLong[r.end_month - 1]}` : ""}
-                              <span className="text-xs"> · {r.months_count} período(s)</span>
+                              {r.end_month != null ? `${tuitionT("arrow_range")}${monthNamesLong[r.end_month - 1]}` : ""}
+                              <span className="text-xs"> · {tuitionT("period_count", { count: r.months_count })}</span>
                             </td>
                             <td className="py-2.5 px-3">
                               {r.generate_all_upfront ? (
-                                <Badge className="bg-pastel-blue text-pastel-blue-foreground">Sim</Badge>
+                                <Badge className="bg-pastel-blue text-pastel-blue-foreground">{tuitionT("yes")}</Badge>
                               ) : (
-                                <Badge variant="secondary">Não</Badge>
+                                <Badge variant="secondary">{tuitionT("no")}</Badge>
                               )}
                             </td>
                             <td className="py-2.5 px-3 text-right">
-                              <Button size="icon" variant="ghost" onClick={() => openRuleDetail(r)} aria-label="Ver detalhes"><Eye className="h-4 w-4" /></Button>
-                              <Button size="icon" variant="ghost" onClick={() => openEditRule(r)} aria-label="Editar"><Pencil className="h-4 w-4" /></Button>
-                              <Button size="icon" variant="ghost" onClick={() => setDeleteRule(r.id)} aria-label="Apagar"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                              <Button size="icon" variant="ghost" onClick={() => openRuleDetail(r)} aria-label={tuitionT("aria_details")}><Eye className="h-4 w-4" /></Button>
+                              <Button size="icon" variant="ghost" onClick={() => openEditRule(r)} aria-label={tuitionT("aria_edit")}><Pencil className="h-4 w-4" /></Button>
+                              <Button size="icon" variant="ghost" onClick={() => setDeleteRule(r.id)} aria-label={tuitionT("aria_delete")}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                             </td>
                           </tr>
                         ))}
@@ -5186,15 +5197,14 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       <Dialog open={ruleDialog} onOpenChange={setRuleDialog}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingRule ? "Editar regra de cobrança" : "Nova regra de cobrança"}</DialogTitle>
+            <DialogTitle>{editingRule ? tuitionT("rule_dialog_edit_title") : tuitionT("rule_dialog_new_title")}</DialogTitle>
             <DialogDescription>
-              O valor é por período de cobrança (ex.: mensal ou trimestral). Sem «gerar tudo de uma vez», só são criadas
-              cobranças dos períodos já atingidos ou do mês actual.
+              {tuitionT("rule_dialog_desc")}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="rounded-xl border border-border bg-muted/30 p-3">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Alvo</Label>
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{tuitionT("target_section")}</Label>
               <Select
                 value={ruleForm.target_scope}
                 onValueChange={(v) =>
@@ -5203,20 +5213,20 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
               >
                 <SelectTrigger className="mt-2 bg-card"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="grade_level">Nível de ensino (turma segue o nível)</SelectItem>
-                  <SelectItem value="classrooms">Turmas específicas</SelectItem>
-                  <SelectItem value="students">Alunos específicos</SelectItem>
+                  <SelectItem value="grade_level">{tuitionT("target_grade_level")}</SelectItem>
+                  <SelectItem value="classrooms">{tuitionT("target_classrooms")}</SelectItem>
+                  <SelectItem value="students">{tuitionT("target_students")}</SelectItem>
                 </SelectContent>
               </Select>
 
               {ruleForm.target_scope === "grade_level" && (
                 <div className="mt-3 grid gap-2">
-                  <Label>Nível de ensino</Label>
+                  <Label>{tuitionT("grade_level_label")}</Label>
                   <Select
                     value={ruleForm.grade_level}
                     onValueChange={(v) => setRuleForm((f) => ({ ...f, grade_level: v }))}
                   >
-                    <SelectTrigger><SelectValue placeholder="Seleccionar nível..." /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={tuitionT("select_level_placeholder")} /></SelectTrigger>
                     <SelectContent>
                       {GRADE_LEVELS.map((g) => (
                         <SelectItem key={g} value={g}>{g}</SelectItem>
@@ -5228,10 +5238,10 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
 
               {ruleForm.target_scope === "classrooms" && (
                 <div className="mt-3 grid gap-2">
-                  <Label>Turmas {activeYearId ? `(ano activo)` : ""}</Label>
+                  <Label>{activeYearId ? tuitionT("classrooms_active_year") : tuitionT("target_classrooms")}</Label>
                   <ScrollArea className="h-36 rounded-md border border-border bg-card px-2 py-2">
                     {classroomsForRulePicker.length === 0 ? (
-                      <p className="text-xs text-muted-foreground py-2">Sem turmas para este ano.</p>
+                      <p className="text-xs text-muted-foreground py-2">{tuitionT("no_classes_for_year")}</p>
                     ) : (
                       <div className="space-y-2 pr-2">
                         {classroomsForRulePicker.map((c) => (
@@ -5254,13 +5264,13 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                       </div>
                     )}
                   </ScrollArea>
-                  <p className="text-xs text-muted-foreground">{ruleForm.classroom_ids.length} turma(s) seleccionada(s).</p>
+                  <p className="text-xs text-muted-foreground">{tuitionT("classes_selected_suffix", { count: ruleForm.classroom_ids.length })}</p>
                 </div>
               )}
 
               {ruleForm.target_scope === "students" && (
                 <div className="mt-3 grid gap-2">
-                  <Label>Alunos</Label>
+                  <Label>{tuitionT("students_label")}</Label>
                   <ScrollArea className="h-36 rounded-md border border-border bg-card px-2 py-2">
                     <div className="space-y-2 pr-2">
                       {students.map((s) => (
@@ -5282,13 +5292,13 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                       ))}
                     </div>
                   </ScrollArea>
-                  <p className="text-xs text-muted-foreground">{ruleForm.student_ids.length} aluno(s) seleccionado(s).</p>
+                  <p className="text-xs text-muted-foreground">{tuitionT("students_selected_suffix", { count: ruleForm.student_ids.length })}</p>
                 </div>
               )}
             </div>
 
             <div className="grid gap-2">
-              <Label>Recorrência do pagamento</Label>
+              <Label>{tuitionT("payment_recurrence_label")}</Label>
               <Select
                 value={ruleForm.recurrence}
                 onValueChange={(v) => setRuleForm((f) => ({ ...f, recurrence: v as FeeRecurrence }))}
@@ -5301,12 +5311,12 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Mensal: um período por mês. Trimestral: a cada 3 meses a partir do mês de início. O valor abaixo é o valor de cada período.
+                {tuitionT("recurrence_help")}
               </p>
             </div>
 
             <div className="grid gap-2">
-              <Label>Valor por período (AOA)</Label>
+              <Label>{tuitionT("amount_per_period_label")}</Label>
               <Input
                 type="number"
                 min="0"
@@ -5318,7 +5328,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="grid gap-2">
-                <Label>Dia vencimento</Label>
+                <Label>{tuitionT("due_day_label")}</Label>
                 <Input
                   type="number"
                   min="1"
@@ -5329,7 +5339,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 />
               </div>
               <div className="grid gap-2">
-                <Label>Mês início</Label>
+                <Label>{tuitionT("start_month_label")}</Label>
                 <Select value={ruleForm.start_month} onValueChange={(v) => setRuleForm({ ...ruleForm, start_month: v })}>
                   <SelectTrigger className="bg-card"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -5340,7 +5350,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label>Mês fim</Label>
+                <Label>{tuitionT("end_month_label")}</Label>
                 <Select value={ruleForm.end_month} onValueChange={(v) => setRuleForm({ ...ruleForm, end_month: v })}>
                   <SelectTrigger className="bg-card"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -5355,7 +5365,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border px-3 py-2">
               <div className="flex items-center justify-between gap-2">
                 <Label htmlFor="gen-all" className="text-sm font-normal leading-tight">
-                  Gerar todos os pagamentos de uma vez
+                  {tuitionT("switch_generate_all_upfront")}
                 </Label>
                 <Switch
                   id="gen-all"
@@ -5364,12 +5374,12 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Desligado: cria só períodos em dia ou em atraso (recomendado).
+                {tuitionT("switch_generate_all_hint")}
               </p>
             </div>
 
             <div className="grid gap-2">
-              <Label>Notas (opcional)</Label>
+              <Label>{tuitionT("notes_optional")}</Label>
               <Input
                 className="bg-card"
                 value={ruleForm.notes}
@@ -5378,8 +5388,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" type="button" onClick={() => setRuleDialog(false)}>Cancelar</Button>
-            <Button type="button" onClick={() => void saveRule()}>Guardar</Button>
+            <Button variant="outline" type="button" onClick={() => setRuleDialog(false)}>{tuitionT("cancel")}</Button>
+            <Button type="button" onClick={() => void saveRule()}>{tuitionT("save")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -5398,38 +5408,47 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       >
         <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col">
           <DialogHeader>
-            <DialogTitle>Detalhes da regra de cobrança</DialogTitle>
+            <DialogTitle>{tuitionT("rule_detail_title")}</DialogTitle>
             <DialogDescription>
-              Propinas já geradas neste ano letivo e períodos previstos. «Gerar» cria uma propina em falta (usa a mesma lógica de valor e descontos que a geração automática).
+              {tuitionT("rule_detail_desc")}
             </DialogDescription>
           </DialogHeader>
           {ruleDetailRule ? (
             <div className="grid min-h-0 flex-1 gap-4">
               <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-muted/25 p-3 text-sm">
                 <div className="min-w-[200px] space-y-1">
-                  <p className="font-medium text-foreground">Alvo: {formatFeeRuleTarget(ruleDetailRule)}</p>
+                  <p className="font-medium text-foreground">{tuitionT("detail_target_prefix", { target: formatFeeRuleTarget(ruleDetailRule, tuitionT) })}</p>
                   <p className="text-muted-foreground">
-                    {formatRecurrenceLabel(ruleDetailRule.recurrence, recurrenceLabels)} · {fmtAOA(Number(ruleDetailRule.monthly_amount))} por período · dia {ruleDetailRule.due_day}
+                    {tuitionT("detail_recurrence_amount_due", {
+                      recurrence: formatRecurrenceLabel(ruleDetailRule.recurrence, recurrenceLabels),
+                      amount: fmtAOA(Number(ruleDetailRule.monthly_amount)),
+                      due: tuitionT("due_day_short", { day: ruleDetailRule.due_day }),
+                    })}
                   </p>
                   <p className="text-muted-foreground">
-                    Calendário: {monthNamesLong[ruleDetailRule.start_month - 1]}
-                    {ruleDetailRule.end_month != null ? ` → ${monthNamesLong[ruleDetailRule.end_month - 1]}` : ""} · {ruleDetailRule.months_count} período(s)
+                    {tuitionT("detail_calendar_line", {
+                      start: monthNamesLong[ruleDetailRule.start_month - 1],
+                      end: ruleDetailRule.end_month != null ? `${tuitionT("arrow_range")}${monthNamesLong[ruleDetailRule.end_month - 1]}` : "",
+                      periods: tuitionT("period_count", { count: ruleDetailRule.months_count }),
+                    })}
                   </p>
                   <p className="text-muted-foreground">
-                    Gerar tudo de uma vez: {ruleDetailRule.generate_all_upfront ? "sim" : "não"}
+                    {tuitionT("detail_all_upfront", {
+                      value: ruleDetailRule.generate_all_upfront ? tuitionT("yes") : tuitionT("no"),
+                    })}
                   </p>
                 </div>
                 <div className="grid min-w-[220px] gap-1.5">
-                  <Label className="text-xs">Ano letivo</Label>
+                  <Label className="text-xs">{tuitionT("school_year_label")}</Label>
                   <Select value={ruleDetailYearId ?? ""} onValueChange={(v) => setRuleDetailYearId(v)}>
                     <SelectTrigger className="bg-card">
-                      <SelectValue placeholder="Ano letivo" />
+                      <SelectValue placeholder={tuitionT("school_year_placeholder")} />
                     </SelectTrigger>
                     <SelectContent>
                       {years.map((y) => (
                         <SelectItem key={y.id} value={y.id}>
                           {y.label}
-                          {y.is_active ? " · activo" : ""}
+                          {y.is_active ? tuitionT("active_suffix") : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -5438,23 +5457,23 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
               </div>
               {!ruleDetailYearStart ? (
                 <p className="text-sm text-destructive">
-                  Este ano letivo não tem data de início na base de dados; não foi possível calcular os vencimentos dos períodos.
+                  {tuitionT("year_has_no_start_error")}
                 </p>
               ) : ruleDetailRows.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">
-                  Nenhuma linha para mostrar — não há alunos abrangidos por esta regra neste ano, ou a regra está ligada noutro ano letivo.
+                  {tuitionT("rule_detail_empty")}
                 </p>
               ) : (
                 <ScrollArea className="max-h-[min(420px,calc(85vh-14rem))] rounded-lg border border-border">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-muted/40 text-left text-muted-foreground">
-                        <th className="px-3 py-2.5 font-medium">Aluno</th>
-                        <th className="px-3 py-2.5 font-medium">Período</th>
-                        <th className="px-3 py-2.5 font-medium whitespace-nowrap">Vencimento</th>
-                        <th className="px-3 py-2.5 font-medium">Valor</th>
-                        <th className="px-3 py-2.5 font-medium">Estado</th>
-                        <th className="px-3 py-2.5 text-right font-medium">Acção</th>
+                        <th className="px-3 py-2.5 font-medium">{tuitionT("detail_tbl_student")}</th>
+                        <th className="px-3 py-2.5 font-medium">{tuitionT("detail_tbl_period")}</th>
+                        <th className="px-3 py-2.5 font-medium whitespace-nowrap">{tuitionT("detail_tbl_due")}</th>
+                        <th className="px-3 py-2.5 font-medium">{tuitionT("detail_tbl_amount")}</th>
+                        <th className="px-3 py-2.5 font-medium">{tuitionT("detail_tbl_state")}</th>
+                        <th className="px-3 py-2.5 text-right font-medium">{tuitionT("detail_tbl_action_right")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -5466,7 +5485,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                             <td className="px-3 py-2 font-medium">{row.studentName}</td>
                             <td className="px-3 py-2 text-muted-foreground">{row.monthLabel}</td>
                             <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
-                              {new Date(`${row.dueIso}T12:00:00`).toLocaleDateString("pt-PT")}
+                              {new Date(`${row.dueIso}T12:00:00`).toLocaleDateString(dateLocaleTag)}
                             </td>
                             <td className="px-3 py-2">
                               {row.fee ? (
@@ -5475,7 +5494,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                 <span className="text-muted-foreground">
                                   {fmtAOA(row.baseEstimate)}
                                   <span className="mt-0.5 block text-[10px] font-normal leading-tight">
-                                    Valor da regra; descontos na geração
+                                    {tuitionT("detail_estimate_hint")}
                                   </span>
                                 </span>
                               )}
@@ -5483,12 +5502,12 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                             <td className="px-3 py-2">
                               {row.fee ? (
                                 row.fee.is_paid ? (
-                                  <Badge className="bg-pastel-green text-pastel-green-foreground">Pago</Badge>
+                                  <Badge className="bg-pastel-green text-pastel-green-foreground">{tuitionT("status_paid")}</Badge>
                                 ) : (
-                                  <Badge variant="secondary">Gerada</Badge>
+                                  <Badge variant="secondary">{tuitionT("badge_generated")}</Badge>
                                 )
                               ) : (
-                                <Badge variant="outline">Por gerar</Badge>
+                                <Badge variant="outline">{tuitionT("badge_pending_generate")}</Badge>
                               )}
                             </td>
                             <td className="px-3 py-2 text-right">
@@ -5505,7 +5524,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   ) : (
                                     <PlayCircle className="h-3.5 w-3.5" />
                                   )}
-                                  Gerar
+                                  {tuitionT("generate_one")}
                                 </Button>
                               ) : (
                                 <span className="text-xs text-muted-foreground">—</span>
@@ -5522,7 +5541,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           ) : null}
           <DialogFooter>
             <Button variant="outline" type="button" onClick={() => setRuleDetailOpen(false)}>
-              Fechar
+              {tuitionT("close")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -5536,28 +5555,34 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       <Dialog open={generateOpen} onOpenChange={setGenerateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Gerar propinas do ano letivo</DialogTitle>
+            <DialogTitle>{tuitionT("generate_dialog_title")}</DialogTitle>
             <DialogDescription>
-              Cria as 10 propinas mensais para todos os alunos com base nas regras definidas.
-              Alunos que já têm propinas geradas para este ano serão ignorados.
+              {tuitionT("generate_dialog_desc")}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label>Ano letivo</Label>
+              <Label>{tuitionT("school_year_label")}</Label>
               <Select value={generateYearId} onValueChange={setGenerateYearId}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {years.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}{y.is_active ? " (ativo)" : ""}</SelectItem>)}
+                  {years.map((y) => (
+                    <SelectItem key={y.id} value={y.id}>
+                      {y.label}
+                      {y.is_active ? tuitionT("year_option_active_suffix") : ""}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setGenerateOpen(false)} disabled={generating}>Cancelar</Button>
+            <Button variant="outline" onClick={() => setGenerateOpen(false)} disabled={generating}>
+              {tuitionT("cancel")}
+            </Button>
             <Button onClick={runGeneration} disabled={generating || !generateYearId}>
               {generating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <PlayCircle className="h-4 w-4 mr-2" />}
-              Gerar propinas
+              {tuitionT("generate_fees_submit")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -5567,12 +5592,12 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       <AlertDialog open={!!deleteRule} onOpenChange={(o) => !o && setDeleteRule(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Apagar regra?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+            <AlertDialogTitle>{tuitionT("delete_rule_title")}</AlertDialogTitle>
+            <AlertDialogDescription>{tuitionT("delete_rule_desc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteRule}>Apagar</AlertDialogAction>
+            <AlertDialogCancel>{tuitionT("cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteRule}>{tuitionT("delete_confirm")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
