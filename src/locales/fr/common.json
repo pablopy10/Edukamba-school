@@ -277,6 +277,64 @@
       "pt": "Portugais",
       "en": "Anglais",
       "fr": "Français"
+    },
+    "no_name": "Sans nom",
+    "roles": {
+      "staff_fallback": "Employé",
+      "SUPER_ADMIN": "Super administrateur",
+      "ADMIN": "Administrateur",
+      "DIRECTOR": "Directeur",
+      "SECRETARY": "Secrétariat",
+      "TREASURER": "Trésorier",
+      "LIBRARIAN": "Bibliothécaire",
+      "STOCK_MANAGER": "Gestionnaire de stock",
+      "RECEPTIONIST": "Réceptionniste",
+      "TEACHER": "Enseignant",
+      "PARENT": "Responsable",
+      "STUDENT": "Élève"
+    },
+    "validation": {
+      "name_required": "Le nom est obligatoire",
+      "name_max": "100 caractères max.",
+      "phone_max": "30 caractères max.",
+      "email_invalid": "E-mail invalide",
+      "email_max": "255 caractères max.",
+      "password_min": "8 caractères minimum",
+      "password_max": "72 caractères max.",
+      "password_upper": "Doit contenir une majuscule",
+      "password_lower": "Doit contenir une minuscule",
+      "password_digit": "Doit contenir un chiffre",
+      "password_mismatch": "Les mots de passe ne correspondent pas"
+    },
+    "credenciais": {
+      "email_title": "E-mail de connexion",
+      "email_desc": "Un e-mail de confirmation sera envoyé à la nouvelle adresse.",
+      "email_current": "E-mail actuel",
+      "email_new": "Nouvel e-mail",
+      "email_update": "Mettre à jour l’e-mail",
+      "email_toast": "E-mail mis à jour. Confirmez sur votre nouvelle adresse.",
+      "password_title": "Mot de passe",
+      "password_desc": "Au moins 8 caractères avec majuscules, minuscules et chiffres.",
+      "password_new": "Nouveau mot de passe",
+      "password_confirm": "Confirmer le nouveau mot de passe",
+      "password_update": "Mettre à jour le mot de passe",
+      "password_toast": "Mot de passe mis à jour."
+    },
+    "seguranca": {
+      "account_title": "Sécurité du compte",
+      "account_desc": "Renforcez la protection de votre accès.",
+      "login_alerts_label": "Alertes de connexion",
+      "login_alerts_desc": "Notifier à chaque nouvelle connexion.",
+      "save_settings": "Enregistrer les paramètres",
+      "settings_toast": "Paramètres de sécurité enregistrés.",
+      "delete_title": "Supprimer le compte",
+      "delete_desc": "Cela désactive définitivement votre accès. Vos données à l’école sont conservées, mais vous perdez immédiatement l’accès à la plateforme et devez contacter un administrateur pour réactiver.",
+      "delete_button": "Supprimer mon compte",
+      "delete_dialog_title": "Supprimer votre compte ?",
+      "delete_dialog_desc": "Cela désactive votre accès et termine votre session. Pour continuer, saisissez {{word}} ci-dessous.",
+      "delete_confirm_word": "SUPPRIMER",
+      "delete_confirm_action": "Confirmer la suppression",
+      "cancel": "Annuler"
     }
   }
 }

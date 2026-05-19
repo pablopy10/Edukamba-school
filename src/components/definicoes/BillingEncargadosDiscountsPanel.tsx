@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { intlLocaleTagFromLng } from "@/lib/intlLocale";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -57,6 +59,13 @@ const fmtAOA = (n: number) =>
 
 /** Cobrança aos encarregados (app) + descontos por familiar e por aluno — migrado de Pagamentos. */
 export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string | null }) {
+  const { t: tr, i18n } = useTranslation("pages", { keyPrefix: "definicoes" });
+  const fmtAOA = (n: number) =>
+    new Intl.NumberFormat(intlLocaleTagFromLng(i18n.language), {
+      style: "currency",
+      currency: "AOA",
+      maximumFractionDigits: 0,
+    }).format(n || 0);
   const { role } = useUserRole();
   const { selectedYearId } = useAcademicYear();
   const canEditSchoolPaymentPrefs = isSchoolManagementRole(role) || isSchoolSettingsAdmin(role);
@@ -120,10 +129,10 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
     );
     setSavingPaymentPrefs(false);
     if (error) {
-      toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+      toast({ title: tr("toasts.billing_save_error"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: "Preferências de cobrança guardadas" });
+    toast({ title: tr("toasts.billing_prefs_saved") });
   };
 
   const openNewFamily = () => {
@@ -147,18 +156,18 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
       ? await supabase.from("family_discount_rules").update(payload).eq("id", editingFamily.id)
       : await supabase.from("family_discount_rules").insert(payload);
     if (error) {
-      toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+      toast({ title: tr("toasts.billing_save_error"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: editingFamily ? "Regra atualizada" : "Regra criada" });
+    toast({ title: editingFamily ? tr("toasts.billing_rule_saved") : tr("toasts.billing_rule_created") });
     setFamilyDialog(false);
     void load();
   };
   const confirmDeleteFamily = async () => {
     if (!deleteFamily) return;
     const { error } = await supabase.from("family_discount_rules").delete().eq("id", deleteFamily);
-    if (error) toast({ title: "Erro a apagar", description: error.message, variant: "destructive" });
-    else toast({ title: "Regra apagada" });
+    if (error) toast({ title: tr("toasts.billing_delete_error"), description: error.message, variant: "destructive" });
+    else toast({ title: tr("toasts.billing_rule_deleted") });
     setDeleteFamily(null);
     void load();
   };
@@ -182,20 +191,20 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
     if (!schoolId) return;
     if (!selectedYearId) {
       toast({
-        title: "Ano letivo em falta",
-        description: "Seleccione o ano letivo activo no cabeçalho da app antes de criar um desconto.",
+        title: tr("validation.year_required_discount"),
+        description: tr("validation.year_required_discount_desc"),
         variant: "destructive",
       });
       return;
     }
     if (!discountForm.student_id) {
-      toast({ title: "Selecciona um aluno", variant: "destructive" });
+      toast({ title: tr("validation.student_required"), variant: "destructive" });
       return;
     }
     const pct = discountForm.discount_percentage ? Number(discountForm.discount_percentage) : null;
     const fixed = discountForm.discount_fixed_amount ? Number(discountForm.discount_fixed_amount) : null;
     if (pct == null && fixed == null) {
-      toast({ title: "Indica uma percentagem ou um valor fixo", variant: "destructive" });
+      toast({ title: tr("validation.discount_value_required"), variant: "destructive" });
       return;
     }
     const payload = {
@@ -211,18 +220,18 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
       ? await supabase.from("student_discounts").update(payload).eq("id", editingDiscount.id)
       : await supabase.from("student_discounts").insert(payload);
     if (error) {
-      toast({ title: "Erro a guardar", description: error.message, variant: "destructive" });
+      toast({ title: tr("toasts.billing_save_error"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: editingDiscount ? "Desconto atualizado" : "Desconto criado" });
+    toast({ title: editingDiscount ? tr("toasts.billing_discount_saved") : tr("toasts.billing_discount_created") });
     setDiscountDialog(false);
     void load();
   };
   const confirmDeleteDiscount = async () => {
     if (!deleteDiscount) return;
     const { error } = await supabase.from("student_discounts").delete().eq("id", deleteDiscount);
-    if (error) toast({ title: "Erro a apagar", description: error.message, variant: "destructive" });
-    else toast({ title: "Desconto removido" });
+    if (error) toast({ title: tr("toasts.billing_delete_error"), description: error.message, variant: "destructive" });
+    else toast({ title: tr("toasts.billing_discount_removed") });
     setDeleteDiscount(null);
     void load();
   };
@@ -234,36 +243,36 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
       {canEditSchoolPaymentPrefs && (
         <Card className="border-muted">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Cobrança aos encarregados</CardTitle>
+            <CardTitle className="text-base">{tr("billing.panel_title")}</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Defina como os encarregados interagem com os pagamentos na plataforma. Com comprovativo, o IBAN da escola aparece nos emails de lembrete.
+              {tr("billing.panel_desc")}
             </p>
           </CardHeader>
           <CardContent className="space-y-2">
             <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-end md:gap-x-4 lg:gap-x-6">
               <div className="flex min-w-[14rem] max-w-full flex-col gap-2 md:w-auto md:max-w-[20rem]">
-                <Label htmlFor="def-pay-mode">Modo de cobrança</Label>
+                <Label htmlFor="def-pay-mode">{tr("billing.field_mode")}</Label>
                 <Select value={guardianPaymentMode} onValueChange={(v) => setGuardianPaymentMode(v as GuardianPaymentMode)}>
                   <SelectTrigger id="def-pay-mode">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="proof_attachment">
-                      Comprovativo na app / transferência (IBAN + validação pela escola)
+                      {tr("billing.mode_proof")}
                     </SelectItem>
                     <SelectItem value="in_person">
-                      Pagamento presencial na escola (sem envio de ficheiros pelos encarregados)
+                      {tr("billing.mode_in_person")}
                     </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-2 md:min-w-[12rem]">
-                <Label htmlFor="def-school-iban">IBAN da escola</Label>
+                <Label htmlFor="def-school-iban">{tr("billing.field_iban")}</Label>
                 <Input
                   id="def-school-iban"
                   value={bankIbanDraft}
                   onChange={(e) => setBankIbanDraft(e.target.value)}
-                  placeholder="Ex.: AO06 ..."
+                  placeholder={tr("billing.iban_placeholder")}
                   disabled={guardianPaymentMode !== "proof_attachment"}
                 />
               </div>
@@ -275,11 +284,11 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
                 disabled={savingPaymentPrefs}
               >
                 {savingPaymentPrefs ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Guardar definições
+                {tr("billing.btn_save_prefs")}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Aparece no email quando está activo o modo com comprovativo. Opcional mas fortemente recomendado.
+              {tr("billing.iban_help")}
             </p>
           </CardContent>
         </Card>
@@ -287,20 +296,20 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
 
       <Tabs defaultValue="family" className="w-full">
         <TabsList>
-          <TabsTrigger value="family">Descontos por familiar</TabsTrigger>
-          <TabsTrigger value="overrides">Descontos por aluno</TabsTrigger>
+          <TabsTrigger value="family">{tr("billing.tab_family")}</TabsTrigger>
+          <TabsTrigger value="overrides">{tr("billing.tab_overrides")}</TabsTrigger>
         </TabsList>
         <TabsContent value="family" className="mt-4 space-y-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle>Desconto automático por familiar</CardTitle>
+                <CardTitle>{tr("billing.family_card_title")}</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Quando um educador tem vários filhos na escola, aplica-se um desconto.
+                  {tr("billing.family_card_desc")}
                 </p>
               </div>
               <Button type="button" onClick={openNewFamily} size="sm" className="gap-2">
-                <Plus className="h-4 w-4" /> Nova regra
+                <Plus className="h-4 w-4" /> {tr("billing.btn_new_rule")}
               </Button>
             </CardHeader>
             <CardContent>
@@ -309,21 +318,21 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
                   <Loader2 className="h-6 w-6 animate-spin" />
                 </div>
               ) : familyRules.length === 0 ? (
-                <p className="py-10 text-center text-muted-foreground">Sem regras definidas.</p>
+                <p className="py-10 text-center text-muted-foreground">{tr("billing.family_empty")}</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-left text-muted-foreground">
-                        <th className="px-2 py-2">Posição do familiar</th>
-                        <th className="px-2 py-2">Desconto</th>
-                        <th className="px-2 py-2 text-right">Acções</th>
+                        <th className="px-2 py-2">{tr("billing.th_sibling_pos")}</th>
+                        <th className="px-2 py-2">{tr("billing.th_discount")}</th>
+                        <th className="px-2 py-2 text-right">{tr("billing.th_actions")}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {familyRules.map((f) => (
                         <tr key={f.id} className="border-b hover:bg-muted/30">
-                          <td className="px-2 py-2 font-medium">{f.sibling_position}º filho ou superior</td>
+                          <td className="px-2 py-2 font-medium">{tr("billing.sibling_row", { n: f.sibling_position })}</td>
                           <td className="px-2 py-2">
                             <Badge variant="secondary">{f.discount_percentage}%</Badge>
                           </td>
@@ -349,14 +358,14 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle>Descontos manuais por aluno</CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">Sobrepõe a regra automática em casos especiais.</p>
+                <CardTitle>{tr("billing.overrides_title")}</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">{tr("billing.overrides_desc")}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Ano letivo do desconto: usa o ano seleccionado no cabeçalho da app{selectedYearId ? "" : " (nenhum seleccionado)"}.
+                  {tr("billing.overrides_year_hint", { suffix: selectedYearId ? "" : tr("billing.overrides_year_none") })}
                 </p>
               </div>
               <Button type="button" onClick={openNewDiscount} size="sm" className="gap-2" disabled={!selectedYearId}>
-                <Plus className="h-4 w-4" /> Novo desconto
+                <Plus className="h-4 w-4" /> {tr("billing.btn_new_discount")}
               </Button>
             </CardHeader>
             <CardContent>
@@ -365,27 +374,27 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
                   <Loader2 className="h-6 w-6 animate-spin" />
                 </div>
               ) : discounts.length === 0 ? (
-                <p className="py-10 text-center text-muted-foreground">Sem descontos manuais.</p>
+                <p className="py-10 text-center text-muted-foreground">{tr("billing.overrides_empty")}</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-left text-muted-foreground">
-                        <th className="px-2 py-2">Aluno</th>
-                        <th className="px-2 py-2">Desconto</th>
-                        <th className="px-2 py-2">Motivo</th>
-                        <th className="px-2 py-2 text-right">Acções</th>
+                        <th className="px-2 py-2">{tr("billing.th_student")}</th>
+                        <th className="px-2 py-2">{tr("billing.th_discount")}</th>
+                        <th className="px-2 py-2">{tr("billing.th_reason")}</th>
+                        <th className="px-2 py-2 text-right">{tr("billing.th_actions")}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {discounts.map((d) => (
                         <tr key={d.id} className="border-b hover:bg-muted/30">
-                          <td className="px-2 py-2 font-medium">{d.student?.full_name ?? "—"}</td>
+                          <td className="px-2 py-2 font-medium">{d.student?.full_name ?? tr("shared.em_dash")}</td>
                           <td className="px-2 py-2">
                             {d.discount_percentage != null ? `${d.discount_percentage}%` : null}
                             {d.discount_fixed_amount != null ? fmtAOA(Number(d.discount_fixed_amount)) : null}
                           </td>
-                          <td className="px-2 py-2 text-muted-foreground">{d.reason ?? "—"}</td>
+                          <td className="px-2 py-2 text-muted-foreground">{d.reason ?? tr("shared.em_dash")}</td>
                           <td className="px-2 py-2 text-right">
                             <Button size="icon" variant="ghost" type="button" onClick={() => openEditDiscount(d)}>
                               <Pencil className="h-4 w-4" />
@@ -408,12 +417,12 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
       <Dialog open={familyDialog} onOpenChange={setFamilyDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingFamily ? "Editar regra" : "Nova regra de família"}</DialogTitle>
-            <DialogDescription>Aplica-se a alunos com o mesmo educador.</DialogDescription>
+            <DialogTitle>{editingFamily ? tr("billing.dialog_family_edit") : tr("billing.dialog_family_new")}</DialogTitle>
+            <DialogDescription>{tr("billing.dialog_family_desc")}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label>A partir do … familiar</Label>
+              <Label>{tr("billing.field_from_sibling")}</Label>
               <Input
                 type="number"
                 min={2}
@@ -422,11 +431,11 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
                 onChange={(e) => setFamilyForm({ ...familyForm, sibling_position: e.target.value })}
               />
               <p className="text-xs text-muted-foreground">
-                2 = aplicar ao 2º filho em diante; 3 = só ao 3º em diante; etc.
+                {tr("billing.field_from_sibling_help")}
               </p>
             </div>
             <div className="grid gap-2">
-              <Label>Desconto (%)</Label>
+              <Label>{tr("billing.field_discount_pct")}</Label>
               <Input
                 type="number"
                 min={0}
@@ -438,10 +447,10 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
           </div>
           <DialogFooter>
             <Button variant="outline" type="button" onClick={() => setFamilyDialog(false)}>
-              Cancelar
+              {tr("shared.cancel")}
             </Button>
             <Button type="button" onClick={() => void saveFamily()}>
-              Guardar
+              {tr("shared.guardar")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -450,19 +459,19 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
       <Dialog open={discountDialog} onOpenChange={setDiscountDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingDiscount ? "Editar desconto" : "Novo desconto manual"}</DialogTitle>
-            <DialogDescription>Sobrepõe a regra automática para um aluno específico.</DialogDescription>
+            <DialogTitle>{editingDiscount ? tr("billing.dialog_discount_edit") : tr("billing.dialog_discount_new")}</DialogTitle>
+            <DialogDescription>{tr("billing.dialog_discount_desc")}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label>Aluno</Label>
+              <Label>{tr("billing.field_student")}</Label>
               <Select
                 value={discountForm.student_id}
                 onValueChange={(v) => setDiscountForm({ ...discountForm, student_id: v })}
                 disabled={!!editingDiscount}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecciona um aluno" />
+                  <SelectValue placeholder={tr("billing.select_student")} />
                 </SelectTrigger>
                 <SelectContent>
                   {students.map((s) => (
@@ -475,7 +484,7 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label>Desconto %</Label>
+                <Label>{tr("billing.field_discount_pct_short")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -491,7 +500,7 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
                 />
               </div>
               <div className="grid gap-2">
-                <Label>Ou valor fixo</Label>
+                <Label>{tr("billing.field_fixed_amount")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -507,20 +516,20 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
               </div>
             </div>
             <div className="grid gap-2">
-              <Label>Motivo</Label>
+              <Label>{tr("billing.th_reason")}</Label>
               <Input
                 value={discountForm.reason}
                 onChange={(e) => setDiscountForm({ ...discountForm, reason: e.target.value })}
-                placeholder="Ex.: bolsa de mérito"
+                placeholder={tr("billing.reason_placeholder")}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" type="button" onClick={() => setDiscountDialog(false)}>
-              Cancelar
+              {tr("shared.cancel")}
             </Button>
             <Button type="button" onClick={() => void saveDiscount()}>
-              Guardar
+              {tr("shared.guardar")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -529,12 +538,12 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
       <AlertDialog open={!!deleteFamily} onOpenChange={(o) => !o && setDeleteFamily(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Apagar regra?</AlertDialogTitle>
-            <AlertDialogDescription>Esta acção não pode ser desfeita.</AlertDialogDescription>
+            <AlertDialogTitle>{tr("billing.confirm_delete_rule_title")}</AlertDialogTitle>
+            <AlertDialogDescription>{tr("billing.confirm_delete_rule_desc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void confirmDeleteFamily()}>Apagar</AlertDialogAction>
+            <AlertDialogCancel>{tr("shared.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmDeleteFamily()}>{tr("billing.confirm_delete_rule_action")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -542,12 +551,12 @@ export function BillingEncargadosDiscountsPanel({ schoolId }: { schoolId: string
       <AlertDialog open={!!deleteDiscount} onOpenChange={(o) => !o && setDeleteDiscount(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover desconto?</AlertDialogTitle>
-            <AlertDialogDescription>Esta acção não pode ser desfeita.</AlertDialogDescription>
+            <AlertDialogTitle>{tr("billing.confirm_delete_discount_title")}</AlertDialogTitle>
+            <AlertDialogDescription>{tr("billing.confirm_delete_rule_desc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void confirmDeleteDiscount()}>Remover</AlertDialogAction>
+            <AlertDialogCancel>{tr("shared.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmDeleteDiscount()}>{tr("billing.confirm_delete_discount_action")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

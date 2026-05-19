@@ -43,6 +43,9 @@ import frChat from "@/locales/fr/chat.json";
 import ptNotificacoes from "@/locales/pt/notificacoes.json";
 import enNotificacoes from "@/locales/en/notificacoes.json";
 import frNotificacoes from "@/locales/fr/notificacoes.json";
+import ptDefinicoes from "@/locales/pt/definicoes.json";
+import enDefinicoes from "@/locales/en/definicoes.json";
+import frDefinicoes from "@/locales/fr/definicoes.json";
 
 const mergePages = (
   base: typeof ptPages,
@@ -60,6 +63,7 @@ const mergePages = (
     documentos: typeof ptDocumentos;
     chat: typeof ptChat;
     notificacoes: typeof ptNotificacoes;
+    definicoes: typeof ptDefinicoes;
   },
 ) => ({ ...base, ...extras });
 
@@ -80,6 +84,7 @@ export const resources = {
       documentos: ptDocumentos,
       chat: ptChat,
       notificacoes: ptNotificacoes,
+      definicoes: ptDefinicoes,
     }),
   },
   en: {
@@ -98,6 +103,7 @@ export const resources = {
       documentos: enDocumentos,
       chat: enChat,
       notificacoes: enNotificacoes,
+      definicoes: enDefinicoes,
     }),
   },
   fr: {
@@ -116,6 +122,7 @@ export const resources = {
       documentos: frDocumentos,
       chat: frChat,
       notificacoes: frNotificacoes,
+      definicoes: frDefinicoes,
     }),
   },
 } as const;

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -25,17 +26,6 @@ const INVITE_ORDER: InviteableStaffRole[] = [
   "TEACHER",
 ];
 
-export const ROLE_LABEL_INVITE: Record<InviteableStaffRole, string> = {
-  ADMIN: "Administrador",
-  DIRECTOR: "Director",
-  SECRETARY: "Secretaria",
-  TREASURER: "Tesoureiro",
-  LIBRARIAN: "Bibliotecário",
-  STOCK_MANAGER: "Gestor de stock",
-  RECEPTIONIST: "Rececionista",
-  TEACHER: "Professor",
-};
-
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -43,6 +33,7 @@ interface Props {
 }
 
 export const InviteStaffUserDialog = ({ open, onOpenChange, onInvited }: Props) => {
+  const { t: tr } = useTranslation("pages", { keyPrefix: "definicoes" });
   const [loading, setLoading] = useState(false);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -61,15 +52,15 @@ export const InviteStaffUserDialog = ({ open, onOpenChange, onInvited }: Props) 
 
   const submit = async () => {
     if (!fullName.trim()) {
-      toast({ title: "Nome obrigatório", variant: "destructive" });
+      toast({ title: tr("validation.invite_name"), variant: "destructive" });
       return;
     }
     if (!email.trim()) {
-      toast({ title: "Email obrigatório", variant: "destructive" });
+      toast({ title: tr("validation.invite_email"), variant: "destructive" });
       return;
     }
     if (password.length < 6) {
-      toast({ title: "Password (mín. 6 caracteres)", variant: "destructive" });
+      toast({ title: tr("validation.invite_password"), variant: "destructive" });
       return;
     }
     setLoading(true);
@@ -86,14 +77,14 @@ export const InviteStaffUserDialog = ({ open, onOpenChange, onInvited }: Props) 
       if (error) throw error;
       if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
       toast({
-        title: "Utilizador criado",
-        description: `Credenciais enviadas por email para ${email.trim()}.`,
+        title: tr("toasts.invite_created"),
+        description: tr("toasts.invite_created_desc", { email: email.trim() }),
       });
       onInvited();
       onOpenChange(false);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      toast({ title: "Erro ao convidar", description: msg, variant: "destructive" });
+      toast({ title: tr("toasts.invite_error"), description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -103,36 +94,49 @@ export const InviteStaffUserDialog = ({ open, onOpenChange, onInvited }: Props) 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Novo utilizador</DialogTitle>
-          <DialogDescription>
-            Um único pedido ao servidor gere os dois fluxos: com convite envia email; com password cria a conta logo (sem mensagem “convite”).
-            Ajustar módulos: separador Permissões.
-          </DialogDescription>
+          <DialogTitle>{tr("invite.title")}</DialogTitle>
+          <DialogDescription>{tr("invite.description")}</DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <Label htmlFor="is-fn">Nome completo</Label>
-            <Input id="is-fn" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Maria Silva" />
+            <Label htmlFor="is-fn">{tr("invite.field_full_name")}</Label>
+            <Input
+              id="is-fn"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder={tr("invite.placeholder_name")}
+            />
           </div>
           <div className="sm:col-span-2">
-            <Label htmlFor="is-em">Email</Label>
-            <Input id="is-em" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@escola.edu" />
+            <Label htmlFor="is-em">{tr("invite.field_email")}</Label>
+            <Input
+              id="is-em"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder={tr("invite.placeholder_email")}
+            />
           </div>
           <div className="sm:col-span-2">
-            <Label htmlFor="is-ph">Telefone (opcional)</Label>
-            <Input id="is-ph" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(244) 923 …" />
+            <Label htmlFor="is-ph">{tr("invite.field_phone")}</Label>
+            <Input
+              id="is-ph"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder={tr("invite.placeholder_phone")}
+            />
           </div>
           <div className="sm:col-span-2">
-            <Label>Função</Label>
+            <Label>{tr("invite.field_role")}</Label>
             <Select value={role} onValueChange={(v) => setRole(v as InviteableStaffRole)}>
               <SelectTrigger>
-                <SelectValue placeholder="Seleccionar função" />
+                <SelectValue placeholder={tr("invite.select_role")} />
               </SelectTrigger>
               <SelectContent>
                 {INVITE_ORDER.map((r) => (
                   <SelectItem key={r} value={r}>
-                    {ROLE_LABEL_INVITE[r]}
+                    {tr(`roles.${r}`)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -140,19 +144,26 @@ export const InviteStaffUserDialog = ({ open, onOpenChange, onInvited }: Props) 
           </div>
 
           <div className="sm:col-span-2 space-y-1.5">
-            <Label htmlFor="is-pw">Password inicial *</Label>
-            <Input id="is-pw" type="text" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
-            <p className="text-xs text-muted-foreground">O utilizador receberá um email com as credenciais de acesso.</p>
+            <Label htmlFor="is-pw">{tr("invite.field_password")}</Label>
+            <Input
+              id="is-pw"
+              type="text"
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={tr("invite.placeholder_password")}
+            />
+            <p className="text-xs text-muted-foreground">{tr("invite.password_help")}</p>
           </div>
         </div>
 
         <DialogFooter className="gap-2">
           <Button variant="outline" type="button" onClick={() => onOpenChange(false)} disabled={loading}>
-            Cancelar
+            {tr("shared.cancel")}
           </Button>
           <Button type="button" onClick={() => void submit()} disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Criar utilizador
+            {tr("invite.btn_create")}
           </Button>
         </DialogFooter>
       </DialogContent>

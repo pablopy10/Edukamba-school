@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   User, Mail, Phone, Lock, Shield, Bell, Eye, EyeOff, Check, AlertCircle,
   Globe, Save, Loader2, Trash2,
@@ -24,7 +24,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Capacitor } from "@capacitor/core";
-import { ROLE_LABEL_INVITE } from "@/components/definicoes/InviteStaffUserDialog";
 import { applyNativePushPreference } from "@/lib/oneSignalNative";
 import { applyWebPushPreference } from "@/lib/oneSignalWeb";
 import {
@@ -38,46 +37,12 @@ import { syncAppLocale } from "@/lib/syncAppLocale";
 
 type Tab = "pessoal" | "credenciais" | "preferencias" | "seguranca";
 
-const profileSchema = z.object({
-  full_name: z.string().trim().min(1, "Nome obrigatório").max(100, "Máx. 100 caracteres"),
-  phone: z.string().trim().max(30, "Máx. 30 caracteres").optional().or(z.literal("")),
-  language: z.enum(["pt", "en", "fr"]),
-});
-
-const emailSchema = z.object({
-  email: z.string().trim().email("Email inválido").max(255, "Máx. 255 caracteres"),
-});
-
-const passwordSchema = z
-  .object({
-    newPassword: z
-      .string()
-      .min(8, "Mínimo 8 caracteres")
-      .max(72, "Máx. 72 caracteres")
-      .regex(/[A-Z]/, "Deve conter uma letra maiúscula")
-      .regex(/[a-z]/, "Deve conter uma letra minúscula")
-      .regex(/[0-9]/, "Deve conter um número"),
-    confirmPassword: z.string(),
-  })
-  .refine((d) => d.newPassword === d.confirmPassword, {
-    path: ["confirmPassword"],
-    message: "As palavras-passe não coincidem",
-  });
-
 const PROFILE_TABS: { id: Tab; labelKey: string; icon: typeof User }[] = [
   { id: "pessoal", labelKey: "perfil.tabs.pessoal", icon: User },
   { id: "credenciais", labelKey: "perfil.tabs.credenciais", icon: Lock },
   { id: "preferencias", labelKey: "perfil.tabs.preferencias", icon: Bell },
   { id: "seguranca", labelKey: "perfil.tabs.seguranca", icon: Shield },
 ];
-
-const roleLabel = (r: string | null | undefined) => {
-  if (!r) return "Funcionário";
-  if (r === "PARENT") return "Educador";
-  if (r === "STUDENT") return "Aluno";
-  if (r === "SUPER_ADMIN") return "Super admin";
-  return ROLE_LABEL_INVITE[r as keyof typeof ROLE_LABEL_INVITE] ?? "Funcionário";
-};
 
 /** Antes as preferências eram só em localStorage; usado para migrar uma vez após carregar da BD. */
 const LEGACY_PREFS_KEY = "perfil:prefs";
@@ -94,6 +59,51 @@ const defaultSecurity = { loginAlerts: true };
 
 const Perfil = () => {
   const { t } = useTranslation("common");
+  const deleteConfirmWord = t("perfil.seguranca.delete_confirm_word");
+
+  const profileSchema = useMemo(
+    () =>
+      z.object({
+        full_name: z.string().trim().min(1, t("perfil.validation.name_required")).max(100, t("perfil.validation.name_max")),
+        phone: z.string().trim().max(30, t("perfil.validation.phone_max")).optional().or(z.literal("")),
+        language: z.enum(["pt", "en", "fr"]),
+      }),
+    [t],
+  );
+
+  const emailSchema = useMemo(
+    () =>
+      z.object({
+        email: z.string().trim().email(t("perfil.validation.email_invalid")).max(255, t("perfil.validation.email_max")),
+      }),
+    [t],
+  );
+
+  const passwordSchema = useMemo(
+    () =>
+      z
+        .object({
+          newPassword: z
+            .string()
+            .min(8, t("perfil.validation.password_min"))
+            .max(72, t("perfil.validation.password_max"))
+            .regex(/[A-Z]/, t("perfil.validation.password_upper"))
+            .regex(/[a-z]/, t("perfil.validation.password_lower"))
+            .regex(/[0-9]/, t("perfil.validation.password_digit")),
+          confirmPassword: z.string(),
+        })
+        .refine((d) => d.newPassword === d.confirmPassword, {
+          path: ["confirmPassword"],
+          message: t("perfil.validation.password_mismatch"),
+        }),
+    [t],
+  );
+
+  const roleLabel = (r: string | null | undefined) => {
+    if (!r) return t("perfil.roles.staff_fallback");
+    return t(`perfil.roles.${r}`, { defaultValue: t("perfil.roles.staff_fallback") });
+  };
+
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -252,13 +262,13 @@ const Perfil = () => {
 
   const handleSaveEmail = async () => {
     const parsed = emailSchema.safeParse({ email: emailDraft });
-    if (!parsed.success) { setEmailError(parsed.error.issues[0]?.message ?? "Email inválido"); return; }
+    if (!parsed.success) { setEmailError(parsed.error.issues[0]?.message ?? t("perfil.validation.email_invalid")); return; }
     setEmailError(null);
     setSaving(true);
     const { error } = await supabase.auth.updateUser({ email: emailDraft.trim() });
     setSaving(false);
     if (error) { showToast("error", error.message); return; }
-    showToast("success", "Email atualizado. Confirme no seu novo endereço.");
+    showToast("success", t("perfil.credenciais.email_toast"));
   };
 
   const handleSavePassword = async () => {
@@ -275,7 +285,7 @@ const Perfil = () => {
     setSaving(false);
     if (error) { showToast("error", error.message); return; }
     setPwd({ newPassword: "", confirmPassword: "" });
-    showToast("success", "Palavra-passe atualizada.");
+    showToast("success", t("perfil.credenciais.password_toast"));
   };
 
   const handleSavePrefs = async () => {
@@ -329,7 +339,7 @@ const Perfil = () => {
 
   const handleSaveSecurity = () => {
     localStorage.setItem(SECURITY_KEY, JSON.stringify(security));
-    showToast("success", "Definições de segurança guardadas.");
+    showToast("success", t("perfil.seguranca.settings_toast"));
   };
 
   const handleDeleteAccount = async () => {
@@ -430,7 +440,7 @@ const Perfil = () => {
             </div>
             <div className="flex-1">
               <div className="flex flex-wrap items-center gap-3">
-                <h2 className="text-xl font-bold text-foreground">{profile.full_name || "Sem nome"}</h2>
+                <h2 className="text-xl font-bold text-foreground">{profile.full_name || t("perfil.no_name")}</h2>
                 <span className="rounded-full bg-pastel-green px-3 py-1 text-xs font-semibold text-pastel-green-foreground">
                   {roleLabel(profile.role)}
                 </span>
@@ -532,15 +542,15 @@ const Perfil = () => {
         {activeTab === "credenciais" && (
           <div className="flex flex-col gap-6">
             <div className="rounded-2xl bg-card p-6 shadow-card">
-              <h2 className="text-lg font-bold text-foreground">Email de Acesso</h2>
+              <h2 className="text-lg font-bold text-foreground">{t("perfil.credenciais.email_title")}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Será enviado um email de confirmação para o novo endereço.
+                {t("perfil.credenciais.email_desc")}
               </p>
               <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-2">
-                <Field label="Email atual" icon={Mail}>
+                <Field label={t("perfil.credenciais.email_current")} icon={Mail}>
                   <input className={cn(inputCls(false), "bg-muted/40")} value={email} readOnly />
                 </Field>
-                <Field label="Novo email" icon={Mail} error={emailError ?? undefined}>
+                <Field label={t("perfil.credenciais.email_new")} icon={Mail} error={emailError ?? undefined}>
                   <input
                     type="email"
                     className={inputCls(!!emailError)}
@@ -557,21 +567,21 @@ const Perfil = () => {
                   className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" strokeWidth={2} />}
-                  Atualizar Email
+                  {t("perfil.credenciais.email_update")}
                 </button>
               </div>
             </div>
 
             <div className="rounded-2xl bg-card p-6 shadow-card">
-              <h2 className="text-lg font-bold text-foreground">Palavra-passe</h2>
+              <h2 className="text-lg font-bold text-foreground">{t("perfil.credenciais.password_title")}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Use no mínimo 8 caracteres com letras maiúsculas, minúsculas e números.
+                {t("perfil.credenciais.password_desc")}
               </p>
 
               <div className="mt-5 grid grid-cols-1 gap-5">
                 {([
-                  { key: "newPassword" as const, label: "Nova palavra-passe", show: showPwd.next, toggle: () => setShowPwd((s) => ({ ...s, next: !s.next })) },
-                  { key: "confirmPassword" as const, label: "Confirmar nova palavra-passe", show: showPwd.confirm, toggle: () => setShowPwd((s) => ({ ...s, confirm: !s.confirm })) },
+                  { key: "newPassword" as const, label: t("perfil.credenciais.password_new"), show: showPwd.next, toggle: () => setShowPwd((s) => ({ ...s, next: !s.next })) },
+                  { key: "confirmPassword" as const, label: t("perfil.credenciais.password_confirm"), show: showPwd.confirm, toggle: () => setShowPwd((s) => ({ ...s, confirm: !s.confirm })) },
                 ]).map((f) => (
                   <Field key={f.key} label={f.label} icon={Lock} error={pwdErrors[f.key]}>
                     <div className="relative">
@@ -601,7 +611,7 @@ const Perfil = () => {
                   className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" strokeWidth={2} />}
-                  Atualizar Palavra-passe
+                  {t("perfil.credenciais.password_update")}
                 </button>
               </div>
             </div>
@@ -664,14 +674,14 @@ const Perfil = () => {
         {activeTab === "seguranca" && (
           <div className="flex flex-col gap-6">
             <div className="rounded-2xl bg-card p-6 shadow-card">
-              <h2 className="text-lg font-bold text-foreground">Segurança da Conta</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Reforce a proteção do seu acesso.</p>
+              <h2 className="text-lg font-bold text-foreground">{t("perfil.seguranca.account_title")}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{t("perfil.seguranca.account_desc")}</p>
 
               <div className="mt-6 flex flex-col divide-y divide-border">
                 <div className="flex items-center justify-between py-4">
                   <div>
-                    <p className="text-sm font-medium text-foreground">Alertas de início de sessão</p>
-                    <p className="text-xs text-muted-foreground">Notificar sempre que houver um novo login.</p>
+                    <p className="text-sm font-medium text-foreground">{t("perfil.seguranca.login_alerts_label")}</p>
+                    <p className="text-xs text-muted-foreground">{t("perfil.seguranca.login_alerts_desc")}</p>
                   </div>
                   <Toggle checked={security.loginAlerts} onChange={(v) => setSecurity({ ...security, loginAlerts: v })} />
                 </div>
@@ -682,7 +692,7 @@ const Perfil = () => {
                   onClick={handleSaveSecurity}
                   className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
                 >
-                  <Save className="h-4 w-4" strokeWidth={2} /> Guardar Definições
+                  <Save className="h-4 w-4" strokeWidth={2} /> {t("perfil.seguranca.save_settings")}
                 </button>
               </div>
             </div>
@@ -694,10 +704,9 @@ const Perfil = () => {
                   <Trash2 className="h-5 w-5" strokeWidth={2} />
                 </div>
                 <div className="flex-1">
-                  <h2 className="text-lg font-bold text-foreground">Remover conta</h2>
+                  <h2 className="text-lg font-bold text-foreground">{t("perfil.seguranca.delete_title")}</h2>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Esta ação desativa permanentemente o seu acesso. Os seus dados na escola serão preservados,
-                    mas perderá imediatamente o acesso à plataforma e terá de contactar um administrador para reativar.
+                    {t("perfil.seguranca.delete_desc")}
                   </p>
                 </div>
               </div>
@@ -707,7 +716,7 @@ const Perfil = () => {
                   onClick={() => { setDeleteConfirm(""); setDeleteOpen(true); }}
                   className="flex h-11 items-center gap-2 rounded-full bg-pastel-pink px-5 text-sm font-semibold text-pastel-pink-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
                 >
-                  <Trash2 className="h-4 w-4" strokeWidth={2} /> Remover a minha conta
+                  <Trash2 className="h-4 w-4" strokeWidth={2} /> {t("perfil.seguranca.delete_button")}
                 </button>
               </div>
             </div>
@@ -718,28 +727,27 @@ const Perfil = () => {
         <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
           <AlertDialogContent className="rounded-2xl">
             <AlertDialogHeader>
-              <AlertDialogTitle>Remover a sua conta?</AlertDialogTitle>
+              <AlertDialogTitle>{t("perfil.seguranca.delete_dialog_title")}</AlertDialogTitle>
               <AlertDialogDescription>
-                Esta ação desativa o seu acesso e termina a sua sessão. Para continuar, escreva{" "}
-                <span className="font-semibold text-foreground">REMOVER</span> abaixo.
+                {t("perfil.seguranca.delete_dialog_desc", { word: deleteConfirmWord })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <input
               autoFocus
               value={deleteConfirm}
               onChange={(e) => setDeleteConfirm(e.target.value)}
-              placeholder="REMOVER"
+              placeholder={deleteConfirmWord}
               className="h-11 rounded-xl border border-border bg-card px-4 text-sm shadow-soft outline-none focus:border-pastel-pink-foreground focus:ring-2 focus:ring-pastel-pink/40"
             />
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={deleting} className="rounded-full">Cancelar</AlertDialogCancel>
+              <AlertDialogCancel disabled={deleting} className="rounded-full">{t("perfil.seguranca.cancel")}</AlertDialogCancel>
               <AlertDialogAction
-                disabled={deleteConfirm !== "REMOVER" || deleting}
+                disabled={deleteConfirm !== deleteConfirmWord || deleting}
                 onClick={(e) => { e.preventDefault(); handleDeleteAccount(); }}
                 className="rounded-full bg-pastel-pink text-pastel-pink-foreground hover:opacity-90 disabled:opacity-50"
               >
                 {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" strokeWidth={2} />}
-                Confirmar remoção
+                {t("perfil.seguranca.delete_confirm_action")}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

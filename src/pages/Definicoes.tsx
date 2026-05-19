@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { intlLocaleTagFromLng } from "@/lib/intlLocale";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Building2,
@@ -41,7 +43,6 @@ import { isDefinicoesTabAllowed } from "@/lib/staffNavAccess";
 import { invokeAdminUpdateUserEmail } from "@/lib/admin/invokeAdminUpdateUserEmail";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { moduleMeta } from "@/context/ModulesContext";
 import {
   getDefaultRoleModulePermission,
   fullAccessMatrix,
@@ -50,24 +51,6 @@ import {
 } from "@/lib/schoolPermissionModules";
 import { schoolPermissionMatrixQueryRoot } from "@/hooks/useSchoolPermissionMatrix";
 import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
-
-const MODULES: { key: PermissionModuleKey; label: string; desc: string }[] = [
-  ...PERMISSION_ROUTE_ORDER.map((key) => ({
-    key,
-    label: moduleMeta[key].label,
-    desc: moduleMeta[key].description,
-  })),
-  {
-    key: "modulos",
-    label: "Visibilidade de módulos",
-    desc: "Ativar ou ocultar módulos do menu consoante o plano (administradores).",
-  },
-  {
-    key: "definicoes",
-    label: "Escola na cloud",
-    desc: "Instituição, marca visual e SaaS (exclusivo de administradores).",
-  },
-];
 
 type Tab =
   | "escola"
@@ -81,15 +64,15 @@ type Tab =
 
 type Role = Database["public"]["Enums"]["user_role"];
 
-const tabs: { id: Tab; label: string; icon: typeof Building2 }[] = [
-  { id: "escola", label: "Escola", icon: Building2 },
-  { id: "marca", label: "Marca", icon: ImageIcon },
-  { id: "academico", label: "Académico", icon: Calendar },
-  { id: "utilizadores", label: "Utilizadores", icon: UsersIcon },
-  { id: "permissoes", label: "Permissões", icon: Shield },
-  { id: "notificacoes", label: "Notificações", icon: Bell },
-  { id: "faturacao", label: "Faturação", icon: CreditCard },
-  { id: "auditoria", label: "Auditoria", icon: History },
+const TAB_DEFS: { id: Tab; icon: typeof Building2 }[] = [
+  { id: "escola", icon: Building2 },
+  { id: "marca", icon: ImageIcon },
+  { id: "academico", icon: Calendar },
+  { id: "utilizadores", icon: UsersIcon },
+  { id: "permissoes", icon: Shield },
+  { id: "notificacoes", icon: Bell },
+  { id: "faturacao", icon: CreditCard },
+  { id: "auditoria", icon: History },
 ];
 
 // ===== UI atoms (module scope to keep stable identity across renders) =====
@@ -176,12 +159,17 @@ const SaveBar = ({
   disabled,
   saving,
   canSave,
+  saveLabel,
 }: {
   onClick: () => void;
   disabled?: boolean;
   saving?: boolean;
   canSave?: boolean;
-}) => (
+  saveLabel?: string;
+}) => {
+  const { t: tr } = useTranslation("pages", { keyPrefix: "definicoes" });
+  const label = saveLabel ?? tr("shared.save_changes");
+  return (
   <div className="mt-6 flex justify-end">
     <button
       onClick={onClick}
@@ -189,10 +177,12 @@ const SaveBar = ({
       className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:opacity-50"
     >
       {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" strokeWidth={2} />}
-      Guardar Alterações
+      {label}
     </button>
   </div>
-);
+  );
+};
+
 
 const ROLES: Role[] = [
   "ADMIN",
@@ -206,40 +196,70 @@ const ROLES: Role[] = [
   "PARENT",
   "STUDENT",
 ];
-const ROLE_LABEL: Record<Role, string> = {
-  SUPER_ADMIN: "Super Admin",
-  ADMIN: "Administrador",
-  DIRECTOR: "Director",
-  SECRETARY: "Secretaria",
-  TREASURER: "Tesoureiro",
-  LIBRARIAN: "Bibliotecário",
-  STOCK_MANAGER: "Gestor de stock",
-  RECEPTIONIST: "Rececionista",
-  TEACHER: "Professor",
-  PARENT: "Encarregado",
-  STUDENT: "Aluno",
-};
-
-const NOTIFICATION_CHANNELS: { key: string; label: string; desc: string }[] = [
-  { key: "welcome_email", label: "Email de boas-vindas", desc: "Enviado quando um utilizador é criado." },
-  { key: "enrollment", label: "Confirmação de matrícula", desc: "Enviado ao concluir a matrícula." },
-  { key: "grade_published", label: "Notas publicadas", desc: "Notificar quando notas forem lançadas." },
-  { key: "event_reminder", label: "Lembretes de eventos", desc: "Enviar 1 dia antes do evento." },
-  { key: "absence_alert", label: "Alertas de faltas", desc: "Notificar encarregado em caso de falta." },
-  { key: "invoice_issued", label: "Faturas emitidas", desc: "Email automático ao emitir fatura." },
-  { key: "new_message", label: "Nova mensagem no chat", desc: "Notificação ao receber uma mensagem." },
-  { key: "complaint_update", label: "Atualização de reclamações", desc: "Quando o estado de uma reclamação muda." },
-  { key: "material_request", label: "Pedidos de material", desc: "Notificar admin de novos pedidos." },
-  { key: "absence_request", label: "Pedidos de ausência", desc: "Notificar admin de novos pedidos." },
-];
-
-const schoolSchema = z.object({
-  name: z.string().trim().min(1, "Nome obrigatório").max(120),
-  nif: z.string().trim().max(40).optional().or(z.literal("")),
-  address: z.string().trim().max(200).optional().or(z.literal("")),
-});
-
 const Definicoes = () => {
+  const { t: tr, i18n } = useTranslation("pages", { keyPrefix: "definicoes" });
+
+  const tabs = useMemo(
+    () => TAB_DEFS.map((tab) => ({ ...tab, label: tr(`tabs.${tab.id}`) })),
+    [tr],
+  );
+
+  const MODULES = useMemo(
+    () => [
+      ...PERMISSION_ROUTE_ORDER.map((key) => ({
+        key,
+        label: tr(`modules.${key}.label`),
+        desc: tr(`modules.${key}.desc`),
+      })),
+      {
+        key: "modulos" as PermissionModuleKey,
+        label: tr("modules.modulos.label"),
+        desc: tr("modules.modulos.desc"),
+      },
+      {
+        key: "definicoes" as PermissionModuleKey,
+        label: tr("modules.definicoes.label"),
+        desc: tr("modules.definicoes.desc"),
+      },
+    ],
+    [tr],
+  );
+
+  const NOTIFICATION_CHANNELS = useMemo(
+    () =>
+      (
+        [
+          "welcome_email",
+          "enrollment",
+          "grade_published",
+          "event_reminder",
+          "absence_alert",
+          "invoice_issued",
+          "new_message",
+          "complaint_update",
+          "material_request",
+          "absence_request",
+        ] as const
+      ).map((key) => ({
+        key,
+        label: tr(`notificacoes.channels.${key}.label`),
+        desc: tr(`notificacoes.channels.${key}.desc`),
+      })),
+    [tr],
+  );
+
+  const schoolSchema = useMemo(
+    () =>
+      z.object({
+        name: z.string().trim().min(1, tr("validation.school_name_required")).max(120),
+        nif: z.string().trim().max(40).optional().or(z.literal("")),
+        address: z.string().trim().max(200).optional().or(z.literal("")),
+      }),
+    [tr],
+  );
+
+  const roleLabel = (r: Role) => tr(`roles.${r}`);
+
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { years, selectedYearId, setSelectedYearId, refresh: refreshAcademicYears } = useAcademicYear();
@@ -324,7 +344,7 @@ const Definicoes = () => {
       const mail = (u.email ?? "").toLowerCase();
       const phone = (u.phone ?? "").replace(/\s+/g, "").toLowerCase();
       const r = u.role ?? "TEACHER";
-      const roleLabelLower = ROLE_LABEL[r as Role].toLowerCase();
+      const roleLabelLower = roleLabel(r as Role).toLowerCase();
       const roleKeyLower = String(r).toLowerCase().replace(/_/g, " ");
       return (
         name.includes(raw) ||
@@ -652,7 +672,7 @@ const Definicoes = () => {
       const errs: Record<string, string> = {};
       parsed.error.issues.forEach((i) => i.path[0] && (errs[String(i.path[0])] = i.message));
       setSchoolErrors(errs);
-      showToast("error", "Verifique os campos do formulário.");
+      showToast("error", tr("validation.form_check"));
       return;
     }
     setSchoolErrors({});
@@ -667,7 +687,7 @@ const Definicoes = () => {
       .eq("id", schoolId);
     setSaving(false);
     if (error) return showToast("error", error.message);
-    showToast("success", "Informações da escola guardadas.");
+    showToast("success", tr("toasts.school_saved"));
   };
 
   // ===== Save brand =====
@@ -684,13 +704,13 @@ const Definicoes = () => {
       .eq("id", schoolId);
     setSaving(false);
     if (error) return showToast("error", error.message);
-    showToast("success", "Marca atualizada.");
+    showToast("success", tr("toasts.brand_saved"));
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !schoolId) return;
-    if (file.size > 2 * 1024 * 1024) return showToast("error", "Ficheiro demasiado grande (máx. 2MB).");
+    if (file.size > 2 * 1024 * 1024) return showToast("error", tr("validation.logo_max_size"));
     setLogoUploading(true);
     const ext = file.name.split(".").pop();
     const path = `${schoolId}/logo-${Date.now()}.${ext}`;
@@ -702,7 +722,7 @@ const Definicoes = () => {
     const { data: pub } = supabase.storage.from("school-logos").getPublicUrl(path);
     setSchool((s) => ({ ...s, logo_url: pub.publicUrl }));
     setLogoUploading(false);
-    showToast("success", "Logotipo carregado. Lembre-se de guardar.");
+    showToast("success", tr("toasts.logo_uploaded"));
   };
 
   // ===== Save academic =====
@@ -720,7 +740,7 @@ const Definicoes = () => {
     setSaving(false);
     if (error) return showToast("error", error.message);
     await refreshAcademicYears();
-    showToast("success", "Ano letivo atualizado.");
+    showToast("success", tr("toasts.academic_updated"));
   };
 
   const handleSetActiveAcademic = async () => {
@@ -733,7 +753,7 @@ const Definicoes = () => {
     setSaving(false);
     if (setActive.error) return showToast("error", setActive.error.message);
     await refreshAcademicYears();
-    showToast("success", "Ano letivo ativo atualizado.");
+    showToast("success", tr("toasts.academic_active_updated"));
   };
 
   const handleCreateAcademicYear = async () => {
@@ -758,7 +778,7 @@ const Definicoes = () => {
     if (error) return showToast("error", error.message);
     await refreshAcademicYears();
     if (data?.id) setSelectedYearId(data.id);
-    showToast("success", "Ano letivo criado. Edite os dados conforme necessário.");
+    showToast("success", tr("toasts.academic_created"));
   };
 
   const [confirmDeleteYearId, setConfirmDeleteYearId] = useState<string | null>(null);
@@ -775,7 +795,7 @@ const Definicoes = () => {
     if (error) {
       setConfirmDeleteYearId(null);
       const msg = /foreign key|violates|referenced/i.test(error.message)
-        ? "Não é possível eliminar: existem turmas, matrículas ou propinas associadas a este ano letivo."
+        ? tr("validation.delete_year_blocked")
         : error.message;
       return showToast("error", msg);
     }
@@ -783,7 +803,7 @@ const Definicoes = () => {
       setConfirmDeleteYearId(null);
       return showToast(
         "error",
-        "Sem permissão para eliminar este ano letivo. Apenas administradores podem fazê-lo.",
+        tr("validation.delete_year_forbidden"),
       );
     }
     const removed = confirmDeleteYearId;
@@ -794,7 +814,7 @@ const Definicoes = () => {
       const next = years.find((y) => y.id !== removed);
       if (next) setSelectedYearId(next.id);
     }
-    showToast("success", "Ano letivo eliminado.");
+    showToast("success", tr("toasts.academic_deleted"));
   };
 
   const handleSaveAcademicSettings = async () => {
@@ -802,15 +822,15 @@ const Definicoes = () => {
     const min = Number(academicSettings.honor_roll_min_average);
     const max = Number(academicSettings.grading_max_score);
     if (Number.isNaN(min) || min < 0 || Number.isNaN(max) || max <= 0 || min > max) {
-      return showToast("error", "Verifique os valores: 0 ≤ média mínima ≤ nota máxima.");
+      return showToast("error", tr("validation.academic_values"));
     }
     const lateValue = Number(academicSettings.late_fee_value);
     if (academicSettings.late_fee_enabled) {
       if (Number.isNaN(lateValue) || lateValue <= 0) {
-        return showToast("error", "Defina um valor de multa maior que zero.");
+        return showToast("error", tr("validation.late_fee_positive"));
       }
       if (academicSettings.late_fee_type === "percentage" && lateValue > 100) {
-        return showToast("error", "A percentagem da multa não pode exceder 100%.");
+        return showToast("error", tr("validation.late_fee_pct_max"));
       }
     }
     setSavingAcademicSettings(true);
@@ -833,7 +853,7 @@ const Definicoes = () => {
     const { error } = await supabase.from("schools").update({ settings: merged }).eq("id", schoolId);
     setSavingAcademicSettings(false);
     if (error) return showToast("error", error.message);
-    showToast("success", "Critérios académicos guardados.");
+    showToast("success", tr("toasts.academic_settings_saved"));
   };
 
   // ===== Users =====
@@ -841,14 +861,14 @@ const Definicoes = () => {
     const { error } = await supabase.from("profiles").update({ role }).eq("id", id);
     if (error) return showToast("error", error.message);
     setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, role } : u)));
-    showToast("success", "Função atualizada.");
+    showToast("success", tr("toasts.role_updated"));
   };
 
   const toggleUserActive = async (id: string, value: boolean) => {
     const { error } = await supabase.from("profiles").update({ is_active: value }).eq("id", id);
     if (error) return showToast("error", error.message);
     setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, is_active: value } : u)));
-    showToast("success", value ? "Utilizador ativado." : "Utilizador desativado.");
+    showToast("success", value ? tr("toasts.user_activated") : tr("toasts.user_deactivated"));
   };
 
   const saveEditUser = async () => {
@@ -856,14 +876,14 @@ const Definicoes = () => {
     const prevMail = users.find((u) => u.id === editUser.id)?.email?.trim().toLowerCase() ?? "";
     const nextMail = (editUser.email ?? "").trim().toLowerCase();
     if (!nextMail) {
-      return showToast("error", "O email é obrigatório (serve para iniciar sessão na Edukamba).");
+      return showToast("error", tr("validation.email_required_login"));
     }
     setSaving(true);
     if (nextMail !== prevMail) {
       const fx = await invokeAdminUpdateUserEmail(editUser.id, nextMail);
       if (!fx.ok) {
         setSaving(false);
-        return showToast("error", fx.message ?? "Não foi possível actualizar o email de login.");
+        return showToast("error", fx.message ?? tr("validation.update_email_failed"));
       }
     }
     const { error } = await supabase
@@ -880,7 +900,7 @@ const Definicoes = () => {
       prev.map((u) => (u.id === editUser.id ? { ...editUser, email: nextMail } : u)),
     );
     setEditUser(null);
-    showToast("success", "Utilizador atualizado.");
+    showToast("success", tr("toasts.user_updated"));
   };
 
   const confirmRemoveUser = async () => {
@@ -893,7 +913,7 @@ const Definicoes = () => {
     if (error) return showToast("error", error.message);
     setUsers((prev) => prev.map((u) => (u.id === removeId ? { ...u, is_active: false } : u)));
     setRemoveId(null);
-    showToast("success", "Utilizador removido. Já não consegue aceder ao Edukamba.");
+    showToast("success", tr("toasts.user_removed"));
   };
 
   // ===== Save permissions =====
@@ -912,7 +932,7 @@ const Definicoes = () => {
     setSaving(false);
     if (error) return showToast("error", error.message);
     void queryClient.invalidateQueries({ queryKey: [...schoolPermissionMatrixQueryRoot] });
-    showToast("success", "Permissões da função guardadas.");
+    showToast("success", tr("toasts.role_perms_saved"));
   };
 
   const saveUserPerms = async () => {
@@ -920,10 +940,10 @@ const Definicoes = () => {
     const targetUser = users.find((u) => u.id === activeUserId);
     const targetRole = targetUser?.role;
     if (!targetRole) {
-      return showToast("error", "Não foi possível determinar a função deste utilizador.");
+      return showToast("error", tr("validation.cannot_resolve_user_role"));
     }
     if (targetRole === "ADMIN" || targetRole === "SUPER_ADMIN") {
-      return showToast("error", "Administradores têm sempre acesso total à aplicação; não são guardadas permissões granulares.");
+      return showToast("error", tr("validation.admin_always_full_access"));
     }
 
     setSaving(true);
@@ -997,7 +1017,7 @@ const Definicoes = () => {
 
     setSaving(false);
     void queryClient.invalidateQueries({ queryKey: [...schoolPermissionMatrixQueryRoot] });
-    showToast("success", "Permissões personalizadas guardadas.");
+    showToast("success", tr("toasts.user_perms_saved"));
   };
 
   const clearStoredRolePermissions = async () => {
@@ -1005,14 +1025,11 @@ const Definicoes = () => {
     if (activeRole === "ADMIN") {
       return showToast(
         "error",
-        "A função Administrador utiliza sempre acesso total na aplicação; não existem linhas personalizadas a remover.",
+        tr("validation.admin_no_stored_perms"),
       );
     }
     if (
-      !window.confirm(
-        `Remover todas as permissões gravadas na base de dados para a função «${ROLE_LABEL[activeRole]}» nesta escola?\n\n` +
-          "Depois disto, todos os utilizadores com esta função voltam a usar apenas as regras padrão da aplicação para cada módulo.",
-      )
+      !window.confirm(tr("modals.confirm_clear_role.body", { role: roleLabel(activeRole) }))
     ) {
       return;
     }
@@ -1027,22 +1044,19 @@ const Definicoes = () => {
     setStoredRolePermRows(0);
     void loadRolePerms(activeRole);
     void queryClient.invalidateQueries({ queryKey: [...schoolPermissionMatrixQueryRoot] });
-    showToast("success", "Permissões da função repostas para os valores padrão da aplicação.");
+    showToast("success", tr("toasts.role_perms_reset"));
   };
 
   const clearStoredUserPermissions = async () => {
     if (!schoolId || !activeUserId || !operationsAdmin) return;
     const targetUser = users.find((u) => u.id === activeUserId);
     const targetRole = targetUser?.role;
-    if (!targetRole) return showToast("error", "Não foi possível determinar a função deste utilizador.");
+    if (!targetRole) return showToast("error", tr("validation.cannot_resolve_user_role"));
     if (targetRole === "ADMIN" || targetRole === "SUPER_ADMIN") {
-      return showToast("error", "Esta conta tem acesso total; não há personalizações por módulo a remover.");
+      return showToast("error", tr("validation.admin_user_full_access"));
     }
     if (
-      !window.confirm(
-        `Remover todas as permissões personalizadas gravadas para ${targetUser.full_name}? ` +
-          "O utilizador voltará a seguir apenas a função (e as regras padrão) para cada módulo.",
-      )
+      !window.confirm(tr("modals.confirm_clear_user.body", { name: targetUser.full_name }))
     ) {
       return;
     }
@@ -1057,14 +1071,14 @@ const Definicoes = () => {
     setStoredUserPermRows(0);
     void loadUserPerms(activeUserId);
     void queryClient.invalidateQueries({ queryKey: [...schoolPermissionMatrixQueryRoot] });
-    showToast("success", "Personalizações do utilizador removidas; aplicam-se de novo os valores herdados pela função.");
+    showToast("success", tr("toasts.user_perms_cleared"));
   };
 
   // ===== Save notification prefs =====
   const saveNotifPrefs = async () => {
     if (!schoolId) return;
     const targets = users.filter((u) => u.role === notifRole && u.is_active !== false);
-    if (targets.length === 0) return showToast("error", "Sem utilizadores nesta função.");
+    if (targets.length === 0) return showToast("error", tr("validation.users_required_for_notif"));
     setSaving(true);
     const rows = targets.flatMap((u) =>
       NOTIFICATION_CHANNELS.map((c) => ({
@@ -1077,7 +1091,7 @@ const Definicoes = () => {
     const { error } = await supabase.from("notification_preferences").upsert(rows, { onConflict: "user_id,channel" });
     setSaving(false);
     if (error) return showToast("error", error.message);
-    showToast("success", `Preferências aplicadas a ${targets.length} utilizador(es).`);
+    showToast("success", tr("toasts.notif_prefs_applied", { count: targets.length }));
   };
 
   // ===== Save billing cycle =====
@@ -1104,7 +1118,7 @@ const Definicoes = () => {
       }
     }
     // Pagamentos são gerados manualmente — não disparar geração automática
-    showToast("success", "Ciclo de pagamento atualizado.");
+    showToast("success", tr("toasts.billing_cycle_updated"));
     void subId;
   };
 
@@ -1120,7 +1134,7 @@ const Definicoes = () => {
 
   const submitProof = async () => {
     if (!proofInvoice || !schoolId || !user) return;
-    if (!proofFile) return showToast("error", "Selecione o ficheiro do comprovativo.");
+    if (!proofFile) return showToast("error", tr("validation.proof_file_required"));
     setProofUploading(true);
     try {
       const ext = proofFile.name.split(".").pop() || "pdf";
@@ -1146,9 +1160,9 @@ const Definicoes = () => {
       setProofFile(null);
       setProofMethod("transferencia");
       setProofNotes("");
-      showToast("success", "Comprovativo enviado. Aguarda validação.");
+      showToast("success", tr("toasts.proof_submitted"));
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Erro ao enviar comprovativo.";
+      const msg = e instanceof Error ? e.message : tr("toasts.proof_error");
       showToast("error", msg);
     } finally {
       setProofUploading(false);
@@ -1159,7 +1173,7 @@ const Definicoes = () => {
     const { data, error } = await supabase.storage
       .from("school-invoice-proofs")
       .createSignedUrl(path, 60 * 5);
-    if (error || !data?.signedUrl) return showToast("error", "Não foi possível abrir o comprovativo.");
+    if (error || !data?.signedUrl) return showToast("error", tr("toasts.proof_open_failed"));
     window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   };
 
@@ -1168,7 +1182,11 @@ const Definicoes = () => {
     const cls = isActive
       ? "bg-pastel-green text-pastel-green-foreground"
       : "bg-pastel-pink text-pastel-pink-foreground";
-    return <span className={cn("rounded-full px-3 py-1 text-xs font-medium", cls)}>{isActive ? "Ativo" : "Inativo"}</span>;
+    return (
+      <span className={cn("rounded-full px-3 py-1 text-xs font-medium", cls)}>
+        {isActive ? tr("utilizadores.status_active") : tr("utilizadores.status_inactive")}
+      </span>
+    );
   };
 
   const setRolePermField = (
@@ -1193,8 +1211,9 @@ const Definicoes = () => {
   };
 
   const formatCurrency = (amount: number, currency: string) => {
+    const locale = intlLocaleTagFromLng(i18n.language);
     try {
-      return new Intl.NumberFormat("pt-PT", { style: "currency", currency }).format(amount);
+      return new Intl.NumberFormat(locale, { style: "currency", currency }).format(amount);
     } catch {
       return `${amount.toFixed(2)} ${currency}`;
     }
@@ -1220,13 +1239,13 @@ const Definicoes = () => {
       <div className="flex flex-col gap-6">
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Definições</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">{tr("page_header.title")}</h1>
           <p className="text-sm text-muted-foreground">
-            Faça a gestão das definições gerais da escola, marca, utilizadores e permissões.
+            {tr("page_header.subtitle")}
           </p>
           {operationsAdmin && !settingsAdmin && (
             <p className="mt-2 rounded-xl bg-pastel-blue/35 px-3 py-2 text-xs text-pastel-blue-foreground">
-              Como director gere utilizadores e permissões. Alterações à marca, dados da instituição e fatura Edukamba ficam apenas com o administrador.
+              {tr("page_header.director_notice")}
             </p>
           )}
         </div>
@@ -1254,9 +1273,9 @@ const Definicoes = () => {
 
         {/* ESCOLA */}
         {activeTab === "escola" && (
-          <SectionCard title="Informações da Escola" desc="Estes dados são usados em documentos, faturas e na app.">
+          <SectionCard title={tr("escola.section_title")} desc={tr("escola.section_desc")}>
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-              <Field label="Nome da escola" icon={Building2} error={schoolErrors.name}>
+              <Field label={tr("escola.field_name")} icon={Building2} error={schoolErrors.name}>
                 <input
                   className={inputCls(!!schoolErrors.name)}
                   value={school.name}
@@ -1265,7 +1284,7 @@ const Definicoes = () => {
                   onChange={(e) => setSchool({ ...school, name: e.target.value })}
                 />
               </Field>
-              <Field label="NIF / Tax ID" icon={Hash} error={schoolErrors.nif}>
+              <Field label={tr("escola.field_nif")} icon={Hash} error={schoolErrors.nif}>
                 <input
                   className={inputCls(!!schoolErrors.nif)}
                   value={school.nif}
@@ -1275,7 +1294,7 @@ const Definicoes = () => {
                 />
               </Field>
               <div className="md:col-span-2">
-                <Field label="Morada" icon={MapPin} error={schoolErrors.address}>
+                <Field label={tr("escola.field_address")} icon={MapPin} error={schoolErrors.address}>
                   <input
                     className={inputCls(!!schoolErrors.address)}
                     value={school.address}
@@ -1292,15 +1311,15 @@ const Definicoes = () => {
 
         {/* MARCA */}
         {activeTab === "marca" && (
-          <SectionCard title="Marca e Identidade Visual" desc="Logotipo e cores que aparecem em toda a app.">
+          <SectionCard title={tr("marca.section_title")} desc={tr("marca.section_desc")}>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div className="rounded-xl border border-dashed border-border p-5">
-                <p className="text-sm font-semibold text-foreground">Logotipo</p>
-                <p className="text-xs text-muted-foreground">PNG ou SVG · até 2MB</p>
+                <p className="text-sm font-semibold text-foreground">{tr("marca.logo_title")}</p>
+                <p className="text-xs text-muted-foreground">{tr("marca.logo_hint")}</p>
                 <div className="mt-4 flex items-center gap-4">
                   <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-muted/40 overflow-hidden">
                     {school.logo_url ? (
-                      <img src={school.logo_url} alt="Logo" className="h-full w-full object-contain" />
+                      <img src={school.logo_url} alt={tr("shared.logo_alt")} className="h-full w-full object-contain" />
                     ) : (
                       <ImageIcon className="h-8 w-8 text-muted-foreground" strokeWidth={1.5} />
                     )}
@@ -1312,7 +1331,7 @@ const Definicoes = () => {
                     )}
                   >
                     {logoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" strokeWidth={1.75} />}
-                    Carregar
+                    {tr("shared.carregar")}
                     <input
                       type="file"
                       accept="image/*"
@@ -1324,7 +1343,7 @@ const Definicoes = () => {
                 </div>
               </div>
 
-              <Field label="Cor primária">
+              <Field label={tr("marca.primary_color")}>
                 <div className="flex items-center gap-3">
                   <input
                     type="color"
@@ -1341,7 +1360,7 @@ const Definicoes = () => {
                   />
                 </div>
               </Field>
-              <Field label="Cor secundária">
+              <Field label={tr("marca.secondary_color")}>
                 <div className="flex items-center gap-3">
                   <input
                     type="color"
@@ -1367,24 +1386,24 @@ const Definicoes = () => {
         {activeTab === "academico" && (
           <div className="flex flex-col gap-6">
             <SectionCard
-              title="Anos letivos"
-              desc="Crie, edite ou elimine os anos letivos da escola. O ano selecionado é usado em toda a aplicação para filtrar a informação."
+              title={tr("academico.years.section_title")}
+              desc={tr("academico.years.section_desc")}
             >
               <div className="mb-5 flex flex-wrap items-end gap-3">
                 <div className="min-w-[240px] flex-1 max-w-sm">
-                  <Field label="Ano em edição" icon={Calendar}>
+                  <Field label={tr("academico.years.field_editing_year")} icon={Calendar}>
                     <Select
                       value={selectedYearId ?? undefined}
                       onValueChange={setSelectedYearId}
                       disabled={years.length === 0}
                     >
                       <SelectTrigger className="h-11 rounded-xl border-border bg-card shadow-soft">
-                        <SelectValue placeholder="Sem anos letivos criados" />
+                        <SelectValue placeholder={tr("academico.years.placeholder_no_years")} />
                       </SelectTrigger>
                       <SelectContent>
                         {years.map((y) => (
                           <SelectItem key={y.id} value={y.id}>
-                            {y.label}{y.is_active ? " · ativo" : ""}
+                            {y.label}{y.is_active ? tr("shared.active_suffix") : ""}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1399,7 +1418,7 @@ const Definicoes = () => {
                     className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Plus className="h-4 w-4" strokeWidth={2} />
-                    Novo ano letivo
+                    {tr("academico.years.btn_new")}
                   </button>
                 )}
                 {settingsAdmin && year.id && (
@@ -1409,23 +1428,23 @@ const Definicoes = () => {
                     disabled={saving || years.find((y) => y.id === year.id)?.is_active === true}
                     title={
                       years.find((y) => y.id === year.id)?.is_active
-                        ? "Não é possível eliminar o ano letivo ativo."
-                        : "Eliminar ano letivo"
+                        ? tr("academico.years.title_cannot_delete_active")
+                        : tr("academico.years.title_delete")
                     }
                     className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-pastel-pink-foreground/40 bg-card px-5 text-sm font-semibold text-pastel-pink-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-pastel-pink/20 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Trash2 className="h-4 w-4" strokeWidth={2} />
-                    Eliminar
+                    {tr("academico.years.btn_delete")}
                   </button>
                 )}
               </div>
               {!year.id ? (
                 <p className="rounded-xl border border-dashed border-border bg-muted/40 p-5 text-sm text-muted-foreground">
-                  Sem anos letivos criados. Clique em <span className="font-semibold text-foreground">"Novo ano letivo"</span> para começar.
+                  Sem anos letivos criados. Clique em <span className="font-semibold text-foreground">"{tr("academico.years.btn_new")}"</span> para começar.
                 </p>
               ) : (
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                  <Field label="Ano letivo">
+                  <Field label={tr("academico.years.field_year_label")}>
                     <input
                       className={inputCls(false)}
                       disabled={!settingsAdmin}
@@ -1433,7 +1452,7 @@ const Definicoes = () => {
                       onChange={(e) => setYear({ ...year, label: e.target.value })}
                     />
                   </Field>
-                  <Field label="Início" icon={Calendar}>
+                  <Field label={tr("academico.years.field_start")} icon={Calendar}>
                     <input
                       type="date"
                       className={inputCls(false)}
@@ -1442,7 +1461,7 @@ const Definicoes = () => {
                       onChange={(e) => setYear({ ...year, start_date: e.target.value })}
                     />
                   </Field>
-                  <Field label="Fim" icon={Calendar}>
+                  <Field label={tr("academico.years.field_end")} icon={Calendar}>
                     <input
                       type="date"
                       className={inputCls(false)}
@@ -1461,7 +1480,7 @@ const Definicoes = () => {
                     disabled={saving}
                     className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-border bg-card px-5 text-sm font-semibold text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Tornar ativo
+                    {tr("academico.years.btn_make_active")}
                   </button>
                 )}
                 <button
@@ -1470,31 +1489,31 @@ const Definicoes = () => {
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" strokeWidth={2} />}
-                  Guardar Alterações
+                  {tr("shared.save_changes")}
                 </button>
               </div>
             </SectionCard>
 
             <SectionCard
-              title="Trimestres e Férias"
-              desc="Defina as datas dos 1º, 2º e 3º trimestres e marque os períodos de férias dos alunos."
+              title={tr("academico.terms_holidays.section_title")}
+              desc={tr("academico.terms_holidays.section_desc")}
             >
               <TermsAndHolidaysManager schoolId={schoolId} academicYearId={year.id ?? null} isAdmin={settingsAdmin} />
             </SectionCard>
 
             <SectionCard
-              title="Configuração de Novo Ano Letivo"
-              desc="Crie o próximo ciclo escolar e clone automaticamente a estrutura do ano anterior — turmas, cursos e tabela de preços — sem trabalho manual."
+              title={tr("academico.wizard.section_title")}
+              desc={tr("academico.wizard.section_desc")}
             >
               <NewAcademicYearWizard schoolId={schoolId} isAdmin={settingsAdmin} />
             </SectionCard>
 
             <SectionCard
-              title="Quadro de Honra"
-              desc="Defina a média mínima para um aluno ser considerado no Quadro de Honra e a nota máxima da escala usada pela escola."
+              title={tr("academico.honor_roll.section_title")}
+              desc={tr("academico.honor_roll.section_desc")}
             >
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <Field label="Média mínima do Quadro de Honra">
+                <Field label={tr("academico.honor_roll.field_min_avg")}>
                   <input
                     type="number"
                     min={0}
@@ -1510,7 +1529,7 @@ const Definicoes = () => {
                     }
                   />
                 </Field>
-                <Field label="Nota máxima da escala">
+                <Field label={tr("academico.honor_roll.field_max_grade")}>
                   <input
                     type="number"
                     min={1}
@@ -1533,11 +1552,11 @@ const Definicoes = () => {
             </SectionCard>
 
             <SectionCard
-              title="Multas por Atraso de Propinas"
-              desc="Aplicada automaticamente no dia 11 de cada mês a propinas vencidas e ainda não pagas. Pode ser um valor fixo (Kz) ou uma percentagem do valor da propina."
+              title={tr("academico.late_fees.section_title")}
+              desc={tr("academico.late_fees.section_desc")}
             >
               <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-                <Field label="Cobrar multa por atraso?">
+                <Field label={tr("academico.late_fees.field_charge")}>
                   <select
                     className={inputCls(false)}
                     disabled={!settingsAdmin}
@@ -1546,11 +1565,11 @@ const Definicoes = () => {
                       setAcademicSettings((s) => ({ ...s, late_fee_enabled: e.target.value === "yes" }))
                     }
                   >
-                    <option value="no">Não cobrar</option>
-                    <option value="yes">Sim, cobrar multa</option>
+                    <option value="no">{tr("academico.late_fees.opt_no")}</option>
+                    <option value="yes">{tr("academico.late_fees.opt_yes")}</option>
                   </select>
                 </Field>
-                <Field label="Tipo de multa">
+                <Field label={tr("academico.late_fees.field_type")}>
                   <select
                     className={inputCls(false)}
                     disabled={!settingsAdmin || !academicSettings.late_fee_enabled}
@@ -1562,15 +1581,15 @@ const Definicoes = () => {
                       }))
                     }
                   >
-                    <option value="fixed">Valor fixo (Kz)</option>
-                    <option value="percentage">Percentagem (%)</option>
+                    <option value="fixed">{tr("academico.late_fees.type_fixed")}</option>
+                    <option value="percentage">{tr("academico.late_fees.type_percentage")}</option>
                   </select>
                 </Field>
                 <Field
                   label={
                     academicSettings.late_fee_type === "percentage"
-                      ? "Percentagem da multa (%)"
-                      : "Valor da multa (Kz)"
+                      ? tr("academico.late_fees.field_value_pct")
+                      : tr("academico.late_fees.field_value_fixed")
                   }
                 >
                   <input
@@ -1590,8 +1609,7 @@ const Definicoes = () => {
                 </Field>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                A multa é aplicada uma única vez por propina em atraso, no dia 11. As propinas pagas antes do
-                vencimento ou já regularizadas não são afetadas.
+                {tr("academico.late_fees.help")}
               </p>
               <div className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
                 <SaveBar onClick={handleSaveAcademicSettings} saving={savingAcademicSettings} canSave={settingsAdmin} />
@@ -1599,11 +1617,11 @@ const Definicoes = () => {
             </SectionCard>
 
             <SectionCard
-              title="Custos de Matrícula"
-              desc="Valores únicos cobrados ao matricular um aluno (nova matrícula) ou ao renovar a matrícula num novo ano letivo. Definir 0 para não cobrar."
+              title={tr("academico.enrollment_fees.section_title")}
+              desc={tr("academico.enrollment_fees.section_desc")}
             >
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <Field label="Custo da matrícula nova (Kz)">
+                <Field label={tr("academico.enrollment_fees.field_new")}>
                   <input
                     type="number"
                     min={0}
@@ -1619,7 +1637,7 @@ const Definicoes = () => {
                     }
                   />
                 </Field>
-                <Field label="Custo da renovação de matrícula (Kz)">
+                <Field label={tr("academico.enrollment_fees.field_renewal")}>
                   <input
                     type="number"
                     min={0}
@@ -1637,9 +1655,7 @@ const Definicoes = () => {
                 </Field>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                Quando uma matrícula é criada e fica ativa, o custo correspondente é gerado automaticamente em
-                Pagamentos &rsaquo; Matrículas. Os encarregados de educação podem anexar o comprovativo para
-                validação pela administração.
+                {tr("academico.enrollment_fees.help")}
               </p>
               <div className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
                 <SaveBar onClick={handleSaveAcademicSettings} saving={savingAcademicSettings} canSave={settingsAdmin} />
@@ -1654,11 +1670,11 @@ const Definicoes = () => {
             <div className="flex flex-col gap-4 border-b border-border p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-              <h2 className="text-lg font-bold text-foreground">Utilizadores</h2>
+              <h2 className="text-lg font-bold text-foreground">{tr("utilizadores.section_title")}</h2>
               <p className="text-sm text-muted-foreground">
                 {usersSearchQuery.trim()
-                  ? `A mostrar ${filteredUsers.length} de ${users.length}`
-                  : `Total: ${users.length}`}
+                  ? tr("utilizadores.summary_filtered", { shown: filteredUsers.length, total: users.length })
+                  : tr("utilizadores.summary_total", { count: users.length })}
               </p>
               </div>
               <div className="flex flex-1 flex-wrap items-center gap-3 min-w-[min(100%,280px)] justify-end">
@@ -1669,8 +1685,8 @@ const Definicoes = () => {
                   />
                   <input
                     type="search"
-                    aria-label="Pesquisar utilizadores"
-                    placeholder="Nome, email, telefone ou função…"
+                    aria-label={tr("utilizadores.search_aria")}
+                    placeholder={tr("utilizadores.search_placeholder")}
                     autoComplete="off"
                     value={usersSearchQuery}
                     onChange={(e) => setUsersSearchQuery(e.target.value)}
@@ -1684,7 +1700,7 @@ const Definicoes = () => {
                     className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-pastel-blue px-4 text-sm font-semibold text-pastel-blue-foreground shadow-soft hover:opacity-90"
                   >
                     <Plus className="h-4 w-4" strokeWidth={2} />
-                    Novo utilizador
+                    {tr("utilizadores.btn_new")}
                   </button>
                 )}
               </div>
@@ -1694,18 +1710,18 @@ const Definicoes = () => {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-pastel-blue/40 text-left text-xs uppercase tracking-wider text-pastel-blue-foreground">
-                    <th className="py-4 pl-5 pr-4 font-semibold">Nome</th>
-                    <th className="py-4 pr-4 font-semibold">Telefone</th>
-                    <th className="py-4 pr-4 font-semibold">Função</th>
-                    <th className="py-4 pr-4 font-semibold">Estado</th>
-                    <th className="py-4 pr-5 font-semibold text-right">Acções</th>
+                    <th className="py-4 pl-5 pr-4 font-semibold">{tr("utilizadores.col_name")}</th>
+                    <th className="py-4 pr-4 font-semibold">{tr("utilizadores.col_phone")}</th>
+                    <th className="py-4 pr-4 font-semibold">{tr("utilizadores.col_role")}</th>
+                    <th className="py-4 pr-4 font-semibold">{tr("utilizadores.col_status")}</th>
+                    <th className="py-4 pr-5 font-semibold text-right">{tr("utilizadores.col_actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredUsers.map((u) => (
                     <tr key={u.id} className="border-b border-border last:border-0 hover:bg-muted/40">
                       <td className="py-3.5 pl-5 pr-4 font-medium text-foreground">{u.full_name}</td>
-                      <td className="py-3.5 pr-4 text-muted-foreground">{u.phone || "—"}</td>
+                      <td className="py-3.5 pr-4 text-muted-foreground">{u.phone || tr("shared.em_dash")}</td>
                       <td className="py-3.5 pr-4">
                         <select
                           value={u.role ?? "TEACHER"}
@@ -1715,7 +1731,7 @@ const Definicoes = () => {
                         >
                           {ROLES.map((r) => (
                             <option key={r} value={r}>
-                              {ROLE_LABEL[r]}
+                              {roleLabel(r)}
                             </option>
                           ))}
                         </select>
@@ -1733,7 +1749,7 @@ const Definicoes = () => {
                       <td className="py-3.5 pr-5">
                         <div className="flex items-center justify-end gap-1">
                           <button
-                            title="Editar"
+                            title={tr("utilizadores.action_edit_title")}
                             disabled={!operationsAdmin}
                             onClick={() => setEditUser(u)}
                             className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground disabled:opacity-50"
@@ -1741,7 +1757,7 @@ const Definicoes = () => {
                             <Pencil className="h-4 w-4" strokeWidth={1.75} />
                           </button>
                           <button
-                            title="Remover"
+                            title={tr("utilizadores.action_remove_title")}
                             disabled={!operationsAdmin || u.id === user?.id}
                             onClick={() => setRemoveId(u.id)}
                             className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground disabled:opacity-50"
@@ -1755,14 +1771,14 @@ const Definicoes = () => {
                   {users.length === 0 && (
                     <tr>
                       <td colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
-                        Sem utilizadores.
+                        {tr("utilizadores.empty")}
                       </td>
                     </tr>
                   )}
                   {users.length > 0 && filteredUsers.length === 0 && (
                     <tr>
                       <td colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
-                        Nenhum utilizador corresponde à pesquisa.
+                        {tr("utilizadores.empty_search")}
                       </td>
                     </tr>
                   )}
@@ -1774,7 +1790,7 @@ const Definicoes = () => {
 
         {/* PERMISSÕES */}
         {activeTab === "permissoes" && (
-          <SectionCard title="Permissões" desc="Por função ou por utilizador pode editar e gravar. No separador «Permissões personalizadas» pode apagar o que foi gravado e voltar aos padrões herdados.">
+          <SectionCard title={tr("permissoes.section_title")} desc={tr("permissoes.section_desc")}>
             <div className="mb-4 flex flex-wrap gap-2">
               <button
                 onClick={() => setPermTab("role")}
@@ -1783,7 +1799,7 @@ const Definicoes = () => {
                   permTab === "role" ? "bg-pastel-lilac text-pastel-lilac-foreground shadow-soft" : "bg-muted text-muted-foreground hover:bg-accent",
                 )}
               >
-                Por Função
+                {tr("permissoes.tab_role")}
               </button>
               <button
                 onClick={() => setPermTab("user")}
@@ -1792,7 +1808,7 @@ const Definicoes = () => {
                   permTab === "user" ? "bg-pastel-lilac text-pastel-lilac-foreground shadow-soft" : "bg-muted text-muted-foreground hover:bg-accent",
                 )}
               >
-                Por Utilizador
+                {tr("permissoes.tab_user")}
               </button>
               <button
                 type="button"
@@ -1804,7 +1820,7 @@ const Definicoes = () => {
                     : "bg-muted text-muted-foreground hover:bg-accent",
                 )}
               >
-                Permissões personalizadas
+                {tr("permissoes.tab_custom")}
               </button>
             </div>
 
@@ -1820,18 +1836,19 @@ const Definicoes = () => {
                         activeRole === r ? "bg-pastel-blue text-pastel-blue-foreground shadow-soft" : "bg-muted text-muted-foreground hover:bg-accent",
                       )}
                     >
-                      {ROLE_LABEL[r]}
+                      {roleLabel(r)}
                     </button>
                   ))}
                 </div>
                 <PermissionsTable
+                  modules={MODULES}
                   perms={rolePerms}
                   onChange={setRolePermField}
                   disabled={!operationsAdmin || (activeRole === "ADMIN" && !settingsAdmin)}
                 />
                 {activeRole === "ADMIN" && (
                   <p className="mt-3 rounded-xl bg-pastel-yellow/40 p-3 text-xs text-pastel-yellow-foreground">
-                    Administradores têm sempre todas as permissões.
+                    {tr("permissoes.admin_always_full")}
                   </p>
                 )}
                 <SaveBar
@@ -1844,16 +1861,13 @@ const Definicoes = () => {
             ) : permTab === "personalizadas" ? (
               <div className="flex flex-col gap-10">
                 <p className="rounded-xl bg-muted/50 p-4 text-sm text-muted-foreground">
-                  Aqui pode apagar na base de dados as permissões que foram gravadas anteriormente para uma{" "}
-                  <strong className="text-foreground">função</strong> ou para um <strong className="text-foreground">utilizador</strong>.
-                  Ao remover esses registos, a aplicação volta a usar as <strong className="text-foreground">regras padrão por função</strong> ou a
-                  combinação <strong className="text-foreground">função mais herança do utilizador</strong>, como antes de gravar nos outros separadores.
+                  {tr("permissoes.custom_intro")}
                 </p>
 
                 <div className="rounded-2xl border border-border bg-card/60 p-5">
-                  <h3 className="text-base font-semibold text-foreground">Permissões personalizadas por função</h3>
+                  <h3 className="text-base font-semibold text-foreground">{tr("permissoes.custom_role_title")}</h3>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Remove todas as linhas guardadas para a função escolhida nesta escola («Por função»). Os valores definidos pela aplicação para cada função voltam a aplicar‑se por omissão.
+                    {tr("permissoes.custom_role_desc")}
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     {ROLES.map((r) => (
@@ -1869,21 +1883,18 @@ const Definicoes = () => {
                             : "bg-muted text-muted-foreground hover:bg-accent",
                         )}
                       >
-                        {ROLE_LABEL[r]}
+                        {roleLabel(r)}
                       </button>
                     ))}
                   </div>
                   <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm text-muted-foreground">
                       {storedCountsLoading || storedRolePermRows === null ? (
-                        <span>Registos gravados nesta escola para esta função: a carregar…</span>
+                        <span>{tr("permissoes.custom_role_count_loading")}</span>
                       ) : activeRole === "ADMIN" ? (
-                        <span>Sem registos aplicáveis: administradores têm sempre acesso total na aplicação.</span>
+                        <span>{tr("permissoes.custom_role_count_admin_none")}</span>
                       ) : (
-                        <span>
-                          Registos gravados nesta escola para esta função:{" "}
-                          <strong className="text-foreground">{storedRolePermRows}</strong>.
-                        </span>
+                        <span>{tr("permissoes.custom_role_count", { count: storedRolePermRows })}</span>
                       )}
                     </p>
                     <button
@@ -1900,30 +1911,30 @@ const Definicoes = () => {
                       className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full border-2 border-pastel-pink/60 bg-transparent px-5 text-sm font-semibold text-pastel-pink-foreground hover:bg-pastel-pink/30 disabled:opacity-50"
                     >
                       <RotateCcw className="h-4 w-4 shrink-0" strokeWidth={2} />
-                      Remover personalização da função
+                      {tr("permissoes.btn_clear_role")}
                     </button>
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-border bg-card/60 p-5">
-                  <h3 className="text-base font-semibold text-foreground">Permissões personalizadas por utilizador</h3>
+                  <h3 className="text-base font-semibold text-foreground">{tr("permissoes.custom_user_title")}</h3>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Remove as sobrescritas gravadas para o utilizador («Por utilizador»). Voltam a aplicar‑se apenas a função e as regras padrão, sem sobrescritas por módulo.
+                    {tr("permissoes.custom_user_desc")}
                   </p>
                   <div className="mt-4 max-w-xl">
-                    <Field label="Utilizador">
+                    <Field label={tr("permissoes.field_user")}>
                       <select
                         className={inputCls(false)}
                         value={activeUserId}
                         disabled={!operationsAdmin}
                         onChange={(e) => setActiveUserId(e.target.value)}
                       >
-                        <option value="">— Selecione —</option>
+                        <option value="">{tr("shared.select_placeholder")}</option>
                         {users
                           .filter((u) => u.role !== "ADMIN" && u.role !== "SUPER_ADMIN" && u.is_active !== false)
                           .map((u) => (
                             <option key={u.id} value={u.id}>
-                              {u.full_name} · {ROLE_LABEL[(u.role ?? "TEACHER") as Role]}
+                              {u.full_name} · {roleLabel((u.role ?? "TEACHER") as Role)}
                             </option>
                           ))}
                       </select>
@@ -1932,14 +1943,11 @@ const Definicoes = () => {
                   <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm text-muted-foreground">
                       {!activeUserId ? (
-                        <span>Selecione um utilizador para ver quantas permissões personalizadas estão gravadas.</span>
+                        <span>{tr("permissoes.custom_user_hint_select")}</span>
                       ) : storedCountsLoading || storedUserPermRows === null ? (
-                        <span>Registos personalizados para este utilizador: a carregar…</span>
+                        <span>{tr("permissoes.custom_user_count_loading")}</span>
                       ) : (
-                        <span>
-                          Registos personalizados para este utilizador:{" "}
-                          <strong className="text-foreground">{storedUserPermRows}</strong>.
-                        </span>
+                        <span>{tr("permissoes.custom_user_count", { count: storedUserPermRows })}</span>
                       )}
                     </p>
                     <button
@@ -1956,33 +1964,33 @@ const Definicoes = () => {
                       className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full border-2 border-pastel-pink/60 bg-transparent px-5 text-sm font-semibold text-pastel-pink-foreground hover:bg-pastel-pink/30 disabled:opacity-50"
                     >
                       <RotateCcw className="h-4 w-4 shrink-0" strokeWidth={2} />
-                      Remover personalização do utilizador
+                      {tr("permissoes.btn_clear_user")}
                     </button>
                   </div>
                 </div>
               </div>
             ) : (
               <>
-                <Field label="Utilizador">
+                <Field label={tr("permissoes.field_user")}>
                   <select
                     className={inputCls(false)}
                     value={activeUserId}
                     disabled={!operationsAdmin}
                     onChange={(e) => setActiveUserId(e.target.value)}
                   >
-                    <option value="">— Selecione —</option>
+                    <option value="">{tr("shared.select_placeholder")}</option>
                     {users
                       .filter((u) => u.role !== "ADMIN" && u.role !== "SUPER_ADMIN" && u.is_active !== false)
                       .map((u) => (
                         <option key={u.id} value={u.id}>
-                          {u.full_name} · {ROLE_LABEL[(u.role ?? "TEACHER") as Role]}
+                          {u.full_name} · {roleLabel((u.role ?? "TEACHER") as Role)}
                         </option>
                       ))}
                   </select>
                 </Field>
                 {activeUserId && (
                   <>
-                    <PermissionsTable perms={userPerms} onChange={setUserPermField} disabled={!operationsAdmin} />
+                    <PermissionsTable modules={MODULES} perms={userPerms} onChange={setUserPermField} disabled={!operationsAdmin} />
                     <SaveBar onClick={saveUserPerms} saving={saving} canSave={operationsAdmin} />
                   </>
                 )}
@@ -1993,7 +2001,7 @@ const Definicoes = () => {
 
         {/* NOTIFICAÇÕES */}
         {activeTab === "notificacoes" && (
-          <SectionCard title="Notificações" desc="Configure que notificações são enviadas aos utilizadores de cada função.">
+          <SectionCard title={tr("notificacoes.section_title")} desc={tr("notificacoes.section_desc")}>
             <div className="flex flex-wrap gap-2">
               {ROLES.map((r) => (
                 <button
@@ -2004,12 +2012,12 @@ const Definicoes = () => {
                     notifRole === r ? "bg-pastel-blue text-pastel-blue-foreground shadow-soft" : "bg-muted text-muted-foreground hover:bg-accent",
                   )}
                 >
-                  {ROLE_LABEL[r]}
+                  {roleLabel(r)}
                 </button>
               ))}
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              Será aplicado a {memoizedUsersForNotif} utilizador(es) ativo(s) com a função {ROLE_LABEL[notifRole]}.
+              {tr("notificacoes.apply_hint", { count: memoizedUsersForNotif, role: roleLabel(notifRole) })}
             </p>
             <div className="mt-4 flex flex-col divide-y divide-border">
               {NOTIFICATION_CHANNELS.map((c) => (
@@ -2034,13 +2042,13 @@ const Definicoes = () => {
         {activeTab === "faturacao" && (
           <div className="flex flex-col gap-6">
             <SectionCard
-              title="Encarregados e descontos"
-              desc="Modo de cobrança dos encarregados na app, descontos por número de dependentes na família e descontos manuais por aluno (afectam a geração de propinas)."
+              title={tr("faturacao.billing_discounts.section_title")}
+              desc={tr("faturacao.billing_discounts.section_desc")}
             >
               <BillingEncargadosDiscountsPanel schoolId={schoolId} />
             </SectionCard>
 
-            <SectionCard title="Ciclo de Pagamento" desc="Escolha como prefere ser cobrado pela plataforma.">
+            <SectionCard title={tr("faturacao.cycle.section_title")} desc={tr("faturacao.cycle.section_desc")}>
               <div className="flex flex-wrap gap-3">
                 {(["SEMESTRAL", "ANNUAL"] as const).map((c) => (
                   <button
@@ -2052,13 +2060,13 @@ const Definicoes = () => {
                       sub.billing_cycle === c ? "border-pastel-blue bg-pastel-blue/20" : "border-border bg-card hover:border-pastel-blue/50",
                     )}
                   >
-                    <span className="text-sm font-bold text-foreground">{c === "SEMESTRAL" ? "Semestral" : "Anual"}</span>
+                    <span className="text-sm font-bold text-foreground">{c === "SEMESTRAL" ? tr("faturacao.cycle.semestral_title") : tr("faturacao.cycle.anual_title")}</span>
                     <span className="text-xs text-muted-foreground">
-                      {c === "SEMESTRAL" ? "Pagamento a cada 6 meses" : "Pagamento uma vez por ano"}
+                      {c === "SEMESTRAL" ? tr("faturacao.cycle.semestral_desc") : tr("faturacao.cycle.anual_desc")}
                     </span>
                     {sub.billing_cycle === c && (
                       <span className="mt-2 flex items-center gap-1 text-xs font-medium text-pastel-blue-foreground">
-                        <Check className="h-3.5 w-3.5" strokeWidth={2.5} /> Selecionado
+                        <Check className="h-3.5 w-3.5" strokeWidth={2.5} /> {tr("faturacao.cycle.selected")}
                       </span>
                     )}
                   </button>
@@ -2068,21 +2076,21 @@ const Definicoes = () => {
 
             <div className="rounded-2xl bg-card shadow-card">
               <div className="border-b border-border p-5">
-                <h2 className="text-lg font-bold text-foreground">Faturas da Escola</h2>
+                <h2 className="text-lg font-bold text-foreground">{tr("faturacao.invoices.section_title")}</h2>
                 <p className="text-sm text-muted-foreground">
-                  Pagamentos efetuados pela escola à plataforma Edukamba.
+                  {tr("faturacao.invoices.section_desc")}
                 </p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-pastel-blue/40 text-left text-xs uppercase tracking-wider text-pastel-blue-foreground">
-                      <th className="py-4 pl-5 pr-4 font-semibold">Nº</th>
-                      <th className="py-4 pr-4 font-semibold">Emissão</th>
-                      <th className="py-4 pr-4 font-semibold">Vencimento</th>
-                      <th className="py-4 pr-4 font-semibold">Valor</th>
-                      <th className="py-4 pr-4 font-semibold">Estado</th>
-                      <th className="py-4 pr-5 font-semibold text-right">Ações</th>
+                      <th className="py-4 pl-5 pr-4 font-semibold">{tr("faturacao.invoices.col_number")}</th>
+                      <th className="py-4 pr-4 font-semibold">{tr("faturacao.invoices.col_issue")}</th>
+                      <th className="py-4 pr-4 font-semibold">{tr("faturacao.invoices.col_due")}</th>
+                      <th className="py-4 pr-4 font-semibold">{tr("faturacao.invoices.col_amount")}</th>
+                      <th className="py-4 pr-4 font-semibold">{tr("utilizadores.col_status")}</th>
+                      <th className="py-4 pr-5 font-semibold text-right">{tr("faturacao.invoices.col_actions")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2108,12 +2116,12 @@ const Definicoes = () => {
                             )}
                           >
                             {inv.status === "paid"
-                              ? "Pago"
+                              ? tr("faturacao.invoices.status_paid")
                               : inv.status === "overdue"
-                                ? "Em atraso"
+                                ? tr("faturacao.invoices.status_overdue")
                                 : inv.status === "submitted"
-                                  ? "A validar"
-                                  : "Pendente"}
+                                  ? tr("faturacao.invoices.status_submitted")
+                                  : tr("faturacao.invoices.status_pending")}
                           </span>
                         </td>
                         <td className="py-3.5 pr-5 text-right">
@@ -2123,7 +2131,7 @@ const Definicoes = () => {
                                 onClick={() => downloadProof(inv.proof_url!)}
                                 className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
                               >
-                                Ver comprovativo
+                                {tr("faturacao.invoices.btn_view_proof")}
                               </button>
                             )}
                             {settingsAdmin && inv.status !== "paid" && (
@@ -2136,7 +2144,7 @@ const Definicoes = () => {
                                 }}
                                 className="rounded-lg bg-pastel-blue px-3 py-1.5 text-xs font-semibold text-pastel-blue-foreground hover:opacity-90"
                               >
-                                {inv.proof_url ? "Substituir" : "Anexar comprovativo"}
+                                {inv.proof_url ? tr("faturacao.invoices.btn_replace_proof") : tr("faturacao.invoices.btn_attach_proof")}
                               </button>
                             )}
                           </div>
@@ -2147,7 +2155,7 @@ const Definicoes = () => {
                       <tr>
                         <td colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
                           <FileText className="mx-auto mb-2 h-8 w-8 opacity-40" />
-                          Sem faturas registadas.
+                          {tr("faturacao.invoices.empty")}
                         </td>
                       </tr>
                     )}
@@ -2165,9 +2173,9 @@ const Definicoes = () => {
           ) : (
             <div className="rounded-2xl bg-card p-8 text-center shadow-card">
               <Shield className="mx-auto mb-3 h-10 w-10 text-muted-foreground" strokeWidth={1.5} />
-              <h2 className="text-lg font-bold text-foreground">Acesso restrito</h2>
+              <h2 className="text-lg font-bold text-foreground">{tr("auditoria.restricted_title")}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Apenas administradores ou diretores da escola podem consultar os logs de auditoria.
+                {tr("auditoria.restricted_desc")}
               </p>
             </div>
           )
@@ -2197,16 +2205,16 @@ const Definicoes = () => {
               className="w-full max-w-md rounded-2xl bg-card p-6 shadow-card"
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-lg font-bold text-foreground">Editar Utilizador</h3>
+              <h3 className="text-lg font-bold text-foreground">{tr("modals.edit_user.title")}</h3>
               <div className="mt-5 flex flex-col gap-4">
-                <Field label="Nome completo" icon={UsersIcon}>
+                <Field label={tr("modals.edit_user.field_name")} icon={UsersIcon}>
                   <input
                     className={inputCls(false)}
                     value={editUser.full_name}
                     onChange={(e) => setEditUser({ ...editUser, full_name: e.target.value })}
                   />
                 </Field>
-                <Field label="Email (início de sessão)" icon={Mail}>
+                <Field label={tr("modals.edit_user.field_email")} icon={Mail}>
                   <input
                     className={inputCls(false)}
                     type="email"
@@ -2215,10 +2223,10 @@ const Definicoes = () => {
                     onChange={(e) => setEditUser({ ...editUser, email: e.target.value })}
                   />
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    Ao alterar, este passa a ser o email utilizado para iniciar sessão em todo o Edukamba.
+                    {tr("modals.edit_user.email_help")}
                   </p>
                 </Field>
-                <Field label="Telefone" icon={Phone}>
+                <Field label={tr("modals.edit_user.field_phone")} icon={Phone}>
                   <input
                     className={inputCls(false)}
                     value={editUser.phone ?? ""}
@@ -2231,14 +2239,14 @@ const Definicoes = () => {
                   onClick={() => setEditUser(null)}
                   className="h-10 rounded-full border border-border px-4 text-sm font-medium text-foreground hover:bg-muted"
                 >
-                  Cancelar
+                  {tr("shared.cancel")}
                 </button>
                 <button
                   onClick={saveEditUser}
                   disabled={saving}
                   className="h-10 rounded-full bg-pastel-blue px-4 text-sm font-semibold text-pastel-blue-foreground shadow-soft hover:opacity-90 disabled:opacity-50"
                 >
-                  Guardar
+                  {tr("shared.guardar")}
                 </button>
               </div>
             </div>
@@ -2255,26 +2263,28 @@ const Definicoes = () => {
               className="w-full max-w-md rounded-2xl bg-card p-6 shadow-card"
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-lg font-bold text-foreground">Anexar comprovativo</h3>
+              <h3 className="text-lg font-bold text-foreground">{tr("modals.proof.title")}</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Fatura <span className="font-medium text-foreground">{proofInvoice.invoice_number}</span> ·{" "}
-                {formatCurrency(Number(proofInvoice.amount), proofInvoice.currency)}
+                {tr("modals.proof.invoice_line", {
+                  number: proofInvoice.invoice_number,
+                  amount: formatCurrency(Number(proofInvoice.amount), proofInvoice.currency),
+                })}
               </p>
               <div className="mt-5 flex flex-col gap-4">
-                <Field label="Método de pagamento" icon={CreditCard}>
+                <Field label={tr("modals.proof.field_method")} icon={CreditCard}>
                   <select
                     className={inputCls(false)}
                     value={proofMethod}
                     onChange={(e) => setProofMethod(e.target.value)}
                   >
-                    <option value="transferencia">Transferência bancária</option>
-                    <option value="multibanco">Multibanco</option>
-                    <option value="mbway">MB WAY</option>
-                    <option value="numerario">Numerário</option>
-                    <option value="outro">Outro</option>
+                    <option value="transferencia">{tr("modals.proof.method_transfer")}</option>
+                    <option value="multibanco">{tr("modals.proof.method_mb")}</option>
+                    <option value="mbway">{tr("modals.proof.method_mbway")}</option>
+                    <option value="numerario">{tr("modals.proof.method_cash")}</option>
+                    <option value="outro">{tr("modals.proof.method_other")}</option>
                   </select>
                 </Field>
-                <Field label="Ficheiro do comprovativo" icon={FileText}>
+                <Field label={tr("modals.proof.field_file")} icon={FileText}>
                   <input
                     type="file"
                     accept="image/*,application/pdf"
@@ -2282,12 +2292,12 @@ const Definicoes = () => {
                     className="block w-full text-sm text-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-pastel-blue/30 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-pastel-blue-foreground"
                   />
                 </Field>
-                <Field label="Notas (opcional)">
+                <Field label={tr("modals.proof.field_notes")}>
                   <textarea
                     className={cn(inputCls(false), "min-h-[80px] py-2")}
                     value={proofNotes}
                     onChange={(e) => setProofNotes(e.target.value)}
-                    placeholder="Referência da transferência, data, etc."
+                    placeholder={tr("modals.proof.notes_placeholder")}
                   />
                 </Field>
               </div>
@@ -2297,7 +2307,7 @@ const Definicoes = () => {
                   disabled={proofUploading}
                   className="h-10 rounded-full border border-border px-4 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50"
                 >
-                  Cancelar
+                  {tr("shared.cancel")}
                 </button>
                 <button
                   onClick={submitProof}
@@ -2305,7 +2315,7 @@ const Definicoes = () => {
                   className="flex h-10 items-center gap-2 rounded-full bg-pastel-blue px-4 text-sm font-semibold text-pastel-blue-foreground shadow-soft hover:opacity-90 disabled:opacity-50"
                 >
                   {proofUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                  Enviar para validação
+                  {tr("modals.proof.btn_submit")}
                 </button>
               </div>
             </div>
@@ -2322,23 +2332,22 @@ const Definicoes = () => {
               className="w-full max-w-md rounded-2xl bg-card p-6 shadow-card"
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-lg font-bold text-foreground">Remover utilizador</h3>
+              <h3 className="text-lg font-bold text-foreground">{tr("modals.remove_user.title")}</h3>
               <p className="mt-2 text-sm text-muted-foreground">
-                O utilizador será desativado e perderá imediatamente o acesso ao Edukamba. Esta ação pode ser revertida
-                reativando o utilizador.
+                {tr("modals.remove_user.body")}
               </p>
               <div className="mt-6 flex justify-end gap-2">
                 <button
                   onClick={() => setRemoveId(null)}
                   className="h-10 rounded-full border border-border px-4 text-sm font-medium text-foreground hover:bg-muted"
                 >
-                  Cancelar
+                  {tr("shared.cancel")}
                 </button>
                 <button
                   onClick={confirmRemoveUser}
                   className="h-10 rounded-full bg-pastel-pink px-4 text-sm font-semibold text-pastel-pink-foreground shadow-soft hover:opacity-90"
                 >
-                  Remover
+                  {tr("shared.remover")}
                 </button>
               </div>
             </div>
@@ -2355,9 +2364,9 @@ const Definicoes = () => {
               className="w-full max-w-md rounded-2xl bg-card p-6 shadow-card"
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-lg font-bold text-foreground">Eliminar ano letivo</h3>
+              <h3 className="text-lg font-bold text-foreground">{tr("academico.years.btn_delete")} ano letivo</h3>
               <p className="mt-2 text-sm text-muted-foreground">
-                Vai eliminar o ano letivo{" "}
+                {tr("modals.delete_year.body", { label: years.find((y) => y.id === confirmDeleteYearId)?.label ?? "" }).split(years.find((y) => y.id === confirmDeleteYearId)?.label ?? "")[0]}
                 <span className="font-semibold text-foreground">
                   {years.find((y) => y.id === confirmDeleteYearId)?.label}
                 </span>
@@ -2368,14 +2377,14 @@ const Definicoes = () => {
                   onClick={() => setConfirmDeleteYearId(null)}
                   className="h-10 rounded-full border border-border px-4 text-sm font-medium text-foreground hover:bg-muted"
                 >
-                  Cancelar
+                  {tr("shared.cancel")}
                 </button>
                 <button
                   onClick={handleDeleteAcademicYear}
                   disabled={saving}
                   className="h-10 rounded-full bg-pastel-pink px-4 text-sm font-semibold text-pastel-pink-foreground shadow-soft hover:opacity-90 disabled:opacity-50"
                 >
-                  Eliminar
+                  {tr("academico.years.btn_delete")}
                 </button>
               </div>
             </div>
@@ -2406,23 +2415,28 @@ const PermissionsTable = ({
   perms,
   onChange,
   disabled,
+  modules,
 }: {
   perms: Record<string, { module: string; can_read: boolean; can_write: boolean; can_delete: boolean }>;
   onChange: (mod: PermissionModuleKey, key: "can_read" | "can_write" | "can_delete", value: boolean) => void;
   disabled?: boolean;
-}) => (
+  modules: { key: PermissionModuleKey; label: string; desc: string }[];
+}) => {
+  const { t: tr } = useTranslation("pages", { keyPrefix: "definicoes" });
+  return (
   <div className="mt-6 overflow-x-auto rounded-xl border border-border">
     <table className="w-full text-sm">
       <thead>
         <tr className="bg-muted/40 text-left text-xs uppercase tracking-wider text-muted-foreground">
-          <th className="py-3 pl-5 pr-4 font-semibold">Módulo</th>
-          <th className="py-3 pr-4 font-semibold text-center">Ver</th>
-          <th className="py-3 pr-4 font-semibold text-center">Editar</th>
-          <th className="py-3 pr-5 font-semibold text-center">Apagar</th>
+          {/* i18n headers */}
+          <th className="py-3 pl-5 pr-4 font-semibold">{tr("permissions_table.col_module")}</th>
+          <th className="py-3 pr-4 font-semibold text-center">{tr("permissions_table.col_read")}</th>
+          <th className="py-3 pr-4 font-semibold text-center">{tr("permissions_table.col_write")}</th>
+          <th className="py-3 pr-5 font-semibold text-center">{tr("permissions_table.col_delete")}</th>
         </tr>
       </thead>
       <tbody>
-        {MODULES.map((m) => {
+        {modules.map((m) => {
           const p = perms[m.key] ?? { module: m.key, can_read: false, can_write: false, can_delete: false };
           return (
             <tr key={m.key} className="border-t border-border">
@@ -2447,6 +2461,7 @@ const PermissionsTable = ({
       </tbody>
     </table>
   </div>
-);
+  );
+};
 
 export default Definicoes;

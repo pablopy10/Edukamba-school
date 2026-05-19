@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -47,6 +48,7 @@ const DEFAULT_OPTIONS: CloneOptions = {
 };
 
 export const NewAcademicYearWizard = ({ schoolId, isAdmin }: Props) => {
+  const { t: tr } = useTranslation("pages", { keyPrefix: "definicoes" });
   const { years, refresh: refreshYears, setSelectedYearId } = useAcademicYear();
   const [label, setLabel] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -73,14 +75,14 @@ export const NewAcademicYearWizard = ({ schoolId, isAdmin }: Props) => {
   );
 
   const computedSteps = useMemo<WizardStep[]>(() => {
-    const list: WizardStep[] = [{ key: "create", label: "Criar ano letivo", state: "pending" }];
-    if (options.courses) list.push({ key: "courses", label: "Validar cursos", state: "pending" });
-    if (options.subjects) list.push({ key: "subjects", label: "Validar disciplinas", state: "pending" });
-    if (options.classrooms) list.push({ key: "classrooms", label: "Clonar turmas", state: "pending" });
-    if (options.fee_rules) list.push({ key: "fee_rules", label: "Clonar regras de cobrança", state: "pending" });
-    list.push({ key: "finish", label: "Finalizar", state: "pending" });
+    const list: WizardStep[] = [{ key: "create", label: tr("wizard.step_create"), state: "pending" }];
+    if (options.courses) list.push({ key: "courses", label: tr("wizard.step_validate_courses"), state: "pending" });
+    if (options.subjects) list.push({ key: "subjects", label: tr("wizard.step_validate_subjects"), state: "pending" });
+    if (options.classrooms) list.push({ key: "classrooms", label: tr("wizard.step_clone_classrooms"), state: "pending" });
+    if (options.fee_rules) list.push({ key: "fee_rules", label: tr("wizard.step_clone_fee_rules"), state: "pending" });
+    list.push({ key: "finish", label: tr("wizard.step_finish"), state: "pending" });
     return list;
-  }, [options]);
+  }, [options, tr]);
 
   const reset = () => {
     setLabel("");
@@ -95,20 +97,20 @@ export const NewAcademicYearWizard = ({ schoolId, isAdmin }: Props) => {
 
   const runWizard = async () => {
     if (!schoolId) {
-      toast({ title: "Escola não encontrada", variant: "destructive" });
+      toast({ title: tr("validation.wizard_school_missing"), variant: "destructive" });
       return;
     }
     if (!label.trim()) {
-      toast({ title: "Indique o nome do ano letivo", variant: "destructive" });
+      toast({ title: tr("validation.wizard_year_label"), variant: "destructive" });
       return;
     }
     if (!startDate || !endDate || endDate <= startDate) {
-      toast({ title: "Datas inválidas", description: "A data de fim deve ser posterior à de início.", variant: "destructive" });
+      toast({ title: tr("validation.wizard_dates"), description: tr("validation.wizard_dates_desc"), variant: "destructive" });
       return;
     }
     const willCloneFromSource = options.classrooms || options.fee_rules;
     if (willCloneFromSource && !sourceYearId) {
-      toast({ title: "Escolha o ano de origem", description: "É necessário um ano anterior para clonar turmas/preços.", variant: "destructive" });
+      toast({ title: tr("validation.wizard_source_required"), description: tr("validation.wizard_source_desc"), variant: "destructive" });
       return;
     }
 
@@ -165,9 +167,9 @@ export const NewAcademicYearWizard = ({ schoolId, isAdmin }: Props) => {
       if (setActive && res?.new_year_id) {
         setSelectedYearId(res.new_year_id);
       }
-      toast({ title: "Novo ano letivo criado", description: `${label.trim()} pronto a usar.` });
+      toast({ title: tr("toasts.wizard_done"), description: tr("toasts.wizard_done_desc", { label: label.trim() }) });
     } catch (e: any) {
-      toast({ title: "Erro na migração", description: e?.message ?? String(e), variant: "destructive" });
+      toast({ title: tr("toasts.wizard_error"), description: e?.message ?? String(e), variant: "destructive" });
       setSteps((prev) => prev.map((s) => (s.state === "active" ? { ...s, state: "pending" } : s)));
     } finally {
       setRunning(false);
@@ -178,17 +180,17 @@ export const NewAcademicYearWizard = ({ schoolId, isAdmin }: Props) => {
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div>
-          <Label htmlFor="ny-label">Nome do ano</Label>
+          <Label htmlFor="ny-label">{tr("wizard.labels.year_name")}</Label>
           <Input
             id="ny-label"
-            placeholder="Ex.: 2026/2027"
+            placeholder={tr("wizard.placeholders.year_name")}
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             disabled={!isAdmin || running}
           />
         </div>
         <div>
-          <Label htmlFor="ny-start">Data de início</Label>
+          <Label htmlFor="ny-start">{tr("wizard.labels.start")}</Label>
           <Input
             id="ny-start"
             type="date"
@@ -198,7 +200,7 @@ export const NewAcademicYearWizard = ({ schoolId, isAdmin }: Props) => {
           />
         </div>
         <div>
-          <Label htmlFor="ny-end">Data de fim</Label>
+          <Label htmlFor="ny-end">{tr("wizard.labels.end")}</Label>
           <Input
             id="ny-end"
             type="date"
@@ -212,32 +214,32 @@ export const NewAcademicYearWizard = ({ schoolId, isAdmin }: Props) => {
       <div className="rounded-2xl border border-border bg-muted/30 p-5">
         <div className="mb-4 flex items-center gap-2">
           <Copy className="h-4 w-4 text-foreground" />
-          <h4 className="text-sm font-semibold text-foreground">Wizard de clonagem</h4>
+          <h4 className="text-sm font-semibold text-foreground">{tr("wizard.clone_title")}</h4>
         </div>
 
         <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <Label>Ano de origem</Label>
+            <Label>{tr("wizard.source_year")}</Label>
             <Select
               value={sourceYearId || undefined}
               onValueChange={setSourceYearId}
               disabled={!isAdmin || running || years.length === 0}
             >
               <SelectTrigger>
-                <SelectValue placeholder={years.length === 0 ? "Sem anos disponíveis" : "Seleccionar ano..."} />
+                <SelectValue placeholder={years.length === 0 ? tr("wizard.source_placeholder_none") : tr("wizard.source_placeholder")} />
               </SelectTrigger>
               <SelectContent>
                 {years.map((y) => (
                   <SelectItem key={y.id} value={y.id}>
                     {y.label}
-                    {y.is_active ? " · ativo" : ""}
+                    {y.is_active ? tr("shared.active_suffix") : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             {sourceYear && (
               <p className="mt-2 text-xs text-muted-foreground">
-                Origem: <span className="font-medium text-foreground">{sourceYear.label}</span>
+                {tr("wizard.source_caption")} <span className="font-medium text-foreground">{sourceYear.label}</span>
               </p>
             )}
           </div>
@@ -248,36 +250,36 @@ export const NewAcademicYearWizard = ({ schoolId, isAdmin }: Props) => {
                 onCheckedChange={(v) => setSetActive(Boolean(v))}
                 disabled={!isAdmin || running}
               />
-              <span className="text-sm text-foreground">Definir como ano letivo ativo</span>
+              <span className="text-sm text-foreground">{tr("wizard.set_active")}</span>
             </label>
           </div>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <CloneOption
-            label="Estrutura de Níveis e Cursos"
-            description="Mantém os cursos da escola (1ª Classe, 2ª Classe, etc.)."
+            label={tr("wizard.opt_courses_label")}
+            description={tr("wizard.opt_courses_desc")}
             checked={options.courses}
             onChange={(v) => setOptions((s) => ({ ...s, courses: v }))}
             disabled={!isAdmin || running}
           />
           <CloneOption
-            label="Turmas"
-            description="Copia nomes, períodos e níveis. Sem alunos."
+            label={tr("wizard.opt_classrooms_label")}
+            description={tr("wizard.opt_classrooms_desc")}
             checked={options.classrooms}
             onChange={(v) => setOptions((s) => ({ ...s, classrooms: v }))}
             disabled={!isAdmin || running}
           />
           <CloneOption
-            label="Regras de cobrança"
-            description="Replica valores, recorrências e alvos (inclui turmas clonadas quando aplicável)."
+            label={tr("wizard.opt_fee_rules_label")}
+            description={tr("wizard.opt_fee_rules_desc")}
             checked={options.fee_rules}
             onChange={(v) => setOptions((s) => ({ ...s, fee_rules: v }))}
             disabled={!isAdmin || running}
           />
           <CloneOption
-            label="Disciplinas por Classe"
-            description="Garante a matriz curricular existente."
+            label={tr("wizard.opt_subjects_label")}
+            description={tr("wizard.opt_subjects_desc")}
             checked={options.subjects}
             onChange={(v) => setOptions((s) => ({ ...s, subjects: v }))}
             disabled={!isAdmin || running}
@@ -290,7 +292,7 @@ export const NewAcademicYearWizard = ({ schoolId, isAdmin }: Props) => {
           <div className="mb-3 flex items-center justify-between">
             <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <Sparkles className="h-4 w-4" />
-              Progresso da migração
+              {tr("wizard.progress_title")}
             </h4>
             <span className="text-xs font-medium text-muted-foreground">{progress}%</span>
           </div>
@@ -333,23 +335,23 @@ export const NewAcademicYearWizard = ({ schoolId, isAdmin }: Props) => {
         <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5">
           <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
             <Check className="h-4 w-4 text-emerald-600" />
-            Migração concluída
+            {tr("wizard.result_title")}
           </div>
           <ul className="grid grid-cols-2 gap-2 text-sm text-foreground sm:grid-cols-4">
             <li className="rounded-lg bg-card px-3 py-2 shadow-soft">
-              <span className="block text-xs text-muted-foreground">Cursos</span>
+              <span className="block text-xs text-muted-foreground">{tr("wizard.result_courses")}</span>
               <span className="text-base font-semibold">{result.courses}</span>
             </li>
             <li className="rounded-lg bg-card px-3 py-2 shadow-soft">
-              <span className="block text-xs text-muted-foreground">Disciplinas</span>
+              <span className="block text-xs text-muted-foreground">{tr("wizard.result_subjects")}</span>
               <span className="text-base font-semibold">{result.subjects}</span>
             </li>
             <li className="rounded-lg bg-card px-3 py-2 shadow-soft">
-              <span className="block text-xs text-muted-foreground">Turmas clonadas</span>
+              <span className="block text-xs text-muted-foreground">{tr("wizard.result_classrooms")}</span>
               <span className="text-base font-semibold">{result.classrooms}</span>
             </li>
             <li className="rounded-lg bg-card px-3 py-2 shadow-soft">
-              <span className="block text-xs text-muted-foreground">Regras de cobrança</span>
+              <span className="block text-xs text-muted-foreground">{tr("wizard.result_fee_rules")}</span>
               <span className="text-base font-semibold">{result.fee_rules}</span>
             </li>
           </ul>
@@ -358,16 +360,16 @@ export const NewAcademicYearWizard = ({ schoolId, isAdmin }: Props) => {
 
       <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
         <Button variant="outline" onClick={reset} disabled={running}>
-          Limpar
+          {tr("wizard.btn_clear")}
         </Button>
         <Button onClick={runWizard} disabled={!isAdmin || running}>
           {running ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> A migrar...
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {tr("wizard.btn_running")}
             </>
           ) : (
             <>
-              <Calendar className="mr-2 h-4 w-4" /> Criar e migrar
+              <Calendar className="mr-2 h-4 w-4" /> {tr("wizard.btn_run")}
             </>
           )}
         </Button>

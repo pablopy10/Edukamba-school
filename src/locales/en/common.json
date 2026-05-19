@@ -277,6 +277,64 @@
       "pt": "Portuguese",
       "en": "English",
       "fr": "French"
+    },
+    "no_name": "No name",
+    "roles": {
+      "staff_fallback": "Staff member",
+      "SUPER_ADMIN": "Super administrator",
+      "ADMIN": "Administrator",
+      "DIRECTOR": "Director",
+      "SECRETARY": "Secretary",
+      "TREASURER": "Treasurer",
+      "LIBRARIAN": "Librarian",
+      "STOCK_MANAGER": "Stock manager",
+      "RECEPTIONIST": "Receptionist",
+      "TEACHER": "Teacher",
+      "PARENT": "Guardian",
+      "STUDENT": "Student"
+    },
+    "validation": {
+      "name_required": "Name is required",
+      "name_max": "Max. 100 characters",
+      "phone_max": "Max. 30 characters",
+      "email_invalid": "Invalid email",
+      "email_max": "Max. 255 characters",
+      "password_min": "At least 8 characters",
+      "password_max": "Max. 72 characters",
+      "password_upper": "Must include an uppercase letter",
+      "password_lower": "Must include a lowercase letter",
+      "password_digit": "Must include a number",
+      "password_mismatch": "Passwords do not match"
+    },
+    "credenciais": {
+      "email_title": "Sign-in email",
+      "email_desc": "A confirmation email will be sent to the new address.",
+      "email_current": "Current email",
+      "email_new": "New email",
+      "email_update": "Update email",
+      "email_toast": "Email updated. Please confirm at your new address.",
+      "password_title": "Password",
+      "password_desc": "Use at least 8 characters with uppercase, lowercase and numbers.",
+      "password_new": "New password",
+      "password_confirm": "Confirm new password",
+      "password_update": "Update password",
+      "password_toast": "Password updated."
+    },
+    "seguranca": {
+      "account_title": "Account security",
+      "account_desc": "Strengthen protection of your access.",
+      "login_alerts_label": "Sign-in alerts",
+      "login_alerts_desc": "Notify whenever there is a new sign-in.",
+      "save_settings": "Save settings",
+      "settings_toast": "Security settings saved.",
+      "delete_title": "Delete account",
+      "delete_desc": "This permanently deactivates your access. Your school data will be kept, but you will immediately lose platform access and must contact an administrator to reactivate.",
+      "delete_button": "Delete my account",
+      "delete_dialog_title": "Delete your account?",
+      "delete_dialog_desc": "This deactivates your access and ends your session. To continue, type {{word}} below.",
+      "delete_confirm_word": "DELETE",
+      "delete_confirm_action": "Confirm deletion",
+      "cancel": "Cancel"
     }
   }
 }

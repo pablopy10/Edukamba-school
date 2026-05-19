@@ -1,0 +1,665 @@
+{
+  "academico": {
+    "enrollment_fees": {
+      "field_new": "New enrolment fee (Kz)",
+      "field_renewal": "Renewal fee (Kz)",
+      "help": "When an enrolment becomes active, the charge is created under Payments › Enrolments. Guardians can attach proof for admin validation.",
+      "section_desc": "One-off amounts for new enrolments or renewals. Set 0 to waive.",
+      "section_title": "Enrolment costs"
+    },
+    "honor_roll": {
+      "field_max_grade": "Maximum grade on scale",
+      "field_min_avg": "Minimum honour-roll average",
+      "section_desc": "Set the minimum average for honour roll and the top of the school’s grading scale.",
+      "section_title": "Honour roll"
+    },
+    "late_fees": {
+      "field_charge": "Charge a late penalty?",
+      "field_type": "Penalty type",
+      "field_value_fixed": "Penalty amount (Kz)",
+      "field_value_pct": "Penalty percentage (%)",
+      "help": "The penalty applies once per overdue fee on the 11th. On-time or settled fees are unaffected.",
+      "opt_no": "Don’t charge",
+      "opt_yes": "Yes, charge penalty",
+      "section_desc": "Applied automatically on the 11th for overdue unpaid fees—fixed amount (Kz) or a percentage of the fee.",
+      "section_title": "Late fee penalties",
+      "type_fixed": "Fixed amount (Kz)",
+      "type_percentage": "Percentage (%)"
+    },
+    "terms_holidays": {
+      "section_desc": "Set dates for terms 1–3 and add student holiday periods.",
+      "section_title": "Terms & holidays"
+    },
+    "wizard": {
+      "section_desc": "Create the next school year and clone the previous structure—classes, courses, and pricing—automatically.",
+      "section_title": "New academic year setup"
+    },
+    "years": {
+      "btn_delete": "Delete",
+      "btn_make_active": "Make active",
+      "btn_new": "New academic year",
+      "empty_state": "No academic years yet. Click “New academic year” to start.",
+      "field_editing_year": "Year being edited",
+      "field_end": "End",
+      "field_start": "Start",
+      "field_year_label": "Academic year",
+      "placeholder_no_years": "No academic years yet",
+      "section_desc": "Create, edit, or delete academic years. The selected year filters data across the app.",
+      "section_title": "Academic years",
+      "title_cannot_delete_active": "You can’t delete the active academic year.",
+      "title_delete": "Delete academic year"
+    }
+  },
+  "audit": {
+    "actions": {
+      "DELETE": "Delete",
+      "INSERT": "Create",
+      "UPDATE": "Update"
+    },
+    "after": "After",
+    "before": "Before",
+    "btn_view": "View",
+    "clear_dates": "Clear dates",
+    "date_from": "Start date",
+    "date_to": "End date",
+    "dialog_title": "Record details",
+    "diff": {
+      "fields_defined": "{{count}} fields set",
+      "no_relevant": "No relevant changes",
+      "record_deleted": "Record deleted"
+    },
+    "empty": "No records for the selected filters.",
+    "filter_action": "Action",
+    "filter_action_all": "All actions",
+    "filter_table": "Table",
+    "filter_table_all": "All tables",
+    "page_indicator": "Page {{current}} of {{total}}",
+    "panel_subtitle": "History of creates, updates, and deletes across the school. Records are kept for 12 months.",
+    "panel_title": "Audit logs",
+    "record_id": "Record ID",
+    "records_count": "{{count}} record(s)",
+    "refresh": "Refresh",
+    "search_placeholder": "Search by user name…",
+    "system_user": "System",
+    "tables": {
+      "academic_terms": "Terms",
+      "academic_years": "Academic years",
+      "activity_fees": "Activity fees",
+      "assessments": "Assessments",
+      "attendance": "Attendance",
+      "classrooms": "Classes",
+      "courses": "Courses",
+      "enrollments": "Enrolments",
+      "events": "Events",
+      "expense_categories": "Expense categories",
+      "expenses": "Expenses",
+      "extracurricular_activities": "Extracurricular activities",
+      "extracurricular_enrollments": "Extracurricular enrolments",
+      "family_discount_rules": "Family discounts",
+      "fee_categories": "Fee categories",
+      "fee_rules": "Billing rules",
+      "grades": "Grades",
+      "guardians": "Guardians",
+      "material_requests": "Supply requests",
+      "materials": "Supplies",
+      "module_authorization_submissions": "Authorisations (submissions)",
+      "payments": "Payments",
+      "recurring_expenses": "Recurring expenses",
+      "schedules": "Schedules",
+      "school_settings": "School settings",
+      "schools": "School",
+      "student_fees": "Fees",
+      "students": "Students",
+      "subjects": "Subjects",
+      "teachers": "Teachers",
+      "time_slots": "Time slots",
+      "transport_enrollments": "Transport enrolments",
+      "transport_fees": "Transport fees",
+      "transport_routes": "Routes",
+      "transport_stops": "Stops"
+    },
+    "th_action": "Action",
+    "th_datetime": "Date/time",
+    "th_details": "Details",
+    "th_summary": "Summary",
+    "th_table": "Table",
+    "th_user": "User"
+  },
+  "auditoria": {
+    "restricted_desc": "Only school administrators or principals can view audit logs.",
+    "restricted_title": "Restricted access"
+  },
+  "billing": {
+    "btn_new_discount": "New discount",
+    "btn_new_rule": "New rule",
+    "btn_save_prefs": "Save settings",
+    "confirm_delete_discount_action": "Remove",
+    "confirm_delete_discount_title": "Remove discount?",
+    "confirm_delete_rule_action": "Delete",
+    "confirm_delete_rule_desc": "This action cannot be undone.",
+    "confirm_delete_rule_title": "Delete rule?",
+    "dialog_discount_desc": "Overrides the automatic rule for one student.",
+    "dialog_discount_edit": "Edit discount",
+    "dialog_discount_new": "New manual discount",
+    "dialog_family_desc": "Applies to pupils with the same guardian.",
+    "dialog_family_edit": "Edit rule",
+    "dialog_family_new": "New family rule",
+    "family_card_desc": "When a guardian has several children at the school, a discount applies.",
+    "family_card_title": "Automatic family discount",
+    "family_empty": "No rules defined.",
+    "field_discount_pct": "Discount (%)",
+    "field_discount_pct_short": "Discount %",
+    "field_fixed_amount": "Or fixed amount",
+    "field_from_sibling": "From sibling no.",
+    "field_from_sibling_help": "2 = from 2nd child onward; 3 = from 3rd onward; etc.",
+    "field_iban": "School IBAN",
+    "field_mode": "Billing mode",
+    "field_student": "Student",
+    "iban_help": "Shown in e-mails when proof mode is active. Optional but strongly recommended.",
+    "iban_placeholder": "E.g., AO06 …",
+    "mode_in_person": "Pay in person at school (no file uploads from guardians)",
+    "mode_proof": "Proof in app / bank transfer (IBAN + school validation)",
+    "overrides_desc": "Overrides the automatic rule for special cases.",
+    "overrides_empty": "No manual discounts.",
+    "overrides_title": "Manual per-student discounts",
+    "overrides_year_hint": "Discount academic year: uses the header year{{suffix}}.",
+    "overrides_year_none": " (none selected)",
+    "panel_desc": "Choose how guardians handle payments in the app. With proof mode, the school IBAN appears in reminder emails.",
+    "panel_title": "Guardian billing",
+    "reason_placeholder": "E.g., merit bursary",
+    "select_student": "Select a student",
+    "sibling_row": "{{n}}th child or higher",
+    "tab_family": "Family discounts",
+    "tab_overrides": "Per-student discounts",
+    "th_actions": "Actions",
+    "th_discount": "Discount",
+    "th_reason": "Reason",
+    "th_sibling_pos": "Sibling position",
+    "th_student": "Student"
+  },
+  "escola": {
+    "field_address": "Address",
+    "field_name": "School name",
+    "field_nif": "Tax ID",
+    "section_desc": "These details appear on documents, invoices, and in the app.",
+    "section_title": "School information"
+  },
+  "faturacao": {
+    "billing_discounts": {
+      "section_desc": "How guardians pay in the app, sibling discounts, and per-student overrides (affect fee generation).",
+      "section_title": "Guardians & discounts"
+    },
+    "cycle": {
+      "anual_desc": "Billed once a year",
+      "anual_title": "Annual",
+      "section_desc": "Choose how you prefer to be billed by the platform.",
+      "section_title": "Payment cycle",
+      "selected": "Selected",
+      "semestral_desc": "Billed every 6 months",
+      "semestral_title": "Semestral"
+    },
+    "invoices": {
+      "btn_attach_proof": "Attach proof",
+      "btn_replace_proof": "Replace",
+      "btn_view_proof": "View proof",
+      "col_actions": "Actions",
+      "col_amount": "Amount",
+      "col_due": "Due",
+      "col_issue": "Issued",
+      "col_number": "No.",
+      "col_status": "Status",
+      "empty": "No invoices yet.",
+      "section_desc": "Payments made by the school to the Edukamba platform.",
+      "section_title": "School invoices",
+      "status_overdue": "Overdue",
+      "status_paid": "Paid",
+      "status_pending": "Pending",
+      "status_submitted": "Pending validation"
+    }
+  },
+  "invite": {
+    "btn_create": "Create user",
+    "description": "One server call handles both flows: invite sends e-mail; password creates the account immediately (no “invite” wording). Adjust modules in Permissions.",
+    "field_email": "Email",
+    "field_full_name": "Full name",
+    "field_password": "Initial password *",
+    "field_phone": "Phone (optional)",
+    "field_role": "Role",
+    "password_help": "The user will receive an e-mail with login credentials.",
+    "placeholder_email": "name@school.edu",
+    "placeholder_name": "Maria Silva",
+    "placeholder_password": "At least 6 characters",
+    "placeholder_phone": "(244) 923 …",
+    "select_role": "Select role",
+    "title": "New user"
+  },
+  "marca": {
+    "logo_hint": "PNG or SVG · up to 2MB",
+    "logo_title": "Logo",
+    "primary_color": "Primary colour",
+    "secondary_color": "Secondary colour",
+    "section_desc": "Logo and colors shown across the app.",
+    "section_title": "Brand & visual identity"
+  },
+  "modals": {
+    "confirm_clear_role": {
+      "body": "Remove all saved permissions for role “{{role}}” at this school?\n\nUsers with this role will fall back to the app defaults per module.",
+      "title": "Clear role permissions"
+    },
+    "confirm_clear_user": {
+      "body": "Remove all custom permissions saved for {{name}}? The user will follow only their role defaults per module."
+    },
+    "delete_year": {
+      "body": "You will delete {{label}}. You can only delete if no classes, enrolments, assessments, or other linked data exist.",
+      "title": "Delete academic year"
+    },
+    "edit_user": {
+      "email_help": "After changing, this becomes the sign-in email across Edukamba.",
+      "field_email": "Email (sign-in)",
+      "field_name": "Full name",
+      "field_phone": "Phone",
+      "title": "Edit user"
+    },
+    "proof": {
+      "btn_submit": "Submit for validation",
+      "field_file": "Proof file",
+      "field_method": "Payment method",
+      "field_notes": "Notes (optional)",
+      "invoice_line": "Invoice {{number}} · {{amount}}",
+      "method_cash": "Cash",
+      "method_mb": "ATM reference",
+      "method_mbway": "MB WAY",
+      "method_other": "Other",
+      "method_transfer": "Bank transfer",
+      "notes_placeholder": "Transfer reference, date, etc.",
+      "title": "Attach proof"
+    },
+    "remove_user": {
+      "body": "The user will be deactivated and lose Edukamba access immediately. You can undo this by reactivating the user.",
+      "title": "Remove user"
+    }
+  },
+  "modules": {
+    "alunos": {
+      "desc": "Directory, records, and student profiles.",
+      "label": "Students"
+    },
+    "avaliacoes": {
+      "desc": "Tests, exams, and graded work.",
+      "label": "Assessments"
+    },
+    "cursos": {
+      "desc": "Catalogue of courses offered.",
+      "label": "Courses"
+    },
+    "definicoes": {
+      "desc": "Institution, brand, and SaaS (admins only).",
+      "label": "Cloud school settings"
+    },
+    "disciplinas": {
+      "desc": "Subjects taught in each course.",
+      "label": "Subjects"
+    },
+    "documentos": {
+      "desc": "School documents, signature requests, and forms.",
+      "label": "Documents"
+    },
+    "educadores": {
+      "desc": "Educational support staff.",
+      "label": "Educators"
+    },
+    "eventos": {
+      "desc": "School events and institutional calendar.",
+      "label": "Events"
+    },
+    "extracurriculares": {
+      "desc": "Activities outside the core curriculum.",
+      "label": "Extracurricular"
+    },
+    "financas": {
+      "desc": "Expenses, income, and profit insights.",
+      "label": "Finance"
+    },
+    "horario": {
+      "desc": "Timetables for classes and teachers.",
+      "label": "Timetable"
+    },
+    "material": {
+      "desc": "Inventory and supply requests.",
+      "label": "Supplies"
+    },
+    "matriculas": {
+      "desc": "Student enrolments and renewals.",
+      "label": "Enrolments"
+    },
+    "modulos": {
+      "desc": "Show or hide menu modules according to the plan (admins).",
+      "label": "Module visibility"
+    },
+    "notas": {
+      "desc": "View grades by class and subject.",
+      "label": "Grades"
+    },
+    "pedidos": {
+      "desc": "Absence requests and approvals.",
+      "label": "Requests"
+    },
+    "presencas": {
+      "desc": "Daily attendance for students.",
+      "label": "Attendance"
+    },
+    "professores": {
+      "desc": "Manage the school’s teachers and instructors.",
+      "label": "Teachers"
+    },
+    "propinas": {
+      "desc": "Billing rules, fee list, validation, and reminders.",
+      "label": "School fees"
+    },
+    "refeicoes": {
+      "desc": "Canteen plans, billing rules, sign‑ups, and payments.",
+      "label": "Meals"
+    },
+    "relatorios": {
+      "desc": "Exports and school analytics.",
+      "label": "Reports"
+    },
+    "timesheet": {
+      "desc": "Staff hour tracking.",
+      "label": "Timesheet"
+    },
+    "transportes": {
+      "desc": "Routes, stops, enrolments, and transport billing.",
+      "label": "Transport"
+    },
+    "turmas": {
+      "desc": "Class organization by year and course.",
+      "label": "Classes"
+    }
+  },
+  "notificacoes": {
+    "apply_hint": "Will apply to {{count}} active user(s) with role {{role}}.",
+    "channels": {
+      "absence_alert": {
+        "desc": "Notify guardian if absent.",
+        "label": "Absence alerts"
+      },
+      "absence_request": {
+        "desc": "Notify admins of new requests.",
+        "label": "Absence requests"
+      },
+      "complaint_update": {
+        "desc": "When a complaint status changes.",
+        "label": "Complaint updates"
+      },
+      "enrollment": {
+        "desc": "Sent when enrolment completes.",
+        "label": "Enrolment confirmation"
+      },
+      "event_reminder": {
+        "desc": "Send one day before the event.",
+        "label": "Event reminders"
+      },
+      "grade_published": {
+        "desc": "Notify when grades are published.",
+        "label": "Grades published"
+      },
+      "invoice_issued": {
+        "desc": "Automatic e-mail when an invoice is issued.",
+        "label": "Invoices issued"
+      },
+      "material_request": {
+        "desc": "Notify admins of new requests.",
+        "label": "Supply requests"
+      },
+      "new_message": {
+        "desc": "Notification when a message arrives.",
+        "label": "New chat message"
+      },
+      "welcome_email": {
+        "desc": "Sent when a user is created.",
+        "label": "Welcome email"
+      }
+    },
+    "section_desc": "Choose which notifications are sent to users in each role.",
+    "section_title": "Notifications"
+  },
+  "page_header": {
+    "director_notice": "As principal you manage users and permissions. Brand, institution data, and Edukamba invoicing remain admin-only.",
+    "subtitle": "Manage your school’s general settings, brand, users, and permissions.",
+    "title": "Settings"
+  },
+  "permissions_table": {
+    "col_delete": "Delete",
+    "col_module": "Module",
+    "col_read": "View",
+    "col_write": "Edit"
+  },
+  "permissoes": {
+    "admin_always_full": "Administrators always have full access.",
+    "btn_clear_role": "Clear role overrides",
+    "btn_clear_user": "Clear user overrides",
+    "custom_intro": "Here you can delete saved permission rows for a role or a user. After removal, the app falls back to default role rules—or role plus inherited user rules—as before other tabs were saved.",
+    "custom_role_count": "Saved rows for this role at this school: {{count}}.",
+    "custom_role_count_admin_none": "No applicable rows: admins always have full access.",
+    "custom_role_count_loading": "Saved rows for this role: loading…",
+    "custom_role_desc": "Deletes all saved rows for the selected role at this school (“By role”). App defaults apply again.",
+    "custom_role_title": "Custom permissions by role",
+    "custom_user_count": "Custom rows for this user: {{count}}.",
+    "custom_user_count_loading": "Custom rows for this user: loading…",
+    "custom_user_desc": "Removes overrides saved for the user (“By user”). Only the role defaults apply, with no per-module overrides.",
+    "custom_user_hint_select": "Select a user to see how many custom rows are saved.",
+    "custom_user_title": "Custom permissions by user",
+    "field_user": "User",
+    "section_desc": "Edit and save by role or user. Under “Custom permissions” you can clear saved rows and return to inherited defaults.",
+    "section_title": "Permissions",
+    "tab_custom": "Custom permissions",
+    "tab_role": "By role",
+    "tab_user": "By user"
+  },
+  "roles": {
+    "ADMIN": "Administrator",
+    "DIRECTOR": "Principal",
+    "LIBRARIAN": "Librarian",
+    "PARENT": "Guardian",
+    "RECEPTIONIST": "Receptionist",
+    "SECRETARY": "Secretary",
+    "STOCK_MANAGER": "Stock manager",
+    "STUDENT": "Student",
+    "SUPER_ADMIN": "Super Admin",
+    "TEACHER": "Teacher",
+    "TREASURER": "Treasurer"
+  },
+  "shared": {
+    "active_suffix": " · active",
+    "atualizar": "Update",
+    "cancel": "Cancel",
+    "carregar": "Upload",
+    "eliminar": "Delete",
+    "em_dash": "—",
+    "guardar": "Save",
+    "logo_alt": "Logo",
+    "nao_aplicavel": "—",
+    "remover": "Remove",
+    "save_changes": "Save changes",
+    "select_placeholder": "— Select —"
+  },
+  "tabs": {
+    "academico": "Academic",
+    "auditoria": "Audit",
+    "escola": "School",
+    "faturacao": "Billing",
+    "marca": "Brand",
+    "notificacoes": "Notifications",
+    "permissoes": "Permissions",
+    "utilizadores": "Users"
+  },
+  "terms": {
+    "action_edit_title": "Edit",
+    "action_remove_title": "Remove",
+    "banner_select_year": "Select (or create) an academic year above to configure that year’s terms and holidays.",
+    "banner_year_scope": "The dates below apply only to the selected academic year. Each year has its own configuration.",
+    "btn_add_holiday": "Add holiday",
+    "btn_remove_term_title": "Remove term",
+    "confirm_remove_holiday": "Remove this holiday period?",
+    "confirm_remove_term": "Remove {{name}}?",
+    "defaults": {
+      "term1": "1st term",
+      "term2": "2nd term",
+      "term3": "3rd term"
+    },
+    "editor_edit_title": "Edit holiday",
+    "editor_new_title": "New holiday",
+    "field_description": "Description (optional)",
+    "holidays_empty": "No holiday periods configured.",
+    "holidays_heading": "Student holidays",
+    "holidays_help": "Add holiday periods visible in the academic calendar (Christmas, Easter, summer, etc.).",
+    "label_end": "End",
+    "label_name": "Name",
+    "label_start": "Start",
+    "placeholder_holiday_name": "E.g., Christmas break",
+    "placeholder_holiday_notes": "Internal notes about this break",
+    "term_ordinal_suffix": "°",
+    "terms_badge": "1st · 2nd · 3rd",
+    "terms_heading": "Terms",
+    "terms_help": "Set the three term dates. Each assessment is linked to the term matching its date."
+  },
+  "toasts": {
+    "academic_active_updated": "Active academic year updated.",
+    "academic_created": "Academic year created. Edit details as needed.",
+    "academic_deleted": "Academic year deleted.",
+    "academic_settings_saved": "Academic criteria saved.",
+    "academic_updated": "Academic year updated.",
+    "billing_cycle_updated": "Billing cycle updated.",
+    "billing_delete_error": "Could not delete",
+    "billing_discount_created": "Discount created",
+    "billing_discount_removed": "Discount removed",
+    "billing_discount_saved": "Discount updated",
+    "billing_prefs_saved": "Billing preferences saved",
+    "billing_rule_created": "Rule created",
+    "billing_rule_deleted": "Rule deleted",
+    "billing_rule_saved": "Rule updated",
+    "billing_save_error": "Could not save",
+    "brand_saved": "Brand updated.",
+    "generic_error_title": "Error",
+    "holiday_created": "Holidays created",
+    "holiday_updated": "Holidays updated",
+    "holidays_removed": "Holidays removed",
+    "invite_created": "User created",
+    "invite_created_desc": "Credentials emailed to {{email}}.",
+    "invite_error": "Could not invite",
+    "logo_uploaded": "Logo uploaded. Remember to save.",
+    "notif_prefs_applied": "Preferences applied to {{count}} user(s).",
+    "proof_error": "Could not upload the proof.",
+    "proof_open_failed": "Could not open the proof.",
+    "proof_submitted": "Proof submitted. Pending validation.",
+    "role_perms_reset": "Role permissions restored to app defaults.",
+    "role_perms_saved": "Role permissions saved.",
+    "role_updated": "Role updated.",
+    "school_saved": "School information saved.",
+    "term_error_title": "Could not save term",
+    "term_removed": "Term removed",
+    "term_saved_title": "{{name}} saved",
+    "user_activated": "User activated.",
+    "user_deactivated": "User deactivated.",
+    "user_perms_cleared": "User overrides removed; inherited role defaults apply again.",
+    "user_perms_saved": "Custom permissions saved.",
+    "user_removed": "User removed. They can no longer access Edukamba.",
+    "user_updated": "User updated.",
+    "wizard_done": "New academic year created",
+    "wizard_done_desc": "{{label}} is ready to use.",
+    "wizard_error": "Migration error"
+  },
+  "utilizadores": {
+    "action_edit_title": "Edit",
+    "action_remove_title": "Remove",
+    "btn_new": "New user",
+    "col_actions": "Actions",
+    "col_name": "Name",
+    "col_phone": "Phone",
+    "col_role": "Role",
+    "col_status": "Status",
+    "empty": "No users.",
+    "empty_search": "No users match your search.",
+    "search_aria": "Search users",
+    "search_placeholder": "Name, email, phone, or role…",
+    "section_title": "Users",
+    "status_active": "Active",
+    "status_inactive": "Inactive",
+    "summary_filtered": "Showing {{shown}} of {{total}}",
+    "summary_total": "Total: {{count}}"
+  },
+  "validation": {
+    "academic_values": "Check values: 0 ≤ min average ≤ max grade.",
+    "admin_always_full_access": "Administrators always have full access; granular permissions are not stored.",
+    "admin_no_stored_perms": "The Administrator role always has full access; there are no custom rows to remove.",
+    "admin_user_full_access": "This account has full access; there are no per-module overrides to remove.",
+    "cannot_resolve_user_role": "Could not determine this user’s role.",
+    "dates_order": "Start date must be before end date.",
+    "delete_year_blocked": "Cannot delete: classes, enrolments, or fees are linked to this year.",
+    "delete_year_forbidden": "You may not delete this academic year. Only administrators can do that.",
+    "discount_value_required": "Enter a percentage or fixed amount",
+    "email_required_login": "Email is required (used to sign in to Edukamba).",
+    "form_check": "Please check the form fields.",
+    "holiday_fields": "Fill in name and dates.",
+    "invite_email": "Email is required",
+    "invite_name": "Name is required",
+    "invite_password": "Password (min. 6 characters)",
+    "late_fee_pct_max": "The penalty percentage cannot exceed 100%.",
+    "late_fee_positive": "Set a late penalty greater than zero.",
+    "logo_max_size": "File too large (max 2MB).",
+    "proof_file_required": "Select the proof file.",
+    "school_name_required": "Name is required",
+    "student_required": "Select a student",
+    "terms_fields": "Fill in all term fields.",
+    "update_email_failed": "Could not update the login email.",
+    "users_required_for_notif": "No users in this role.",
+    "wizard_dates": "Invalid dates",
+    "wizard_dates_desc": "The end date must be after the start date.",
+    "wizard_school_missing": "School not found",
+    "wizard_source_desc": "You need a previous year to clone classes/pricing.",
+    "wizard_source_required": "Choose the source year",
+    "wizard_year_label": "Enter the academic year name",
+    "year_required_discount": "Academic year missing",
+    "year_required_discount_desc": "Select the active academic year in the app header before creating a discount."
+  },
+  "wizard": {
+    "btn_clear": "Reset",
+    "btn_run": "Create & migrate",
+    "btn_running": "Migrating…",
+    "clone_title": "Cloning wizard",
+    "labels": {
+      "end": "End date",
+      "start": "Start date",
+      "year_name": "Year name"
+    },
+    "opt_classrooms_desc": "Copies names, periods, and levels. No pupils.",
+    "opt_classrooms_label": "Classes",
+    "opt_courses_desc": "Keeps the school’s courses (Grade 1, Grade 2, etc.).",
+    "opt_courses_label": "Levels & courses structure",
+    "opt_fee_rules_desc": "Copies amounts, recurrence, and targets (includes cloned classes where applicable).",
+    "opt_fee_rules_label": "Billing rules",
+    "opt_subjects_desc": "Keeps the existing curriculum matrix.",
+    "opt_subjects_label": "Subjects by class",
+    "placeholders": {
+      "year_name": "E.g., 2026/2027"
+    },
+    "progress_title": "Migration progress",
+    "result_classrooms": "Classes cloned",
+    "result_courses": "Courses",
+    "result_fee_rules": "Billing rules",
+    "result_subjects": "Subjects",
+    "result_title": "Migration complete",
+    "set_active": "Set as active academic year",
+    "source_caption": "Source:",
+    "source_placeholder": "Select year…",
+    "source_placeholder_none": "No years available",
+    "source_year": "Source year",
+    "step_clone_classrooms": "Clone classes",
+    "step_clone_fee_rules": "Clone billing rules",
+    "step_create": "Create academic year",
+    "step_finish": "Finish",
+    "step_validate_courses": "Validate courses",
+    "step_validate_subjects": "Validate subjects"
+  }
+}

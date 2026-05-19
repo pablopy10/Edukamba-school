@@ -1,0 +1,665 @@
+{
+  "academico": {
+    "enrollment_fees": {
+      "field_new": "Frais de nouvelle inscription (Kz)",
+      "field_renewal": "Frais de renouvellement (Kz)",
+      "help": "Lorsqu’une inscription devient active, les frais sont créés dans Paiements › Inscriptions. Les responsables peuvent joindre une preuve pour validation.",
+      "section_desc": "Montants uniques pour une nouvelle inscription ou un renouvellement. Mettez 0 pour ne pas facturer.",
+      "section_title": "Frais d’inscription"
+    },
+    "honor_roll": {
+      "field_max_grade": "Note maximale de l’échelle",
+      "field_min_avg": "Moyenne minimale pour le tableau d’honneur",
+      "section_desc": "Définissez la moyenne minimale pour le tableau d’honneur et la note maximale de l’échelle.",
+      "section_title": "Tableau d’honneur"
+    },
+    "late_fees": {
+      "field_charge": "Appliquer une pénalité de retard ?",
+      "field_type": "Type de pénalité",
+      "field_value_fixed": "Montant de la pénalité (Kz)",
+      "field_value_pct": "Pourcentage de pénalité (%)",
+      "help": "La pénalité s’applique une fois par échéance en retard le 11. Les paiements à temps ne sont pas impactés.",
+      "opt_no": "Ne pas facturer",
+      "opt_yes": "Oui, appliquer une pénalité",
+      "section_desc": "Appliquée automatiquement le 11 de chaque mois pour les échéances impayées—montant fixe (Kz) ou pourcentage.",
+      "section_title": "Pénalités de retard sur les frais",
+      "type_fixed": "Montant fixe (Kz)",
+      "type_percentage": "Pourcentage (%)"
+    },
+    "terms_holidays": {
+      "section_desc": "Définissez les dates des 1er, 2e et 3e trimestres et les périodes de vacances des élèves.",
+      "section_title": "Trimestres et vacances"
+    },
+    "wizard": {
+      "section_desc": "Créez le prochain cycle et clonez automatiquement la structure de l’année précédente (classes, cours et tarifs).",
+      "section_title": "Configuration d’une nouvelle année scolaire"
+    },
+    "years": {
+      "btn_delete": "Supprimer",
+      "btn_make_active": "Définir comme active",
+      "btn_new": "Nouvelle année scolaire",
+      "empty_state": "Aucune année scolaire. Cliquez sur « Nouvelle année scolaire » pour commencer.",
+      "field_editing_year": "Année en cours d’édition",
+      "field_end": "Fin",
+      "field_start": "Début",
+      "field_year_label": "Année scolaire",
+      "placeholder_no_years": "Aucune année scolaire créée",
+      "section_desc": "Créez, modifiez ou supprimez les années scolaires. L’année sélectionnée filtre les données dans toute l’application.",
+      "section_title": "Années scolaires",
+      "title_cannot_delete_active": "Impossible de supprimer l’année scolaire active.",
+      "title_delete": "Supprimer l’année scolaire"
+    }
+  },
+  "audit": {
+    "actions": {
+      "DELETE": "Suppression",
+      "INSERT": "Création",
+      "UPDATE": "Modification"
+    },
+    "after": "Après",
+    "before": "Avant",
+    "btn_view": "Voir",
+    "clear_dates": "Effacer les dates",
+    "date_from": "Date de début",
+    "date_to": "Date de fin",
+    "dialog_title": "Détails de l’enregistrement",
+    "diff": {
+      "fields_defined": "{{count}} champs définis",
+      "no_relevant": "Pas de changements pertinents",
+      "record_deleted": "Enregistrement supprimé"
+    },
+    "empty": "Aucun enregistrement pour ces filtres.",
+    "filter_action": "Action",
+    "filter_action_all": "Toutes les actions",
+    "filter_table": "Table",
+    "filter_table_all": "Toutes les tables",
+    "page_indicator": "Page {{current}} sur {{total}}",
+    "panel_subtitle": "Historique des créations, modifications et suppressions. Conservation 12 mois.",
+    "panel_title": "Journaux d’audit",
+    "record_id": "ID de l’enregistrement",
+    "records_count": "{{count}} enregistrement(s)",
+    "refresh": "Actualiser",
+    "search_placeholder": "Rechercher par nom d’utilisateur…",
+    "system_user": "Système",
+    "tables": {
+      "academic_terms": "Périodes",
+      "academic_years": "Années scolaires",
+      "activity_fees": "Frais d’activités",
+      "assessments": "Évaluations",
+      "attendance": "Présences",
+      "classrooms": "Classes",
+      "courses": "Cours",
+      "enrollments": "Inscriptions",
+      "events": "Événements",
+      "expense_categories": "Catégories de dépense",
+      "expenses": "Dépenses",
+      "extracurricular_activities": "Activités extrascolaires",
+      "extracurricular_enrollments": "Inscriptions extrascolaires",
+      "family_discount_rules": "Remises familiales",
+      "fee_categories": "Catégories de frais",
+      "fee_rules": "Règles de facturation",
+      "grades": "Notes",
+      "guardians": "Responsables légaux",
+      "material_requests": "Demandes de matériel",
+      "materials": "Matériels",
+      "module_authorization_submissions": "Autorisations (soumissions)",
+      "payments": "Paiements",
+      "recurring_expenses": "Dépenses récurrentes",
+      "schedules": "Horaires",
+      "school_settings": "Paramètres de l’établissement",
+      "schools": "École",
+      "student_fees": "Frais récurrents",
+      "students": "Élèves",
+      "subjects": "Matières",
+      "teachers": "Enseignants",
+      "time_slots": "Créneaux",
+      "transport_enrollments": "Inscriptions transport",
+      "transport_fees": "Frais de transport",
+      "transport_routes": "Itinéraires",
+      "transport_stops": "Arrêts"
+    },
+    "th_action": "Action",
+    "th_datetime": "Date/heure",
+    "th_details": "Détails",
+    "th_summary": "Résumé",
+    "th_table": "Table",
+    "th_user": "Utilisateur"
+  },
+  "auditoria": {
+    "restricted_desc": "Seuls les administrateurs ou directeurs peuvent consulter les journaux d’audit.",
+    "restricted_title": "Accès restreint"
+  },
+  "billing": {
+    "btn_new_discount": "Nouvelle remise",
+    "btn_new_rule": "Nouvelle règle",
+    "btn_save_prefs": "Enregistrer les paramètres",
+    "confirm_delete_discount_action": "Retirer",
+    "confirm_delete_discount_title": "Retirer la remise ?",
+    "confirm_delete_rule_action": "Supprimer",
+    "confirm_delete_rule_desc": "Cette action est irréversible.",
+    "confirm_delete_rule_title": "Supprimer la règle ?",
+    "dialog_discount_desc": "Remplace la règle automatique pour un élève donné.",
+    "dialog_discount_edit": "Modifier la remise",
+    "dialog_discount_new": "Nouvelle remise manuelle",
+    "dialog_family_desc": "S’applique aux élèves ayant le même responsable.",
+    "dialog_family_edit": "Modifier la règle",
+    "dialog_family_new": "Nouvelle règle familiale",
+    "family_card_desc": "Lorsqu’un responsable a plusieurs enfants dans l’école, une remise s’applique.",
+    "family_card_title": "Remise familiale automatique",
+    "family_empty": "Aucune règle définie.",
+    "field_discount_pct": "Remise (%)",
+    "field_discount_pct_short": "Remise %",
+    "field_fixed_amount": "Ou montant fixe",
+    "field_from_sibling": "À partir du … membre",
+    "field_from_sibling_help": "2 = à partir du 2e enfant ; 3 = à partir du 3e ; etc.",
+    "field_iban": "IBAN de l’établissement",
+    "field_mode": "Mode de recouvrement",
+    "field_student": "Élève",
+    "iban_help": "Affiché dans l’e-mail lorsque le mode justificatif est actif. Optionnel mais recommandé.",
+    "iban_placeholder": "Ex. : AO06 …",
+    "mode_in_person": "Paiement sur place (pas d’envoi de fichiers par les responsables)",
+    "mode_proof": "Justificatif dans l’app / virement (IBAN + validation par l’école)",
+    "overrides_desc": "Remplace la règle automatique dans les cas particuliers.",
+    "overrides_empty": "Aucune remise manuelle.",
+    "overrides_title": "Remises manuelles par élève",
+    "overrides_year_hint": "Année du rabais : utilise l’année sélectionnée dans l’en-tête{{suffix}}.",
+    "overrides_year_none": " (aucune sélectionnée)",
+    "panel_desc": "Définissez comment les responsables gèrent les paiements dans l’app. Avec justificatif, l’IBAN figure dans les e-mails de rappel.",
+    "panel_title": "Recouvrement auprès des responsables",
+    "reason_placeholder": "Ex. : bourse au mérite",
+    "select_student": "Sélectionnez un élève",
+    "sibling_row": "{{n}}e enfant ou suivant",
+    "tab_family": "Remises familiales",
+    "tab_overrides": "Remises par élève",
+    "th_actions": "Actions",
+    "th_discount": "Remise",
+    "th_reason": "Motif",
+    "th_sibling_pos": "Position dans la fratrie",
+    "th_student": "Élève"
+  },
+  "escola": {
+    "field_address": "Adresse",
+    "field_name": "Nom de l’école",
+    "field_nif": "N° fiscal / ID fiscal",
+    "section_desc": "Ces données figurent sur les documents, les factures et dans l’application.",
+    "section_title": "Informations sur l’école"
+  },
+  "faturacao": {
+    "billing_discounts": {
+      "section_desc": "Mode de recouvrement auprès des responsables, remises famille et remises manuelles par élève (impactent les frais).",
+      "section_title": "Responsables et remises"
+    },
+    "cycle": {
+      "anual_desc": "Paiement une fois par an",
+      "anual_title": "Annuel",
+      "section_desc": "Choisissez la fréquence de facturation par la plateforme.",
+      "section_title": "Cycle de paiement",
+      "selected": "Sélectionné",
+      "semestral_desc": "Paiement tous les 6 mois",
+      "semestral_title": "Semestriel"
+    },
+    "invoices": {
+      "btn_attach_proof": "Joindre une preuve",
+      "btn_replace_proof": "Remplacer",
+      "btn_view_proof": "Voir la preuve",
+      "col_actions": "Actions",
+      "col_amount": "Montant",
+      "col_due": "Échéance",
+      "col_issue": "Émission",
+      "col_number": "N°",
+      "col_status": "État",
+      "empty": "Aucune facture enregistrée.",
+      "section_desc": "Paiements effectués par l’établissement à la plateforme Edukamba.",
+      "section_title": "Factures de l’établissement",
+      "status_overdue": "En retard",
+      "status_paid": "Payé",
+      "status_pending": "En attente",
+      "status_submitted": "En validation"
+    }
+  },
+  "invite": {
+    "btn_create": "Créer l’utilisateur",
+    "description": "Un seul appel gère les deux flux : invitation par e-mail ou création immédiate avec mot de passe. Modules : onglet Permissions.",
+    "field_email": "E-mail",
+    "field_full_name": "Nom complet",
+    "field_password": "Mot de passe initial *",
+    "field_phone": "Téléphone (facultatif)",
+    "field_role": "Fonction",
+    "password_help": "L’utilisateur recevra un e-mail avec ses identifiants.",
+    "placeholder_email": "nom@ecole.edu",
+    "placeholder_name": "Maria Silva",
+    "placeholder_password": "Au moins 6 caractères",
+    "placeholder_phone": "(244) 923 …",
+    "select_role": "Sélectionner une fonction",
+    "title": "Nouvel utilisateur"
+  },
+  "marca": {
+    "logo_hint": "PNG ou SVG · jusqu’à 2 Mo",
+    "logo_title": "Logo",
+    "primary_color": "Couleur principale",
+    "secondary_color": "Couleur secondaire",
+    "section_desc": "Logo et couleurs affichés dans toute l’application.",
+    "section_title": "Marque et identité visuelle"
+  },
+  "modals": {
+    "confirm_clear_role": {
+      "body": "Supprimer toutes les permissions enregistrées pour « {{role}} » dans cette école ?\n\nLes utilisateurs reviennent aux valeurs par défaut par module.",
+      "title": "Réinitialiser les permissions de la fonction"
+    },
+    "confirm_clear_user": {
+      "body": "Supprimer toutes les permissions personnalisées pour {{name}} ? L’utilisateur suivra uniquement les règles de la fonction."
+    },
+    "delete_year": {
+      "body": "Vous supprimez {{label}}. Impossible s’il reste des classes, inscriptions, évaluations ou données liées.",
+      "title": "Supprimer l’année scolaire"
+    },
+    "edit_user": {
+      "email_help": "Après modification, il devient l’e-mail de connexion pour tout Edukamba.",
+      "field_email": "E-mail (connexion)",
+      "field_name": "Nom complet",
+      "field_phone": "Téléphone",
+      "title": "Modifier l’utilisateur"
+    },
+    "proof": {
+      "btn_submit": "Envoyer pour validation",
+      "field_file": "Fichier du justificatif",
+      "field_method": "Moyen de paiement",
+      "field_notes": "Notes (facultatif)",
+      "invoice_line": "Facture {{number}} · {{amount}}",
+      "method_cash": "Espèces",
+      "method_mb": "Multibanco",
+      "method_mbway": "MB WAY",
+      "method_other": "Autre",
+      "method_transfer": "Virement bancaire",
+      "notes_placeholder": "Référence de virement, date, etc.",
+      "title": "Joindre une preuve"
+    },
+    "remove_user": {
+      "body": "L’utilisateur sera désactivé et perdra l’accès immédiatement. Réversible en réactivant le compte.",
+      "title": "Retirer l’utilisateur"
+    }
+  },
+  "modules": {
+    "alunos": {
+      "desc": "Liste, dossiers et profils des élèves.",
+      "label": "Élèves"
+    },
+    "avaliacoes": {
+      "desc": "Tests, examens et travaux notés.",
+      "label": "Évaluations"
+    },
+    "cursos": {
+      "desc": "Catalogue des cours proposés.",
+      "label": "Cours"
+    },
+    "definicoes": {
+      "desc": "Institution, identité visuelle et SaaS (réservé aux administrateurs).",
+      "label": "École dans le cloud"
+    },
+    "disciplinas": {
+      "desc": "Matières enseignées dans chaque cours.",
+      "label": "Matières"
+    },
+    "documentos": {
+      "desc": "Documents officiels, demandes de signature et formulaires.",
+      "label": "Documents"
+    },
+    "educadores": {
+      "desc": "Personnel d’accompagnement éducatif.",
+      "label": "Éducateurs"
+    },
+    "eventos": {
+      "desc": "Événements scolaires et calendrier institutionnel.",
+      "label": "Événements"
+    },
+    "extracurriculares": {
+      "desc": "Activités hors programme officiel.",
+      "label": "L’extrascolaire"
+    },
+    "financas": {
+      "desc": "Dépenses, recettes et indicateurs de rentabilité.",
+      "label": "Finances"
+    },
+    "horario": {
+      "desc": "Emplois du temps des classes et des enseignants.",
+      "label": "Emploi du temps"
+    },
+    "material": {
+      "desc": "Stock et demandes de fournitures.",
+      "label": "Matériel"
+    },
+    "matriculas": {
+      "desc": "Inscriptions et renouvellements des élèves.",
+      "label": "Inscriptions"
+    },
+    "modulos": {
+      "desc": "Afficher ou masquer les modules du menu selon le forfait (administrateurs).",
+      "label": "Visibilité des modules"
+    },
+    "notas": {
+      "desc": "Consultation des notes par classe et matière.",
+      "label": "Notes"
+    },
+    "pedidos": {
+      "desc": "Demandes d’absence et approbations.",
+      "label": "Demandes"
+    },
+    "presencas": {
+      "desc": "Suivi quotidien des présences des élèves.",
+      "label": "Présences"
+    },
+    "professores": {
+      "desc": "Gestion des enseignants et du personnel enseignant.",
+      "label": "Enseignants"
+    },
+    "propinas": {
+      "desc": "Règles de facturation, liste des échéances, validation et rappels.",
+      "label": "Frais de scolarité"
+    },
+    "refeicoes": {
+      "desc": "Plans de cantine, règles de facturation, inscriptions et paiements.",
+      "label": "Restauration"
+    },
+    "relatorios": {
+      "desc": "Exports et analyses de l’établissement.",
+      "label": "Rapports"
+    },
+    "timesheet": {
+      "desc": "Suivi des heures du personnel.",
+      "label": "Timesheet"
+    },
+    "transportes": {
+      "desc": "Services, arrêts, inscriptions et facturation du transport.",
+      "label": "Transport"
+    },
+    "turmas": {
+      "desc": "Organisation des classes par année et par cours.",
+      "label": "Classes"
+    }
+  },
+  "notificacoes": {
+    "apply_hint": "S’appliquera à {{count}} utilisateur(s) actif(s) avec le rôle {{role}}.",
+    "channels": {
+      "absence_alert": {
+        "desc": "Notifier le responsable en cas d’absence.",
+        "label": "Alertes d’absence"
+      },
+      "absence_request": {
+        "desc": "Notifier les administrateurs des nouvelles demandes.",
+        "label": "Demandes d’absence"
+      },
+      "complaint_update": {
+        "desc": "Lorsque le statut d’une réclamation change.",
+        "label": "Mises à jour des réclamations"
+      },
+      "enrollment": {
+        "desc": "Envoyé à la fin de l’inscription.",
+        "label": "Confirmation d’inscription"
+      },
+      "event_reminder": {
+        "desc": "Envoyer 1 jour avant l’événement.",
+        "label": "Rappels d’événements"
+      },
+      "grade_published": {
+        "desc": "Notifier lors de la publication des notes.",
+        "label": "Notes publiées"
+      },
+      "invoice_issued": {
+        "desc": "E-mail automatique à l’émission d’une facture.",
+        "label": "Factures émises"
+      },
+      "material_request": {
+        "desc": "Notifier les administrateurs des nouvelles demandes.",
+        "label": "Demandes de matériel"
+      },
+      "new_message": {
+        "desc": "Notification à la réception d’un message.",
+        "label": "Nouveau message"
+      },
+      "welcome_email": {
+        "desc": "Envoyé lors de la création d’un utilisateur.",
+        "label": "E-mail de bienvenue"
+      }
+    },
+    "section_desc": "Choisissez les notifications envoyées pour chaque fonction.",
+    "section_title": "Notifications"
+  },
+  "page_header": {
+    "director_notice": "En tant que directeur, vous gérez les utilisateurs et les permissions. La marque, les données de l’institution et la facturation Edukamba restent réservées à l’administrateur.",
+    "subtitle": "Gérez les réglages généraux de l’établissement, l’identité visuelle, les utilisateurs et les permissions.",
+    "title": "Paramètres"
+  },
+  "permissions_table": {
+    "col_delete": "Supprimer",
+    "col_module": "Module",
+    "col_read": "Voir",
+    "col_write": "Modifier"
+  },
+  "permissoes": {
+    "admin_always_full": "Les administrateurs ont toujours tous les accès.",
+    "btn_clear_role": "Réinitialiser la fonction",
+    "btn_clear_user": "Réinitialiser l’utilisateur",
+    "custom_intro": "Ici vous pouvez supprimer les permissions enregistrées pour une fonction ou un utilisateur. Après suppression, l’application revient aux règles par défaut ou à la combinaison héritée.",
+    "custom_role_count": "Enregistrements pour cette fonction : {{count}}.",
+    "custom_role_count_admin_none": "Aucun enregistrement : les administrateurs ont toujours l’accès complet.",
+    "custom_role_count_loading": "Enregistrements pour cette fonction : chargement…",
+    "custom_role_desc": "Supprime toutes les lignes enregistrées pour la fonction sélectionnée. Les valeurs par défaut de l’application s’appliquent à nouveau.",
+    "custom_role_title": "Permissions personnalisées par fonction",
+    "custom_user_count": "Enregistrements personnalisés : {{count}}.",
+    "custom_user_count_loading": "Enregistrements personnalisés : chargement…",
+    "custom_user_desc": "Supprime les surcharges enregistrées pour l’utilisateur. Seules les règles de la fonction s’appliquent.",
+    "custom_user_hint_select": "Sélectionnez un utilisateur pour voir le nombre de permissions personnalisées.",
+    "custom_user_title": "Permissions personnalisées par utilisateur",
+    "field_user": "Utilisateur",
+    "section_desc": "Modifiez et enregistrez par fonction ou par utilisateur. Sous « Permissions personnalisées », vous pouvez effacer et revenir aux valeurs héritées.",
+    "section_title": "Permissions",
+    "tab_custom": "Permissions personnalisées",
+    "tab_role": "Par fonction",
+    "tab_user": "Par utilisateur"
+  },
+  "roles": {
+    "ADMIN": "Administrateur",
+    "DIRECTOR": "Directeur",
+    "LIBRARIAN": "Bibliothécaire",
+    "PARENT": "Responsable",
+    "RECEPTIONIST": "Réceptionniste",
+    "SECRETARY": "Secrétariat",
+    "STOCK_MANAGER": "Gestionnaire de stock",
+    "STUDENT": "Élève",
+    "SUPER_ADMIN": "Super admin",
+    "TEACHER": "Enseignant",
+    "TREASURER": "Trésorier"
+  },
+  "shared": {
+    "active_suffix": " · actif",
+    "atualizar": "Mettre à jour",
+    "cancel": "Annuler",
+    "carregar": "Téléverser",
+    "eliminar": "Supprimer",
+    "em_dash": "—",
+    "guardar": "Enregistrer",
+    "logo_alt": "Logo",
+    "nao_aplicavel": "—",
+    "remover": "Retirer",
+    "save_changes": "Enregistrer les modifications",
+    "select_placeholder": "— Sélectionner —"
+  },
+  "tabs": {
+    "academico": "Académique",
+    "auditoria": "Audit",
+    "escola": "École",
+    "faturacao": "Facturation",
+    "marca": "Marque",
+    "notificacoes": "Notifications",
+    "permissoes": "Permissions",
+    "utilizadores": "Utilisateurs"
+  },
+  "terms": {
+    "action_edit_title": "Modifier",
+    "action_remove_title": "Retirer",
+    "banner_select_year": "Sélectionnez (ou créez) une année scolaire ci-dessus pour configurer trimestres et vacances.",
+    "banner_year_scope": "Les dates ci-dessous concernent uniquement l’année sélectionnée. Chaque année a sa propre configuration.",
+    "btn_add_holiday": "Ajouter des vacances",
+    "btn_remove_term_title": "Supprimer le trimestre",
+    "confirm_remove_holiday": "Supprimer cette période de vacances ?",
+    "confirm_remove_term": "Supprimer {{name}} ?",
+    "defaults": {
+      "term1": "1er trimestre",
+      "term2": "2e trimestre",
+      "term3": "3e trimestre"
+    },
+    "editor_edit_title": "Modifier les vacances",
+    "editor_new_title": "Nouvelles vacances",
+    "field_description": "Description (facultatif)",
+    "holidays_empty": "Aucune période de vacances configurée.",
+    "holidays_heading": "Vacances des élèves",
+    "holidays_help": "Ajoutez des périodes visibles dans le calendrier (Noël, Pâques, été, etc.).",
+    "label_end": "Fin",
+    "label_name": "Nom",
+    "label_start": "Début",
+    "placeholder_holiday_name": "Ex. : Vacances de Noël",
+    "placeholder_holiday_notes": "Notes internes sur cette période",
+    "term_ordinal_suffix": "ᵉ",
+    "terms_badge": "1er · 2e · 3e",
+    "terms_heading": "Trimestres",
+    "terms_help": "Définissez les trois trimestres. Chaque évaluation est rattachée au trimestre correspondant à sa date."
+  },
+  "toasts": {
+    "academic_active_updated": "Année active mise à jour.",
+    "academic_created": "Année créée. Modifiez les données si besoin.",
+    "academic_deleted": "Année scolaire supprimée.",
+    "academic_settings_saved": "Critères académiques enregistrés.",
+    "academic_updated": "Année scolaire mise à jour.",
+    "billing_cycle_updated": "Cycle de paiement mis à jour.",
+    "billing_delete_error": "Erreur de suppression",
+    "billing_discount_created": "Remise créée",
+    "billing_discount_removed": "Remise retirée",
+    "billing_discount_saved": "Remise mise à jour",
+    "billing_prefs_saved": "Préférences de recouvrement enregistrées",
+    "billing_rule_created": "Règle créée",
+    "billing_rule_deleted": "Règle supprimée",
+    "billing_rule_saved": "Règle mise à jour",
+    "billing_save_error": "Erreur d’enregistrement",
+    "brand_saved": "Marque mise à jour.",
+    "generic_error_title": "Erreur",
+    "holiday_created": "Vacances créées",
+    "holiday_updated": "Vacances mises à jour",
+    "holidays_removed": "Vacances supprimées",
+    "invite_created": "Utilisateur créé",
+    "invite_created_desc": "Identifiants envoyés à {{email}}.",
+    "invite_error": "Erreur d’invitation",
+    "logo_uploaded": "Logo téléversé. Pensez à enregistrer.",
+    "notif_prefs_applied": "Préférences appliquées à {{count}} utilisateur(s).",
+    "proof_error": "Erreur d’envoi du justificatif.",
+    "proof_open_failed": "Impossible d’ouvrir le justificatif.",
+    "proof_submitted": "Justificatif envoyé. En attente de validation.",
+    "role_perms_reset": "Permissions de la fonction réinitialisées.",
+    "role_perms_saved": "Permissions de la fonction enregistrées.",
+    "role_updated": "Fonction mise à jour.",
+    "school_saved": "Informations de l’école enregistrées.",
+    "term_error_title": "Erreur d’enregistrement du trimestre",
+    "term_removed": "Trimestre supprimé",
+    "term_saved_title": "{{name}} enregistré",
+    "user_activated": "Utilisateur activé.",
+    "user_deactivated": "Utilisateur désactivé.",
+    "user_perms_cleared": "Surcharges utilisateur supprimées ; retour aux valeurs héritées.",
+    "user_perms_saved": "Permissions personnalisées enregistrées.",
+    "user_removed": "Utilisateur retiré. Plus d’accès à Edukamba.",
+    "user_updated": "Utilisateur mis à jour.",
+    "wizard_done": "Nouvelle année créée",
+    "wizard_done_desc": "{{label}} est prête à l’emploi.",
+    "wizard_error": "Erreur de migration"
+  },
+  "utilizadores": {
+    "action_edit_title": "Modifier",
+    "action_remove_title": "Retirer",
+    "btn_new": "Nouvel utilisateur",
+    "col_actions": "Actions",
+    "col_name": "Nom",
+    "col_phone": "Téléphone",
+    "col_role": "Fonction",
+    "col_status": "État",
+    "empty": "Aucun utilisateur.",
+    "empty_search": "Aucun utilisateur ne correspond à la recherche.",
+    "search_aria": "Rechercher des utilisateurs",
+    "search_placeholder": "Nom, e-mail, téléphone ou fonction…",
+    "section_title": "Utilisateurs",
+    "status_active": "Actif",
+    "status_inactive": "Inactif",
+    "summary_filtered": "Affichage de {{shown}} sur {{total}}",
+    "summary_total": "Total : {{count}}"
+  },
+  "validation": {
+    "academic_values": "Vérifiez : 0 ≤ moyenne min ≤ note max.",
+    "admin_always_full_access": "Les administrateurs ont toujours l’accès complet ; pas de permissions granulaires stockées.",
+    "admin_no_stored_perms": "La fonction Administrateur a toujours l’accès complet ; aucune ligne à supprimer.",
+    "admin_user_full_access": "Compte à accès complet ; aucune surcharge par module.",
+    "cannot_resolve_user_role": "Impossible de déterminer le rôle de cet utilisateur.",
+    "dates_order": "La date de début doit précéder la fin.",
+    "delete_year_blocked": "Suppression impossible : classes, inscriptions ou frais liés à cette année.",
+    "delete_year_forbidden": "Vous ne pouvez pas supprimer cette année. Réservé aux administrateurs.",
+    "discount_value_required": "Indiquez un pourcentage ou un montant fixe",
+    "email_required_login": "L’e-mail est obligatoire (connexion Edukamba).",
+    "form_check": "Vérifiez les champs du formulaire.",
+    "holiday_fields": "Renseignez le nom et les dates.",
+    "invite_email": "L’e-mail est obligatoire",
+    "invite_name": "Le nom est obligatoire",
+    "invite_password": "Mot de passe (min. 6 caractères)",
+    "late_fee_pct_max": "Le pourcentage ne peut pas dépasser 100 %.",
+    "late_fee_positive": "Indiquez une pénalité supérieure à zéro.",
+    "logo_max_size": "Fichier trop volumineux (max 2 Mo).",
+    "proof_file_required": "Sélectionnez le fichier du justificatif.",
+    "school_name_required": "Le nom est obligatoire",
+    "student_required": "Sélectionnez un élève",
+    "terms_fields": "Remplissez tous les champs du trimestre.",
+    "update_email_failed": "Impossible de mettre à jour l’e-mail de connexion.",
+    "users_required_for_notif": "Aucun utilisateur pour cette fonction.",
+    "wizard_dates": "Dates invalides",
+    "wizard_dates_desc": "La date de fin doit être postérieure au début.",
+    "wizard_school_missing": "École introuvable",
+    "wizard_source_desc": "Une année source est nécessaire pour cloner classes/tarifs.",
+    "wizard_source_required": "Choisissez l’année source",
+    "wizard_year_label": "Indiquez le nom de l’année",
+    "year_required_discount": "Année scolaire manquante",
+    "year_required_discount_desc": "Sélectionnez l’année active dans l’en-tête avant de créer une remise."
+  },
+  "wizard": {
+    "btn_clear": "Effacer",
+    "btn_run": "Créer et migrer",
+    "btn_running": "Migration…",
+    "clone_title": "Assistant de clonage",
+    "labels": {
+      "end": "Date de fin",
+      "start": "Date de début",
+      "year_name": "Nom de l’année"
+    },
+    "opt_classrooms_desc": "Copie les noms, les périodes et les niveaux. Sans élèves.",
+    "opt_classrooms_label": "Classes",
+    "opt_courses_desc": "Conserve les cours de l’école (1re classe, 2e classe, etc.).",
+    "opt_courses_label": "Structure des niveaux et cours",
+    "opt_fee_rules_desc": "Réplique montants, récurrence et cibles (y compris les classes clonées le cas échéant).",
+    "opt_fee_rules_label": "Règles de facturation",
+    "opt_subjects_desc": "Préserve la matrice curriculaire existante.",
+    "opt_subjects_label": "Matières par classe",
+    "placeholders": {
+      "year_name": "Ex. : 2026/2027"
+    },
+    "progress_title": "Progression de la migration",
+    "result_classrooms": "Classes clonées",
+    "result_courses": "Cours",
+    "result_fee_rules": "Règles de facturation",
+    "result_subjects": "Matières",
+    "result_title": "Migration terminée",
+    "set_active": "Définir comme année scolaire active",
+    "source_caption": "Source :",
+    "source_placeholder": "Sélectionner une année…",
+    "source_placeholder_none": "Aucune année disponible",
+    "source_year": "Année source",
+    "step_clone_classrooms": "Cloner les classes",
+    "step_clone_fee_rules": "Cloner les règles de facturation",
+    "step_create": "Créer l’année scolaire",
+    "step_finish": "Terminer",
+    "step_validate_courses": "Valider les cours",
+    "step_validate_subjects": "Valider les matières"
+  }
+}

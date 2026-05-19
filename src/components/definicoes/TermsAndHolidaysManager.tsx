@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { intlLocaleTagFromLng } from "@/lib/intlLocale";
 import { Plus, Trash2, Pencil, Loader2, CalendarRange, Palmtree, Save, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -20,17 +22,6 @@ type Holiday = {
   description: string | null;
 };
 
-const TERM_DEFAULTS = [
-  { term_number: 1, name: "1º Trimestre" },
-  { term_number: 2, name: "2º Trimestre" },
-  { term_number: 3, name: "3º Trimestre" },
-];
-
-const fmtRange = (a: string, b: string) => {
-  const f = (s: string) =>
-    new Date(s + "T00:00:00").toLocaleDateString("pt-PT", { day: "2-digit", month: "short" });
-  return `${f(a)} → ${f(b)}`;
-};
 
 interface Props {
   schoolId: string | null;
@@ -39,6 +30,21 @@ interface Props {
 }
 
 export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: Props) => {
+  const { t: tr, i18n } = useTranslation("pages", { keyPrefix: "definicoes" });
+  const TERM_DEFAULTS = useMemo(
+    () => [
+      { term_number: 1, name: tr("terms.defaults.term1") },
+      { term_number: 2, name: tr("terms.defaults.term2") },
+      { term_number: 3, name: tr("terms.defaults.term3") },
+    ],
+    [tr],
+  );
+  const fmtRange = (a: string, b: string) => {
+    const locale = intlLocaleTagFromLng(i18n.language);
+    const f = (s: string) =>
+      new Date(s + "T00:00:00").toLocaleDateString(locale, { day: "2-digit", month: "short" });
+    return `${f(a)} → ${f(b)}`;
+  };
   const [loading, setLoading] = useState(true);
   const [terms, setTerms] = useState<Term[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
@@ -107,11 +113,11 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
     if (!schoolId) return;
     const draft = termDrafts[n];
     if (!draft?.name?.trim() || !draft.start_date || !draft.end_date) {
-      toast({ title: "Preencha todos os campos do trimestre.", variant: "destructive" });
+      toast({ title: tr("validation.terms_fields"), variant: "destructive" });
       return;
     }
     if (draft.start_date > draft.end_date) {
-      toast({ title: "A data de início deve ser anterior à data de fim.", variant: "destructive" });
+      toast({ title: tr("validation.dates_order"), variant: "destructive" });
       return;
     }
     setSavingTermNumber(n);
@@ -129,23 +135,23 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
       : await supabase.from("academic_terms").insert(payload);
     setSavingTermNumber(null);
     if (error) {
-      toast({ title: "Erro ao guardar trimestre", description: error.message, variant: "destructive" });
+      toast({ title: tr("toasts.term_error_title"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: `${draft.name} guardado` });
+    toast({ title: tr("toasts.term_saved_title", { name: draft.name }) });
     load();
   };
 
   const removeTerm = async (n: number) => {
     const existing = terms.find((t) => t.term_number === n);
     if (!existing) return;
-    if (!confirm(`Remover ${existing.name}?`)) return;
+    if (!confirm(tr("terms.confirm_remove_term", { name: existing.name }))) return;
     const { error } = await supabase.from("academic_terms").delete().eq("id", existing.id);
     if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
+      toast({ title: tr("toasts.generic_error_title"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: "Trimestre removido" });
+    toast({ title: tr("toasts.term_removed") });
     load();
   };
 
@@ -156,11 +162,11 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
   const saveHoliday = async () => {
     if (!schoolId || !editingHoliday) return;
     if (!editingHoliday.name?.trim() || !editingHoliday.start_date || !editingHoliday.end_date) {
-      toast({ title: "Preencha nome e datas.", variant: "destructive" });
+      toast({ title: tr("validation.holiday_fields"), variant: "destructive" });
       return;
     }
     if (editingHoliday.start_date > editingHoliday.end_date) {
-      toast({ title: "A data de início deve ser anterior à data de fim.", variant: "destructive" });
+      toast({ title: tr("validation.dates_order"), variant: "destructive" });
       return;
     }
     setSavingHoliday(true);
@@ -177,22 +183,22 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
       : await supabase.from("school_holidays").insert(payload);
     setSavingHoliday(false);
     if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
+      toast({ title: tr("toasts.generic_error_title"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: editingHoliday.id ? "Férias atualizadas" : "Férias criadas" });
+    toast({ title: editingHoliday.id ? tr("toasts.holiday_updated") : tr("toasts.holiday_created") });
     setEditingHoliday(null);
     load();
   };
 
   const removeHoliday = async (id: string) => {
-    if (!confirm("Remover este período de férias?")) return;
+    if (!confirm(tr("terms.confirm_remove_holiday"))) return;
     const { error } = await supabase.from("school_holidays").delete().eq("id", id);
     if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
+      toast({ title: tr("toasts.generic_error_title"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: "Férias removidas" });
+    toast({ title: tr("toasts.holidays_removed") });
     load();
   };
 
@@ -208,27 +214,25 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
     <div className="flex flex-col gap-8">
       {!academicYearId && (
         <div className="rounded-xl border border-pastel-yellow/60 bg-pastel-yellow/20 p-3 text-xs text-pastel-yellow-foreground">
-          Selecione (ou crie) um ano letivo acima para configurar trimestres e férias específicos desse ano.
+          {tr("terms.banner_select_year")}
         </div>
       )}
       {academicYearId && (
         <div className="rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">
-          As datas abaixo aplicam-se apenas ao ano letivo atualmente selecionado. Cada ano letivo
-          (ex.: 2025/2026, 2026/2027) tem a sua própria configuração.
+          {tr("terms.banner_year_scope")}
         </div>
       )}
       {/* TRIMESTRES */}
       <section className="flex flex-col gap-4">
         <div className="flex items-center gap-2">
           <CalendarRange className="h-5 w-5 text-pastel-blue-foreground" strokeWidth={1.75} />
-          <h3 className="text-base font-bold text-foreground">Trimestres</h3>
+          <h3 className="text-base font-bold text-foreground">{tr("terms.terms_heading")}</h3>
           <span className="rounded-full bg-pastel-blue/40 px-2 py-0.5 text-[11px] font-medium text-pastel-blue-foreground">
-            1º · 2º · 3º
+            {tr("terms.terms_badge")}
           </span>
         </div>
         <p className="text-sm text-muted-foreground">
-          Configure as datas dos três trimestres do ano letivo. Cada avaliação será automaticamente
-          associada ao trimestre correspondente à sua data.
+          {tr("terms.terms_help")}
         </p>
 
         <div className="flex flex-col gap-3">
@@ -241,11 +245,12 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
                 className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-end"
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pastel-lilac text-sm font-bold text-pastel-lilac-foreground">
-                  {term_number}º
+                  {term_number}
+                  {tr("terms.term_ordinal_suffix")}
                 </div>
                 <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Nome</label>
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{tr("terms.label_name")}</label>
                     <input
                       type="text"
                       disabled={!isAdmin}
@@ -255,7 +260,7 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Início</label>
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{tr("terms.label_start")}</label>
                     <input
                       type="date"
                       disabled={!isAdmin}
@@ -265,7 +270,7 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Fim</label>
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{tr("terms.label_end")}</label>
                     <input
                       type="date"
                       disabled={!isAdmin}
@@ -286,13 +291,13 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
                     ) : (
                       <Save className="h-4 w-4" strokeWidth={1.75} />
                     )}
-                    {existing ? "Atualizar" : "Guardar"}
+                    {existing ? tr("shared.atualizar") : tr("shared.guardar")}
                   </button>
                   {existing && isAdmin && (
                     <button
                       onClick={() => removeTerm(term_number)}
                       className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-pastel-pink/40 hover:text-pastel-pink-foreground"
-                      title="Remover trimestre"
+                      title={tr("terms.btn_remove_term_title")}
                     >
                       <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                     </button>
@@ -309,7 +314,7 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Palmtree className="h-5 w-5 text-pastel-yellow-foreground" strokeWidth={1.75} />
-            <h3 className="text-base font-bold text-foreground">Férias dos alunos</h3>
+            <h3 className="text-base font-bold text-foreground">{tr("terms.holidays_heading")}</h3>
           </div>
           {isAdmin && (
             <button
@@ -317,17 +322,17 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
               className="flex h-10 items-center gap-2 rounded-full bg-pastel-yellow px-4 text-sm font-semibold text-pastel-yellow-foreground shadow-soft transition-opacity hover:opacity-90"
             >
               <Plus className="h-4 w-4" strokeWidth={2} />
-              Adicionar férias
+              {tr("terms.btn_add_holiday")}
             </button>
           )}
         </div>
         <p className="text-sm text-muted-foreground">
-          Marque períodos de férias para serem visíveis no calendário académico (Natal, Páscoa, Verão, etc.).
+          {tr("terms.holidays_help")}
         </p>
 
         {holidays.length === 0 ? (
           <p className="rounded-xl bg-muted/50 p-4 text-center text-sm text-muted-foreground">
-            Sem períodos de férias configurados.
+            {tr("terms.holidays_empty")}
           </p>
         ) : (
           <div className="flex flex-col gap-2">
@@ -346,14 +351,14 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
                     <button
                       onClick={() => setEditingHoliday(h)}
                       className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-pastel-yellow/40 hover:text-pastel-yellow-foreground"
-                      title="Editar"
+                      title={tr("terms.action_edit_title")}
                     >
                       <Pencil className="h-4 w-4" strokeWidth={1.75} />
                     </button>
                     <button
                       onClick={() => removeHoliday(h.id)}
                       className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-pastel-pink/40 hover:text-pastel-pink-foreground"
-                      title="Remover"
+                      title={tr("terms.action_remove_title")}
                     >
                       <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                     </button>
@@ -369,7 +374,7 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
           <div className="rounded-xl border border-border bg-card p-4">
             <div className="mb-3 flex items-center justify-between">
               <h4 className="text-sm font-bold text-foreground">
-                {editingHoliday.id ? "Editar férias" : "Novas férias"}
+                {editingHoliday.id ? tr("terms.editor_edit_title") : tr("terms.editor_new_title")}
               </h4>
               <button
                 onClick={() => setEditingHoliday(null)}
@@ -385,7 +390,7 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
                   type="text"
                   value={editingHoliday.name ?? ""}
                   onChange={(e) => setEditingHoliday((p) => p && { ...p, name: e.target.value })}
-                  placeholder="Ex: Férias do Natal"
+                  placeholder={tr("terms.placeholder_holiday_name")}
                   className="h-10 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-pastel-yellow/40"
                 />
               </div>
@@ -408,12 +413,12 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
                 />
               </div>
               <div className="flex flex-col gap-1 sm:col-span-2">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Descrição (opcional)</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{tr("terms.field_description")}</label>
                 <input
                   type="text"
                   value={editingHoliday.description ?? ""}
                   onChange={(e) => setEditingHoliday((p) => p && { ...p, description: e.target.value })}
-                  placeholder="Notas internas sobre estas férias"
+                  placeholder={tr("terms.placeholder_holiday_notes")}
                   className="h-10 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-pastel-yellow/40"
                 />
               </div>
@@ -423,7 +428,7 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
                 onClick={() => setEditingHoliday(null)}
                 className="h-10 rounded-full px-4 text-sm font-medium text-muted-foreground hover:bg-muted"
               >
-                Cancelar
+                {tr("shared.cancel")}
               </button>
               <button
                 onClick={saveHoliday}
@@ -434,7 +439,7 @@ export const TermsAndHolidaysManager = ({ schoolId, academicYearId, isAdmin }: P
                 )}
               >
                 {savingHoliday ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" strokeWidth={1.75} />}
-                Guardar
+                {tr("shared.guardar")}
               </button>
             </div>
           </div>

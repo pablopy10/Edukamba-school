@@ -277,6 +277,64 @@
       "pt": "Português",
       "en": "English",
       "fr": "Français"
+    },
+    "no_name": "Sem nome",
+    "roles": {
+      "staff_fallback": "Funcionário",
+      "SUPER_ADMIN": "Super administrador",
+      "ADMIN": "Administrador",
+      "DIRECTOR": "Director",
+      "SECRETARY": "Secretaria",
+      "TREASURER": "Tesoureiro",
+      "LIBRARIAN": "Bibliotecário",
+      "STOCK_MANAGER": "Gestor de stock",
+      "RECEPTIONIST": "Rececionista",
+      "TEACHER": "Professor",
+      "PARENT": "Educador",
+      "STUDENT": "Aluno"
+    },
+    "validation": {
+      "name_required": "Nome obrigatório",
+      "name_max": "Máx. 100 caracteres",
+      "phone_max": "Máx. 30 caracteres",
+      "email_invalid": "Email inválido",
+      "email_max": "Máx. 255 caracteres",
+      "password_min": "Mínimo 8 caracteres",
+      "password_max": "Máx. 72 caracteres",
+      "password_upper": "Deve conter uma letra maiúscula",
+      "password_lower": "Deve conter uma letra minúscula",
+      "password_digit": "Deve conter um número",
+      "password_mismatch": "As palavras-passe não coincidem"
+    },
+    "credenciais": {
+      "email_title": "Email de Acesso",
+      "email_desc": "Será enviado um email de confirmação para o novo endereço.",
+      "email_current": "Email atual",
+      "email_new": "Novo email",
+      "email_update": "Atualizar Email",
+      "email_toast": "Email atualizado. Confirme no seu novo endereço.",
+      "password_title": "Palavra-passe",
+      "password_desc": "Use no mínimo 8 caracteres com letras maiúsculas, minúsculas e números.",
+      "password_new": "Nova palavra-passe",
+      "password_confirm": "Confirmar nova palavra-passe",
+      "password_update": "Atualizar Palavra-passe",
+      "password_toast": "Palavra-passe atualizada."
+    },
+    "seguranca": {
+      "account_title": "Segurança da Conta",
+      "account_desc": "Reforce a proteção do seu acesso.",
+      "login_alerts_label": "Alertas de início de sessão",
+      "login_alerts_desc": "Notificar sempre que houver um novo login.",
+      "save_settings": "Guardar Definições",
+      "settings_toast": "Definições de segurança guardadas.",
+      "delete_title": "Remover conta",
+      "delete_desc": "Esta ação desativa permanentemente o seu acesso. Os seus dados na escola serão preservados, mas perderá imediatamente o acesso à plataforma e terá de contactar um administrador para reativar.",
+      "delete_button": "Remover a minha conta",
+      "delete_dialog_title": "Remover a sua conta?",
+      "delete_dialog_desc": "Esta ação desativa o seu acesso e termina a sua sessão. Para continuar, escreva {{word}} abaixo.",
+      "delete_confirm_word": "REMOVER",
+      "delete_confirm_action": "Confirmar remoção",
+      "cancel": "Cancelar"
     }
   }
 }
