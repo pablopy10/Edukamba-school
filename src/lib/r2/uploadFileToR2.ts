@@ -108,7 +108,7 @@ function putFileWithXHR(
     if (onProgress) {
       xhr.upload.onprogress = (ev) => {
         if (!ev.lengthComputable) return;
-        onProgress(Math.min(99, Math.round((ev.loaded / ev.total) * 100)));
+        onProgress(Math.round((ev.loaded / ev.total) * 100));
       };
     }
 
@@ -128,7 +128,7 @@ function putFileWithXHR(
 
     xhr.onerror = () => {
       const hint = isNativeMobileApp()
-        ? " Isto é CORS no bucket R2 — adicione https://localhost e capacitor://localhost em AllowedOrigins com PUT."
+        ? " Configure CORS no bucket R2: AllowedOrigins https://localhost e capacitor://localhost, métodos PUT e GET, AllowedHeaders *."
         : " Verifique a política CORS do bucket R2 (método PUT) para o domínio da app.";
       reject(new R2UploadError(`Falha de rede no envio directo para o armazenamento.${hint}`));
     };
@@ -172,7 +172,8 @@ async function uploadViaEdgeFunction(
       onProgress(0);
       xhr.upload.onprogress = (ev) => {
         if (!ev.lengthComputable) return;
-        onProgress(Math.min(99, Math.round((ev.loaded / ev.total) * 100)));
+        const pct = Math.round((ev.loaded / ev.total) * 90);
+        onProgress(pct);
       };
     }
 
@@ -186,7 +187,7 @@ async function uploadViaEdgeFunction(
       }
 
       if (xhr.status >= 200 && xhr.status < 300 && payload.publicUrl) {
-        onProgress?.(100);
+        onProgress?.(100); /* servidor respondeu após enviar o ficheiro */
         resolve(payload.publicUrl);
         return;
       }
@@ -229,15 +230,31 @@ async function uploadViaPresignedUrl(
   prefix: string,
   onProgress?: (percent: number) => void,
 ): Promise<string> {
+  onProgress?.(0);
   const { uploadUrl, publicUrl } = await requestPresignedUrl(file, prefix);
-  await putFileWithXHR(uploadUrl, file, onProgress);
+  await putFileWithXHR(uploadUrl, file, (pct) => {
+    onProgress?.(Math.min(100, Math.max(5, pct)));
+  });
   return publicUrl;
+}
+
+/** Erros em que faz sentido tentar upload-to-r2 (ex.: CORS no PUT para R2 na app Capacitor). */
+function shouldFallbackToEdgeUpload(err: unknown): boolean {
+  if (!(err instanceof R2UploadError)) return false;
+  const msg = err.message.toLowerCase();
+  return (
+    msg.includes("cors") ||
+    msg.includes("rede") ||
+    msg.includes("network") ||
+    msg.includes("failed to fetch") ||
+    msg.includes("armazenamento")
+  );
 }
 
 /**
  * Upload seguro para Cloudflare R2.
- * - App nativa (Capacitor) ≤5 MB: via Edge Function (sem CORS no R2).
- * - Resto: presigned PUT directo; fallback para Edge se ≤5 MB e o PUT falhar.
+ * Web e app móvel: presigned PUT (get-r2-upload-url) — igual ao que funciona na web.
+ * Fallback upload-to-r2 só se o PUT falhar (ex.: CORS em falta no bucket R2).
  */
 export async function uploadFileToR2(
   file: File,
@@ -246,36 +263,16 @@ export async function uploadFileToR2(
   const prefix = options?.prefix ?? "documents";
   const onProgress = options?.onProgress;
   const prepared = await prepareFileForUpload(file);
-
-  if (prepared.size > EDGE_UPLOAD_MAX_BYTES && isNativeMobileApp()) {
-    throw new R2UploadError(
-      `Ficheiro demasiado grande (${(prepared.size / (1024 * 1024)).toFixed(1)} MB). Máximo 5 MB na app móvel.`,
-    );
-  }
-
-  const canUseEdge = prepared.size <= EDGE_UPLOAD_MAX_BYTES;
-
-  if (isNativeMobileApp() && canUseEdge) {
-    try {
-      return await uploadViaEdgeFunction(prepared, prefix, onProgress);
-    } catch (edgeErr) {
-      /* fallback presigned se edge falhar (ex.: função não deployada) */
-      try {
-        return await uploadViaPresignedUrl(prepared, prefix, onProgress);
-      } catch {
-        throw edgeErr;
-      }
-    }
-  }
+  const canUseEdgeFallback = prepared.size <= EDGE_UPLOAD_MAX_BYTES;
 
   try {
     return await uploadViaPresignedUrl(prepared, prefix, onProgress);
   } catch (presignErr) {
-    if (canUseEdge) {
+    if (canUseEdgeFallback && shouldFallbackToEdgeUpload(presignErr)) {
       try {
         return await uploadViaEdgeFunction(prepared, prefix, onProgress);
       } catch {
-        /* mantém erro original */
+        /* mantém erro do presign (inclui dica CORS) */
       }
     }
     throw presignErr;
