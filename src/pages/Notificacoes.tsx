@@ -42,7 +42,8 @@ const allowedStatuses: Status[] = ["unread", "read", "archived"];
 type FilterTab = "todas" | "nao_lidas" | "arquivadas";
 
 const Notificacoes = () => {
-  const { t, i18n } = useTranslation("pages");
+  const { t, i18n } = useTranslation("pages", { keyPrefix: "notificacoes" });
+  const { t: tShared } = useTranslation("pages", { keyPrefix: "shared" });
   const { user } = useAuth();
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,11 +55,11 @@ const Notificacoes = () => {
 
   const categoryMeta: Record<Category, { label: string; icon: typeof Bell; bg: string; text: string }> = useMemo(
     () => ({
-      academico: { label: t("notificacoes.cat_academico"), icon: GraduationCap, bg: "bg-pastel-blue", text: "text-pastel-blue-foreground" },
-      administrativo: { label: t("notificacoes.cat_administrativo"), icon: Receipt, bg: "bg-pastel-yellow", text: "text-pastel-yellow-foreground" },
-      evento: { label: t("notificacoes.cat_evento"), icon: CalendarCheck, bg: "bg-pastel-green", text: "text-pastel-green-foreground" },
-      mensagem: { label: t("notificacoes.cat_mensagem"), icon: MessageSquare, bg: "bg-pastel-lilac", text: "text-pastel-lilac-foreground" },
-      sistema: { label: t("notificacoes.cat_sistema"), icon: Bell, bg: "bg-pastel-pink", text: "text-pastel-pink-foreground" },
+      academico: { label: t("cat_academico"), icon: GraduationCap, bg: "bg-pastel-blue", text: "text-pastel-blue-foreground" },
+      administrativo: { label: t("cat_administrativo"), icon: Receipt, bg: "bg-pastel-yellow", text: "text-pastel-yellow-foreground" },
+      evento: { label: t("cat_evento"), icon: CalendarCheck, bg: "bg-pastel-green", text: "text-pastel-green-foreground" },
+      mensagem: { label: t("cat_mensagem"), icon: MessageSquare, bg: "bg-pastel-lilac", text: "text-pastel-lilac-foreground" },
+      sistema: { label: t("cat_sistema"), icon: Bell, bg: "bg-pastel-pink", text: "text-pastel-pink-foreground" },
     }),
     [t],
   );
@@ -70,17 +71,17 @@ const Notificacoes = () => {
       const localeTag = intlLocaleTagFromLng(i18n.language);
       const diffMs = Date.now() - date.getTime();
       const sec = Math.floor(diffMs / 1000);
-      if (sec < 60) return t("shared.relative_just_now");
+      if (sec < 60) return tShared("relative_just_now");
       const min = Math.floor(sec / 60);
-      if (min < 60) return t("shared.relative_minutes", { count: min });
+      if (min < 60) return tShared("relative_minutes", { count: min });
       const h = Math.floor(min / 60);
-      if (h < 24) return t("shared.relative_hours", { count: h });
+      if (h < 24) return tShared("relative_hours", { count: h });
       const d = Math.floor(h / 24);
-      if (d === 1) return t("shared.relative_yesterday");
-      if (d < 30) return t("shared.relative_days", { count: d });
+      if (d === 1) return tShared("relative_yesterday");
+      if (d < 30) return tShared("relative_days", { count: d });
       return date.toLocaleDateString(localeTag);
     },
-    [t, i18n.language],
+    [tShared, i18n.language],
   );
 
   const showToast = (kind: "success" | "error", msg: string) => {
@@ -97,7 +98,7 @@ const Notificacoes = () => {
       .eq("recipient_id", user.id)
       .order("created_at", { ascending: false });
     if (error) {
-      showToast("error", t("notificacoes.err_load"));
+      showToast("error", t("err_load"));
       setItems([]);
     } else {
       const mapped: Notification[] = (data ?? []).map((n: any) => ({
@@ -182,11 +183,11 @@ const Notificacoes = () => {
       .update({ status })
       .in("id", ids);
     if (error) {
-      showToast("error", t("notificacoes.err_update"));
+      showToast("error", t("err_update"));
       loadNotifications();
     } else {
       window.dispatchEvent(new Event("notifications_updated"));
-      showToast("success", t("notificacoes.toast_updated", { count: ids.length }));
+      showToast("success", t("toast_updated", { count: ids.length }));
     }
   };
 
@@ -200,19 +201,19 @@ const Notificacoes = () => {
     setSelected([]);
     const { error } = await supabase.from("notifications").delete().in("id", ids);
     if (error) {
-      showToast("error", t("notificacoes.err_delete"));
+      showToast("error", t("err_delete"));
       loadNotifications();
     } else {
       window.dispatchEvent(new Event("notifications_updated"));
-      showToast("success", t("notificacoes.toast_deleted", { count: ids.length }));
+      showToast("success", t("toast_deleted", { count: ids.length }));
     }
   };
 
   const tabs: { id: FilterTab; label: string; count: number }[] = useMemo(
     () => [
-      { id: "todas", label: t("notificacoes.tab_inbox"), count: items.filter((i) => i.status !== "archived").length },
-      { id: "nao_lidas", label: t("notificacoes.tab_unread"), count: counts.unread },
-      { id: "arquivadas", label: t("notificacoes.tab_archived"), count: counts.archived },
+      { id: "todas", label: t("tab_inbox"), count: items.filter((i) => i.status !== "archived").length },
+      { id: "nao_lidas", label: t("tab_unread"), count: counts.unread },
+      { id: "arquivadas", label: t("tab_archived"), count: counts.archived },
     ],
     [t, items, counts.unread, counts.archived],
   );
@@ -223,8 +224,8 @@ const Notificacoes = () => {
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("notificacoes.title")}</h1>
-            <p className="text-sm text-muted-foreground">{t("notificacoes.subtitle")}</p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("title")}</h1>
+            <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
           </div>
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -233,7 +234,7 @@ const Notificacoes = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 type="text"
-                placeholder={t("notificacoes.search_placeholder")}
+                placeholder={t("search_placeholder")}
                 className="h-11 w-72 rounded-full border border-border bg-card pl-11 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             </div>
@@ -242,7 +243,7 @@ const Notificacoes = () => {
                 onClick={() => markRead(items.filter((i) => i.status === "unread").map((i) => i.id))}
                 className="hidden h-11 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-soft transition-[var(--transition-smooth)] hover:bg-accent sm:flex"
               >
-                <CheckCheck className="h-4 w-4" strokeWidth={1.75} /> {t("notificacoes.mark_all_read")}
+                <CheckCheck className="h-4 w-4" strokeWidth={1.75} /> {t("mark_all_read")}
               </button>
             )}
           </div>
@@ -251,19 +252,19 @@ const Notificacoes = () => {
         {/* Stats */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <div className="rounded-2xl bg-card p-5 shadow-card">
-            <span className="inline-block rounded-full bg-pastel-blue px-3 py-1 text-xs font-medium text-pastel-blue-foreground">{t("notificacoes.kpi_total")}</span>
+            <span className="inline-block rounded-full bg-pastel-blue px-3 py-1 text-xs font-medium text-pastel-blue-foreground">{t("kpi_total")}</span>
             <p className="mt-3 text-3xl font-bold text-foreground">{counts.total}</p>
           </div>
           <div className="rounded-2xl bg-card p-5 shadow-card">
-            <span className="inline-block rounded-full bg-pastel-yellow px-3 py-1 text-xs font-medium text-pastel-yellow-foreground">{t("notificacoes.kpi_unread")}</span>
+            <span className="inline-block rounded-full bg-pastel-yellow px-3 py-1 text-xs font-medium text-pastel-yellow-foreground">{t("kpi_unread")}</span>
             <p className="mt-3 text-3xl font-bold text-foreground">{counts.unread}</p>
           </div>
           <div className="rounded-2xl bg-card p-5 shadow-card">
-            <span className="inline-block rounded-full bg-pastel-green px-3 py-1 text-xs font-medium text-pastel-green-foreground">{t("notificacoes.kpi_read")}</span>
+            <span className="inline-block rounded-full bg-pastel-green px-3 py-1 text-xs font-medium text-pastel-green-foreground">{t("kpi_read")}</span>
             <p className="mt-3 text-3xl font-bold text-foreground">{counts.total - counts.unread - counts.archived}</p>
           </div>
           <div className="rounded-2xl bg-card p-5 shadow-card">
-            <span className="inline-block rounded-full bg-pastel-pink px-3 py-1 text-xs font-medium text-pastel-pink-foreground">{t("notificacoes.kpi_archived")}</span>
+            <span className="inline-block rounded-full bg-pastel-pink px-3 py-1 text-xs font-medium text-pastel-pink-foreground">{t("kpi_archived")}</span>
             <p className="mt-3 text-3xl font-bold text-foreground">{counts.archived}</p>
           </div>
         </div>
@@ -295,7 +296,7 @@ const Notificacoes = () => {
               onChange={(e) => setCategory(e.target.value as Category | "all")}
               className="h-10 rounded-xl border border-border bg-card px-3 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
             >
-              <option value="all">{t("notificacoes.filter_categories")}</option>
+              <option value="all">{t("filter_categories")}</option>
               {(Object.keys(categoryMeta) as Category[]).map((k) => (
                 <option key={k} value={k}>{categoryMeta[k].label}</option>
               ))}
@@ -308,26 +309,26 @@ const Notificacoes = () => {
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-pastel-blue/40 p-3 shadow-card">
             <div className="flex items-center gap-2 px-2 text-sm font-medium text-pastel-blue-foreground">
               <CheckCheck className="h-4 w-4" strokeWidth={1.75} />
-              {t("notificacoes.bulk_selected", { count: selected.length })}
+              {t("bulk_selected", { count: selected.length })}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button onClick={() => markRead(selected, "read")} className="flex h-9 items-center gap-2 rounded-full bg-card px-3 text-xs font-medium text-foreground shadow-soft hover:bg-accent">
-                <Check className="h-3.5 w-3.5" strokeWidth={2} /> {t("notificacoes.mark_read")}
+                <Check className="h-3.5 w-3.5" strokeWidth={2} /> {t("mark_read")}
               </button>
               <button onClick={() => markRead(selected, "unread")} className="flex h-9 items-center gap-2 rounded-full bg-card px-3 text-xs font-medium text-foreground shadow-soft hover:bg-accent">
-                <Dot className="h-4 w-4" strokeWidth={2} /> {t("notificacoes.mark_unread")}
+                <Dot className="h-4 w-4" strokeWidth={2} /> {t("mark_unread")}
               </button>
               {tab !== "arquivadas" ? (
                 <button onClick={() => archive(selected)} className="flex h-9 items-center gap-2 rounded-full bg-card px-3 text-xs font-medium text-foreground shadow-soft hover:bg-accent">
-                  <Archive className="h-3.5 w-3.5" strokeWidth={2} /> {t("notificacoes.archive")}
+                  <Archive className="h-3.5 w-3.5" strokeWidth={2} /> {t("archive")}
                 </button>
               ) : (
                 <button onClick={() => restore(selected)} className="flex h-9 items-center gap-2 rounded-full bg-card px-3 text-xs font-medium text-foreground shadow-soft hover:bg-accent">
-                  <ArchiveRestore className="h-3.5 w-3.5" strokeWidth={2} /> {t("notificacoes.restore")}
+                  <ArchiveRestore className="h-3.5 w-3.5" strokeWidth={2} /> {t("restore")}
                 </button>
               )}
               <button onClick={() => remove(selected)} className="flex h-9 items-center gap-2 rounded-full bg-pastel-pink px-3 text-xs font-medium text-pastel-pink-foreground shadow-soft hover:opacity-90">
-                <Trash2 className="h-3.5 w-3.5" strokeWidth={2} /> {t("notificacoes.delete")}
+                <Trash2 className="h-3.5 w-3.5" strokeWidth={2} /> {t("delete")}
               </button>
             </div>
           </div>
@@ -341,10 +342,10 @@ const Notificacoes = () => {
               checked={allVisibleSelected}
               onChange={toggleSelectAll}
               className="h-4 w-4 rounded border-border accent-[hsl(var(--pastel-blue-foreground))]"
-              aria-label={t("notificacoes.select_all_aria")}
+              aria-label={t("select_all_aria")}
             />
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {t("notificacoes.list_count", { count: filtered.length })}
+              {t("list_count", { count: filtered.length })}
             </span>
           </div>
 
@@ -353,15 +354,15 @@ const Notificacoes = () => {
               <span className="flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground animate-pulse">
                 <Bell className="h-6 w-6" strokeWidth={1.5} />
               </span>
-              <p className="text-sm font-medium text-foreground">{t("notificacoes.loading")}</p>
+              <p className="text-sm font-medium text-foreground">{t("loading")}</p>
             </div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 p-16 text-center">
               <span className="flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
                 <Bell className="h-6 w-6" strokeWidth={1.5} />
               </span>
-              <p className="text-sm font-medium text-foreground">{t("notificacoes.empty_title")}</p>
-              <p className="text-xs text-muted-foreground">{t("notificacoes.empty_hint")}</p>
+              <p className="text-sm font-medium text-foreground">{t("empty_title")}</p>
+              <p className="text-xs text-muted-foreground">{t("empty_hint")}</p>
             </div>
           ) : (
             <ul className="divide-y divide-border">
@@ -389,7 +390,7 @@ const Notificacoes = () => {
                       onClick={(e) => e.stopPropagation()}
                       onChange={() => toggleSelect(n.id)}
                       className="mt-1.5 h-4 w-4 shrink-0 rounded border-border accent-[hsl(var(--pastel-blue-foreground))]"
-                      aria-label={t("notificacoes.row_select_aria", { title: n.title })}
+                      aria-label={t("row_select_aria", { title: n.title })}
                     />
                     <span className={cn("relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", meta.bg, meta.text)}>
                       <Icon className="h-5 w-5" strokeWidth={1.75} />
@@ -410,24 +411,24 @@ const Notificacoes = () => {
                       className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
                     >
                       {isUnread ? (
-                        <button onClick={() => markRead([n.id], "read")} title={t("notificacoes.row_mark_read")} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground">
+                        <button onClick={() => markRead([n.id], "read")} title={t("row_mark_read")} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground">
                           <Check className="h-4 w-4" strokeWidth={1.75} />
                         </button>
                       ) : (
-                        <button onClick={() => markRead([n.id], "unread")} title={t("notificacoes.row_mark_unread")} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground">
+                        <button onClick={() => markRead([n.id], "unread")} title={t("row_mark_unread")} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground">
                           <Dot className="h-5 w-5" strokeWidth={2} />
                         </button>
                       )}
                       {n.status === "archived" ? (
-                        <button onClick={() => restore([n.id])} title={t("notificacoes.row_restore")} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground">
+                        <button onClick={() => restore([n.id])} title={t("row_restore")} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground">
                           <ArchiveRestore className="h-4 w-4" strokeWidth={1.75} />
                         </button>
                       ) : (
-                        <button onClick={() => archive([n.id])} title={t("notificacoes.row_archive")} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground">
+                        <button onClick={() => archive([n.id])} title={t("row_archive")} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground">
                           <Archive className="h-4 w-4" strokeWidth={1.75} />
                         </button>
                       )}
-                      <button onClick={() => remove([n.id])} title={t("notificacoes.row_delete")} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-pastel-pink hover:text-pastel-pink-foreground">
+                      <button onClick={() => remove([n.id])} title={t("row_delete")} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-pastel-pink hover:text-pastel-pink-foreground">
                         <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                       </button>
                     </div>

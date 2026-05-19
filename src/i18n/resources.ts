@@ -37,6 +37,12 @@ import frTimesheet from "@/locales/fr/timesheet.json";
 import ptDocumentos from "@/locales/pt/documentos.json";
 import enDocumentos from "@/locales/en/documentos.json";
 import frDocumentos from "@/locales/fr/documentos.json";
+import ptChat from "@/locales/pt/chat.json";
+import enChat from "@/locales/en/chat.json";
+import frChat from "@/locales/fr/chat.json";
+import ptNotificacoes from "@/locales/pt/notificacoes.json";
+import enNotificacoes from "@/locales/en/notificacoes.json";
+import frNotificacoes from "@/locales/fr/notificacoes.json";
 
 const mergePages = (
   base: typeof ptPages,
@@ -52,6 +58,8 @@ const mergePages = (
     relatorios: typeof ptRelatorios;
     timesheet: typeof ptTimesheet;
     documentos: typeof ptDocumentos;
+    chat: typeof ptChat;
+    notificacoes: typeof ptNotificacoes;
   },
 ) => ({ ...base, ...extras });
 
@@ -70,6 +78,8 @@ export const resources = {
       relatorios: ptRelatorios,
       timesheet: ptTimesheet,
       documentos: ptDocumentos,
+      chat: ptChat,
+      notificacoes: ptNotificacoes,
     }),
   },
   en: {
@@ -86,6 +96,8 @@ export const resources = {
       relatorios: enRelatorios,
       timesheet: enTimesheet,
       documentos: enDocumentos,
+      chat: enChat,
+      notificacoes: enNotificacoes,
     }),
   },
   fr: {
@@ -102,6 +114,8 @@ export const resources = {
       relatorios: frRelatorios,
       timesheet: frTimesheet,
       documentos: frDocumentos,
+      chat: frChat,
+      notificacoes: frNotificacoes,
     }),
   },
 } as const;

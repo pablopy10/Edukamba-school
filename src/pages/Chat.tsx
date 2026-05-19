@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation, Trans } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
+import { dateLocaleTag } from "@/lib/i18nDateLocale";
 import {
   Search, Send, Paperclip, Smile, MoreVertical, Check, CheckCheck, Loader2,
   Plus, X, FileText, ImageIcon, Download, Ban, ArrowLeft,
@@ -15,7 +17,6 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import type { UserRole } from "@/hooks/useUserRole";
-import { ROLE_LABEL_INVITE } from "@/components/definicoes/InviteStaffUserDialog";
 import { isNativeMobileApp } from "@/lib/nativeApp";
 import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 
@@ -65,24 +66,6 @@ const colorFor = (id: string) =>
   palette[(id.charCodeAt(0) + id.charCodeAt(id.length - 1)) % palette.length];
 const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "??";
-const formatTime = (iso: string | null) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const today = new Date();
-  const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
-  const isToday = d.toDateString() === today.toDateString();
-  const isYesterday = d.toDateString() === yesterday.toDateString();
-  if (isToday) return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
-  if (isYesterday) return "ontem";
-  return d.toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit" });
-};
-const roleLabel = (r: Role) => {
-  if (!r) return "Membro";
-  if (r === "PARENT") return "Educador";
-  if (r === "STUDENT") return "Aluno";
-  if (r === "SUPER_ADMIN") return "Super admin";
-  return ROLE_LABEL_INVITE[r as keyof typeof ROLE_LABEL_INVITE] ?? r;
-};
 
 // Allowed-pair check (UI mirror of RLS): students excluded entirely; teacher↔student forbidden
 const canChat = (myRole: Role, otherRole: Role) => {
@@ -98,8 +81,36 @@ const formatBytes = (bytes: number | null) => {
 };
 
 const Chat = () => {
+  const { t, i18n } = useTranslation("pages", { keyPrefix: "chat" });
+  const { t: tShared } = useTranslation("pages", { keyPrefix: "shared" });
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const formatTime = useCallback(
+    (iso: string | null) => {
+      if (!iso) return "";
+      const d = new Date(iso);
+      const today = new Date();
+      const yesterday = new Date();
+      yesterday.setDate(today.getDate() - 1);
+      const isToday = d.toDateString() === today.toDateString();
+      const isYesterday = d.toDateString() === yesterday.toDateString();
+      if (isToday) {
+        return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
+      }
+      if (isYesterday) return tShared("relative_yesterday");
+      return d.toLocaleDateString(dateLocaleTag(i18n.language), { day: "2-digit", month: "2-digit" });
+    },
+    [i18n.language, tShared],
+  );
+
+  const roleLabel = useCallback(
+    (r: Role) => {
+      if (!r) return t("roles.member_fallback");
+      return t(`roles.${r}`, { defaultValue: r });
+    },
+    [t],
+  );
   const toParam = searchParams.get("to");
 
   const [myRole, setMyRole] = useState<Role>(null);
@@ -221,10 +232,12 @@ const Chat = () => {
       const last = msgs[msgs.length - 1];
       const unread = msgs.filter((m) => m.receiver_id === user.id && !m.is_read).length;
       const preview = last
-        ? (last.message_type === "image" ? "📷 Imagem"
-          : last.message_type === "file" ? `📎 ${last.file_name ?? "Ficheiro"}`
-          : last.content ?? "")
-        : "Sem mensagens. Diga olá!";
+        ? (last.message_type === "image"
+          ? t("preview_image")
+          : last.message_type === "file"
+            ? t("preview_file", { name: last.file_name ?? t("preview_file_fallback") })
+            : last.content ?? "")
+        : t("preview_empty");
       list.push({
         contactId,
         name: contact.full_name,
@@ -239,7 +252,7 @@ const Chat = () => {
     }
     list.sort((a, b) => b.lastIso.localeCompare(a.lastIso));
     return list;
-  }, [allMessages, contacts, activeId, user?.id]);
+  }, [allMessages, contacts, activeId, user?.id, formatTime, roleLabel, t]);
 
   const filteredConvos = useMemo(
     () => conversations.filter((c) =>
@@ -291,7 +304,7 @@ const Chat = () => {
       .select("id, sender_id, receiver_id, content, is_read, created_at, school_id, message_type, file_url, file_name, file_type, file_size")
       .single();
     if (error) {
-      toast({ title: "Erro a enviar", description: error.message, variant: "destructive" });
+      toast({ title: t("toast_send_error"), description: error.message, variant: "destructive" });
       return;
     }
     setAllMessages((prev) => [...prev, data as DBMessage]);
@@ -308,11 +321,11 @@ const Chat = () => {
 
   const onPickFile = async (file: File, kind: "image" | "file") => {
     if (!user || !activeId || !schoolId) {
-      toast({ title: "Selecione uma conversa primeiro", variant: "destructive" });
+      toast({ title: t("toast_select_conversation"), variant: "destructive" });
       return;
     }
     if (file.size > 20 * 1024 * 1024) {
-      toast({ title: "Ficheiro muito grande", description: "Máx. 20 MB.", variant: "destructive" });
+      toast({ title: t("toast_file_large_title"), description: t("toast_file_large_desc"), variant: "destructive" });
       return;
     }
     setUploading(true);
@@ -323,7 +336,7 @@ const Chat = () => {
     });
     if (upErr) {
       setUploading(false);
-      toast({ title: "Falha no upload", description: upErr.message, variant: "destructive" });
+      toast({ title: t("toast_upload_failed"), description: upErr.message, variant: "destructive" });
       return;
     }
     await insertMessage({
@@ -341,7 +354,7 @@ const Chat = () => {
     if (!m.file_url) return;
     const { data, error } = await supabase.storage.from("chat-attachments").createSignedUrl(m.file_url, 60 * 5);
     if (error || !data) {
-      toast({ title: "Não foi possível abrir o ficheiro", description: error?.message, variant: "destructive" });
+      toast({ title: t("toast_open_file_failed"), description: error?.message, variant: "destructive" });
       return;
     }
     window.open(data.signedUrl, "_blank");
@@ -372,9 +385,9 @@ const Chat = () => {
       <>
         <div className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-card p-12 text-center shadow-card">
           <Ban className="h-10 w-10 text-muted-foreground" strokeWidth={1.5} />
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Chat indisponível</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("student_lockout_title")}</h1>
           <p className="max-w-md text-sm text-muted-foreground">
-            O chat não está disponível para a conta de aluno. Contacte um administrador ou educador para qualquer assunto.
+            {t("student_lockout_desc")}
           </p>
         </div>
       </>
@@ -394,8 +407,8 @@ const Chat = () => {
     <>
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Chat</h1>
-          <p className="text-sm text-muted-foreground">Mensagens entre administradores, professores e educadores.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
 
         <div className={cn(
@@ -407,12 +420,12 @@ const Chat = () => {
           {/* Sidebar */}
           <aside className="flex flex-col border-r border-border">
             <div className="flex items-center justify-between gap-2 border-b border-border p-4">
-              <h2 className="text-sm font-semibold text-foreground">Conversas</h2>
+              <h2 className="text-sm font-semibold text-foreground">{t("conversations")}</h2>
               <button
                 onClick={() => setShowNewChat(true)}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-pastel-blue text-pastel-blue-foreground transition-colors hover:opacity-90"
-                aria-label="Nova conversa"
-                title="Nova conversa"
+                aria-label={t("new_chat_aria")}
+                title={t("new_chat_aria")}
               >
                 <Plus className="h-4 w-4" strokeWidth={2} />
               </button>
@@ -424,7 +437,7 @@ const Chat = () => {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   type="text"
-                  placeholder="Pesquisar..."
+                  placeholder={t("search_placeholder")}
                   className="h-10 w-full rounded-full border border-border bg-card pl-10 pr-4 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
                 />
               </div>
@@ -475,7 +488,11 @@ const Chat = () => {
                 })}
                 {!loading && filteredConvos.length === 0 && (
                   <li className="p-6 text-center text-xs text-muted-foreground">
-                    Nenhuma conversa ainda. Clique no <Plus className="inline h-3 w-3" /> para começar.
+                    <Trans
+                      t={t}
+                      i18nKey="empty_conversations"
+                      components={{ 1: <Plus className="inline h-3 w-3" /> }}
+                    />
                   </li>
                 )}
               </ul>
@@ -496,12 +513,12 @@ const Chat = () => {
                       <p className="text-xs text-muted-foreground">{roleLabel(active.role)}</p>
                     </div>
                   </div>
-                  <button className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Mais opções">
+                  <button className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground" aria-label={t("more_options_aria")}>
                     <MoreVertical className="h-4 w-4" strokeWidth={1.75} />
                   </button>
                 </>
               ) : (
-                <p className="text-sm text-muted-foreground">Seleccione uma conversa para começar.</p>
+                <p className="text-sm text-muted-foreground">{t("select_conversation")}</p>
               )}
             </header>
 
@@ -519,7 +536,7 @@ const Chat = () => {
                         {m.message_type === "image" && m.file_url && (
                           <button onClick={() => downloadAttachment(m)} className="block overflow-hidden rounded-lg">
                             {signedUrls[m.id] ? (
-                              <img src={signedUrls[m.id]} alt={m.file_name ?? "imagem"} className="max-h-64 w-full rounded-lg object-cover" />
+                              <img src={signedUrls[m.id]} alt={m.file_name ?? t("image_alt")} className="max-h-64 w-full rounded-lg object-cover" />
                             ) : (
                               <div className="flex h-40 w-60 items-center justify-center rounded-lg bg-muted">
                                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -539,7 +556,7 @@ const Chat = () => {
                               <FileText className="h-5 w-5 text-muted-foreground" strokeWidth={1.75} />
                             </div>
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-medium">{m.file_name ?? "Ficheiro"}</p>
+                              <p className="truncate text-sm font-medium">{m.file_name ?? t("preview_file_fallback")}</p>
                               <p className="text-[11px] opacity-70">{formatBytes(m.file_size)}</p>
                             </div>
                             <Download className="h-4 w-4 opacity-70" strokeWidth={1.75} />
@@ -562,10 +579,10 @@ const Chat = () => {
                   );
                 })}
                 {active && thread.length === 0 && (
-                  <div className="py-16 text-center text-sm text-muted-foreground">Sem mensagens ainda. Diga olá! 👋</div>
+                  <div className="py-16 text-center text-sm text-muted-foreground">{t("thread_empty")}</div>
                 )}
                 {!active && (
-                  <div className="py-16 text-center text-sm text-muted-foreground">Escolha alguém da lista ou abra uma nova conversa.</div>
+                  <div className="py-16 text-center text-sm text-muted-foreground">{t("pick_someone")}</div>
                 )}
               </div>
             </div>
@@ -594,7 +611,7 @@ const Chat = () => {
                     <button
                       disabled={!active || uploading}
                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
-                      aria-label="Anexar"
+                      aria-label={t("attach_aria")}
                     >
                       {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" strokeWidth={1.75} />}
                     </button>
@@ -604,13 +621,13 @@ const Chat = () => {
                       onClick={() => imageRef.current?.click()}
                       className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent"
                     >
-                      <ImageIcon className="h-4 w-4" /> Imagem
+                      <ImageIcon className="h-4 w-4" /> {t("attach_image")}
                     </button>
                     <button
                       onClick={() => fileRef.current?.click()}
                       className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent"
                     >
-                      <FileText className="h-4 w-4" /> Documento
+                      <FileText className="h-4 w-4" /> {t("attach_document")}
                     </button>
                   </PopoverContent>
                 </Popover>
@@ -620,7 +637,7 @@ const Chat = () => {
                     <button
                       disabled={!active}
                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
-                      aria-label="Emoji"
+                      aria-label={t("emoji_aria")}
                     >
                       <Smile className="h-4 w-4" strokeWidth={1.75} />
                     </button>
@@ -632,7 +649,7 @@ const Chat = () => {
                       theme={Theme.AUTO}
                       width={320}
                       height={380}
-                      searchPlaceHolder="Pesquisar emoji..."
+                      searchPlaceHolder={t("emoji_search")}
                       previewConfig={{ showPreview: false }}
                     />
                   </PopoverContent>
@@ -645,7 +662,7 @@ const Chat = () => {
                     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(); }
                   }}
                   rows={1}
-                  placeholder={active ? `Mensagem para ${active.full_name}...` : "Seleccione uma conversa..."}
+                  placeholder={active ? t("placeholder_active", { name: active.full_name }) : t("placeholder_inactive")}
                   maxLength={2000}
                   disabled={!active || sending}
                   className="min-h-[40px] max-h-32 flex-1 resize-none rounded-2xl border border-border bg-card px-4 py-2.5 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
@@ -654,7 +671,7 @@ const Chat = () => {
                   onClick={sendText}
                   disabled={!draft.trim() || !active || sending}
                   className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pastel-blue-foreground text-card shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:opacity-40"
-                  aria-label="Enviar"
+                  aria-label={t("send_aria")}
                 >
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" strokeWidth={2} />}
                 </button>
@@ -672,8 +689,8 @@ const Chat = () => {
         >
           <DialogContent className="fixed inset-0 z-[150] flex h-[100dvh] w-full max-w-none flex-col gap-0 rounded-none border-0 p-0 [transform:none] pl-[max(0.75rem,var(--sal-r))] pr-[max(0.75rem,var(--sar-r))]">
             <DialogHeader className="sr-only">
-              <DialogTitle>{active?.full_name ?? "Conversa"}</DialogTitle>
-              <DialogDescription>Conversa com {active?.full_name ?? "utilizador"}</DialogDescription>
+              <DialogTitle>{active?.full_name ?? t("mobile_conversation_title")}</DialogTitle>
+              <DialogDescription>{t("mobile_conversation_desc", { name: active?.full_name ?? t("mobile_default_user") })}</DialogDescription>
             </DialogHeader>
 
             {/* Header */}
@@ -681,7 +698,7 @@ const Chat = () => {
               <button
                 onClick={() => { setActiveId(null); setShowEmoji(false); }}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground hover:bg-accent"
-                aria-label="Voltar"
+                aria-label={t("back_aria")}
               >
                 <ArrowLeft className="h-5 w-5" strokeWidth={1.75} />
               </button>
@@ -712,7 +729,7 @@ const Chat = () => {
                         {m.message_type === "image" && m.file_url && (
                           <button onClick={() => downloadAttachment(m)} className="block overflow-hidden rounded-lg">
                             {signedUrls[m.id] ? (
-                              <img src={signedUrls[m.id]} alt={m.file_name ?? "imagem"} className="max-h-64 w-full rounded-lg object-cover" />
+                              <img src={signedUrls[m.id]} alt={m.file_name ?? t("image_alt")} className="max-h-64 w-full rounded-lg object-cover" />
                             ) : (
                               <div className="flex h-40 w-60 items-center justify-center rounded-lg bg-muted">
                                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -732,7 +749,7 @@ const Chat = () => {
                               <FileText className="h-5 w-5 text-muted-foreground" strokeWidth={1.75} />
                             </div>
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-medium">{m.file_name ?? "Ficheiro"}</p>
+                              <p className="truncate text-sm font-medium">{m.file_name ?? t("preview_file_fallback")}</p>
                               <p className="text-[11px] opacity-70">{formatBytes(m.file_size)}</p>
                             </div>
                             <Download className="h-4 w-4 opacity-70" strokeWidth={1.75} />
@@ -755,7 +772,7 @@ const Chat = () => {
                   );
                 })}
                 {active && thread.length === 0 && (
-                  <div className="py-16 text-center text-sm text-muted-foreground">Sem mensagens ainda. Diga olá! 👋</div>
+                  <div className="py-16 text-center text-sm text-muted-foreground">{t("thread_empty")}</div>
                 )}
               </div>
             </div>
@@ -768,7 +785,7 @@ const Chat = () => {
                     <button
                       disabled={!active || uploading}
                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
-                      aria-label="Anexar"
+                      aria-label={t("attach_aria")}
                     >
                       {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" strokeWidth={1.75} />}
                     </button>
@@ -778,13 +795,13 @@ const Chat = () => {
                       onClick={() => imageRef.current?.click()}
                       className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent"
                     >
-                      <ImageIcon className="h-4 w-4" /> Imagem
+                      <ImageIcon className="h-4 w-4" /> {t("attach_image")}
                     </button>
                     <button
                       onClick={() => fileRef.current?.click()}
                       className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent"
                     >
-                      <FileText className="h-4 w-4" /> Documento
+                      <FileText className="h-4 w-4" /> {t("attach_document")}
                     </button>
                   </PopoverContent>
                 </Popover>
@@ -794,7 +811,7 @@ const Chat = () => {
                     <button
                       disabled={!active}
                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
-                      aria-label="Emoji"
+                      aria-label={t("emoji_aria")}
                     >
                       <Smile className="h-4 w-4" strokeWidth={1.75} />
                     </button>
@@ -806,7 +823,7 @@ const Chat = () => {
                       theme={Theme.AUTO}
                       width={300}
                       height={350}
-                      searchPlaceHolder="Pesquisar emoji..."
+                      searchPlaceHolder={t("emoji_search")}
                       previewConfig={{ showPreview: false }}
                     />
                   </PopoverContent>
@@ -819,7 +836,7 @@ const Chat = () => {
                     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(); }
                   }}
                   rows={1}
-                  placeholder={active ? `Mensagem para ${active.full_name}...` : "Seleccione uma conversa..."}
+                  placeholder={active ? t("placeholder_active", { name: active.full_name }) : t("placeholder_inactive")}
                   maxLength={2000}
                   disabled={!active || sending}
                   className="min-h-[40px] max-h-32 flex-1 resize-none rounded-2xl border border-border bg-card px-4 py-2.5 text-sm shadow-soft outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
@@ -828,7 +845,7 @@ const Chat = () => {
                   onClick={sendText}
                   disabled={!draft.trim() || !active || sending}
                   className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pastel-blue-foreground text-card shadow-soft transition-[var(--transition-smooth)] hover:opacity-90 disabled:opacity-40"
-                  aria-label="Enviar"
+                  aria-label={t("send_aria")}
                 >
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" strokeWidth={2} />}
                 </button>
@@ -842,9 +859,9 @@ const Chat = () => {
       <Dialog open={showNewChat} onOpenChange={setShowNewChat}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Nova conversa</DialogTitle>
+            <DialogTitle>{t("dialog_new_title")}</DialogTitle>
             <DialogDescription>
-              Escolha uma pessoa da sua escola para iniciar uma conversa.
+              {t("dialog_new_desc")}
             </DialogDescription>
           </DialogHeader>
           <div className="relative">
@@ -853,14 +870,14 @@ const Chat = () => {
               value={newChatSearch}
               onChange={(e) => setNewChatSearch(e.target.value)}
               type="text"
-              placeholder="Pesquisar pessoa..."
+              placeholder={t("dialog_search_placeholder")}
               className="h-10 w-full rounded-full border border-border bg-card pl-10 pr-4 text-sm shadow-soft outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
             />
           </div>
           <ul className="flex max-h-80 flex-col overflow-y-auto sidebar-scroll">
             {newChatCandidates.length === 0 && (
               <li className="p-6 text-center text-xs text-muted-foreground">
-                Nenhum contacto disponível.
+                {t("dialog_no_contacts")}
               </li>
             )}
             {newChatCandidates.map((c) => (
@@ -886,7 +903,7 @@ const Chat = () => {
             ))}
           </ul>
           <div className="flex justify-end">
-            <Button variant="ghost" onClick={() => setShowNewChat(false)}>Fechar</Button>
+            <Button variant="ghost" onClick={() => setShowNewChat(false)}>{t("close")}</Button>
           </div>
         </DialogContent>
       </Dialog>
