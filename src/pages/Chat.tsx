@@ -130,6 +130,12 @@ const Chat = () => {
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [newChatSearch, setNewChatSearch] = useState("");
+  const [imagePreview, setImagePreview] = useState<{
+    displayUrl: string;
+    downloadRef: string;
+    alt: string;
+  } | null>(null);
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const mobileScrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -375,7 +381,49 @@ const Chat = () => {
     }
   };
 
-  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+  const openImagePreview = async (m: DBMessage) => {
+    if (!m.file_url) return;
+    const cached = signedUrls[m.id];
+    if (cached) {
+      setImagePreview({
+        displayUrl: cached,
+        downloadRef: m.file_url,
+        alt: m.file_name ?? t("image_alt"),
+      });
+      return;
+    }
+    try {
+      const displayUrl = isPublicFileUrl(m.file_url)
+        ? m.file_url
+        : await resolveFileUrl(m.file_url, "chat-attachments");
+      setSignedUrls((p) => ({ ...p, [m.id]: displayUrl }));
+      setImagePreview({
+        displayUrl,
+        downloadRef: m.file_url,
+        alt: m.file_name ?? t("image_alt"),
+      });
+    } catch (e) {
+      toast({
+        title: t("toast_open_file_failed"),
+        description: e instanceof Error ? e.message : undefined,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const downloadImagePreview = async () => {
+    if (!imagePreview) return;
+    try {
+      await openFileUrl(imagePreview.downloadRef, "chat-attachments");
+    } catch (e) {
+      toast({
+        title: t("toast_open_file_failed"),
+        description: e instanceof Error ? e.message : undefined,
+        variant: "destructive",
+      });
+    }
+  };
+
   // sign image previews
   useEffect(() => {
     const imgs = thread.filter((m) => m.message_type === "image" && m.file_url && !signedUrls[m.id]);
@@ -395,6 +443,15 @@ const Chat = () => {
       if (Object.keys(updates).length) setSignedUrls((p) => ({ ...p, ...updates }));
     })();
   }, [thread]);
+
+  useEffect(() => {
+    if (!imagePreview) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setImagePreview(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [imagePreview]);
 
   const StatusIcon = ({ read }: { read: boolean }) =>
     read ? <CheckCheck className="h-3.5 w-3.5" strokeWidth={2} />
@@ -595,7 +652,12 @@ const Chat = () => {
                         mine ? "bg-pastel-blue text-pastel-blue-foreground rounded-br-sm" : "bg-card text-foreground rounded-bl-sm",
                       )}>
                         {m.message_type === "image" && m.file_url && (
-                          <button onClick={() => downloadAttachment(m)} className="block overflow-hidden rounded-lg">
+                          <button
+                            type="button"
+                            onClick={() => openImagePreview(m)}
+                            className="block overflow-hidden rounded-lg"
+                            aria-label={t("image_preview_open_aria")}
+                          >
                             {signedUrls[m.id] ? (
                               <img src={signedUrls[m.id]} alt={m.file_name ?? t("image_alt")} className="max-h-64 w-full rounded-lg object-cover" />
                             ) : (
@@ -607,6 +669,7 @@ const Chat = () => {
                         )}
                         {m.message_type === "file" && (
                           <button
+                            type="button"
                             onClick={() => downloadAttachment(m)}
                             className={cn(
                               "flex items-center gap-3 rounded-lg p-2 text-left transition-colors",
@@ -780,7 +843,12 @@ const Chat = () => {
                         mine ? "bg-pastel-blue text-pastel-blue-foreground rounded-br-sm" : "bg-card text-foreground rounded-bl-sm",
                       )}>
                         {m.message_type === "image" && m.file_url && (
-                          <button onClick={() => downloadAttachment(m)} className="block overflow-hidden rounded-lg">
+                          <button
+                            type="button"
+                            onClick={() => openImagePreview(m)}
+                            className="block overflow-hidden rounded-lg"
+                            aria-label={t("image_preview_open_aria")}
+                          >
                             {signedUrls[m.id] ? (
                               <img src={signedUrls[m.id]} alt={m.file_name ?? t("image_alt")} className="max-h-64 w-full rounded-lg object-cover" />
                             ) : (
@@ -792,6 +860,7 @@ const Chat = () => {
                         )}
                         {m.message_type === "file" && (
                           <button
+                            type="button"
                             onClick={() => downloadAttachment(m)}
                             className={cn(
                               "flex items-center gap-3 rounded-lg p-2 text-left transition-colors",
@@ -1002,6 +1071,49 @@ const Chat = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {imagePreview && (
+        <div
+          className="fixed inset-0 z-[250] flex flex-col bg-black/95 pl-[max(0px,var(--sal-r))] pr-[max(0px,var(--sar-r))] pt-[max(0px,var(--sat-r))] pb-[max(0px,var(--sab-r))]"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("image_preview_title")}
+        >
+          <div className="flex shrink-0 items-center justify-between gap-3 px-3 py-3 sm:px-4">
+            <p className="min-w-0 truncate text-sm text-white/90">{imagePreview.alt}</p>
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={() => void downloadImagePreview()}
+                className="flex h-10 w-10 items-center justify-center rounded-full text-white/90 hover:bg-white/10"
+                aria-label={t("image_preview_download_aria")}
+              >
+                <Download className="h-5 w-5" strokeWidth={1.75} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setImagePreview(null)}
+                className="flex h-10 w-10 items-center justify-center rounded-full text-white/90 hover:bg-white/10"
+                aria-label={t("image_preview_close_aria")}
+              >
+                <X className="h-5 w-5" strokeWidth={1.75} />
+              </button>
+            </div>
+          </div>
+          <div
+            className="flex min-h-0 flex-1 cursor-zoom-out items-center justify-center p-3 sm:p-6"
+            onClick={() => setImagePreview(null)}
+            role="presentation"
+          >
+            <img
+              src={imagePreview.displayUrl}
+              alt={imagePreview.alt}
+              className="max-h-full max-w-full cursor-default object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 };
