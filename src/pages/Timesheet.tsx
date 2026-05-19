@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { dateLocaleTag } from "@/lib/i18nDateLocale";
 import {
   Search,
   Clock,
@@ -16,7 +18,6 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
-import { ROLE_LABEL_INVITE } from "@/components/definicoes/InviteStaffUserDialog";
 import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 
 type EntryStatus = "completo" | "em_curso" | "incompleto";
@@ -41,24 +42,6 @@ type TimeEntry = {
 
 type Employee = { id: string; name: string; role: string };
 
-const roleLabels: Record<string, string> = {
-  ...ROLE_LABEL_INVITE,
-  PARENT: "Encarregado de Educação",
-  STUDENT: "Aluno",
-  SUPER_ADMIN: "Super Administrador",
-};
-
-const translateRole = (role: string | null | undefined) => {
-  if (!role) return "";
-  return roleLabels[role] ?? role;
-};
-
-const statusMeta: Record<EntryStatus, { label: string; color: string; icon: typeof CheckCircle2 }> = {
-  completo: { label: "Completo", color: "bg-pastel-green text-pastel-green-foreground", icon: CheckCircle2 },
-  em_curso: { label: "Em Curso", color: "bg-pastel-blue text-pastel-blue-foreground", icon: Loader2 },
-  incompleto: { label: "Incompleto", color: "bg-pastel-yellow text-pastel-yellow-foreground", icon: AlertCircle },
-};
-
 const formatTime = (iso: string | null) => {
   if (!iso) return null;
   const d = new Date(iso);
@@ -66,7 +49,30 @@ const formatTime = (iso: string | null) => {
 };
 
 const Timesheet = () => {
+  const { t, i18n } = useTranslation("pages", { keyPrefix: "timesheet" });
   const { user } = useAuth();
+
+  const translateRole = useCallback(
+    (role: string | null | undefined) => {
+      if (!role) return "";
+      return t(`roles.${role}`, { defaultValue: role });
+    },
+    [t],
+  );
+
+  const statusMeta = useMemo(
+    (): Record<EntryStatus, { label: string; color: string; icon: typeof CheckCircle2 }> => ({
+      completo: { label: t("status.completo"), color: "bg-pastel-green text-pastel-green-foreground", icon: CheckCircle2 },
+      em_curso: { label: t("status.em_curso"), color: "bg-pastel-blue text-pastel-blue-foreground", icon: Loader2 },
+      incompleto: { label: t("status.incompleto"), color: "bg-pastel-yellow text-pastel-yellow-foreground", icon: AlertCircle },
+    }),
+    [t],
+  );
+
+  const monthOptions = useMemo(
+    () => Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: t(`months.${i + 1}`) })),
+    [t],
+  );
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [myProfileId, setMyProfileId] = useState<string | null>(null);
   const [myRole, setMyRole] = useState<string | null>(null);
@@ -121,7 +127,7 @@ const Timesheet = () => {
     ]);
 
     if (entriesRes.error) {
-      toast({ title: "Erro a carregar timesheet", description: entriesRes.error.message, variant: "destructive" });
+      toast({ title: t("toast_load_error"), description: entriesRes.error.message, variant: "destructive" });
     } else {
       setEntries((entriesRes.data ?? []) as TimeEntry[]);
     }
@@ -166,7 +172,7 @@ const Timesheet = () => {
       }
       return matchSearch && matchStatus && matchMonth && matchYear;
     });
-  }, [entries, search, statusFilter, monthFilter, yearFilter]);
+  }, [entries, search, statusFilter, monthFilter, yearFilter, translateRole]);
 
   const stats = useMemo(() => {
     const totalHours = entries.reduce((s, e) => s + Number(e.hours_worked || 0), 0);
@@ -207,7 +213,7 @@ const Timesheet = () => {
     setSubmitting(true);
     const nowIso = new Date().toISOString();
     const date = nowIso.split("T")[0];
-    const address = "Localização capturada via GPS";
+    const address = t("gps_address");
 
     if (registerType === "in") {
       // Verificar se já existe um em_curso ativo deste funcionário
@@ -221,8 +227,8 @@ const Timesheet = () => {
 
       if (existing) {
         toast({
-          title: "Entrada já registada",
-          description: "Este funcionário já tem uma entrada em curso. Registe primeiro a saída.",
+          title: t("toast_check_in_exists"),
+          description: t("toast_check_in_exists_desc"),
           variant: "destructive",
         });
         setSubmitting(false);
@@ -243,9 +249,9 @@ const Timesheet = () => {
         check_in_address: address,
       });
       if (error) {
-        toast({ title: "Erro ao registar entrada", description: error.message, variant: "destructive" });
+        toast({ title: t("toast_check_in_error"), description: error.message, variant: "destructive" });
       } else {
-        toast({ title: "Entrada registada", description: `${employee.name}` });
+        toast({ title: t("toast_check_in_success"), description: employee.name });
       }
     } else {
       // Procurar entrada em_curso
@@ -261,8 +267,8 @@ const Timesheet = () => {
 
       if (!open) {
         toast({
-          title: "Sem entrada em curso",
-          description: "Não foi encontrada uma entrada por fechar para este funcionário.",
+          title: t("toast_no_open_entry"),
+          description: t("toast_no_open_entry_desc"),
           variant: "destructive",
         });
         setSubmitting(false);
@@ -287,9 +293,12 @@ const Timesheet = () => {
         .eq("id", open.id);
 
       if (error) {
-        toast({ title: "Erro ao registar saída", description: error.message, variant: "destructive" });
+        toast({ title: t("toast_check_out_error"), description: error.message, variant: "destructive" });
       } else {
-        toast({ title: "Saída registada", description: `${employee.name} — ${hours.toFixed(2)}h` });
+        toast({
+          title: t("toast_check_out_success"),
+          description: t("toast_check_out_success_desc", { name: employee.name, hours: hours.toFixed(2) }),
+        });
       }
     }
 
@@ -301,9 +310,7 @@ const Timesheet = () => {
   };
 
   const exportCsv = () => {
-    const header = isAdmin
-      ? "Funcionário;Função;Data;Entrada;Saída;Horas;Estado;Lat Entrada;Lng Entrada;Lat Saída;Lng Saída\n"
-      : "Funcionário;Função;Data;Entrada;Saída;Horas;Estado\n";
+    const header = isAdmin ? t("csv_header_admin") : t("csv_header");
     const rows = filtered
       .map((e) => {
         const base = [
@@ -341,10 +348,8 @@ const Timesheet = () => {
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Timesheet</h1>
-            <p className="text-sm text-muted-foreground">
-              Controlo de presenças e horas trabalhadas com registo de localização GPS
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("title")}</h1>
+            <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -352,7 +357,7 @@ const Timesheet = () => {
               className="inline-flex items-center gap-2 rounded-xl bg-secondary px-4 py-2.5 text-sm font-semibold text-foreground hover:opacity-90 transition-[var(--transition-smooth)]"
             >
               <Download className="h-4 w-4" />
-              Exportar CSV
+              {t("export_csv")}
             </button>
             <button
               onClick={() => {
@@ -363,7 +368,7 @@ const Timesheet = () => {
               className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-soft hover:opacity-90 transition-[var(--transition-smooth)]"
             >
               <LogIn className="h-4 w-4" />
-              Registar Entrada
+              {t("register_check_in")}
             </button>
             <button
               onClick={() => {
@@ -374,17 +379,17 @@ const Timesheet = () => {
               className="inline-flex items-center gap-2 rounded-xl bg-pastel-pink px-4 py-2.5 text-sm font-semibold text-pastel-pink-foreground shadow-soft hover:opacity-90 transition-[var(--transition-smooth)]"
             >
               <LogOut className="h-4 w-4" />
-              Registar Saída
+              {t("register_check_out")}
             </button>
           </div>
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <StatBox icon={CalendarDays} label="Registos Hoje" value={stats.todayCount.toString()} tone="bg-pastel-blue text-pastel-blue-foreground" />
-          <StatBox icon={Loader2} label="Em Curso" value={stats.inProgress.toString()} tone="bg-pastel-yellow text-pastel-yellow-foreground" />
-          <StatBox icon={CheckCircle2} label="Completos" value={stats.completed.toString()} tone="bg-pastel-green text-pastel-green-foreground" />
-          <StatBox icon={Clock} label="Total de Horas" value={stats.totalHours.toFixed(1) + "h"} tone="bg-pastel-lilac text-pastel-lilac-foreground" />
+          <StatBox icon={CalendarDays} label={t("kpi_today")} value={stats.todayCount.toString()} tone="bg-pastel-blue text-pastel-blue-foreground" />
+          <StatBox icon={Loader2} label={t("kpi_in_progress")} value={stats.inProgress.toString()} tone="bg-pastel-yellow text-pastel-yellow-foreground" />
+          <StatBox icon={CheckCircle2} label={t("kpi_completed")} value={stats.completed.toString()} tone="bg-pastel-green text-pastel-green-foreground" />
+          <StatBox icon={Clock} label={t("kpi_total_hours")} value={stats.totalHours.toFixed(1) + t("hours_unit")} tone="bg-pastel-lilac text-pastel-lilac-foreground" />
         </div>
 
         {/* Filters */}
@@ -394,7 +399,7 @@ const Timesheet = () => {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Pesquisar por funcionário ou função…"
+              placeholder={t("search_placeholder")}
               className="h-10 w-full rounded-xl border border-border bg-card pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
@@ -403,12 +408,9 @@ const Timesheet = () => {
             onChange={(e) => setMonthFilter(e.target.value)}
             className="h-10 rounded-xl border border-border bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
           >
-            <option value="">Todos os meses</option>
-            {[
-              "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
-              "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro",
-            ].map((label, i) => (
-              <option key={i + 1} value={String(i + 1)}>{label}</option>
+            <option value="">{t("filter_all_months")}</option>
+            {monthOptions.map((m) => (
+              <option key={m.value} value={m.value}>{m.label}</option>
             ))}
           </select>
           <select
@@ -416,7 +418,7 @@ const Timesheet = () => {
             onChange={(e) => setYearFilter(e.target.value)}
             className="h-10 rounded-xl border border-border bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
           >
-            <option value="">Todos os anos</option>
+            <option value="">{t("filter_all_years")}</option>
             {(() => {
               const current = new Date().getFullYear();
               const years = new Set<number>();
@@ -437,10 +439,10 @@ const Timesheet = () => {
             onChange={(e) => setStatusFilter(e.target.value as EntryStatus | "todos")}
             className="h-10 rounded-xl border border-border bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
           >
-            <option value="todos">Todos os estados</option>
-            <option value="completo">Completo</option>
-            <option value="em_curso">Em Curso</option>
-            <option value="incompleto">Incompleto</option>
+            <option value="todos">{t("filter_all_statuses")}</option>
+            <option value="completo">{t("status.completo")}</option>
+            <option value="em_curso">{t("status.em_curso")}</option>
+            <option value="incompleto">{t("status.incompleto")}</option>
           </select>
           {(monthFilter || yearFilter || statusFilter !== "todos" || search) && (
             <button
@@ -452,7 +454,7 @@ const Timesheet = () => {
               }}
               className="h-10 rounded-xl bg-secondary px-3 text-xs font-semibold text-foreground hover:opacity-90"
             >
-              Limpar filtros
+              {t("filter_clear")}
             </button>
           )}
         </div>
@@ -463,15 +465,15 @@ const Timesheet = () => {
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-3 text-left font-semibold">Funcionário</th>
-                  <th className="px-4 py-3 text-left font-semibold">Data</th>
-                  <th className="px-4 py-3 text-left font-semibold">Entrada</th>
-                  <th className="px-4 py-3 text-left font-semibold">Saída</th>
-                  <th className="px-4 py-3 text-left font-semibold">Horas</th>
+                  <th className="px-4 py-3 text-left font-semibold">{t("table_employee")}</th>
+                  <th className="px-4 py-3 text-left font-semibold">{t("table_date")}</th>
+                  <th className="px-4 py-3 text-left font-semibold">{t("table_check_in")}</th>
+                  <th className="px-4 py-3 text-left font-semibold">{t("table_check_out")}</th>
+                  <th className="px-4 py-3 text-left font-semibold">{t("table_hours")}</th>
                   {isAdmin && (
-                    <th className="px-4 py-3 text-left font-semibold">Localização</th>
+                    <th className="px-4 py-3 text-left font-semibold">{t("table_location")}</th>
                   )}
-                  <th className="px-4 py-3 text-left font-semibold">Estado</th>
+                  <th className="px-4 py-3 text-left font-semibold">{t("table_status")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -516,7 +518,7 @@ const Timesheet = () => {
                             {checkIn}
                           </span>
                         ) : (
-                          <span className="text-muted-foreground">—</span>
+                          <span className="text-muted-foreground">{t("em_dash")}</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -526,11 +528,11 @@ const Timesheet = () => {
                             {checkOut}
                           </span>
                         ) : (
-                          <span className="text-muted-foreground">—</span>
+                          <span className="text-muted-foreground">{t("em_dash")}</span>
                         )}
                       </td>
                       <td className="px-4 py-3 font-semibold text-foreground">
-                        {Number(e.hours_worked) > 0 ? `${Number(e.hours_worked).toFixed(2)}h` : "—"}
+                        {Number(e.hours_worked) > 0 ? `${Number(e.hours_worked).toFixed(2)}${t("hours_unit")}` : t("em_dash")}
                       </td>
                       {isAdmin && (
                         <td className="px-4 py-3">
@@ -540,7 +542,7 @@ const Timesheet = () => {
                               {Number(e.check_in_lat).toFixed(4)}, {Number(e.check_in_lng).toFixed(4)}
                             </span>
                           ) : (
-                            <span className="text-muted-foreground">—</span>
+                            <span className="text-muted-foreground">{t("em_dash")}</span>
                           )}
                         </td>
                       )}
@@ -556,7 +558,7 @@ const Timesheet = () => {
                 {!loading && filtered.length === 0 && (
                   <tr>
                     <td colSpan={isAdmin ? 7 : 6} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                      Nenhum registo encontrado.
+                      {t("empty")}
                     </td>
                   </tr>
                 )}
@@ -592,23 +594,23 @@ const Timesheet = () => {
               </div>
               <div>
                 <h2 className="text-lg font-bold text-foreground">
-                  Registar {registerType === "in" ? "Entrada" : "Saída"}
+                  {registerType === "in" ? t("modal_register_in") : t("modal_register_out")}
                 </h2>
-                <p className="text-xs text-muted-foreground">A localização GPS será registada</p>
+                <p className="text-xs text-muted-foreground">{t("modal_gps_note")}</p>
               </div>
             </div>
 
             <div className="flex flex-col gap-4">
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Funcionário
+                  {t("modal_employee")}
                 </label>
                 <select
                   value={selectedEmployeeId}
                   onChange={(e) => setSelectedEmployeeId(e.target.value)}
                   className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
                 >
-                  {employees.length === 0 && <option value="">Sem funcionários</option>}
+                  {employees.length === 0 && <option value="">{t("modal_no_employees")}</option>}
                   {employees.map((e) => (
                     <option key={e.id} value={e.id}>
                       {e.name}{e.role ? ` — ${translateRole(e.role)}` : ""}
@@ -620,37 +622,37 @@ const Timesheet = () => {
               <div className="rounded-xl border border-border bg-muted/40 p-4">
                 <div className="flex items-center gap-2 pb-2">
                   <Navigation className="h-4 w-4 text-primary" />
-                  <p className="text-sm font-semibold text-foreground">Localização GPS</p>
+                  <p className="text-sm font-semibold text-foreground">{t("modal_gps_title")}</p>
                 </div>
                 {gpsStatus === "loading" && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    A capturar localização…
+                    {t("modal_gps_capturing")}
                   </div>
                 )}
                 {gpsStatus === "success" && currentCoords && (
                   <div className="flex flex-col gap-1 text-xs">
                     <div className="flex items-center gap-2 text-pastel-green-foreground">
                       <CheckCircle2 className="h-4 w-4" />
-                      <span className="font-semibold">Localização capturada</span>
+                      <span className="font-semibold">{t("modal_gps_captured")}</span>
                     </div>
                     <p className="font-mono text-muted-foreground">
-                      Lat: {currentCoords.lat.toFixed(6)}
+                      {t("modal_lat")} {currentCoords.lat.toFixed(6)}
                     </p>
                     <p className="font-mono text-muted-foreground">
-                      Lng: {currentCoords.lng.toFixed(6)}
+                      {t("modal_lng")} {currentCoords.lng.toFixed(6)}
                     </p>
                   </div>
                 )}
                 {gpsStatus === "error" && (
-                  <p className="text-xs text-destructive">Erro ao capturar localização.</p>
+                  <p className="text-xs text-destructive">{t("modal_gps_error")}</p>
                 )}
                 {(gpsStatus === "idle" || gpsStatus === "error") && (
                   <button
                     onClick={captureGps}
                     className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
                   >
-                    <Navigation className="h-3.5 w-3.5" /> Capturar localização
+                    <Navigation className="h-3.5 w-3.5" /> {t("modal_gps_capture_btn")}
                   </button>
                 )}
               </div>
@@ -658,7 +660,7 @@ const Timesheet = () => {
               <div className="flex items-center gap-2 rounded-xl bg-accent px-3 py-2 text-sm">
                 <Clock className="h-4 w-4 text-accent-foreground" />
                 <span className="text-accent-foreground">
-                  {new Date().toLocaleString("pt-PT", {
+                  {new Date().toLocaleString(dateLocaleTag(i18n.language), {
                     weekday: "long",
                     day: "2-digit",
                     month: "long",
@@ -678,7 +680,7 @@ const Timesheet = () => {
                   disabled={submitting}
                   className="flex-1 rounded-xl bg-secondary py-2.5 text-sm font-semibold text-foreground hover:opacity-90 disabled:opacity-50"
                 >
-                  Cancelar
+                  {t("modal_cancel")}
                 </button>
                 <button
                   onClick={submitRegister}
@@ -686,7 +688,7 @@ const Timesheet = () => {
                   className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Confirmar Registo
+                  {t("modal_confirm")}
                 </button>
               </div>
             </div>
@@ -725,17 +727,19 @@ const Timesheet = () => {
 
             <div className="grid grid-cols-2 gap-3 pb-4">
               <div className="rounded-xl bg-pastel-green/30 p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-pastel-green-foreground">Entrada</p>
-                <p className="mt-1 text-lg font-bold text-foreground">{formatTime(selectedEntry.check_in) ?? "—"}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-pastel-green-foreground">{t("detail_check_in")}</p>
+                <p className="mt-1 text-lg font-bold text-foreground">{formatTime(selectedEntry.check_in) ?? t("em_dash")}</p>
               </div>
               <div className="rounded-xl bg-pastel-pink/30 p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-pastel-pink-foreground">Saída</p>
-                <p className="mt-1 text-lg font-bold text-foreground">{formatTime(selectedEntry.check_out) ?? "—"}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-pastel-pink-foreground">{t("detail_check_out")}</p>
+                <p className="mt-1 text-lg font-bold text-foreground">{formatTime(selectedEntry.check_out) ?? t("em_dash")}</p>
               </div>
               <div className="col-span-2 rounded-xl bg-pastel-blue/30 p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-pastel-blue-foreground">Horas Trabalhadas</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-pastel-blue-foreground">{t("detail_hours_worked")}</p>
                 <p className="mt-1 text-2xl font-bold text-foreground">
-                  {Number(selectedEntry.hours_worked) > 0 ? `${Number(selectedEntry.hours_worked).toFixed(2)} h` : "Em curso"}
+                  {Number(selectedEntry.hours_worked) > 0
+                    ? `${Number(selectedEntry.hours_worked).toFixed(2)}${t("hours_with_space")}`
+                    : t("detail_in_progress")}
                 </p>
               </div>
             </div>
@@ -743,7 +747,7 @@ const Timesheet = () => {
             <div className="flex flex-col gap-3">
               {isAdmin && selectedEntry.check_in_lat != null && selectedEntry.check_in_lng != null && (
                 <LocationCard
-                  title="Localização de Entrada"
+                  title={t("detail_check_in_location")}
                   lat={Number(selectedEntry.check_in_lat)}
                   lng={Number(selectedEntry.check_in_lng)}
                   address={selectedEntry.check_in_address ?? ""}
@@ -752,7 +756,7 @@ const Timesheet = () => {
               )}
               {isAdmin && selectedEntry.check_out_lat != null && selectedEntry.check_out_lng != null && (
                 <LocationCard
-                  title="Localização de Saída"
+                  title={t("detail_check_out_location")}
                   lat={Number(selectedEntry.check_out_lat)}
                   lng={Number(selectedEntry.check_out_lng)}
                   address={selectedEntry.check_out_address ?? ""}
@@ -765,7 +769,7 @@ const Timesheet = () => {
               onClick={() => setSelectedEntry(null)}
               className="mt-5 w-full rounded-xl bg-secondary py-2.5 text-sm font-semibold text-foreground hover:opacity-90"
             >
-              Fechar
+              {t("detail_close")}
             </button>
           </div>
         </div>
@@ -809,6 +813,7 @@ const LocationCard = ({
   address: string;
   tone: "green" | "pink";
 }) => {
+  const { t } = useTranslation("pages", { keyPrefix: "timesheet" });
   const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
   return (
     <div className="rounded-xl border border-border bg-muted/40 p-3">
@@ -826,7 +831,7 @@ const LocationCard = ({
         rel="noreferrer"
         className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
       >
-        <Navigation className="h-3 w-3" /> Ver no mapa
+        <Navigation className="h-3 w-3" /> {t("detail_view_map")}
       </a>
     </div>
   );

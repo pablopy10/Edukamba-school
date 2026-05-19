@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation, Trans } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -13,15 +14,17 @@ import {
 import { Loader2 } from "lucide-react";
 import { generateSaftXml, downloadSaftXmlInBrowser, type SaftInvoiceRow } from "@/lib/fiscal/generateSaftXml";
 
-const monthOpts = [
-  { v: "1", l: "Janeiro" }, { v: "2", l: "Fevereiro" }, { v: "3", l: "Março" }, { v: "4", l: "Abril" },
-  { v: "5", l: "Maio" }, { v: "6", l: "Junho" }, { v: "7", l: "Julho" }, { v: "8", l: "Agosto" },
-  { v: "9", l: "Setembro" }, { v: "10", l: "Outubro" }, { v: "11", l: "Novembro" }, { v: "12", l: "Dezembro" },
-];
-
 type Props = { schoolId: string };
 
 export function SaftExportCard({ schoolId }: Props) {
+  const { t } = useTranslation("pages", { keyPrefix: "financas.saft" });
+  const { t: tCommon } = useTranslation("common");
+
+  const monthOpts = useMemo(() => {
+    const names = tCommon("dashboard.calendar_months_long", { returnObjects: true }) as string[];
+    return names.map((l, i) => ({ v: String(i + 1), l }));
+  }, [tCommon]);
+
   const now = useMemo(() => new Date(), []);
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -75,7 +78,7 @@ export function SaftExportCard({ schoolId }: Props) {
         year,
         month,
         school: {
-          name: school?.name ?? "Escola",
+          name: school?.name ?? t("default_school_name"),
           taxRegistrationNumber: school?.nif ?? null,
           address: school?.address ?? null,
         },
@@ -85,10 +88,13 @@ export function SaftExportCard({ schoolId }: Props) {
 
       const fn = `SAFT_${schoolId.slice(0, 8)}_${year}-${String(month).padStart(2, "0")}.xml`;
       downloadSaftXmlInBrowser(fn, xml);
-      toast({ title: "SAF-T gerado", description: `Download: ${fn}` });
+      toast({
+        title: t("toast_generated_title"),
+        description: t("toast_generated_desc", { filename: fn }),
+      });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      toast({ title: "Erro ao gerar SAF-T", description: msg, variant: "destructive" });
+      toast({ title: t("toast_error_title"), description: msg, variant: "destructive" });
     } finally {
       setBusy(false);
     }
@@ -97,17 +103,21 @@ export function SaftExportCard({ schoolId }: Props) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Exportar SAF-T (AGT Angola)</CardTitle>
+        <CardTitle className="text-base">{t("title")}</CardTitle>
         <p className="text-sm text-muted-foreground">
-          XSD oficial 1.01_01 (estruturas completas como DocumentStatus/SpecialRegimes/two SourceID, não só exemplos resumidos). Header: NIF emitente ≠ NIF produtor —
-          pode definir <code className="text-xs font-mono">VITE_SAFT_PRODUCT_COMPANY_TAX_ID</code> para{' '}
-          <code className="text-xs font-mono">ProductCompanyTaxID</code>. SAF-T habitualmente obriga software certificado; entrega mensal até ~dia 5 e validação antes do envio ficam ao cargo da AGT/contabilidade.
-          Facturas no ficheiro necessitam de hash/control já registados na base.
+          <Trans
+            t={t}
+            i18nKey="description"
+            components={{
+              1: <code className="text-xs font-mono" />,
+              2: <code className="text-xs font-mono" />,
+            }}
+          />
         </p>
       </CardHeader>
       <CardContent className="flex flex-wrap items-end gap-3">
         <div className="grid gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Mês</label>
+          <label className="text-xs font-medium text-muted-foreground">{t("label_month")}</label>
           <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
             <SelectTrigger className="w-[180px]">
               <SelectValue />
@@ -120,7 +130,7 @@ export function SaftExportCard({ schoolId }: Props) {
           </Select>
         </div>
         <div className="grid gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Ano</label>
+          <label className="text-xs font-medium text-muted-foreground">{t("label_year")}</label>
           <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
             <SelectTrigger className="w-[120px]">
               <SelectValue />
@@ -134,7 +144,7 @@ export function SaftExportCard({ schoolId }: Props) {
         </div>
         <Button type="button" onClick={runExport} disabled={busy} className="gap-2">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          Descarregar SAF-T
+          {t("download_button")}
         </Button>
       </CardContent>
     </Card>

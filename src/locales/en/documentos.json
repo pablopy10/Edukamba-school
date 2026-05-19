@@ -1,0 +1,166 @@
+{
+  "title": "Documents",
+  "subtitle": "Manage school documents, request signatures and share forms.",
+  "new_document": "New document",
+  "new_short": "New",
+  "em_dash": "—",
+  "loading": "Loading…",
+  "loading_responses": "Loading responses…",
+  "category": {
+    "assinatura": "Signature",
+    "formulario": "Form",
+    "informativo": "Informational"
+  },
+  "target": {
+    "PARENT": "Guardians",
+    "TEACHER": "Teachers",
+    "ALL": "Everyone"
+  },
+  "request_status": {
+    "pending": "Pending",
+    "signed": "Signed",
+    "submitted": "Submitted",
+    "declined": "Declined"
+  },
+  "kpi": {
+    "total": "Total",
+    "active": "Active",
+    "pending_response": "Awaiting response",
+    "archived": "Archived"
+  },
+  "tabs": {
+    "all": "All",
+    "pending": "Pending",
+    "responses": "Responses"
+  },
+  "search_placeholder": "Search document…",
+  "filter_category": "Category",
+  "all_categories": "All categories",
+  "empty": {
+    "admin_none": "No documents yet. Create the first one!",
+    "user_none": "No documents available at the moment.",
+    "no_match": "No documents match the filters."
+  },
+  "badge": {
+    "required": "Required",
+    "archived": "Archived",
+    "expired": "Expired"
+  },
+  "list": {
+    "recipients": "Recipients:",
+    "expires": "Expires:",
+    "created": "Created:",
+    "pending_one": "{{count}} pending",
+    "pending_other": "{{count}} pending",
+    "responded_one": "{{count}} responded",
+    "responded_other": "{{count}} responded",
+    "total": "{{count}} total",
+    "student": "Student:",
+    "expires_on": "Expires on ",
+    "expired_on": "⚠ Expired on "
+  },
+  "actions": {
+    "sign": "Sign",
+    "fill": "Fill in",
+    "confirm_read": "Confirm read",
+    "open_file": "Open file",
+    "view_responses": "View responses",
+    "send_requests": "Send requests",
+    "send": "Send",
+    "edit": "Edit",
+    "archive": "Archive",
+    "reactivate": "Reactivate",
+    "delete": "Delete",
+    "view_document": "View document",
+    "decline": "Decline",
+    "view_signed_doc": "View signed document",
+    "view_signature": "View signature"
+  },
+  "responses_tab": {
+    "hint": "Click \"View responses\" on a document to see responses here.",
+    "empty": "There are no responses for this document yet.",
+    "fallback_title": "Responses"
+  },
+  "pending_tab": {
+    "all_done": "You have no pending documents. All caught up!"
+  },
+  "dialog": {
+    "edit_title": "Edit document",
+    "new_title": "New document",
+    "edit_desc": "Update the document details.",
+    "new_desc": "Create a new document to share with guardians or teachers.",
+    "title_label": "Title *",
+    "title_placeholder": "E.g. Study trip permission",
+    "category_label": "Category *",
+    "recipients_label": "Recipients",
+    "description_label": "Description",
+    "description_placeholder": "Optional document description…",
+    "expires_label": "Expiry date",
+    "required_checkbox": "Required",
+    "pdf_label": "PDF document",
+    "configure_fields": "Configure signature / text fields",
+    "configure_fields_count_one": "Configure fields ({{count}} defined)",
+    "configure_fields_count_other": "Configure fields ({{count}} defined)",
+    "cancel": "Cancel",
+    "save": "Save changes",
+    "create": "Create document",
+    "existing_file": "Existing file",
+    "field_editor_sr": "Configure document fields"
+  },
+  "viewer": {
+    "title": "Signed document",
+    "pdf_embedded": "PDF with embedded signature",
+    "open_download": "Open / Download",
+    "iframe_title": "Signed PDF",
+    "digital_signature": "Digital signature",
+    "signature_alt": "Signature",
+    "no_pdf_note": "The document had no PDF configured — only the signature was saved.",
+    "signed_by": "Signed by"
+  },
+  "send_dialog": {
+    "title": "Send signature requests",
+    "description": "Select the target class. A request will be created for each guardian.",
+    "document_label": "Document",
+    "classroom_label": "Class",
+    "classroom_placeholder": "Select class",
+    "all_classrooms": "All classes",
+    "enrollment_hint": "Only guardians with an enrolled student will receive the request.",
+    "enrollment_hint_year": "Only guardians with a student enrolled in the selected academic year will receive the request.",
+    "sending": "Sending…",
+    "submit": "Send requests"
+  },
+  "delete_dialog": {
+    "title": "Delete document?",
+    "description": "Are you sure you want to delete {{title}}? All associated response requests will also be deleted. This action cannot be undone.",
+    "cancel": "Cancel",
+    "confirm": "Delete"
+  },
+  "toast": {
+    "load_documents_error": "Error loading documents",
+    "load_requests_error": "Error loading requests",
+    "load_responses_error": "Error loading responses",
+    "load_students_error": "Error loading students",
+    "no_guardians_title": "No guardians found",
+    "no_guardians_desc": "Check that students have an associated guardian.",
+    "send_requests_error": "Error sending requests",
+    "requests_created_one": "{{count}} request created!",
+    "requests_created_other": "{{count}} requests created!",
+    "sending_emails": "Sending emails…",
+    "emails_sent": "📧 Emails sent successfully!",
+    "title_required": "Title is required",
+    "save_error": "Error saving",
+    "updated": "Document updated",
+    "created": "Document created",
+    "error": "Error",
+    "archived": "Document archived",
+    "reactivated": "Document reactivated",
+    "delete_error": "Error deleting",
+    "deleted": "Document deleted",
+    "signed": "Document signed",
+    "submitted": "Form submitted",
+    "response_sent": "Response sent",
+    "open_error": "Error opening document",
+    "fields_saved_one": "{{count}} field saved",
+    "fields_saved_other": "{{count}} fields saved"
+  }
+}

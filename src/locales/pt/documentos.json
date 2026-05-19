@@ -1,0 +1,166 @@
+{
+  "title": "Documentos",
+  "subtitle": "Gerencie documentos escolares, peça assinaturas e partilhe formulários.",
+  "new_document": "Novo documento",
+  "new_short": "Novo",
+  "em_dash": "—",
+  "loading": "A carregar…",
+  "loading_responses": "A carregar respostas…",
+  "category": {
+    "assinatura": "Assinatura",
+    "formulario": "Formulário",
+    "informativo": "Informativo"
+  },
+  "target": {
+    "PARENT": "Educadores",
+    "TEACHER": "Professores",
+    "ALL": "Todos"
+  },
+  "request_status": {
+    "pending": "Pendente",
+    "signed": "Assinado",
+    "submitted": "Submetido",
+    "declined": "Recusado"
+  },
+  "kpi": {
+    "total": "Total",
+    "active": "Activos",
+    "pending_response": "Pendentes de resposta",
+    "archived": "Arquivados"
+  },
+  "tabs": {
+    "all": "Todos",
+    "pending": "Pendentes",
+    "responses": "Respostas"
+  },
+  "search_placeholder": "Pesquisar documento…",
+  "filter_category": "Categoria",
+  "all_categories": "Todas as categorias",
+  "empty": {
+    "admin_none": "Ainda não existem documentos. Crie o primeiro!",
+    "user_none": "Nenhum documento disponível de momento.",
+    "no_match": "Nenhum documento corresponde aos filtros."
+  },
+  "badge": {
+    "required": "Obrigatório",
+    "archived": "Arquivado",
+    "expired": "Expirado"
+  },
+  "list": {
+    "recipients": "Destinatários:",
+    "expires": "Expira:",
+    "created": "Criado:",
+    "pending_one": "{{count}} pendente",
+    "pending_other": "{{count}} pendentes",
+    "responded_one": "{{count}} respondido",
+    "responded_other": "{{count}} respondidos",
+    "total": "{{count}} total",
+    "student": "Aluno:",
+    "expires_on": "Expira em ",
+    "expired_on": "⚠ Expirado em "
+  },
+  "actions": {
+    "sign": "Assinar",
+    "fill": "Preencher",
+    "confirm_read": "Confirmar leitura",
+    "open_file": "Abrir ficheiro",
+    "view_responses": "Ver respostas",
+    "send_requests": "Enviar pedidos",
+    "send": "Enviar",
+    "edit": "Editar",
+    "archive": "Arquivar",
+    "reactivate": "Reactivar",
+    "delete": "Eliminar",
+    "view_document": "Ver documento",
+    "decline": "Recusar",
+    "view_signed_doc": "Ver documento assinado",
+    "view_signature": "Ver assinatura"
+  },
+  "responses_tab": {
+    "hint": "Clique em \"Ver respostas\" num documento para ver as respostas aqui.",
+    "empty": "Ainda não há respostas para este documento.",
+    "fallback_title": "Respostas"
+  },
+  "pending_tab": {
+    "all_done": "Não tem documentos pendentes. Tudo em dia!"
+  },
+  "dialog": {
+    "edit_title": "Editar documento",
+    "new_title": "Novo documento",
+    "edit_desc": "Actualize os dados do documento.",
+    "new_desc": "Crie um novo documento para partilhar com encarregados ou professores.",
+    "title_label": "Título *",
+    "title_placeholder": "Ex: Autorização visita de estudo",
+    "category_label": "Categoria *",
+    "recipients_label": "Destinatários",
+    "description_label": "Descrição",
+    "description_placeholder": "Descrição opcional do documento…",
+    "expires_label": "Data de expiração",
+    "required_checkbox": "Obrigatório",
+    "pdf_label": "Documento PDF",
+    "configure_fields": "Configurar campos de assinatura / texto",
+    "configure_fields_count_one": "Configurar campos ({{count}} definido)",
+    "configure_fields_count_other": "Configurar campos ({{count}} definidos)",
+    "cancel": "Cancelar",
+    "save": "Guardar alterações",
+    "create": "Criar documento",
+    "existing_file": "Ficheiro existente",
+    "field_editor_sr": "Configurar campos do documento"
+  },
+  "viewer": {
+    "title": "Documento assinado",
+    "pdf_embedded": "PDF com assinatura incorporada",
+    "open_download": "Abrir / Descarregar",
+    "iframe_title": "PDF assinado",
+    "digital_signature": "Assinatura digital",
+    "signature_alt": "Assinatura",
+    "no_pdf_note": "O documento não tinha um PDF configurado — apenas a assinatura foi guardada.",
+    "signed_by": "Assinado por"
+  },
+  "send_dialog": {
+    "title": "Enviar pedidos de assinatura",
+    "description": "Seleccione a turma destinatária. Será criado um pedido para cada encarregado de educação.",
+    "document_label": "Documento",
+    "classroom_label": "Turma",
+    "classroom_placeholder": "Seleccionar turma",
+    "all_classrooms": "Todas as turmas",
+    "enrollment_hint": "Apenas encarregados com aluno matriculado receberão o pedido.",
+    "enrollment_hint_year": "Apenas encarregados com aluno matriculado no ano lectivo seleccionado receberão o pedido.",
+    "sending": "A enviar…",
+    "submit": "Enviar pedidos"
+  },
+  "delete_dialog": {
+    "title": "Eliminar documento?",
+    "description": "Tem a certeza que quer eliminar {{title}}? Todos os pedidos de resposta associados serão também eliminados. Esta acção não pode ser desfeita.",
+    "cancel": "Cancelar",
+    "confirm": "Eliminar"
+  },
+  "toast": {
+    "load_documents_error": "Erro a carregar documentos",
+    "load_requests_error": "Erro a carregar pedidos",
+    "load_responses_error": "Erro a carregar respostas",
+    "load_students_error": "Erro a obter alunos",
+    "no_guardians_title": "Nenhum encarregado encontrado",
+    "no_guardians_desc": "Verifique se os alunos têm encarregado associado.",
+    "send_requests_error": "Erro ao enviar pedidos",
+    "requests_created_one": "{{count}} pedido criado!",
+    "requests_created_other": "{{count}} pedidos criados!",
+    "sending_emails": "A enviar emails…",
+    "emails_sent": "📧 Emails enviados com sucesso!",
+    "title_required": "Título obrigatório",
+    "save_error": "Erro ao guardar",
+    "updated": "Documento actualizado",
+    "created": "Documento criado",
+    "error": "Erro",
+    "archived": "Documento arquivado",
+    "reactivated": "Documento reactivado",
+    "delete_error": "Erro ao eliminar",
+    "deleted": "Documento eliminado",
+    "signed": "Documento assinado",
+    "submitted": "Formulário submetido",
+    "response_sent": "Resposta enviada",
+    "open_error": "Erro ao abrir documento",
+    "fields_saved_one": "{{count}} campo guardado",
+    "fields_saved_other": "{{count}} campos guardados"
+  }
+}

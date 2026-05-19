@@ -1,0 +1,196 @@
+{
+  "title": "Relatórios",
+  "subtitle": "Filtre os dados da escola e exporte para Excel ou PDF",
+  "access_denied": {
+    "title": "Acesso restrito",
+    "message": "Apenas administradores podem aceder aos relatórios."
+  },
+  "reports": {
+    "alunos": {
+      "label": "Alunos",
+      "description": "Lista de alunos por turma e curso"
+    },
+    "presencas": {
+      "label": "Presenças",
+      "description": "Registos de presenças e faltas"
+    },
+    "notas": {
+      "label": "Notas",
+      "description": "Notas por aluno e avaliação"
+    },
+    "professores": {
+      "label": "Professores",
+      "description": "Lista de professores"
+    },
+    "pedidos_ausencia": {
+      "label": "Pedidos de Ausência",
+      "description": "Pedidos de staff"
+    },
+    "pedidos_material": {
+      "label": "Pedidos de Material",
+      "description": "Pedidos por professor/turma"
+    },
+    "stock": {
+      "label": "Stock de Material",
+      "description": "Inventário e stock baixo"
+    },
+    "eventos": {
+      "label": "Eventos",
+      "description": "Eventos da escola"
+    },
+    "atividades": {
+      "label": "Atividades Extracurriculares",
+      "description": "Atividades e clubes"
+    }
+  },
+  "filters": {
+    "title": "Filtros",
+    "search_placeholder": "Pesquisar...",
+    "all_classrooms": "Todas as turmas",
+    "all_courses": "Todos os cursos",
+    "all_statuses": "Todos os estados",
+    "all_teachers": "Todos os professores"
+  },
+  "export": {
+    "pdf": "PDF",
+    "excel": "Exportar Excel",
+    "download": "Descarregar"
+  },
+  "table": {
+    "report_title": "Relatório de {{label}}",
+    "loading": "A carregar...",
+    "records_found": "{{count}} registos encontrados",
+    "loading_data": "A carregar dados...",
+    "empty": "Sem resultados para os filtros selecionados."
+  },
+  "em_dash": "—",
+  "yes": "Sim",
+  "no": "Não",
+  "teacher_status": {
+    "active": "Ativo",
+    "inactive": "Inativo"
+  },
+  "teacher_filter": {
+    "active": "Ativos",
+    "inactive": "Inativos"
+  },
+  "attendance_status": {
+    "PRESENT": "Presente",
+    "ABSENT": "Ausente",
+    "LATE": "Atrasado",
+    "JUSTIFIED": "Justificado"
+  },
+  "absence_status": {
+    "PENDING": "Pendente",
+    "APPROVED": "Aprovado",
+    "REJECTED": "Rejeitado"
+  },
+  "material_request_status": {
+    "pendente": "Pendente",
+    "aprovado": "Aprovado",
+    "rejeitado": "Rejeitado",
+    "entregue": "Entregue"
+  },
+  "stock_filter": {
+    "low": "Stock baixo"
+  },
+  "columns": {
+    "alunos": {
+      "numero": "Nº",
+      "nome": "Nome",
+      "turma": "Turma",
+      "curso": "Curso",
+      "data_nasc": "Data Nasc.",
+      "email": "Email",
+      "telefone": "Telefone",
+      "encarregado": "Encarregado"
+    },
+    "presencas": {
+      "data": "Data",
+      "aluno": "Aluno",
+      "turma": "Turma",
+      "estado": "Estado",
+      "professor": "Professor",
+      "notas": "Notas"
+    },
+    "notas": {
+      "data": "Data",
+      "aluno": "Aluno",
+      "turma": "Turma",
+      "disciplina": "Disciplina",
+      "avaliacao": "Avaliação",
+      "nota": "Nota"
+    },
+    "professores": {
+      "nome": "Nome",
+      "numero_funcionario": "Nº Funcionário",
+      "disciplina": "Disciplina",
+      "data_contratacao": "Data Contratação",
+      "estado": "Estado"
+    },
+    "pedidos_ausencia": {
+      "funcionario": "Funcionário",
+      "motivo": "Motivo",
+      "inicio": "Início",
+      "fim": "Fim",
+      "estado": "Estado",
+      "descricao": "Descrição"
+    },
+    "pedidos_material": {
+      "material": "Material",
+      "qtd": "Qtd",
+      "professor": "Professor",
+      "turma": "Turma",
+      "aluno": "Aluno",
+      "dia": "Dia",
+      "estado": "Estado"
+    },
+    "stock": {
+      "nome": "Nome",
+      "categoria": "Categoria",
+      "sku": "SKU",
+      "quantidade": "Quantidade",
+      "minimo": "Mínimo",
+      "unidade": "Unidade",
+      "localizacao": "Localização"
+    },
+    "eventos": {
+      "data": "Data",
+      "titulo": "Título",
+      "tipo": "Tipo",
+      "localizacao": "Localização",
+      "organizador": "Organizador",
+      "audiencia": "Audiência"
+    },
+    "atividades": {
+      "nome": "Nome",
+      "categoria": "Categoria",
+      "responsavel": "Responsável",
+      "localizacao": "Localização",
+      "capacidade": "Capacidade",
+      "recorrente": "Recorrente"
+    }
+  },
+  "filter_summary": {
+    "search": "Pesquisa: \"{{value}}\"",
+    "classroom": "Turma: {{value}}",
+    "course": "Curso: {{value}}",
+    "status": "Estado: {{value}}",
+    "teacher": "Professor: {{value}}",
+    "from": "De: {{value}}",
+    "to": "Até: {{value}}"
+  },
+  "pdf": {
+    "default_title": "Relatório",
+    "report_title": "Relatório de {{label}}",
+    "generated_at": "Gerado em {{date}}",
+    "records_count": "{{count}} registos",
+    "filters_prefix": "Filtros:"
+  },
+  "toast": {
+    "excel_title": "Excel exportado",
+    "excel_description": "{{label}} • {{count}} registos",
+    "pdf_title": "PDF exportado",
+    "pdf_description": "{{label}} • {{count}} registos"
+  }
+}

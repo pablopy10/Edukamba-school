@@ -1,0 +1,196 @@
+{
+  "title": "Rapports",
+  "subtitle": "Filtrez les données de l'école et exportez en Excel ou PDF",
+  "access_denied": {
+    "title": "Accès restreint",
+    "message": "Seuls les administrateurs peuvent accéder aux rapports."
+  },
+  "reports": {
+    "alunos": {
+      "label": "Élèves",
+      "description": "Liste des élèves par classe et cours"
+    },
+    "presencas": {
+      "label": "Présences",
+      "description": "Registres de présences et absences"
+    },
+    "notas": {
+      "label": "Notes",
+      "description": "Notes par élève et évaluation"
+    },
+    "professores": {
+      "label": "Enseignants",
+      "description": "Liste des enseignants"
+    },
+    "pedidos_ausencia": {
+      "label": "Demandes d'absence",
+      "description": "Demandes du personnel"
+    },
+    "pedidos_material": {
+      "label": "Demandes de matériel",
+      "description": "Demandes par enseignant/classe"
+    },
+    "stock": {
+      "label": "Stock de matériel",
+      "description": "Inventaire et stock faible"
+    },
+    "eventos": {
+      "label": "Événements",
+      "description": "Événements de l'école"
+    },
+    "atividades": {
+      "label": "Activités extrascolaires",
+      "description": "Activités et clubs"
+    }
+  },
+  "filters": {
+    "title": "Filtres",
+    "search_placeholder": "Rechercher...",
+    "all_classrooms": "Toutes les classes",
+    "all_courses": "Tous les cours",
+    "all_statuses": "Tous les états",
+    "all_teachers": "Tous les enseignants"
+  },
+  "export": {
+    "pdf": "PDF",
+    "excel": "Exporter Excel",
+    "download": "Télécharger"
+  },
+  "table": {
+    "report_title": "Rapport {{label}}",
+    "loading": "Chargement…",
+    "records_found": "{{count}} enregistrement(s) trouvé(s)",
+    "loading_data": "Chargement des données…",
+    "empty": "Aucun résultat pour les filtres sélectionnés."
+  },
+  "em_dash": "—",
+  "yes": "Oui",
+  "no": "Non",
+  "teacher_status": {
+    "active": "Actif",
+    "inactive": "Inactif"
+  },
+  "teacher_filter": {
+    "active": "Actifs",
+    "inactive": "Inactifs"
+  },
+  "attendance_status": {
+    "PRESENT": "Présent",
+    "ABSENT": "Absent",
+    "LATE": "En retard",
+    "JUSTIFIED": "Justifié"
+  },
+  "absence_status": {
+    "PENDING": "En attente",
+    "APPROVED": "Approuvé",
+    "REJECTED": "Rejeté"
+  },
+  "material_request_status": {
+    "pendente": "En attente",
+    "aprovado": "Approuvé",
+    "rejeitado": "Rejeté",
+    "entregue": "Livré"
+  },
+  "stock_filter": {
+    "low": "Stock faible"
+  },
+  "columns": {
+    "alunos": {
+      "numero": "Nº",
+      "nome": "Nom",
+      "turma": "Classe",
+      "curso": "Cours",
+      "data_nasc": "Date naiss.",
+      "email": "E-mail",
+      "telefone": "Téléphone",
+      "encarregado": "Responsable"
+    },
+    "presencas": {
+      "data": "Date",
+      "aluno": "Élève",
+      "turma": "Classe",
+      "estado": "État",
+      "professor": "Enseignant",
+      "notas": "Notes"
+    },
+    "notas": {
+      "data": "Date",
+      "aluno": "Élève",
+      "turma": "Classe",
+      "disciplina": "Matière",
+      "avaliacao": "Évaluation",
+      "nota": "Note"
+    },
+    "professores": {
+      "nome": "Nom",
+      "numero_funcionario": "Nº employé",
+      "disciplina": "Matière",
+      "data_contratacao": "Date d'embauche",
+      "estado": "État"
+    },
+    "pedidos_ausencia": {
+      "funcionario": "Employé",
+      "motivo": "Motif",
+      "inicio": "Début",
+      "fim": "Fin",
+      "estado": "État",
+      "descricao": "Description"
+    },
+    "pedidos_material": {
+      "material": "Matériel",
+      "qtd": "Qté",
+      "professor": "Enseignant",
+      "turma": "Classe",
+      "aluno": "Élève",
+      "dia": "Jour",
+      "estado": "État"
+    },
+    "stock": {
+      "nome": "Nom",
+      "categoria": "Catégorie",
+      "sku": "SKU",
+      "quantidade": "Quantité",
+      "minimo": "Minimum",
+      "unidade": "Unité",
+      "localizacao": "Emplacement"
+    },
+    "eventos": {
+      "data": "Date",
+      "titulo": "Titre",
+      "tipo": "Type",
+      "localizacao": "Lieu",
+      "organizador": "Organisateur",
+      "audiencia": "Public"
+    },
+    "atividades": {
+      "nome": "Nom",
+      "categoria": "Catégorie",
+      "responsavel": "Responsable",
+      "localizacao": "Lieu",
+      "capacidade": "Capacité",
+      "recorrente": "Récurrent"
+    }
+  },
+  "filter_summary": {
+    "search": "Recherche : « {{value}} »",
+    "classroom": "Classe : {{value}}",
+    "course": "Cours : {{value}}",
+    "status": "État : {{value}}",
+    "teacher": "Enseignant : {{value}}",
+    "from": "Du : {{value}}",
+    "to": "Au : {{value}}"
+  },
+  "pdf": {
+    "default_title": "Rapport",
+    "report_title": "Rapport {{label}}",
+    "generated_at": "Généré le {{date}}",
+    "records_count": "{{count}} enregistrement(s)",
+    "filters_prefix": "Filtres :"
+  },
+  "toast": {
+    "excel_title": "Excel exporté",
+    "excel_description": "{{label}} • {{count}} enregistrement(s)",
+    "pdf_title": "PDF exporté",
+    "pdf_description": "{{label}} • {{count}} enregistrement(s)"
+  }
+}

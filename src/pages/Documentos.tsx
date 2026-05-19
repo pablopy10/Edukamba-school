@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { dateLocaleTag } from "@/lib/i18nDateLocale";
 import {
   FolderOpen, Plus, Search, Loader2, FileSignature, FileText, Info,
   CheckCircle2, Clock, XCircle, Pencil, Trash2, AlertTriangle, ExternalLink,
@@ -81,25 +83,6 @@ type DocWithStats = Document & {
   signed: number;
 };
 
-const CATEGORY_META: Record<DocCategory, { label: string; icon: typeof FileSignature; color: string }> = {
-  assinatura: { label: "Assinatura", icon: FileSignature, color: "bg-pastel-blue text-pastel-blue-foreground" },
-  formulario: { label: "Formulário", icon: FileText, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-  informativo: { label: "Informativo", icon: Info, color: "bg-pastel-green text-pastel-green-foreground" },
-};
-
-const TARGET_LABEL: Record<DocTarget, string> = {
-  PARENT: "Educadores",
-  TEACHER: "Professores",
-  ALL: "Todos",
-};
-
-const REQUEST_STATUS_META: Record<RequestStatus, { label: string; icon: typeof CheckCircle2; color: string }> = {
-  pending: { label: "Pendente", icon: Clock, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-  signed: { label: "Assinado", icon: CheckCircle2, color: "bg-pastel-green text-pastel-green-foreground" },
-  submitted: { label: "Submetido", icon: CheckCircle2, color: "bg-pastel-blue text-pastel-blue-foreground" },
-  declined: { label: "Recusado", icon: XCircle, color: "bg-pastel-pink text-pastel-pink-foreground" },
-};
-
 const emptyForm = {
   title: "",
   description: "",
@@ -113,17 +96,50 @@ const emptyForm = {
   signature_fields: null as FieldDef[] | null,
 };
 
-const formatDate = (iso: string | null) => {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("pt-PT", { day: "2-digit", month: "short", year: "numeric" });
-};
-
 const isExpired = (expires_at: string | null) => {
   if (!expires_at) return false;
   return new Date(expires_at) < new Date();
 };
 
 export default function Documentos() {
+  const { t, i18n } = useTranslation("pages", { keyPrefix: "documentos" });
+  const locale = dateLocaleTag(i18n.language);
+  const formatDate = useCallback(
+    (iso: string | null) => {
+      if (!iso) return t("em_dash");
+      return new Date(iso).toLocaleDateString(locale, { day: "2-digit", month: "short", year: "numeric" });
+    },
+    [locale, t],
+  );
+
+  const CATEGORY_META = useMemo(
+    (): Record<DocCategory, { label: string; icon: typeof FileSignature; color: string }> => ({
+      assinatura: { label: t("category.assinatura"), icon: FileSignature, color: "bg-pastel-blue text-pastel-blue-foreground" },
+      formulario: { label: t("category.formulario"), icon: FileText, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+      informativo: { label: t("category.informativo"), icon: Info, color: "bg-pastel-green text-pastel-green-foreground" },
+    }),
+    [t],
+  );
+
+  const TARGET_LABEL = useMemo(
+    (): Record<DocTarget, string> => ({
+      PARENT: t("target.PARENT"),
+      TEACHER: t("target.TEACHER"),
+      ALL: t("target.ALL"),
+    }),
+    [t],
+  );
+
+  const REQUEST_STATUS_META = useMemo(
+    (): Record<RequestStatus, { label: string; icon: typeof CheckCircle2; color: string }> => ({
+      pending: { label: t("request_status.pending"), icon: Clock, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+      signed: { label: t("request_status.signed"), icon: CheckCircle2, color: "bg-pastel-green text-pastel-green-foreground" },
+      submitted: { label: t("request_status.submitted"), icon: CheckCircle2, color: "bg-pastel-blue text-pastel-blue-foreground" },
+      declined: { label: t("request_status.declined"), icon: XCircle, color: "bg-pastel-pink text-pastel-pink-foreground" },
+    }),
+    [t],
+  );
+
   const { user } = useAuth();
   const { role, loading: roleLoading } = useUserRole();
   const { schoolId: ctxSchoolId, selectedYearId } = useAcademicYear();
@@ -186,7 +202,7 @@ export default function Documentos() {
 
     if (error) {
       if (!error.message.includes("does not exist")) {
-        toast({ title: "Erro a carregar documentos", description: error.message, variant: "destructive" });
+        toast({ title: t("toast.load_documents_error"), description: error.message, variant: "destructive" });
       }
       setDocuments([]);
       return;
@@ -203,7 +219,7 @@ export default function Documentos() {
       };
     });
     setDocuments(mapped);
-  }, []);
+  }, [t]);
 
   const loadMyRequests = useCallback(async () => {
     if (!user?.id) return;
@@ -215,13 +231,13 @@ export default function Documentos() {
 
     if (error) {
       if (!error.message.includes("does not exist")) {
-        toast({ title: "Erro a carregar pedidos", description: error.message, variant: "destructive" });
+        toast({ title: t("toast.load_requests_error"), description: error.message, variant: "destructive" });
       }
       setMyRequests([]);
       return;
     }
     setMyRequests((data ?? []) as unknown as DocumentRequest[]);
-  }, [user?.id]);
+  }, [user?.id, t]);
 
   const loadClassrooms = useCallback(async (sid: string, yearId?: string | null) => {
     if (yearId) {
@@ -268,11 +284,11 @@ export default function Documentos() {
       .eq("document_id", docId)
       .order("created_at", { ascending: false });
     if (error) {
-      toast({ title: "Erro a carregar respostas", description: error.message, variant: "destructive" });
+      toast({ title: t("toast.load_responses_error"), description: error.message, variant: "destructive" });
     }
     setDocRequests((data ?? []) as unknown as DocumentRequest[]);
     setRequestsLoading(false);
-  }, []);
+  }, [t]);
 
   const handleOpenSendDialog = async (doc: Document) => {
     setSendDoc(doc);
@@ -301,7 +317,7 @@ export default function Documentos() {
 
     const { data: enrollments, error: enrErr } = await query;
     if (enrErr) {
-      toast({ title: "Erro a obter alunos", description: enrErr.message, variant: "destructive" });
+      toast({ title: t("toast.load_students_error"), description: enrErr.message, variant: "destructive" });
       setSendingRequests(false);
       return;
     }
@@ -329,7 +345,7 @@ export default function Documentos() {
     }
 
     if (requests.length === 0) {
-      toast({ title: "Nenhum encarregado encontrado", description: "Verifique se os alunos têm encarregado associado.", variant: "destructive" });
+      toast({ title: t("toast.no_guardians_title"), description: t("toast.no_guardians_desc"), variant: "destructive" });
       setSendingRequests(false);
       return;
     }
@@ -341,11 +357,14 @@ export default function Documentos() {
     setSendingRequests(false);
 
     if (insErr) {
-      toast({ title: "Erro ao enviar pedidos", description: insErr.message, variant: "destructive" });
+      toast({ title: t("toast.send_requests_error"), description: insErr.message, variant: "destructive" });
       return;
     }
 
-    toast({ title: `${requests.length} pedido${requests.length > 1 ? "s" : ""} criado${requests.length > 1 ? "s" : ""}!`, description: `A enviar emails…` });
+    toast({
+      title: t("toast.requests_created", { count: requests.length }),
+      description: t("toast.sending_emails"),
+    });
     setSendDialogOpen(false);
     if (schoolId) await loadDocuments(schoolId);
 
@@ -362,7 +381,7 @@ export default function Documentos() {
         })
         .then(({ error: fnErr }) => {
           if (fnErr) console.warn("document-sign-request email error:", fnErr);
-          else toast({ title: `📧 Emails enviados com sucesso!` });
+          else toast({ title: t("toast.emails_sent") });
         });
     }
   };
@@ -398,7 +417,7 @@ export default function Documentos() {
       required: doc.required,
       expires_at: doc.expires_at ?? "",
       pdf_template_url: doc.pdf_template_url ?? doc.file_url ?? "",
-      pdf_template_name: doc.pdf_template_url ? "Ficheiro existente" : "",
+      pdf_template_name: doc.pdf_template_url ? t("dialog.existing_file") : "",
       signature_fields: doc.signature_fields ?? null,
     });
     setDialogOpen(true);
@@ -406,7 +425,7 @@ export default function Documentos() {
 
   const handleSave = async () => {
     if (!form.title.trim()) {
-      toast({ title: "Título obrigatório", variant: "destructive" });
+      toast({ title: t("toast.title_required"), variant: "destructive" });
       return;
     }
     if (!schoolId) return;
@@ -433,10 +452,10 @@ export default function Documentos() {
 
     setSaving(false);
     if (error) {
-      toast({ title: "Erro ao guardar", description: error.message, variant: "destructive" });
+      toast({ title: t("toast.save_error"), description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: editing ? "Documento actualizado" : "Documento criado" });
+    toast({ title: editing ? t("toast.updated") : t("toast.created") });
     setDialogOpen(false);
     if (schoolId) await loadDocuments(schoolId);
   };
@@ -444,16 +463,16 @@ export default function Documentos() {
   const handleArchive = async (doc: Document) => {
     const newStatus = doc.status === "active" ? "archived" : "active";
     const { error } = await supabase.from("documents").update({ status: newStatus }).eq("id", doc.id);
-    if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); return; }
-    toast({ title: newStatus === "archived" ? "Documento arquivado" : "Documento reactivado" });
+    if (error) { toast({ title: t("toast.error"), description: error.message, variant: "destructive" }); return; }
+    toast({ title: newStatus === "archived" ? t("toast.archived") : t("toast.reactivated") });
     if (schoolId) await loadDocuments(schoolId);
   };
 
   const handleDelete = async () => {
     if (!deleteDoc) return;
     const { error } = await supabase.from("documents").delete().eq("id", deleteDoc.id);
-    if (error) { toast({ title: "Erro ao eliminar", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Documento eliminado" });
+    if (error) { toast({ title: t("toast.delete_error"), description: error.message, variant: "destructive" }); return; }
+    toast({ title: t("toast.deleted") });
     setDeleteDoc(null);
     if (schoolId) await loadDocuments(schoolId);
   };
@@ -463,8 +482,15 @@ export default function Documentos() {
       .from("document_requests")
       .update({ status, responded_at: new Date().toISOString() })
       .eq("id", reqId);
-    if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); return; }
-    toast({ title: status === "signed" ? "Documento assinado" : status === "submitted" ? "Formulário submetido" : "Resposta enviada" });
+    if (error) { toast({ title: t("toast.error"), description: error.message, variant: "destructive" }); return; }
+    toast({
+      title:
+        status === "signed"
+          ? t("toast.signed")
+          : status === "submitted"
+            ? t("toast.submitted")
+            : t("toast.response_sent"),
+    });
     await loadMyRequests();
   };
 
@@ -508,7 +534,7 @@ export default function Documentos() {
       .select("id")
       .single();
     if (error || !data) {
-      toast({ title: "Erro ao abrir documento", description: error?.message, variant: "destructive" });
+      toast({ title: t("toast.open_error"), description: error?.message, variant: "destructive" });
       return;
     }
     navigate(`/documentos/assinar/${data.id}`);
@@ -522,12 +548,15 @@ export default function Documentos() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingRequests.length, isPrivileged]);
 
-  const kpiCards = [
-    { label: "Total", value: documents.length, color: "bg-pastel-blue/20 text-pastel-blue-foreground" },
-    { label: "Activos", value: documents.filter((d) => d.status === "active").length, color: "bg-pastel-green/20 text-pastel-green-foreground" },
-    { label: "Pendentes de resposta", value: documents.reduce((s, d) => s + d.pending, 0), color: "bg-pastel-yellow/20 text-pastel-yellow-foreground" },
-    { label: "Arquivados", value: documents.filter((d) => d.status === "archived").length, color: "bg-muted text-muted-foreground" },
-  ];
+  const kpiCards = useMemo(
+    () => [
+      { label: t("kpi.total"), value: documents.length, color: "bg-pastel-blue/20 text-pastel-blue-foreground" },
+      { label: t("kpi.active"), value: documents.filter((d) => d.status === "active").length, color: "bg-pastel-green/20 text-pastel-green-foreground" },
+      { label: t("kpi.pending_response"), value: documents.reduce((s, d) => s + d.pending, 0), color: "bg-pastel-yellow/20 text-pastel-yellow-foreground" },
+      { label: t("kpi.archived"), value: documents.filter((d) => d.status === "archived").length, color: "bg-muted text-muted-foreground" },
+    ],
+    [documents, t],
+  );
 
   return (
     <div className="flex flex-col gap-6 pb-24 lg:pb-8">
@@ -535,10 +564,8 @@ export default function Documentos() {
       {showPageKpiCards() ? (
         <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Documentos</h1>
-            <p className="text-sm text-muted-foreground">
-              Gerencie documentos escolares, peça assinaturas e partilhe formulários.
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("title")}</h1>
+            <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
           </div>
           {isPrivileged && (
             <button
@@ -546,7 +573,7 @@ export default function Documentos() {
               className="flex h-11 w-fit shrink-0 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
             >
               <Plus className="h-4 w-4" strokeWidth={2.25} />
-              Novo documento
+              {t("new_document")}
             </button>
           )}
         </div>
@@ -554,7 +581,7 @@ export default function Documentos() {
         <div className="flex items-center justify-between gap-2 pt-2">
           <div className="flex items-center gap-2">
             <FolderOpen className="h-6 w-6 text-pastel-blue-foreground" strokeWidth={1.75} />
-            <h1 className="text-xl font-bold text-foreground">Documentos</h1>
+            <h1 className="text-xl font-bold text-foreground">{t("title")}</h1>
           </div>
           {isPrivileged && (
             <button
@@ -562,7 +589,7 @@ export default function Documentos() {
               className="flex h-9 items-center gap-1.5 rounded-full bg-pastel-blue px-4 text-xs font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90"
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
-              Novo
+              {t("new_short")}
             </button>
           )}
         </div>
@@ -583,16 +610,16 @@ export default function Documentos() {
       {loading ? (
         <div className="flex items-center justify-center gap-2 py-24 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin" />
-          <span className="text-sm">A carregar…</span>
+          <span className="text-sm">{t("loading")}</span>
         </div>
       ) : (
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
           {/* Tab bar */}
           <TabsList className="mb-2">
-            <TabsTrigger value="todos">Todos</TabsTrigger>
+            <TabsTrigger value="todos">{t("tabs.all")}</TabsTrigger>
             {!isPrivileged && (
               <TabsTrigger value="pendentes" className="gap-1.5">
-                Pendentes
+                {t("tabs.pending")}
                 {pendingRequests.length > 0 && (
                   <span className="rounded-full bg-pastel-yellow px-1.5 py-0.5 text-[10px] font-semibold text-pastel-yellow-foreground">
                     {pendingRequests.length}
@@ -602,7 +629,7 @@ export default function Documentos() {
             )}
             {isPrivileged && (
               <TabsTrigger value="respostas" className="gap-1.5">
-                Respostas
+                {t("tabs.responses")}
                 {requestsDocId && docRequests.length > 0 && (
                   <span className="rounded-full bg-pastel-blue/60 px-1.5 py-0.5 text-[10px] font-semibold text-pastel-blue-foreground">
                     {docRequests.length}
@@ -622,20 +649,20 @@ export default function Documentos() {
                   type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Pesquisar documento…"
+                  placeholder={t("search_placeholder")}
                   className="h-10 w-full rounded-xl border border-border bg-background pl-10 pr-4 text-sm outline-none transition-[var(--transition-smooth)] focus:border-primary focus:ring-2 focus:ring-primary/20"
                 />
               </div>
               <div className="min-w-[160px]">
                 <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                   <SelectTrigger className="h-10">
-                    <SelectValue placeholder="Categoria" />
+                    <SelectValue placeholder={t("filter_category")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todas as categorias</SelectItem>
-                    <SelectItem value="assinatura">Assinatura</SelectItem>
-                    <SelectItem value="formulario">Formulário</SelectItem>
-                    <SelectItem value="informativo">Informativo</SelectItem>
+                    <SelectItem value="all">{t("all_categories")}</SelectItem>
+                    <SelectItem value="assinatura">{t("category.assinatura")}</SelectItem>
+                    <SelectItem value="formulario">{t("category.formulario")}</SelectItem>
+                    <SelectItem value="informativo">{t("category.informativo")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -658,7 +685,7 @@ export default function Documentos() {
                     className="mt-1 flex h-10 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft hover:opacity-90"
                   >
                     <Plus className="h-4 w-4" />
-                    Novo documento
+                    {t("new_document")}
                   </button>
                 )}
               </div>
@@ -694,18 +721,18 @@ export default function Documentos() {
                               </span>
                               {doc.required && (
                                 <span className="rounded-full bg-pastel-pink/60 px-2 py-0.5 text-xs font-medium text-pastel-pink-foreground">
-                                  Obrigatório
+                                  {t("badge.required")}
                                 </span>
                               )}
                               {doc.status === "archived" && (
                                 <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                                  Arquivado
+                                  {t("badge.archived")}
                                 </span>
                               )}
                               {expired && doc.status === "active" && (
                                 <span className="flex items-center gap-1 rounded-full bg-pastel-pink/40 px-2 py-0.5 text-xs text-pastel-pink-foreground">
                                   <AlertTriangle className="h-3 w-3" />
-                                  Expirado
+                                  {t("badge.expired")}
                                 </span>
                               )}
                             </div>
@@ -713,23 +740,23 @@ export default function Documentos() {
                               <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{doc.description}</p>
                             )}
                             <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                              <span>Destinatários: <span className="font-medium text-foreground">{TARGET_LABEL[doc.target_role]}</span></span>
+                              <span>{t("list.recipients")} <span className="font-medium text-foreground">{TARGET_LABEL[doc.target_role]}</span></span>
                               {doc.expires_at && (
-                                <span>Expira: <span className={cn("font-medium", expired ? "text-pastel-pink-foreground" : "text-foreground")}>{formatDate(doc.expires_at)}</span></span>
+                                <span>{t("list.expires")} <span className={cn("font-medium", expired ? "text-pastel-pink-foreground" : "text-foreground")}>{formatDate(doc.expires_at)}</span></span>
                               )}
-                              <span>Criado: <span className="font-medium text-foreground">{formatDate(doc.created_at)}</span></span>
+                              <span>{t("list.created")} <span className="font-medium text-foreground">{formatDate(doc.created_at)}</span></span>
                             </div>
                             {/* Stats — privileged only */}
                             {isPrivileged && doc.total > 0 && (
                               <div className="mt-2 flex flex-wrap gap-2">
                                 <span className="rounded-full bg-pastel-yellow/50 px-2.5 py-0.5 text-xs font-medium text-pastel-yellow-foreground">
-                                  {doc.pending} pendente{doc.pending !== 1 ? "s" : ""}
+                                  {t("list.pending", { count: doc.pending })}
                                 </span>
                                 <span className="rounded-full bg-pastel-green/50 px-2.5 py-0.5 text-xs font-medium text-pastel-green-foreground">
-                                  {doc.signed} respondido{doc.signed !== 1 ? "s" : ""}
+                                  {t("list.responded", { count: doc.signed })}
                                 </span>
                                 <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">
-                                  {doc.total} total
+                                  {t("list.total", { count: doc.total })}
                                 </span>
                               </div>
                             )}
@@ -764,10 +791,10 @@ export default function Documentos() {
                               >
                                 <FileSignature className="h-3.5 w-3.5" />
                                 {doc.category === "assinatura"
-                                  ? "Assinar"
+                                  ? t("actions.sign")
                                   : doc.category === "formulario"
-                                    ? "Preencher"
-                                    : "Confirmar leitura"}
+                                    ? t("actions.fill")
+                                    : t("actions.confirm_read")}
                               </button>
                             )
                           )}
@@ -778,7 +805,7 @@ export default function Documentos() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60"
-                              title="Abrir ficheiro"
+                              title={t("actions.open_file")}
                             >
                               <ExternalLink className="h-4 w-4" strokeWidth={1.75} />
                             </a>
@@ -793,7 +820,7 @@ export default function Documentos() {
                                     setActiveTab("respostas");
                                     await loadDocRequests(doc.id);
                                   }}
-                                  title="Ver respostas"
+                                  title={t("actions.view_responses")}
                                   className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-blue/30 hover:text-pastel-blue-foreground"
                                 >
                                   <Eye className="h-4 w-4" strokeWidth={1.75} />
@@ -803,16 +830,16 @@ export default function Documentos() {
                               {doc.status === "active" && (
                                 <button
                                   onClick={() => handleOpenSendDialog(doc)}
-                                  title="Enviar pedidos"
+                                  title={t("actions.send_requests")}
                                   className="flex h-9 items-center gap-1.5 rounded-full bg-pastel-blue/20 px-3 text-xs font-semibold text-pastel-blue-foreground transition-colors hover:bg-pastel-blue/40"
                                 >
                                   <Send className="h-3.5 w-3.5" strokeWidth={1.75} />
-                                  Enviar
+                                  {t("actions.send")}
                                 </button>
                               )}
                               <button
                                 onClick={() => openEdit(doc)}
-                                title="Editar"
+                                title={t("actions.edit")}
                                 className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-yellow/50 hover:text-pastel-yellow-foreground"
                               >
                                 <Pencil className="h-4 w-4" strokeWidth={1.75} />
@@ -828,7 +855,7 @@ export default function Documentos() {
                               </button>
                               <button
                                 onClick={() => setDeleteDoc(doc)}
-                                title="Eliminar"
+                                title={t("actions.delete")}
                                 className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink/50 hover:text-pastel-pink-foreground"
                               >
                                 <Trash2 className="h-4 w-4" strokeWidth={1.75} />
@@ -850,24 +877,24 @@ export default function Documentos() {
               {!requestsDocId ? (
                 <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-card py-16 text-center shadow-soft">
                   <Eye className="h-10 w-10 text-muted-foreground/40" strokeWidth={1.25} />
-                  <p className="text-sm text-muted-foreground">Clique em "Ver respostas" num documento para ver as respostas aqui.</p>
+                  <p className="text-sm text-muted-foreground">{t("responses_tab.hint")}</p>
                 </div>
               ) : requestsLoading ? (
                 <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
                   <Loader2 className="h-5 w-5 animate-spin" />
-                  <span className="text-sm">A carregar respostas…</span>
+                  <span className="text-sm">{t("loading_responses")}</span>
                 </div>
               ) : docRequests.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-card py-16 text-center shadow-soft">
                   <Users className="h-10 w-10 text-muted-foreground/40" strokeWidth={1.25} />
-                  <p className="text-sm text-muted-foreground">Ainda não há respostas para este documento.</p>
+                  <p className="text-sm text-muted-foreground">{t("responses_tab.empty")}</p>
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
                   <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
                     <div className="border-b border-border bg-muted/30 px-4 py-3">
                       <p className="text-sm font-semibold text-foreground">
-                        {documents.find((d) => d.id === requestsDocId)?.title ?? "Respostas"}
+                        {documents.find((d) => d.id === requestsDocId)?.title ?? t("responses_tab.fallback_title")}
                       </p>
                     </div>
                     <div className="divide-y divide-border">
@@ -879,11 +906,11 @@ export default function Documentos() {
                           <div key={req.id} className="flex items-center justify-between gap-3 px-4 py-3">
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-medium text-foreground">
-                                {req.recipient?.full_name ?? req.signer_name ?? "—"}
+                                {req.recipient?.full_name ?? req.signer_name ?? t("em_dash")}
                               </p>
                               {req.student && (
                                 <p className="text-xs text-muted-foreground">
-                                  Aluno: {req.student.full_name}
+                                  {t("list.student")} {req.student.full_name}
                                 </p>
                               )}
                               {req.signed_at && (
@@ -897,10 +924,10 @@ export default function Documentos() {
                                 <button
                                   onClick={() => setViewerRequest(req)}
                                   className="flex h-8 items-center gap-1.5 rounded-full bg-pastel-blue/20 px-3 text-xs font-semibold text-pastel-blue-foreground hover:bg-pastel-blue/40"
-                                  title="Ver documento assinado"
+                                  title={t("actions.view_signed_doc")}
                                 >
                                   <Eye className="h-3.5 w-3.5" />
-                                  Ver assinatura
+                                  {t("actions.view_signature")}
                                 </button>
                               )}
                               <span className={cn("flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold", statusMeta.color)}>
@@ -924,7 +951,7 @@ export default function Documentos() {
               {pendingRequests.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-card py-20 text-center shadow-soft">
                   <CheckCircle2 className="h-10 w-10 text-pastel-green-foreground/60" strokeWidth={1.25} />
-                  <p className="text-sm text-muted-foreground">Não tem documentos pendentes. Tudo em dia!</p>
+                  <p className="text-sm text-muted-foreground">{t("pending_tab.all_done")}</p>
                 </div>
               ) : (
                 pendingRequests.map((req) => {
@@ -944,23 +971,23 @@ export default function Documentos() {
                               <h3 className="font-semibold text-foreground">{doc.title}</h3>
                               <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", catMeta.color)}>{catMeta.label}</span>
                               {doc.required && (
-                                <span className="rounded-full bg-pastel-pink/60 px-2 py-0.5 text-xs font-medium text-pastel-pink-foreground">Obrigatório</span>
+                                <span className="rounded-full bg-pastel-pink/60 px-2 py-0.5 text-xs font-medium text-pastel-pink-foreground">{t("badge.required")}</span>
                               )}
                             </div>
                             {doc.description && <p className="mt-1 text-sm text-muted-foreground">{doc.description}</p>}
                             {req.student && (
                               <p className="mt-1 text-xs text-muted-foreground">
-                                Aluno: <span className="font-medium text-foreground">{req.student.full_name}</span>
+                                {t("list.student")} <span className="font-medium text-foreground">{req.student.full_name}</span>
                               </p>
                             )}
                             {doc.expires_at && (
                               <p className={cn("mt-1 text-xs", isExpired(doc.expires_at) ? "text-pastel-pink-foreground font-medium" : "text-muted-foreground")}>
-                                {isExpired(doc.expires_at) ? "⚠ Expirado em " : "Expira em "}{formatDate(doc.expires_at)}
+                                {isExpired(doc.expires_at) ? t("list.expired_on") : t("list.expires_on")}{formatDate(doc.expires_at)}
                               </p>
                             )}
                             {doc.file_url && (
                               <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-pastel-blue-foreground hover:underline">
-                                <ExternalLink className="h-3 w-3" /> Ver documento
+                                <ExternalLink className="h-3 w-3" /> {t("actions.view_document")}
                               </a>
                             )}
                           </div>
@@ -978,7 +1005,7 @@ export default function Documentos() {
                               )}
                             >
                               <FileSignature className="h-3.5 w-3.5" />
-                              {doc.category === "assinatura" ? "Assinar" : "Preencher"}
+                              {doc.category === "assinatura" ? t("actions.sign") : t("actions.fill")}
                             </button>
                           )}
                           {doc.category === "informativo" && (
@@ -987,7 +1014,7 @@ export default function Documentos() {
                               className="flex h-9 items-center gap-1.5 rounded-full bg-pastel-green px-4 text-xs font-semibold text-pastel-green-foreground shadow-soft hover:opacity-90"
                             >
                               <CheckCircle2 className="h-3.5 w-3.5" />
-                              Confirmar leitura
+                              {t("actions.confirm_read")}
                             </button>
                           )}
                           <button
@@ -995,7 +1022,7 @@ export default function Documentos() {
                             className="flex h-9 items-center gap-1.5 rounded-full border border-border bg-background px-4 text-xs font-semibold text-muted-foreground shadow-soft hover:bg-pastel-pink/20"
                           >
                             <XCircle className="h-3.5 w-3.5" />
-                            Recusar
+                            {t("actions.decline")}
                           </button>
                         </div>
                       </div>
@@ -1012,55 +1039,55 @@ export default function Documentos() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="flex max-h-[90vh] max-w-lg flex-col gap-0 p-0">
           <DialogHeader className="shrink-0 border-b border-border px-6 py-5">
-            <DialogTitle>{editing ? "Editar documento" : "Novo documento"}</DialogTitle>
+            <DialogTitle>{editing ? t("dialog.edit_title") : t("dialog.new_title")}</DialogTitle>
             <DialogDescription>
-              {editing ? "Actualize os dados do documento." : "Crie um novo documento para partilhar com encarregados ou professores."}
+              {editing ? t("dialog.edit_desc") : t("dialog.new_desc")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
             <div className="space-y-1.5">
-              <Label>Título *</Label>
+              <Label>{t("dialog.title_label")}</Label>
               <Input
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="Ex: Autorização visita de estudo"
+                placeholder={t("dialog.title_placeholder")}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Categoria *</Label>
+                <Label>{t("dialog.category_label")}</Label>
                 <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v as DocCategory }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="assinatura">Assinatura</SelectItem>
-                    <SelectItem value="formulario">Formulário</SelectItem>
-                    <SelectItem value="informativo">Informativo</SelectItem>
+                    <SelectItem value="assinatura">{t("category.assinatura")}</SelectItem>
+                    <SelectItem value="formulario">{t("category.formulario")}</SelectItem>
+                    <SelectItem value="informativo">{t("category.informativo")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Destinatários</Label>
+                <Label>{t("dialog.recipients_label")}</Label>
                 <div className="flex h-10 items-center rounded-xl border border-border bg-muted/40 px-3 text-sm text-muted-foreground">
-                  Educadores
+                  {t("target.PARENT")}
                 </div>
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Descrição</Label>
+              <Label>{t("dialog.description_label")}</Label>
               <Textarea
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                placeholder="Descrição opcional do documento…"
+                placeholder={t("dialog.description_placeholder")}
                 rows={3}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Data de expiração</Label>
+                <Label>{t("dialog.expires_label")}</Label>
                 <Input
                   type="date"
                   value={form.expires_at}
@@ -1075,13 +1102,13 @@ export default function Documentos() {
                     onChange={(e) => setForm((f) => ({ ...f, required: e.target.checked }))}
                     className="h-4 w-4 rounded border-border accent-pastel-blue-foreground"
                   />
-                  <span className="font-medium">Obrigatório</span>
+                  <span className="font-medium">{t("dialog.required_checkbox")}</span>
                 </label>
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Documento PDF</Label>
+              <Label>{t("dialog.pdf_label")}</Label>
               <DocumentUpload
                 schoolId={schoolId}
                 currentUrl={form.pdf_template_url || null}
@@ -1098,18 +1125,18 @@ export default function Documentos() {
                 >
                   <Settings2 className="h-4 w-4" />
                   {form.signature_fields && form.signature_fields.length > 0
-                    ? `Configurar campos (${form.signature_fields.length} definido${form.signature_fields.length > 1 ? "s" : ""})`
-                    : "Configurar campos de assinatura / texto"}
+                    ? t("dialog.configure_fields_count", { count: form.signature_fields.length })
+                    : t("dialog.configure_fields")}
                 </button>
               )}
             </div>
           </div>
 
           <DialogFooter className="shrink-0 gap-2 border-t border-border px-6 py-4">
-            <Button variant="ghost" onClick={() => setDialogOpen(false)} disabled={saving}>Cancelar</Button>
+            <Button variant="ghost" onClick={() => setDialogOpen(false)} disabled={saving}>{t("dialog.cancel")}</Button>
             <Button onClick={handleSave} disabled={saving}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {editing ? "Guardar alterações" : "Criar documento"}
+              {editing ? t("dialog.save") : t("dialog.create")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1121,10 +1148,10 @@ export default function Documentos() {
           <DialogHeader className="shrink-0 border-b border-border px-6 py-4">
             <DialogTitle className="flex items-center gap-2">
               <FileSignature className="h-5 w-5 text-pastel-blue-foreground" />
-              Documento assinado
+              {t("viewer.title")}
             </DialogTitle>
             <DialogDescription>
-              {viewerRequest?.recipient?.full_name ?? viewerRequest?.signer_name ?? "—"}
+              {viewerRequest?.recipient?.full_name ?? viewerRequest?.signer_name ?? t("em_dash")}
               {viewerRequest?.signed_at && (
                 <span className="ml-2 text-xs">• {formatDate(viewerRequest.signed_at)}</span>
               )}
@@ -1136,7 +1163,7 @@ export default function Documentos() {
             {viewerRequest?.signed_pdf_url ? (
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-foreground">PDF com assinatura incorporada</p>
+                  <p className="text-sm font-semibold text-foreground">{t("viewer.pdf_embedded")}</p>
                   <a
                     href={viewerRequest.signed_pdf_url}
                     target="_blank"
@@ -1144,30 +1171,30 @@ export default function Documentos() {
                     className="flex items-center gap-1.5 rounded-full bg-pastel-blue/20 px-3 py-1.5 text-xs font-semibold text-pastel-blue-foreground hover:bg-pastel-blue/40"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
-                    Abrir / Descarregar
+                    {t("viewer.open_download")}
                   </a>
                 </div>
                 <div className="overflow-hidden rounded-xl border border-border" style={{ height: 500 }}>
                   <iframe
                     src={viewerRequest.signed_pdf_url}
                     className="h-full w-full"
-                    title="PDF assinado"
+                    title={t("viewer.iframe_title")}
                   />
                 </div>
               </div>
             ) : viewerRequest?.signature_data ? (
               /* No signed PDF — show the drawn signature image */
               <div className="flex flex-col gap-3">
-                <p className="text-sm font-semibold text-foreground">Assinatura digital</p>
+                <p className="text-sm font-semibold text-foreground">{t("viewer.digital_signature")}</p>
                 <div className="flex justify-center rounded-2xl border border-pastel-green/40 bg-pastel-green/10 p-6">
                   <img
                     src={viewerRequest.signature_data}
-                    alt="Assinatura"
+                    alt={t("viewer.signature_alt")}
                     className="max-h-40 object-contain"
                   />
                 </div>
                 <p className="text-center text-xs text-muted-foreground">
-                  O documento não tinha um PDF configurado — apenas a assinatura foi guardada.
+                  {t("viewer.no_pdf_note")}
                 </p>
               </div>
             ) : null}
@@ -1175,7 +1202,7 @@ export default function Documentos() {
             {/* Signer info */}
             {viewerRequest?.signer_name && (
               <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
-                <p className="text-xs text-muted-foreground">Assinado por</p>
+                <p className="text-xs text-muted-foreground">{t("viewer.signed_by")}</p>
                 <p className="mt-0.5 text-sm font-semibold text-foreground">{viewerRequest.signer_name}</p>
                 {viewerRequest.signed_at && (
                   <p className="text-xs text-muted-foreground">{formatDate(viewerRequest.signed_at)}</p>
@@ -1190,7 +1217,7 @@ export default function Documentos() {
       <Dialog open={fieldEditorOpen} onOpenChange={setFieldEditorOpen}>
         <DialogContent className="max-w-5xl p-0" style={{ height: "90vh", display: "flex", flexDirection: "column" }}>
           <DialogHeader className="sr-only">
-            <DialogTitle>Configurar campos do documento</DialogTitle>
+            <DialogTitle>{t("dialog.field_editor_sr")}</DialogTitle>
           </DialogHeader>
           {form.pdf_template_url && (
             <div className="flex flex-1 flex-col overflow-hidden">
@@ -1200,7 +1227,7 @@ export default function Documentos() {
                 onSave={(fields) => {
                   setForm((f) => ({ ...f, signature_fields: fields }));
                   setFieldEditorOpen(false);
-                  toast({ title: `${fields.length} campo${fields.length !== 1 ? "s" : ""} guardado${fields.length !== 1 ? "s" : ""}` });
+                  toast({ title: t("toast.fields_saved", { count: fields.length }) });
                 }}
                 onCancel={() => setFieldEditorOpen(false)}
               />
@@ -1215,30 +1242,30 @@ export default function Documentos() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Send className="h-4 w-4" />
-              Enviar pedidos de assinatura
+              {t("send_dialog.title")}
             </DialogTitle>
             <DialogDescription>
-              Seleccione a turma destinatária. Será criado um pedido para cada encarregado de educação.
+              {t("send_dialog.description")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex flex-col gap-4">
             <div className="rounded-xl border border-border bg-muted/30 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Documento</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("send_dialog.document_label")}</p>
               <p className="mt-1 text-sm font-medium text-foreground">{sendDoc?.title}</p>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Turma</Label>
+              <Label>{t("send_dialog.classroom_label")}</Label>
               <Select value={selectedClassroom} onValueChange={setSelectedClassroom}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar turma" />
+                  <SelectValue placeholder={t("send_dialog.classroom_placeholder")} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">
                     <span className="flex items-center gap-2">
                       <Users className="h-3.5 w-3.5" />
-                      Todas as turmas
+                      {t("send_dialog.all_classrooms")}
                     </span>
                   </SelectItem>
                   {classrooms.map((c) => (
@@ -1247,20 +1274,20 @@ export default function Documentos() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Apenas encarregados com aluno matriculado{selectedYearId ? " no ano lectivo seleccionado" : ""} receberão o pedido.
+                {selectedYearId ? t("send_dialog.enrollment_hint_year") : t("send_dialog.enrollment_hint")}
               </p>
             </div>
           </div>
 
           <DialogFooter className="gap-2">
             <Button variant="ghost" onClick={() => setSendDialogOpen(false)} disabled={sendingRequests}>
-              Cancelar
+              {t("dialog.cancel")}
             </Button>
             <Button onClick={handleSendRequests} disabled={sendingRequests}>
               {sendingRequests ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> A enviar…</>
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t("send_dialog.sending")}</>
               ) : (
-                <><Send className="mr-2 h-4 w-4" /> Enviar pedidos</>
+                <><Send className="mr-2 h-4 w-4" /> {t("send_dialog.submit")}</>
               )}
             </Button>
           </DialogFooter>
@@ -1271,19 +1298,18 @@ export default function Documentos() {
       <AlertDialog open={!!deleteDoc} onOpenChange={(o) => !o && setDeleteDoc(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar documento?</AlertDialogTitle>
+            <AlertDialogTitle>{t("delete_dialog.title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem a certeza que quer eliminar <strong>{deleteDoc?.title}</strong>?
-              Todos os pedidos de resposta associados serão também eliminados. Esta acção não pode ser desfeita.
+              {t("delete_dialog.description", { title: deleteDoc?.title ?? "" })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel>{t("delete_dialog.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Eliminar
+              {t("delete_dialog.confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

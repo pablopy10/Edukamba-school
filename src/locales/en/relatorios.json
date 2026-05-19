@@ -1,0 +1,196 @@
+{
+  "title": "Reports",
+  "subtitle": "Filter school data and export to Excel or PDF",
+  "access_denied": {
+    "title": "Restricted access",
+    "message": "Only administrators can access reports."
+  },
+  "reports": {
+    "alunos": {
+      "label": "Students",
+      "description": "Student list by class and course"
+    },
+    "presencas": {
+      "label": "Attendance",
+      "description": "Attendance and absence records"
+    },
+    "notas": {
+      "label": "Grades",
+      "description": "Grades by student and assessment"
+    },
+    "professores": {
+      "label": "Teachers",
+      "description": "Teacher list"
+    },
+    "pedidos_ausencia": {
+      "label": "Absence requests",
+      "description": "Staff requests"
+    },
+    "pedidos_material": {
+      "label": "Material requests",
+      "description": "Requests by teacher/class"
+    },
+    "stock": {
+      "label": "Material stock",
+      "description": "Inventory and low stock"
+    },
+    "eventos": {
+      "label": "Events",
+      "description": "School events"
+    },
+    "atividades": {
+      "label": "Extracurricular activities",
+      "description": "Activities and clubs"
+    }
+  },
+  "filters": {
+    "title": "Filters",
+    "search_placeholder": "Search...",
+    "all_classrooms": "All classes",
+    "all_courses": "All courses",
+    "all_statuses": "All statuses",
+    "all_teachers": "All teachers"
+  },
+  "export": {
+    "pdf": "PDF",
+    "excel": "Export Excel",
+    "download": "Download"
+  },
+  "table": {
+    "report_title": "{{label}} report",
+    "loading": "Loading...",
+    "records_found": "{{count}} record(s) found",
+    "loading_data": "Loading data...",
+    "empty": "No results for the selected filters."
+  },
+  "em_dash": "—",
+  "yes": "Yes",
+  "no": "No",
+  "teacher_status": {
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "teacher_filter": {
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "attendance_status": {
+    "PRESENT": "Present",
+    "ABSENT": "Absent",
+    "LATE": "Late",
+    "JUSTIFIED": "Excused"
+  },
+  "absence_status": {
+    "PENDING": "Pending",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected"
+  },
+  "material_request_status": {
+    "pendente": "Pending",
+    "aprovado": "Approved",
+    "rejeitado": "Rejected",
+    "entregue": "Delivered"
+  },
+  "stock_filter": {
+    "low": "Low stock"
+  },
+  "columns": {
+    "alunos": {
+      "numero": "No.",
+      "nome": "Name",
+      "turma": "Class",
+      "curso": "Course",
+      "data_nasc": "Birth date",
+      "email": "Email",
+      "telefone": "Phone",
+      "encarregado": "Guardian"
+    },
+    "presencas": {
+      "data": "Date",
+      "aluno": "Student",
+      "turma": "Class",
+      "estado": "Status",
+      "professor": "Teacher",
+      "notas": "Notes"
+    },
+    "notas": {
+      "data": "Date",
+      "aluno": "Student",
+      "turma": "Class",
+      "disciplina": "Subject",
+      "avaliacao": "Assessment",
+      "nota": "Grade"
+    },
+    "professores": {
+      "nome": "Name",
+      "numero_funcionario": "Employee no.",
+      "disciplina": "Subject",
+      "data_contratacao": "Hire date",
+      "estado": "Status"
+    },
+    "pedidos_ausencia": {
+      "funcionario": "Staff member",
+      "motivo": "Reason",
+      "inicio": "Start",
+      "fim": "End",
+      "estado": "Status",
+      "descricao": "Description"
+    },
+    "pedidos_material": {
+      "material": "Material",
+      "qtd": "Qty",
+      "professor": "Teacher",
+      "turma": "Class",
+      "aluno": "Student",
+      "dia": "Day",
+      "estado": "Status"
+    },
+    "stock": {
+      "nome": "Name",
+      "categoria": "Category",
+      "sku": "SKU",
+      "quantidade": "Quantity",
+      "minimo": "Minimum",
+      "unidade": "Unit",
+      "localizacao": "Location"
+    },
+    "eventos": {
+      "data": "Date",
+      "titulo": "Title",
+      "tipo": "Type",
+      "localizacao": "Location",
+      "organizador": "Organiser",
+      "audiencia": "Audience"
+    },
+    "atividades": {
+      "nome": "Name",
+      "categoria": "Category",
+      "responsavel": "Responsible",
+      "localizacao": "Location",
+      "capacidade": "Capacity",
+      "recorrente": "Recurring"
+    }
+  },
+  "filter_summary": {
+    "search": "Search: \"{{value}}\"",
+    "classroom": "Class: {{value}}",
+    "course": "Course: {{value}}",
+    "status": "Status: {{value}}",
+    "teacher": "Teacher: {{value}}",
+    "from": "From: {{value}}",
+    "to": "To: {{value}}"
+  },
+  "pdf": {
+    "default_title": "Report",
+    "report_title": "{{label}} report",
+    "generated_at": "Generated on {{date}}",
+    "records_count": "{{count}} record(s)",
+    "filters_prefix": "Filters:"
+  },
+  "toast": {
+    "excel_title": "Excel exported",
+    "excel_description": "{{label}} • {{count}} record(s)",
+    "pdf_title": "PDF exported",
+    "pdf_description": "{{label}} • {{count}} record(s)"
+  }
+}

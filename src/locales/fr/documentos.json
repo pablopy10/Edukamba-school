@@ -1,0 +1,166 @@
+{
+  "title": "Documents",
+  "subtitle": "Gérez les documents scolaires, demandez des signatures et partagez des formulaires.",
+  "new_document": "Nouveau document",
+  "new_short": "Nouveau",
+  "em_dash": "—",
+  "loading": "Chargement…",
+  "loading_responses": "Chargement des réponses…",
+  "category": {
+    "assinatura": "Signature",
+    "formulario": "Formulaire",
+    "informativo": "Informatif"
+  },
+  "target": {
+    "PARENT": "Responsables",
+    "TEACHER": "Enseignants",
+    "ALL": "Tous"
+  },
+  "request_status": {
+    "pending": "En attente",
+    "signed": "Signé",
+    "submitted": "Soumis",
+    "declined": "Refusé"
+  },
+  "kpi": {
+    "total": "Total",
+    "active": "Actifs",
+    "pending_response": "En attente de réponse",
+    "archived": "Archivés"
+  },
+  "tabs": {
+    "all": "Tous",
+    "pending": "En attente",
+    "responses": "Réponses"
+  },
+  "search_placeholder": "Rechercher un document…",
+  "filter_category": "Catégorie",
+  "all_categories": "Toutes les catégories",
+  "empty": {
+    "admin_none": "Aucun document pour l'instant. Créez le premier !",
+    "user_none": "Aucun document disponible pour le moment.",
+    "no_match": "Aucun document ne correspond aux filtres."
+  },
+  "badge": {
+    "required": "Obligatoire",
+    "archived": "Archivé",
+    "expired": "Expiré"
+  },
+  "list": {
+    "recipients": "Destinataires :",
+    "expires": "Expire :",
+    "created": "Créé :",
+    "pending_one": "{{count}} en attente",
+    "pending_other": "{{count}} en attente",
+    "responded_one": "{{count}} répondu",
+    "responded_other": "{{count}} répondus",
+    "total": "{{count}} au total",
+    "student": "Élève :",
+    "expires_on": "Expire le ",
+    "expired_on": "⚠ Expiré le "
+  },
+  "actions": {
+    "sign": "Signer",
+    "fill": "Remplir",
+    "confirm_read": "Confirmer la lecture",
+    "open_file": "Ouvrir le fichier",
+    "view_responses": "Voir les réponses",
+    "send_requests": "Envoyer les demandes",
+    "send": "Envoyer",
+    "edit": "Modifier",
+    "archive": "Archiver",
+    "reactivate": "Réactiver",
+    "delete": "Supprimer",
+    "view_document": "Voir le document",
+    "decline": "Refuser",
+    "view_signed_doc": "Voir le document signé",
+    "view_signature": "Voir la signature"
+  },
+  "responses_tab": {
+    "hint": "Cliquez sur « Voir les réponses » sur un document pour afficher les réponses ici.",
+    "empty": "Il n'y a pas encore de réponses pour ce document.",
+    "fallback_title": "Réponses"
+  },
+  "pending_tab": {
+    "all_done": "Vous n'avez aucun document en attente. Tout est à jour !"
+  },
+  "dialog": {
+    "edit_title": "Modifier le document",
+    "new_title": "Nouveau document",
+    "edit_desc": "Mettez à jour les informations du document.",
+    "new_desc": "Créez un nouveau document à partager avec les responsables ou les enseignants.",
+    "title_label": "Titre *",
+    "title_placeholder": "Ex. : Autorisation sortie scolaire",
+    "category_label": "Catégorie *",
+    "recipients_label": "Destinataires",
+    "description_label": "Description",
+    "description_placeholder": "Description facultative du document…",
+    "expires_label": "Date d'expiration",
+    "required_checkbox": "Obligatoire",
+    "pdf_label": "Document PDF",
+    "configure_fields": "Configurer les champs de signature / texte",
+    "configure_fields_count_one": "Configurer les champs ({{count}} défini)",
+    "configure_fields_count_other": "Configurer les champs ({{count}} définis)",
+    "cancel": "Annuler",
+    "save": "Enregistrer les modifications",
+    "create": "Créer le document",
+    "existing_file": "Fichier existant",
+    "field_editor_sr": "Configurer les champs du document"
+  },
+  "viewer": {
+    "title": "Document signé",
+    "pdf_embedded": "PDF avec signature intégrée",
+    "open_download": "Ouvrir / Télécharger",
+    "iframe_title": "PDF signé",
+    "digital_signature": "Signature numérique",
+    "signature_alt": "Signature",
+    "no_pdf_note": "Le document n'avait pas de PDF configuré — seule la signature a été enregistrée.",
+    "signed_by": "Signé par"
+  },
+  "send_dialog": {
+    "title": "Envoyer des demandes de signature",
+    "description": "Sélectionnez la classe destinataire. Une demande sera créée pour chaque responsable.",
+    "document_label": "Document",
+    "classroom_label": "Classe",
+    "classroom_placeholder": "Sélectionner une classe",
+    "all_classrooms": "Toutes les classes",
+    "enrollment_hint": "Seuls les responsables avec un élève inscrit recevront la demande.",
+    "enrollment_hint_year": "Seuls les responsables avec un élève inscrit dans l'année scolaire sélectionnée recevront la demande.",
+    "sending": "Envoi…",
+    "submit": "Envoyer les demandes"
+  },
+  "delete_dialog": {
+    "title": "Supprimer le document ?",
+    "description": "Voulez-vous vraiment supprimer {{title}} ? Toutes les demandes de réponse associées seront également supprimées. Cette action est irréversible.",
+    "cancel": "Annuler",
+    "confirm": "Supprimer"
+  },
+  "toast": {
+    "load_documents_error": "Erreur lors du chargement des documents",
+    "load_requests_error": "Erreur lors du chargement des demandes",
+    "load_responses_error": "Erreur lors du chargement des réponses",
+    "load_students_error": "Erreur lors du chargement des élèves",
+    "no_guardians_title": "Aucun responsable trouvé",
+    "no_guardians_desc": "Vérifiez que les élèves ont un responsable associé.",
+    "send_requests_error": "Erreur lors de l'envoi des demandes",
+    "requests_created_one": "{{count}} demande créée !",
+    "requests_created_other": "{{count}} demandes créées !",
+    "sending_emails": "Envoi des e-mails…",
+    "emails_sent": "📧 E-mails envoyés avec succès !",
+    "title_required": "Le titre est obligatoire",
+    "save_error": "Erreur lors de l'enregistrement",
+    "updated": "Document mis à jour",
+    "created": "Document créé",
+    "error": "Erreur",
+    "archived": "Document archivé",
+    "reactivated": "Document réactivé",
+    "delete_error": "Erreur lors de la suppression",
+    "deleted": "Document supprimé",
+    "signed": "Document signé",
+    "submitted": "Formulaire soumis",
+    "response_sent": "Réponse envoyée",
+    "open_error": "Erreur lors de l'ouverture du document",
+    "fields_saved_one": "{{count}} champ enregistré",
+    "fields_saved_other": "{{count}} champs enregistrés"
+  }
+}

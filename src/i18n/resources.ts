@@ -25,6 +25,18 @@ import frPagamentosEmbedded from "@/locales/fr/pagamentos_embedded.json";
 import ptModuleAuthorizations from "@/locales/pt/module_authorizations.json";
 import enModuleAuthorizations from "@/locales/en/module_authorizations.json";
 import frModuleAuthorizations from "@/locales/fr/module_authorizations.json";
+import ptFinancas from "@/locales/pt/financas.json";
+import enFinancas from "@/locales/en/financas.json";
+import frFinancas from "@/locales/fr/financas.json";
+import ptRelatorios from "@/locales/pt/relatorios.json";
+import enRelatorios from "@/locales/en/relatorios.json";
+import frRelatorios from "@/locales/fr/relatorios.json";
+import ptTimesheet from "@/locales/pt/timesheet.json";
+import enTimesheet from "@/locales/en/timesheet.json";
+import frTimesheet from "@/locales/fr/timesheet.json";
+import ptDocumentos from "@/locales/pt/documentos.json";
+import enDocumentos from "@/locales/en/documentos.json";
+import frDocumentos from "@/locales/fr/documentos.json";
 
 const mergePages = (
   base: typeof ptPages,
@@ -36,6 +48,10 @@ const mergePages = (
     domain_charge_rules: typeof ptDomainChargeRules;
     pagamentos_embedded: typeof ptPagamentosEmbedded;
     module_authorizations: typeof ptModuleAuthorizations;
+    financas: typeof ptFinancas;
+    relatorios: typeof ptRelatorios;
+    timesheet: typeof ptTimesheet;
+    documentos: typeof ptDocumentos;
   },
 ) => ({ ...base, ...extras });
 
@@ -50,6 +66,10 @@ export const resources = {
       domain_charge_rules: ptDomainChargeRules,
       pagamentos_embedded: ptPagamentosEmbedded,
       module_authorizations: ptModuleAuthorizations,
+      financas: ptFinancas,
+      relatorios: ptRelatorios,
+      timesheet: ptTimesheet,
+      documentos: ptDocumentos,
     }),
   },
   en: {
@@ -62,6 +82,10 @@ export const resources = {
       domain_charge_rules: enDomainChargeRules,
       pagamentos_embedded: enPagamentosEmbedded,
       module_authorizations: enModuleAuthorizations,
+      financas: enFinancas,
+      relatorios: enRelatorios,
+      timesheet: enTimesheet,
+      documentos: enDocumentos,
     }),
   },
   fr: {
@@ -74,6 +98,10 @@ export const resources = {
       domain_charge_rules: frDomainChargeRules,
       pagamentos_embedded: frPagamentosEmbedded,
       module_authorizations: frModuleAuthorizations,
+      financas: frFinancas,
+      relatorios: frRelatorios,
+      timesheet: frTimesheet,
+      documentos: frDocumentos,
     }),
   },
 } as const;

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Users,
   CalendarDays,
@@ -17,7 +18,7 @@ import {
   Calendar,
   ShieldAlert,
 } from "lucide-react";
-import { cn, sortByName } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -27,6 +28,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
+import { dateLocaleTag } from "@/lib/i18nDateLocale";
 
 type ReportKey =
   | "alunos"
@@ -47,22 +49,59 @@ type ReportMeta = {
   color: string;
 };
 
-const reports: ReportMeta[] = [
-  { key: "alunos", label: "Alunos", description: "Lista de alunos por turma e curso", icon: Users, color: "bg-pastel-blue text-pastel-blue-foreground" },
-  { key: "presencas", label: "Presenças", description: "Registos de presenças e faltas", icon: UserCheck, color: "bg-pastel-green text-pastel-green-foreground" },
-  { key: "notas", label: "Notas", description: "Notas por aluno e avaliação", icon: GraduationCap, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-  { key: "professores", label: "Professores", description: "Lista de professores", icon: School, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
-  { key: "pedidos_ausencia", label: "Pedidos de Ausência", description: "Pedidos de staff", icon: ClipboardList, color: "bg-pastel-pink text-pastel-pink-foreground" },
-  { key: "pedidos_material", label: "Pedidos de Material", description: "Pedidos por professor/turma", icon: Package, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-  { key: "stock", label: "Stock de Material", description: "Inventário e stock baixo", icon: Boxes, color: "bg-pastel-blue text-pastel-blue-foreground" },
-  { key: "eventos", label: "Eventos", description: "Eventos da escola", icon: CalendarDays, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
-  { key: "atividades", label: "Atividades Extracurriculares", description: "Atividades e clubes", icon: Activity, color: "bg-pastel-green text-pastel-green-foreground" },
+const REPORT_DEFS: Omit<ReportMeta, "label" | "description">[] = [
+  { key: "alunos", icon: Users, color: "bg-pastel-blue text-pastel-blue-foreground" },
+  { key: "presencas", icon: UserCheck, color: "bg-pastel-green text-pastel-green-foreground" },
+  { key: "notas", icon: GraduationCap, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+  { key: "professores", icon: School, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
+  { key: "pedidos_ausencia", icon: ClipboardList, color: "bg-pastel-pink text-pastel-pink-foreground" },
+  { key: "pedidos_material", icon: Package, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+  { key: "stock", icon: Boxes, color: "bg-pastel-blue text-pastel-blue-foreground" },
+  { key: "eventos", icon: CalendarDays, color: "bg-pastel-lilac text-pastel-lilac-foreground" },
+  { key: "atividades", icon: Activity, color: "bg-pastel-green text-pastel-green-foreground" },
 ];
 
-const fmtDate = (d: string | null | undefined) =>
-  d ? new Date(d).toLocaleDateString("pt-PT") : "—";
-
 const Relatorios = () => {
+  const { t, i18n } = useTranslation("pages", { keyPrefix: "relatorios" });
+  const emDash = t("em_dash");
+  const dateLocale = dateLocaleTag(i18n.language);
+
+  const fmtDate = useCallback(
+    (d: string | null | undefined) =>
+      d ? new Date(d).toLocaleDateString(dateLocale) : emDash,
+    [dateLocale, emDash],
+  );
+
+  const reports = useMemo<ReportMeta[]>(
+    () =>
+      REPORT_DEFS.map((r) => ({
+        ...r,
+        label: t(`reports.${r.key}.label`),
+        description: t(`reports.${r.key}.description`),
+      })),
+    [t],
+  );
+
+  const colHeaders = useCallback(
+    (report: ReportKey, keys: string[]) => keys.map((k) => t(`columns.${report}.${k}`)),
+    [t],
+  );
+
+  const attendanceLabel = useCallback(
+    (status: string) => t(`attendance_status.${status}`, { defaultValue: status }),
+    [t],
+  );
+
+  const absenceStatusLabel = useCallback(
+    (status: string) => t(`absence_status.${status}`, { defaultValue: status }),
+    [t],
+  );
+
+  const materialStatusLabel = useCallback(
+    (status: string) => t(`material_request_status.${status}`, { defaultValue: status }),
+    [t],
+  );
+
   const { user } = useAuth();
   const { selectedYearId } = useAcademicYear();
   const [schoolId, setSchoolId] = useState<string | null>(null);
@@ -78,6 +117,26 @@ const Relatorios = () => {
   const [professorFilter, setProfessorFilter] = useState("all");
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
+
+  const estadoFilterLabel = useCallback(
+    (value: string) => {
+      switch (active) {
+        case "presencas":
+          return attendanceLabel(value);
+        case "professores":
+          return t(`teacher_filter.${value}`, { defaultValue: value });
+        case "pedidos_ausencia":
+          return absenceStatusLabel(value);
+        case "pedidos_material":
+          return materialStatusLabel(value);
+        case "stock":
+          return t(`stock_filter.${value}`, { defaultValue: value });
+        default:
+          return value;
+      }
+    },
+    [active, attendanceLabel, absenceStatusLabel, materialStatusLabel, t],
+  );
 
   // Raw data
   const [students, setStudents] = useState<any[]>([]);
@@ -153,49 +212,41 @@ const Relatorios = () => {
   const meta = reports.find((r) => r.key === active)!;
 
   // Lookup helpers
-  const classroomName = (id: string | null) => classrooms.find((c) => c.id === id)?.name ?? "—";
-  const courseName = (id: string | null) => courses.find((c) => c.id === id)?.name ?? "—";
-  const subjectName = (id: string | null) => subjects.find((s) => s.id === id)?.name ?? "—";
-  const studentName = (id: string | null) => students.find((s) => s.id === id)?.full_name ?? "—";
-  const profileName = (id: string | null) => (id ? profilesMap.get(id) ?? "—" : "—");
+  const classroomName = (id: string | null) => classrooms.find((c) => c.id === id)?.name ?? emDash;
+  const courseName = (id: string | null) => courses.find((c) => c.id === id)?.name ?? emDash;
+  const subjectName = (id: string | null) => subjects.find((s) => s.id === id)?.name ?? emDash;
+  const studentName = (id: string | null) => students.find((s) => s.id === id)?.full_name ?? emDash;
+  const profileName = (id: string | null) => (id ? profilesMap.get(id) ?? emDash : emDash);
 
-  // Estado options per report
-  const estadoOptionsByReport: Record<ReportKey, { value: string; label: string }[]> = {
+  const estadoOptionsByReport = useMemo<Record<ReportKey, { value: string; label: string }[]>>(() => ({
     alunos: [],
-    presencas: [
-      { value: "PRESENT", label: "Presente" },
-      { value: "ABSENT", label: "Ausente" },
-      { value: "LATE", label: "Atrasado" },
-      { value: "JUSTIFIED", label: "Justificado" },
-    ],
+    presencas: (["PRESENT", "ABSENT", "LATE", "JUSTIFIED"] as const).map((value) => ({
+      value,
+      label: t(`attendance_status.${value}`),
+    })),
     notas: [],
-    professores: [
-      { value: "active", label: "Ativos" },
-      { value: "inactive", label: "Inativos" },
-    ],
-    pedidos_ausencia: [
-      { value: "PENDING", label: "Pendente" },
-      { value: "APPROVED", label: "Aprovado" },
-      { value: "REJECTED", label: "Rejeitado" },
-    ],
-    pedidos_material: [
-      { value: "pendente", label: "Pendente" },
-      { value: "aprovado", label: "Aprovado" },
-      { value: "rejeitado", label: "Rejeitado" },
-      { value: "entregue", label: "Entregue" },
-    ],
-    stock: [
-      { value: "low", label: "Stock baixo" },
-    ],
+    professores: (["active", "inactive"] as const).map((value) => ({
+      value,
+      label: t(`teacher_filter.${value}`),
+    })),
+    pedidos_ausencia: (["PENDING", "APPROVED", "REJECTED"] as const).map((value) => ({
+      value,
+      label: t(`absence_status.${value}`),
+    })),
+    pedidos_material: (["pendente", "aprovado", "rejeitado", "entregue"] as const).map((value) => ({
+      value,
+      label: t(`material_request_status.${value}`),
+    })),
+    stock: [{ value: "low", label: t("stock_filter.low") }],
     eventos: [],
     atividades: [],
-  };
+  }), [t]);
 
   const teacherOptions = useMemo(() => {
     return teachers
-      .map((t) => ({ id: t.profile_id, name: profilesMap.get(t.profile_id) ?? "—" }))
-      .filter((t) => t.id);
-  }, [teachers, profilesMap]);
+      .map((tch) => ({ id: tch.profile_id, name: profilesMap.get(tch.profile_id) ?? emDash }))
+      .filter((tch) => tch.id);
+  }, [teachers, profilesMap, emDash]);
 
   const inDate = (d: string | null | undefined) => {
     if (!d) return !dataInicio && !dataFim;
@@ -220,17 +271,17 @@ const Relatorios = () => {
           return matchText(s.full_name, s.email, s.phone, s.enrollment_number);
         });
         return {
-          columns: ["Nº", "Nome", "Turma", "Curso", "Data Nasc.", "Email", "Telefone", "Encarregado"],
+          columns: colHeaders("alunos", ["numero", "nome", "turma", "curso", "data_nasc", "email", "telefone", "encarregado"]),
           rows: data.map((s) => {
             const cls = classrooms.find((c) => c.id === s.classroom_id);
             return [
-              s.enrollment_number ?? "—",
+              s.enrollment_number ?? emDash,
               s.full_name,
-              cls?.name ?? "—",
-              cls ? courseName(cls.course_id) : "—",
+              cls?.name ?? emDash,
+              cls ? courseName(cls.course_id) : emDash,
               fmtDate(s.birth_date),
-              s.email ?? "—",
-              s.phone ?? "—",
+              s.email ?? emDash,
+              s.phone ?? emDash,
               profileName(s.parent_id),
             ];
           }),
@@ -245,14 +296,14 @@ const Relatorios = () => {
           return matchText(sName, a.notes);
         });
         return {
-          columns: ["Data", "Aluno", "Turma", "Estado", "Professor", "Notas"],
+          columns: colHeaders("presencas", ["data", "aluno", "turma", "estado", "professor", "notas"]),
           rows: data.map((a) => [
             fmtDate(a.date),
             studentName(a.student_id),
             classroomName(a.classroom_id),
-            ({ PRESENT: "Presente", ABSENT: "Ausente", LATE: "Atrasado", JUSTIFIED: "Justificado" } as any)[a.status] ?? a.status,
+            attendanceLabel(a.status),
             profileName(a.teacher_id),
-            a.notes ?? "—",
+            a.notes ?? emDash,
           ]),
         };
       }
@@ -266,7 +317,7 @@ const Relatorios = () => {
           return matchText(sName, a.title, subjectName(a.subject_id));
         });
         return {
-          columns: ["Data", "Aluno", "Turma", "Disciplina", "Avaliação", "Nota"],
+          columns: colHeaders("notas", ["data", "aluno", "turma", "disciplina", "avaliacao", "nota"]),
           rows: data.map((g) => {
             const a = assessments.find((x) => x.id === g.assessment_id);
             return [
@@ -274,26 +325,26 @@ const Relatorios = () => {
               studentName(g.student_id),
               classroomName(a?.classroom_id ?? null),
               subjectName(a?.subject_id ?? null),
-              a?.title ?? "—",
+              a?.title ?? emDash,
               g.score,
             ];
           }),
         };
       }
       case "professores": {
-        const data = teachers.filter((t) => {
-          if (estado === "active" && !t.is_active) return false;
-          if (estado === "inactive" && t.is_active) return false;
-          return matchText(profileName(t.profile_id), t.employee_id, subjectName(t.subject_id));
+        const data = teachers.filter((tch) => {
+          if (estado === "active" && !tch.is_active) return false;
+          if (estado === "inactive" && tch.is_active) return false;
+          return matchText(profileName(tch.profile_id), tch.employee_id, subjectName(tch.subject_id));
         });
         return {
-          columns: ["Nome", "Nº Funcionário", "Disciplina", "Data Contratação", "Estado"],
-          rows: data.map((t) => [
-            profileName(t.profile_id),
-            t.employee_id ?? "—",
-            subjectName(t.subject_id),
-            fmtDate(t.hire_date),
-            t.is_active ? "Ativo" : "Inativo",
+          columns: colHeaders("professores", ["nome", "numero_funcionario", "disciplina", "data_contratacao", "estado"]),
+          rows: data.map((tch) => [
+            profileName(tch.profile_id),
+            tch.employee_id ?? emDash,
+            subjectName(tch.subject_id),
+            fmtDate(tch.hire_date),
+            tch.is_active ? t("teacher_status.active") : t("teacher_status.inactive"),
           ]),
         };
       }
@@ -305,14 +356,14 @@ const Relatorios = () => {
           return matchText(profileName(a.profile_id ?? a.requester_id), a.reason, a.description);
         });
         return {
-          columns: ["Funcionário", "Motivo", "Início", "Fim", "Estado", "Descrição"],
+          columns: colHeaders("pedidos_ausencia", ["funcionario", "motivo", "inicio", "fim", "estado", "descricao"]),
           rows: data.map((a) => [
             profileName(a.profile_id ?? a.requester_id),
             a.reason,
             fmtDate(a.start_date),
             fmtDate(a.end_date),
-            a.status,
-            a.description ?? "—",
+            absenceStatusLabel(a.status),
+            a.description ?? emDash,
           ]),
         };
       }
@@ -325,15 +376,15 @@ const Relatorios = () => {
           return matchText(r.item_name, r.teacher_name, r.recipient, r.description);
         });
         return {
-          columns: ["Material", "Qtd", "Professor", "Turma", "Aluno", "Dia", "Estado"],
+          columns: colHeaders("pedidos_material", ["material", "qtd", "professor", "turma", "aluno", "dia", "estado"]),
           rows: data.map((r) => [
             r.item_name,
             r.quantity,
             r.teacher_name ?? profileName(r.requester_id),
             classroomName(r.classroom_id),
-            r.student_id ? studentName(r.student_id) : "—",
+            r.student_id ? studentName(r.student_id) : emDash,
             fmtDate(r.needed_date),
-            r.status,
+            materialStatusLabel(r.status),
           ]),
         };
       }
@@ -343,8 +394,8 @@ const Relatorios = () => {
           return matchText(m.name, m.sku, m.category, m.location);
         });
         return {
-          columns: ["Nome", "Categoria", "SKU", "Quantidade", "Mínimo", "Unidade", "Localização"],
-          rows: data.map((m) => [m.name, m.category, m.sku ?? "—", m.quantity, m.min_quantity, m.unit, m.location ?? "—"]),
+          columns: colHeaders("stock", ["nome", "categoria", "sku", "quantidade", "minimo", "unidade", "localizacao"]),
+          rows: data.map((m) => [m.name, m.category, m.sku ?? emDash, m.quantity, m.min_quantity, m.unit, m.location ?? emDash]),
         };
       }
       case "eventos": {
@@ -353,8 +404,8 @@ const Relatorios = () => {
           return matchText(e.title, e.type, e.location, e.organizer);
         });
         return {
-          columns: ["Data", "Título", "Tipo", "Localização", "Organizador", "Audiência"],
-          rows: data.map((e) => [fmtDate(e.event_date), e.title, e.type, e.location ?? "—", e.organizer ?? "—", e.audience ?? "—"]),
+          columns: colHeaders("eventos", ["data", "titulo", "tipo", "localizacao", "organizador", "audiencia"]),
+          rows: data.map((e) => [fmtDate(e.event_date), e.title, e.type, e.location ?? emDash, e.organizer ?? emDash, e.audience ?? emDash]),
         };
       }
       case "atividades": {
@@ -362,24 +413,61 @@ const Relatorios = () => {
           return matchText(a.name, a.category, a.responsible, a.location);
         });
         return {
-          columns: ["Nome", "Categoria", "Responsável", "Localização", "Capacidade", "Recorrente"],
-          rows: data.map((a) => [a.name, a.category, a.responsible ?? "—", a.location ?? "—", a.capacity, a.is_recurring ? "Sim" : "Não"]),
+          columns: colHeaders("atividades", ["nome", "categoria", "responsavel", "localizacao", "capacidade", "recorrente"]),
+          rows: data.map((a) => [
+            a.name,
+            a.category,
+            a.responsible ?? emDash,
+            a.location ?? emDash,
+            a.capacity,
+            a.is_recurring ? t("yes") : t("no"),
+          ]),
         };
       }
     }
-  }, [active, search, turma, curso, estado, professorFilter, dataInicio, dataFim, students, classrooms, courses, attendance, grades, assessments, subjects, teachers, absences, matRequests, materials, events, activities, profilesMap]);
+  }, [
+    active,
+    search,
+    turma,
+    curso,
+    estado,
+    professorFilter,
+    dataInicio,
+    dataFim,
+    students,
+    classrooms,
+    courses,
+    attendance,
+    grades,
+    assessments,
+    subjects,
+    teachers,
+    absences,
+    matRequests,
+    materials,
+    events,
+    activities,
+    profilesMap,
+    colHeaders,
+    fmtDate,
+    emDash,
+    attendanceLabel,
+    absenceStatusLabel,
+    materialStatusLabel,
+    t,
+  ]);
 
   const filtersSummary = useMemo(() => {
     const parts: string[] = [];
-    if (search) parts.push(`Pesquisa: "${search}"`);
-    if (turma !== "all") parts.push(`Turma: ${classroomName(turma)}`);
-    if (curso !== "all") parts.push(`Curso: ${courseName(curso)}`);
-    if (estado !== "all") parts.push(`Estado: ${estado}`);
-    if (professorFilter !== "all") parts.push(`Professor: ${profileName(professorFilter)}`);
-    if (dataInicio) parts.push(`De: ${fmtDate(dataInicio)}`);
-    if (dataFim) parts.push(`Até: ${fmtDate(dataFim)}`);
+    if (search) parts.push(t("filter_summary.search", { value: search }));
+    if (turma !== "all") parts.push(t("filter_summary.classroom", { value: classroomName(turma) }));
+    if (curso !== "all") parts.push(t("filter_summary.course", { value: courseName(curso) }));
+    if (estado !== "all") parts.push(t("filter_summary.status", { value: estadoFilterLabel(estado) }));
+    if (professorFilter !== "all") parts.push(t("filter_summary.teacher", { value: profileName(professorFilter) }));
+    if (dataInicio) parts.push(t("filter_summary.from", { value: fmtDate(dataInicio) }));
+    if (dataFim) parts.push(t("filter_summary.to", { value: fmtDate(dataFim) }));
     return parts;
-  }, [search, turma, curso, estado, professorFilter, dataInicio, dataFim, classrooms, courses, profilesMap]);
+  }, [search, turma, curso, estado, professorFilter, dataInicio, dataFim, classrooms, courses, profilesMap, t, fmtDate, estadoFilterLabel]);
 
   const exportXLSX = () => {
     const ws = XLSX.utils.aoa_to_sheet([columns, ...rows]);
@@ -387,7 +475,10 @@ const Relatorios = () => {
     XLSX.utils.book_append_sheet(wb, ws, meta.label.slice(0, 31));
     const filename = `relatorio-${active}-${new Date().toISOString().slice(0, 10)}.xlsx`;
     XLSX.writeFile(wb, filename);
-    toast({ title: "Excel exportado", description: `${meta.label} • ${rows.length} registos` });
+    toast({
+      title: t("toast.excel_title"),
+      description: t("toast.excel_description", { label: meta.label, count: rows.length }),
+    });
   };
 
   const exportPDF = () => {
@@ -396,26 +487,36 @@ const Relatorios = () => {
 
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
-    doc.text(schoolName || "Relatório", 40, 40);
+    doc.text(schoolName || t("pdf.default_title"), 40, 40);
 
     doc.setFontSize(11);
     doc.setFont("helvetica", "normal");
-    doc.text(`Relatório de ${meta.label}`, 40, 58);
+    doc.text(t("pdf.report_title", { label: meta.label }), 40, 58);
 
     doc.setFontSize(9);
     doc.setTextColor(120);
-    doc.text(`Gerado em ${new Date().toLocaleString("pt-PT")}`, pageWidth - 40, 40, { align: "right" });
-    doc.text(`${rows.length} registos`, pageWidth - 40, 54, { align: "right" });
+    doc.text(
+      t("pdf.generated_at", { date: new Date().toLocaleString(dateLocale) }),
+      pageWidth - 40,
+      40,
+      { align: "right" },
+    );
+    doc.text(
+      t("pdf.records_count", { count: rows.length }),
+      pageWidth - 40,
+      54,
+      { align: "right" },
+    );
 
     if (filtersSummary.length) {
       doc.setFontSize(8);
       doc.setTextColor(80);
-      doc.text(`Filtros: ${filtersSummary.join(" · ")}`, 40, 75, { maxWidth: pageWidth - 80 });
+      doc.text(`${t("pdf.filters_prefix")} ${filtersSummary.join(" · ")}`, 40, 75, { maxWidth: pageWidth - 80 });
     }
 
     autoTable(doc, {
       head: [columns],
-      body: rows.map((r) => r.map((c) => (c == null ? "—" : String(c)))),
+      body: rows.map((r) => r.map((c) => (c == null ? emDash : String(c)))),
       startY: filtersSummary.length ? 90 : 75,
       styles: { fontSize: 8, cellPadding: 4 },
       headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: "bold" },
@@ -425,7 +526,10 @@ const Relatorios = () => {
 
     const filename = `relatorio-${active}-${new Date().toISOString().slice(0, 10)}.pdf`;
     doc.save(filename);
-    toast({ title: "PDF exportado", description: `${meta.label} • ${rows.length} registos` });
+    toast({
+      title: t("toast.pdf_title"),
+      description: t("toast.pdf_description", { label: meta.label, count: rows.length }),
+    });
   };
 
   // Visibility of filters per report
@@ -440,8 +544,8 @@ const Relatorios = () => {
       <>
         <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-center">
           <ShieldAlert className="h-10 w-10 text-muted-foreground" />
-          <h1 className="text-xl font-bold text-foreground">Acesso restrito</h1>
-          <p className="text-sm text-muted-foreground">Apenas administradores podem aceder aos relatórios.</p>
+          <h1 className="text-xl font-bold text-foreground">{t("access_denied.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("access_denied.message")}</p>
         </div>
       </>
     );
@@ -453,8 +557,8 @@ const Relatorios = () => {
       {/* Header */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Relatórios</h1>
-          <p className="text-sm text-muted-foreground">Filtre os dados da escola e exporte para Excel ou PDF</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -462,14 +566,14 @@ const Relatorios = () => {
             disabled={loading || rows.length === 0}
             className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition-[var(--transition-smooth)]"
           >
-            <FileText className="h-4 w-4" /> PDF
+            <FileText className="h-4 w-4" /> {t("export.pdf")}
           </button>
           <button
             onClick={exportXLSX}
             disabled={loading || rows.length === 0}
             className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-soft hover:opacity-90 transition-[var(--transition-smooth)]"
           >
-            <FileSpreadsheet className="h-4 w-4" /> Exportar Excel
+            <FileSpreadsheet className="h-4 w-4" /> {t("export.excel")}
           </button>
         </div>
       </div>
@@ -511,7 +615,7 @@ const Relatorios = () => {
       {/* Filters */}
       <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
         <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Filter className="h-4 w-4 text-muted-foreground" /> Filtros
+          <Filter className="h-4 w-4 text-muted-foreground" /> {t("filters.title")}
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
           <div className="relative md:col-span-2">
@@ -519,7 +623,7 @@ const Relatorios = () => {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Pesquisar..."
+              placeholder={t("filters.search_placeholder")}
               className="h-10 w-full rounded-xl border border-input bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
@@ -530,7 +634,7 @@ const Relatorios = () => {
               onChange={(e) => setTurma(e.target.value)}
               className="h-10 rounded-xl border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <option value="all">Todas as turmas</option>
+              <option value="all">{t("filters.all_classrooms")}</option>
               {classrooms.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           )}
@@ -541,7 +645,7 @@ const Relatorios = () => {
               onChange={(e) => setCurso(e.target.value)}
               className="h-10 rounded-xl border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <option value="all">Todos os cursos</option>
+              <option value="all">{t("filters.all_courses")}</option>
               {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           )}
@@ -552,7 +656,7 @@ const Relatorios = () => {
               onChange={(e) => setEstado(e.target.value)}
               className="h-10 rounded-xl border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <option value="all">Todos os estados</option>
+              <option value="all">{t("filters.all_statuses")}</option>
               {estadoOptionsByReport[active].map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           )}
@@ -563,8 +667,8 @@ const Relatorios = () => {
               onChange={(e) => setProfessorFilter(e.target.value)}
               className="h-10 rounded-xl border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <option value="all">Todos os professores</option>
-              {teacherOptions.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              <option value="all">{t("filters.all_teachers")}</option>
+              {teacherOptions.map((tch) => <option key={tch.id} value={tch.id}>{tch.name}</option>)}
             </select>
           )}
 
@@ -601,8 +705,10 @@ const Relatorios = () => {
               <meta.icon className="h-5 w-5" strokeWidth={2} />
             </span>
             <div>
-              <h2 className="text-base font-semibold text-foreground">Relatório de {meta.label}</h2>
-              <p className="text-xs text-muted-foreground">{loading ? "A carregar..." : `${rows.length} registos encontrados`}</p>
+              <h2 className="text-base font-semibold text-foreground">{t("table.report_title", { label: meta.label })}</h2>
+              <p className="text-xs text-muted-foreground">
+                {loading ? t("table.loading") : t("table.records_found", { count: rows.length })}
+              </p>
             </div>
           </div>
           <button
@@ -610,7 +716,7 @@ const Relatorios = () => {
             disabled={loading || rows.length === 0}
             className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground hover:bg-muted transition-[var(--transition-smooth)]"
           >
-            <Download className="h-3.5 w-3.5" /> Descarregar
+            <Download className="h-3.5 w-3.5" /> {t("export.download")}
           </button>
         </div>
 
@@ -629,13 +735,13 @@ const Relatorios = () => {
               {loading ? (
                 <tr>
                   <td colSpan={columns.length} className="px-5 py-12 text-center text-sm text-muted-foreground">
-                    A carregar dados...
+                    {t("table.loading_data")}
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length} className="px-5 py-12 text-center text-sm text-muted-foreground">
-                    Sem resultados para os filtros selecionados.
+                    {t("table.empty")}
                   </td>
                 </tr>
               ) : (
@@ -643,7 +749,7 @@ const Relatorios = () => {
                   <tr key={i} className="border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors">
                     {row.map((cell, j) => (
                       <td key={j} className="px-5 py-3 text-foreground">
-                        {cell == null || cell === "" ? "—" : String(cell)}
+                        {cell == null || cell === "" ? emDash : String(cell)}
                       </td>
                     ))}
                   </tr>

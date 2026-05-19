@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
@@ -64,18 +65,37 @@ type RecurringExpense = {
   is_active: boolean;
   category?: { name: string; color: string | null } | null;
 };
-const FREQ_LABEL: Record<RecurringFrequency, string> = {
-  mensal: "Mensal",
-  trimestral: "Trimestral",
-  semestral: "Semestral",
-  anual: "Anual",
-};
-
-const monthShort = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const fmtAOA = (n: number) =>
   new Intl.NumberFormat("pt-PT", { style: "currency", currency: "AOA", maximumFractionDigits: 0 }).format(n || 0);
 
 const Financas = () => {
+  const { t } = useTranslation("pages", { keyPrefix: "financas" });
+  const { t: tCommon } = useTranslation("common");
+
+  const monthShort = useMemo(
+    () => tCommon("dashboard.chart_months_short", { returnObjects: true }) as string[],
+    [tCommon],
+  );
+
+  const FREQ_LABEL = useMemo(
+    (): Record<RecurringFrequency, string> => ({
+      mensal: t("frequency.mensal"),
+      trimestral: t("frequency.trimestral"),
+      semestral: t("frequency.semestral"),
+      anual: t("frequency.anual"),
+    }),
+    [t],
+  );
+
+  const chartSeries = useMemo(
+    () => ({
+      revenue: t("chart.series.revenue"),
+      expenses: t("chart.series.expenses"),
+      profit: t("chart.series.profit"),
+    }),
+    [t],
+  );
+
   const native = isNativeMobileApp();
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -161,7 +181,7 @@ const Financas = () => {
         .order("created_at", { ascending: false }),
     ]);
 
-    if (eRes.error) toast({ title: "Erro a carregar despesas", description: eRes.error.message, variant: "destructive" });
+    if (eRes.error) toast({ title: t("toast.load_expenses_error"), description: eRes.error.message, variant: "destructive" });
     setExpenses((eRes.data ?? []) as Expense[]);
     setCategories((cRes.data ?? []) as Category[]);
     setRecurring(((rRes as any)?.data ?? []) as RecurringExpense[]);
@@ -193,7 +213,7 @@ const Financas = () => {
     setErpLoading(true);
     const { data, error } = await fetchValidatedPaymentsForErpYear(supabase, schoolId, year);
     if (error) {
-      toast({ title: "Erro a carregar pagamentos", description: error.message, variant: "destructive" });
+      toast({ title: t("toast.load_payments_error"), description: error.message, variant: "destructive" });
       setErpLoading(false);
       return;
     }
@@ -201,7 +221,7 @@ const Financas = () => {
     const studentMap = await resolveStudentsForPayments(supabase, rows);
     setErpPaymentLines(enrichErpPaymentsWithStudentNames(rows, studentMap));
     setErpLoading(false);
-  }, [schoolId, year, staffCanExportErp, native]);
+  }, [schoolId, year, staffCanExportErp, native, t]);
 
   useEffect(() => {
     loadErpPayments();
@@ -219,7 +239,7 @@ const Financas = () => {
 
   const exportPaymentsToErp = async () => {
     if (!schoolId || filteredErpPayments.length === 0) {
-      toast({ title: "Nada a exportar", description: "Não há pagamentos validados no filtro seleccionado.", variant: "destructive" });
+      toast({ title: t("toast.nothing_to_export"), description: t("toast.nothing_to_export_filter"), variant: "destructive" });
       return;
     }
     setErpExporting(true);
@@ -233,17 +253,17 @@ const Financas = () => {
     });
     setErpExporting(false);
     if (result.empty) {
-      toast({ title: "Nada a exportar", variant: "destructive" });
+      toast({ title: t("toast.nothing_to_export"), variant: "destructive" });
       return;
     }
     if (result.exportMarkedError) {
-      toast({ title: "Ficheiro gerado; erro ao marcar exportação", description: result.exportMarkedError, variant: "destructive" });
+      toast({ title: t("toast.export_mark_error"), description: result.exportMarkedError, variant: "destructive" });
       await loadErpPayments();
       return;
     }
     toast({
-      title: "Exportação concluída",
-      description: `${result.count} linha(s). Os registos foram marcados como exportados.`,
+      title: t("toast.export_done"),
+      description: t("toast.export_done_desc", { count: result.count }),
     });
     await loadErpPayments();
   };
@@ -261,9 +281,14 @@ const Financas = () => {
     return monthShort.map((label, i) => {
       const receita = revenueByMonth[i] ?? 0;
       const despesa = expByMonth[i] ?? 0;
-      return { mes: label, Receitas: receita, Despesas: despesa, Lucro: receita - despesa };
+      return {
+        mes: label,
+        [chartSeries.revenue]: receita,
+        [chartSeries.expenses]: despesa,
+        [chartSeries.profit]: receita - despesa,
+      };
     });
-  }, [revenueByMonth, expByMonth]);
+  }, [revenueByMonth, expByMonth, monthShort, chartSeries]);
 
   const totals = useMemo(() => {
     const totalRev = Object.values(revenueByMonth).reduce((s, v) => s + v, 0);
@@ -300,14 +325,14 @@ const Financas = () => {
   };
   const saveExp = async () => {
     if (!schoolId) return;
-    if (!expForm.description.trim()) { toast({ title: "Descrição obrigatória", variant: "destructive" }); return; }
+    if (!expForm.description.trim()) { toast({ title: t("toast.description_required"), variant: "destructive" }); return; }
 
     let receiptUrl: string | undefined;
     if (receiptFile) {
       const ext = receiptFile.name.split(".").pop();
       const path = `${schoolId}/${crypto.randomUUID()}.${ext}`;
       const { error: upErr } = await supabase.storage.from("expense-receipts").upload(path, receiptFile);
-      if (upErr) { toast({ title: "Erro a carregar comprovativo", description: upErr.message, variant: "destructive" }); return; }
+      if (upErr) { toast({ title: t("toast.receipt_upload_error"), description: upErr.message, variant: "destructive" }); return; }
       receiptUrl = path;
     }
 
@@ -329,16 +354,16 @@ const Financas = () => {
       const { data: { user } } = await supabase.auth.getUser();
       ({ error } = await supabase.from("expenses").insert({ ...basePayload, created_by: user?.id ?? null }));
     }
-    if (error) { toast({ title: "Erro a guardar", description: error.message, variant: "destructive" }); return; }
-    toast({ title: editingExp ? "Despesa atualizada" : "Despesa criada" });
+    if (error) { toast({ title: t("toast.save_error"), description: error.message, variant: "destructive" }); return; }
+    toast({ title: editingExp ? t("toast.expense_updated") : t("toast.expense_created") });
     setExpDialog(false);
     fetchAll();
   };
   const confirmDeleteExp = async () => {
     if (!deleteExp) return;
     const { error } = await supabase.from("expenses").delete().eq("id", deleteExp);
-    if (error) toast({ title: "Erro a apagar", description: error.message, variant: "destructive" });
-    else toast({ title: "Despesa apagada" });
+    if (error) toast({ title: t("toast.delete_error"), description: error.message, variant: "destructive" });
+    else toast({ title: t("toast.expense_deleted") });
     setDeleteExp(null);
     fetchAll();
   };
@@ -347,21 +372,21 @@ const Financas = () => {
   const openNewCat = () => { setEditingCat(null); setCatForm({ name: "", color: "#6366f1" }); setCatDialog(true); };
   const openEditCat = (c: Category) => { setEditingCat(c); setCatForm({ name: c.name, color: c.color ?? "#6366f1" }); setCatDialog(true); };
   const saveCat = async () => {
-    if (!schoolId || !catForm.name.trim()) { toast({ title: "Nome obrigatório", variant: "destructive" }); return; }
+    if (!schoolId || !catForm.name.trim()) { toast({ title: t("toast.name_required"), variant: "destructive" }); return; }
     const payload = { school_id: schoolId, name: catForm.name.trim(), color: catForm.color };
     const { error } = editingCat
       ? await supabase.from("expense_categories").update(payload).eq("id", editingCat.id)
       : await supabase.from("expense_categories").insert(payload);
-    if (error) { toast({ title: "Erro a guardar", description: error.message, variant: "destructive" }); return; }
-    toast({ title: editingCat ? "Categoria atualizada" : "Categoria criada" });
+    if (error) { toast({ title: t("toast.save_error"), description: error.message, variant: "destructive" }); return; }
+    toast({ title: editingCat ? t("toast.category_updated") : t("toast.category_created") });
     setCatDialog(false);
     fetchAll();
   };
   const confirmDeleteCat = async () => {
     if (!deleteCat) return;
     const { error } = await supabase.from("expense_categories").delete().eq("id", deleteCat);
-    if (error) toast({ title: "Erro a apagar", description: error.message, variant: "destructive" });
-    else toast({ title: "Categoria apagada" });
+    if (error) toast({ title: t("toast.delete_error"), description: error.message, variant: "destructive" });
+    else toast({ title: t("toast.category_deleted") });
     setDeleteCat(null);
     fetchAll();
   };
@@ -399,7 +424,7 @@ const Financas = () => {
   };
   const saveRec = async () => {
     if (!schoolId) return;
-    if (!recForm.description.trim()) { toast({ title: "Descrição obrigatória", variant: "destructive" }); return; }
+    if (!recForm.description.trim()) { toast({ title: t("toast.description_required"), variant: "destructive" }); return; }
     const payload: Record<string, unknown> = {
       school_id: schoolId,
       description: recForm.description.trim(),
@@ -415,51 +440,54 @@ const Financas = () => {
     let savedId: string | null = editingRec?.id ?? null;
     if (editingRec) {
       const { error } = await (supabase as any).from("recurring_expenses").update(payload).eq("id", editingRec.id);
-      if (error) { toast({ title: "Erro a guardar", description: error.message, variant: "destructive" }); return; }
+      if (error) { toast({ title: t("toast.save_error"), description: error.message, variant: "destructive" }); return; }
     } else {
       const { data: { user } } = await supabase.auth.getUser();
       const { data, error } = await (supabase as any).from("recurring_expenses")
         .insert({ ...payload, created_by: user?.id ?? null })
         .select("id")
         .single();
-      if (error) { toast({ title: "Erro a guardar", description: error.message, variant: "destructive" }); return; }
+      if (error) { toast({ title: t("toast.save_error"), description: error.message, variant: "destructive" }); return; }
       savedId = data?.id ?? null;
     }
     // Gerar automaticamente as ocorrências até final do ano em curso (+12 meses)
     if (savedId && recForm.is_active) {
       await (supabase as any).rpc("generate_recurring_expense_occurrences", { _recurring_id: savedId });
     }
-    toast({ title: editingRec ? "Recorrência atualizada" : "Recorrência criada", description: "Despesas geradas automaticamente." });
+    toast({
+      title: editingRec ? t("toast.recurring_updated") : t("toast.recurring_created"),
+      description: t("toast.recurring_auto_generated"),
+    });
     setRecDialog(false);
     fetchAll();
   };
   const confirmDeleteRec = async () => {
     if (!deleteRec) return;
     const { error } = await (supabase as any).from("recurring_expenses").delete().eq("id", deleteRec);
-    if (error) toast({ title: "Erro a apagar", description: error.message, variant: "destructive" });
-    else toast({ title: "Recorrência apagada", description: "Despesas já lançadas foram mantidas." });
+    if (error) toast({ title: t("toast.delete_error"), description: error.message, variant: "destructive" });
+    else toast({ title: t("toast.recurring_deleted"), description: t("toast.recurring_deleted_kept") });
     setDeleteRec(null);
     fetchAll();
   };
   const toggleRecActive = async (r: RecurringExpense) => {
     const { error } = await (supabase as any).from("recurring_expenses")
       .update({ is_active: !r.is_active }).eq("id", r.id);
-    if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); return; }
-    toast({ title: r.is_active ? "Recorrência pausada" : "Recorrência ativada" });
+    if (error) { toast({ title: t("toast.error"), description: error.message, variant: "destructive" }); return; }
+    toast({ title: r.is_active ? t("toast.recurring_paused") : t("toast.recurring_activated") });
     fetchAll();
   };
   const generateNow = async (r: RecurringExpense) => {
     setGeneratingId(r.id);
     const { data, error } = await (supabase as any).rpc("generate_recurring_expense_occurrences", { _recurring_id: r.id });
     setGeneratingId(null);
-    if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Ocorrências geradas", description: `${data ?? 0} novas despesas lançadas.` });
+    if (error) { toast({ title: t("toast.error"), description: error.message, variant: "destructive" }); return; }
+    toast({ title: t("toast.occurrences_generated"), description: t("toast.occurrences_generated_desc", { count: data ?? 0 }) });
     fetchAll();
   };
 
   const downloadReceipt = async (path: string) => {
     const { data, error } = await supabase.storage.from("expense-receipts").createSignedUrl(path, 60);
-    if (error || !data?.signedUrl) { toast({ title: "Erro", description: error?.message, variant: "destructive" }); return; }
+    if (error || !data?.signedUrl) { toast({ title: t("toast.error"), description: error?.message, variant: "destructive" }); return; }
     window.open(data.signedUrl, "_blank");
   };
 
@@ -468,11 +496,11 @@ const Financas = () => {
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Finanças</h1>
-            <p className="text-sm text-muted-foreground">Despesas, receitas e indicadores financeiros.</p>
+            <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
+            <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
           </div>
           <div className="flex items-center gap-2">
-            <Label className="text-sm">Ano:</Label>
+            <Label className="text-sm">{t("year_label")}</Label>
             <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
               <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -486,42 +514,42 @@ const Financas = () => {
         <div className={cn(native ? "grid grid-cols-2 gap-4" : "grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4")}>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Receita total</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">{t("kpi.total_revenue")}</CardTitle>
               <TrendingUp className="h-4 w-4 text-emerald-600" />
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-bold">{fmtAOA(totals.totalRev)}</p>
-              <p className="text-xs text-muted-foreground">propinas pagas</p>
+              <p className="text-xs text-muted-foreground">{t("kpi.paid_tuition_hint")}</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Despesa total</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">{t("kpi.total_expense")}</CardTitle>
               <TrendingDown className="h-4 w-4 text-rose-600" />
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-bold">{fmtAOA(totals.totalExp)}</p>
-              <p className="text-xs text-muted-foreground">{expenses.length} registos</p>
+              <p className="text-xs text-muted-foreground">{t("kpi.records_count", { count: expenses.length })}</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Lucro líquido</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">{t("kpi.net_profit")}</CardTitle>
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <p className={`text-2xl font-bold ${totals.profit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{fmtAOA(totals.profit)}</p>
-              <p className="text-xs text-muted-foreground">no ano</p>
+              <p className="text-xs text-muted-foreground">{t("kpi.in_year")}</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Propinas em atraso</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">{t("kpi.overdue_tuition")}</CardTitle>
               <AlertCircle className="h-4 w-4 text-amber-600" />
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-bold">{fmtAOA(overdueAmount)}</p>
-              <p className="text-xs text-muted-foreground">por cobrar</p>
+              <p className="text-xs text-muted-foreground">{t("kpi.to_collect")}</p>
             </CardContent>
           </Card>
         </div>
@@ -529,7 +557,7 @@ const Financas = () => {
         {/* CHARTS */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card>
-            <CardHeader><CardTitle>Receitas vs Despesas (mensal)</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t("chart.revenue_vs_expenses")}</CardTitle></CardHeader>
             <CardContent>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -539,15 +567,15 @@ const Financas = () => {
                     <YAxis className="text-xs" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
                     <Tooltip formatter={(v: number) => fmtAOA(v)} contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
                     <Legend />
-                    <Bar dataKey="Receitas" fill="hsl(142 71% 45%)" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Despesas" fill="hsl(0 72% 51%)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey={chartSeries.revenue} fill="hsl(142 71% 45%)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey={chartSeries.expenses} fill="hsl(0 72% 51%)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader><CardTitle>Lucro líquido anual</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t("chart.annual_profit")}</CardTitle></CardHeader>
             <CardContent>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -556,7 +584,7 @@ const Financas = () => {
                     <XAxis dataKey="mes" className="text-xs" />
                     <YAxis className="text-xs" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
                     <Tooltip formatter={(v: number) => fmtAOA(v)} contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
-                    <Line type="monotone" dataKey="Lucro" stroke="hsl(var(--primary))" strokeWidth={3} dot={{ r: 4 }} />
+                    <Line type="monotone" dataKey={chartSeries.profit} stroke="hsl(var(--primary))" strokeWidth={3} dot={{ r: 4 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -566,17 +594,17 @@ const Financas = () => {
 
         <Tabs defaultValue="expenses" className="w-full">
           <TabsList className="flex h-auto flex-wrap gap-1">
-            <TabsTrigger value="expenses">Despesas</TabsTrigger>
-            <TabsTrigger value="recurring">Recorrentes</TabsTrigger>
-            <TabsTrigger value="categories">Categorias</TabsTrigger>
+            <TabsTrigger value="expenses">{t("tabs.expenses")}</TabsTrigger>
+            <TabsTrigger value="recurring">{t("tabs.recurring")}</TabsTrigger>
+            <TabsTrigger value="categories">{t("tabs.categories")}</TabsTrigger>
             {staffCanExportErp && !native && (
               <TabsTrigger value="erp-payments" className="gap-1.5">
-                <FileSpreadsheet className="h-3.5 w-3.5" /> Pagamentos ERP
+                <FileSpreadsheet className="h-3.5 w-3.5" /> {t("tabs.erp_payments")}
               </TabsTrigger>
             )}
             {staffCanExportSaft && (
               <TabsTrigger value="saft" className="gap-1.5">
-                <FileText className="h-3.5 w-3.5" /> SAF-T (AGT)
+                <FileText className="h-3.5 w-3.5" /> {t("tabs.saft")}
               </TabsTrigger>
             )}
           </TabsList>
@@ -585,27 +613,27 @@ const Financas = () => {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle>Registo de despesas</CardTitle>
+                  <CardTitle>{t("expenses.title")}</CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">{year}</p>
                 </div>
-                <Button onClick={openNewExp} size="sm" className="gap-2"><Plus className="h-4 w-4" /> Nova despesa</Button>
+                <Button onClick={openNewExp} size="sm" className="gap-2"><Plus className="h-4 w-4" /> {t("expenses.new")}</Button>
               </CardHeader>
               <CardContent>
                 {loading ? (
                   <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
                 ) : expenses.length === 0 ? (
-                  <p className="text-center py-10 text-muted-foreground">Sem despesas registadas neste ano.</p>
+                  <p className="text-center py-10 text-muted-foreground">{t("expenses.empty")}</p>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
-                          <th className="py-2 px-2">Data</th>
-                          <th className="py-2 px-2">Descrição</th>
-                          <th className="py-2 px-2">Categoria</th>
-                          <th className="py-2 px-2">Valor</th>
-                          <th className="py-2 px-2">Comprovativo</th>
-                          <th className="py-2 px-2 text-right">Ações</th>
+                          <th className="py-2 px-2">{t("expenses.col_date")}</th>
+                          <th className="py-2 px-2">{t("expenses.col_description")}</th>
+                          <th className="py-2 px-2">{t("expenses.col_category")}</th>
+                          <th className="py-2 px-2">{t("expenses.col_amount")}</th>
+                          <th className="py-2 px-2">{t("expenses.col_receipt")}</th>
+                          <th className="py-2 px-2 text-right">{t("expenses.col_actions")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -619,13 +647,13 @@ const Financas = () => {
                                   <span className="h-2 w-2 rounded-full" style={{ background: e.category.color ?? "#6366f1" }} />
                                   {e.category.name}
                                 </span>
-                              ) : <span className="text-muted-foreground">—</span>}
+                              ) : <span className="text-muted-foreground">{t("common.em_dash")}</span>}
                             </td>
                             <td className="py-2 px-2 font-semibold text-rose-600">{fmtAOA(Number(e.amount))}</td>
                             <td className="py-2 px-2">
                               {e.receipt_url ? (
-                                <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => downloadReceipt(e.receipt_url!)}>Ver</Button>
-                              ) : <span className="text-muted-foreground">—</span>}
+                                <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => downloadReceipt(e.receipt_url!)}>{t("expenses.view_receipt")}</Button>
+                              ) : <span className="text-muted-foreground">{t("common.em_dash")}</span>}
                             </td>
                             <td className="py-2 px-2 text-right">
                               <Button size="icon" variant="ghost" onClick={() => openEditExp(e)}><Pencil className="h-4 w-4" /></Button>
@@ -645,29 +673,29 @@ const Financas = () => {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle className="flex items-center gap-2"><Repeat className="h-5 w-5" /> Despesas recorrentes</CardTitle>
+                  <CardTitle className="flex items-center gap-2"><Repeat className="h-5 w-5" /> {t("recurring.title")}</CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Salários, combustível, rendas, etc. Geram lançamentos automáticos contados no lucro.
+                    {t("recurring.subtitle")}
                   </p>
                 </div>
-                <Button onClick={openNewRec} size="sm" className="gap-2"><Plus className="h-4 w-4" /> Nova recorrência</Button>
+                <Button onClick={openNewRec} size="sm" className="gap-2"><Plus className="h-4 w-4" /> {t("recurring.new")}</Button>
               </CardHeader>
               <CardContent>
                 {recurring.length === 0 ? (
-                  <p className="text-center py-10 text-muted-foreground">Sem despesas recorrentes. Cria a primeira.</p>
+                  <p className="text-center py-10 text-muted-foreground">{t("recurring.empty")}</p>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
-                          <th className="py-2 px-2">Descrição</th>
-                          <th className="py-2 px-2">Categoria</th>
-                          <th className="py-2 px-2">Frequência</th>
-                          <th className="py-2 px-2">Valor</th>
-                          <th className="py-2 px-2">Início</th>
-                          <th className="py-2 px-2">Fim</th>
-                          <th className="py-2 px-2">Estado</th>
-                          <th className="py-2 px-2 text-right">Ações</th>
+                          <th className="py-2 px-2">{t("recurring.col_description")}</th>
+                          <th className="py-2 px-2">{t("recurring.col_category")}</th>
+                          <th className="py-2 px-2">{t("recurring.col_frequency")}</th>
+                          <th className="py-2 px-2">{t("recurring.col_amount")}</th>
+                          <th className="py-2 px-2">{t("recurring.col_start")}</th>
+                          <th className="py-2 px-2">{t("recurring.col_end")}</th>
+                          <th className="py-2 px-2">{t("recurring.col_status")}</th>
+                          <th className="py-2 px-2 text-right">{t("recurring.col_actions")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -680,28 +708,28 @@ const Financas = () => {
                                   <span className="h-2 w-2 rounded-full" style={{ background: r.category.color ?? "#6366f1" }} />
                                   {r.category.name}
                                 </span>
-                              ) : <span className="text-muted-foreground">—</span>}
+                              ) : <span className="text-muted-foreground">{t("common.em_dash")}</span>}
                             </td>
                             <td className="py-2 px-2">
                               <Badge variant="secondary">{FREQ_LABEL[r.frequency]}</Badge>
                             </td>
                             <td className="py-2 px-2 font-semibold text-rose-600">{fmtAOA(Number(r.amount))}</td>
                             <td className="py-2 px-2">{new Date(r.start_date).toLocaleDateString("pt-PT")}</td>
-                            <td className="py-2 px-2">{r.end_date ? new Date(r.end_date).toLocaleDateString("pt-PT") : <span className="text-muted-foreground">indefinido</span>}</td>
+                            <td className="py-2 px-2">{r.end_date ? new Date(r.end_date).toLocaleDateString("pt-PT") : <span className="text-muted-foreground">{t("recurring.end_indefinite")}</span>}</td>
                             <td className="py-2 px-2">
-                              <Badge variant={r.is_active ? "default" : "outline"}>{r.is_active ? "Ativa" : "Pausada"}</Badge>
+                              <Badge variant={r.is_active ? "default" : "outline"}>{r.is_active ? t("recurring.status_active") : t("recurring.status_paused")}</Badge>
                             </td>
                             <td className="py-2 px-2 text-right">
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                title="Gerar ocorrências em falta"
+                                title={t("recurring.generate_title")}
                                 onClick={() => generateNow(r)}
                                 disabled={generatingId === r.id}
                               >
                                 {generatingId === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                               </Button>
-                              <Button size="icon" variant="ghost" title={r.is_active ? "Pausar" : "Ativar"} onClick={() => toggleRecActive(r)}>
+                              <Button size="icon" variant="ghost" title={r.is_active ? t("recurring.pause_title") : t("recurring.activate_title")} onClick={() => toggleRecActive(r)}>
                                 <Power className={`h-4 w-4 ${r.is_active ? "text-emerald-600" : "text-muted-foreground"}`} />
                               </Button>
                               <Button size="icon" variant="ghost" onClick={() => openEditRec(r)}><Pencil className="h-4 w-4" /></Button>
@@ -721,14 +749,14 @@ const Financas = () => {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle>Categorias de despesas</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">Ex: Salários, Materiais, Manutenção</p>
+                  <CardTitle>{t("categories.title")}</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">{t("categories.subtitle")}</p>
                 </div>
-                <Button onClick={openNewCat} size="sm" className="gap-2"><Plus className="h-4 w-4" /> Nova categoria</Button>
+                <Button onClick={openNewCat} size="sm" className="gap-2"><Plus className="h-4 w-4" /> {t("categories.new")}</Button>
               </CardHeader>
               <CardContent>
                 {categories.length === 0 ? (
-                  <p className="text-center py-10 text-muted-foreground">Sem categorias. Cria a primeira.</p>
+                  <p className="text-center py-10 text-muted-foreground">{t("categories.empty")}</p>
                 ) : (
                   <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                     {categories.map((c) => (
@@ -754,23 +782,23 @@ const Financas = () => {
               <Card>
                 <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
-                    <CardTitle>Exportação para ERP</CardTitle>
+                    <CardTitle>{t("erp.title")}</CardTitle>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Lista pagamentos validados no ano seleccionado ({year}). Os valores no Excel são números e datas em formato ISO (YYYY-MM-DD), sem formatação extra.
+                      {t("erp.subtitle", { year })}
                     </p>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Configure os nomes das colunas e o mapeamento na secção de integração ERP nesta página de Finanças.
+                      {t("erp.config_hint")}
                     </p>
                   </div>
                   <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                     <Select value={erpExportFilter} onValueChange={(v) => setErpExportFilter(v as typeof erpExportFilter)}>
                       <SelectTrigger className="w-full sm:w-[220px]">
-                        <SelectValue placeholder="Filtro" />
+                        <SelectValue placeholder={t("erp.filter_placeholder")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Todos os pagamentos</SelectItem>
-                        <SelectItem value="pending">Ainda não exportados</SelectItem>
-                        <SelectItem value="exported">Já exportados</SelectItem>
+                        <SelectItem value="all">{t("erp.filter_all")}</SelectItem>
+                        <SelectItem value="pending">{t("erp.filter_pending")}</SelectItem>
+                        <SelectItem value="exported">{t("erp.filter_exported")}</SelectItem>
                       </SelectContent>
                     </Select>
                     <Button
@@ -780,7 +808,7 @@ const Financas = () => {
                       onClick={exportPaymentsToErp}
                     >
                       {erpExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
-                      Exportar para ERP
+                      {t("erp.export_button")}
                     </Button>
                   </div>
                 </CardHeader>
@@ -791,33 +819,33 @@ const Financas = () => {
                     </div>
                   ) : filteredErpPayments.length === 0 ? (
                     <p className="py-10 text-center text-muted-foreground">
-                      Nenhum pagamento validado corresponde ao filtro neste ano.
+                      {t("erp.empty")}
                     </p>
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b text-left text-muted-foreground">
-                            <th className="py-2 px-2">Data</th>
-                            <th className="py-2 px-2">Aluno</th>
-                            <th className="py-2 px-2">Valor</th>
-                            <th className="py-2 px-2">Método</th>
-                            <th className="py-2 px-2">Status de exportação</th>
+                            <th className="py-2 px-2">{t("erp.col_date")}</th>
+                            <th className="py-2 px-2">{t("erp.col_student")}</th>
+                            <th className="py-2 px-2">{t("erp.col_amount")}</th>
+                            <th className="py-2 px-2">{t("erp.col_method")}</th>
+                            <th className="py-2 px-2">{t("erp.col_export_status")}</th>
                           </tr>
                         </thead>
                         <tbody>
                           {filteredErpPayments.map((p) => (
                             <tr key={p.id} className="border-b hover:bg-muted/30">
                               <td className="py-2 px-2 whitespace-nowrap font-mono text-xs">
-                                {p.payment_date ? p.payment_date.slice(0, 10) : "—"}
+                                {p.payment_date ? p.payment_date.slice(0, 10) : t("common.em_dash")}
                               </td>
                               <td className="py-2 px-2 font-medium">{p.studentName}</td>
                               <td className="py-2 px-2">{fmtAOA(Number(p.amount_paid))}</td>
-                              <td className="py-2 px-2">{p.method ?? "—"}</td>
+                              <td className="py-2 px-2">{p.method ?? t("common.em_dash")}</td>
                               <td className="py-2 px-2">
                                 {p.erp_exported_at ? (
                                   <Badge variant="secondary" className="font-normal">
-                                    Exportado em{" "}
+                                    {t("erp.badge_exported")}{" "}
                                     {new Date(p.erp_exported_at).toLocaleString("pt-PT", {
                                       dateStyle: "short",
                                       timeStyle: "short",
@@ -825,7 +853,7 @@ const Financas = () => {
                                   </Badge>
                                 ) : (
                                   <Badge variant="outline" className="border-amber-500/50 text-amber-800 dark:text-amber-200">
-                                    Pendente
+                                    {t("erp.badge_pending")}
                                   </Badge>
                                 )}
                               </td>
@@ -851,55 +879,55 @@ const Financas = () => {
       <Dialog open={expDialog} onOpenChange={setExpDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingExp ? "Editar despesa" : "Nova despesa"}</DialogTitle>
-            <DialogDescription>Regista uma despesa da escola.</DialogDescription>
+            <DialogTitle>{editingExp ? t("expenses.dialog_edit") : t("expenses.dialog_new")}</DialogTitle>
+            <DialogDescription>{t("expenses.dialog_desc")}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label>Descrição</Label>
+              <Label>{t("expenses.label_description")}</Label>
               <Input value={expForm.description} onChange={(e) => setExpForm({ ...expForm, description: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label>Valor (AOA)</Label>
+                <Label>{t("expenses.label_amount")}</Label>
                 <Input type="number" min="0" value={expForm.amount} onChange={(e) => setExpForm({ ...expForm, amount: e.target.value })} />
               </div>
               <div className="grid gap-2">
-                <Label>Data</Label>
+                <Label>{t("expenses.label_date")}</Label>
                 <Input type="date" value={expForm.expense_date} onChange={(e) => setExpForm({ ...expForm, expense_date: e.target.value })} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label>Categoria</Label>
+                <Label>{t("expenses.label_category")}</Label>
                 <Select value={expForm.category_id || "_none"} onValueChange={(v) => setExpForm({ ...expForm, category_id: v === "_none" ? "" : v })}>
-                  <SelectTrigger><SelectValue placeholder="Sem categoria" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("expenses.no_category")} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_none">Sem categoria</SelectItem>
+                    <SelectItem value="_none">{t("expenses.no_category")}</SelectItem>
                     {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label>Método de pagamento</Label>
-                <Input value={expForm.payment_method} onChange={(e) => setExpForm({ ...expForm, payment_method: e.target.value })} placeholder="Ex: Transferência" />
+                <Label>{t("expenses.label_payment_method")}</Label>
+                <Input value={expForm.payment_method} onChange={(e) => setExpForm({ ...expForm, payment_method: e.target.value })} placeholder={t("expenses.payment_method_placeholder")} />
               </div>
             </div>
             <div className="grid gap-2">
-              <Label>Notas</Label>
+              <Label>{t("expenses.label_notes")}</Label>
               <Textarea rows={2} value={expForm.notes} onChange={(e) => setExpForm({ ...expForm, notes: e.target.value })} />
             </div>
             <div className="grid gap-2">
-              <Label>Comprovativo (opcional)</Label>
+              <Label>{t("expenses.label_receipt")}</Label>
               <Input type="file" accept="image/*,application/pdf" onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)} />
               {editingExp?.receipt_url && !receiptFile && (
-                <p className="text-xs text-muted-foreground">Comprovativo existente será mantido.</p>
+                <p className="text-xs text-muted-foreground">{t("expenses.receipt_kept_hint")}</p>
               )}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setExpDialog(false)}>Cancelar</Button>
-            <Button onClick={saveExp}>Guardar</Button>
+            <Button variant="outline" onClick={() => setExpDialog(false)}>{t("common.cancel")}</Button>
+            <Button onClick={saveExp}>{t("common.save")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -908,21 +936,21 @@ const Financas = () => {
       <Dialog open={catDialog} onOpenChange={setCatDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingCat ? "Editar categoria" : "Nova categoria"}</DialogTitle>
+            <DialogTitle>{editingCat ? t("categories.dialog_edit") : t("categories.dialog_new")}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label>Nome</Label>
-              <Input value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })} placeholder="Ex: Salários" />
+              <Label>{t("categories.label_name")}</Label>
+              <Input value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })} placeholder={t("categories.name_placeholder")} />
             </div>
             <div className="grid gap-2">
-              <Label>Cor</Label>
+              <Label>{t("categories.label_color")}</Label>
               <Input type="color" value={catForm.color} onChange={(e) => setCatForm({ ...catForm, color: e.target.value })} className="h-10 w-20" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCatDialog(false)}>Cancelar</Button>
-            <Button onClick={saveCat}>Guardar</Button>
+            <Button variant="outline" onClick={() => setCatDialog(false)}>{t("common.cancel")}</Button>
+            <Button onClick={saveCat}>{t("common.save")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -930,24 +958,24 @@ const Financas = () => {
       <AlertDialog open={!!deleteExp} onOpenChange={(o) => !o && setDeleteExp(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Apagar despesa?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+            <AlertDialogTitle>{t("expenses.delete_title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("expenses.delete_desc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteExp}>Apagar</AlertDialogAction>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteExp}>{t("common.delete")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
       <AlertDialog open={!!deleteCat} onOpenChange={(o) => !o && setDeleteCat(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Apagar categoria?</AlertDialogTitle>
-            <AlertDialogDescription>As despesas existentes ficarão sem categoria.</AlertDialogDescription>
+            <AlertDialogTitle>{t("categories.delete_title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("categories.delete_desc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteCat}>Apagar</AlertDialogAction>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteCat}>{t("common.delete")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -956,85 +984,85 @@ const Financas = () => {
       <Dialog open={recDialog} onOpenChange={setRecDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingRec ? "Editar recorrência" : "Nova despesa recorrente"}</DialogTitle>
+            <DialogTitle>{editingRec ? t("recurring.dialog_edit") : t("recurring.dialog_new")}</DialogTitle>
             <DialogDescription>
-              As ocorrências são geradas automaticamente como despesas, contando para o lucro mensal.
+              {t("recurring.dialog_desc")}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label>Descrição</Label>
+              <Label>{t("expenses.label_description")}</Label>
               <Input
                 value={recForm.description}
                 onChange={(e) => setRecForm({ ...recForm, description: e.target.value })}
-                placeholder="Ex: Salário do João, Combustível do gerador"
+                placeholder={t("recurring.description_placeholder")}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label>Valor (AOA)</Label>
+                <Label>{t("expenses.label_amount")}</Label>
                 <Input type="number" min="0" value={recForm.amount}
                   onChange={(e) => setRecForm({ ...recForm, amount: e.target.value })} />
               </div>
               <div className="grid gap-2">
-                <Label>Frequência</Label>
+                <Label>{t("recurring.label_frequency")}</Label>
                 <Select value={recForm.frequency} onValueChange={(v) => setRecForm({ ...recForm, frequency: v as RecurringFrequency })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="mensal">Mensal</SelectItem>
-                    <SelectItem value="trimestral">Trimestral</SelectItem>
-                    <SelectItem value="semestral">Semestral</SelectItem>
-                    <SelectItem value="anual">Anual</SelectItem>
+                    <SelectItem value="mensal">{t("frequency.mensal")}</SelectItem>
+                    <SelectItem value="trimestral">{t("frequency.trimestral")}</SelectItem>
+                    <SelectItem value="semestral">{t("frequency.semestral")}</SelectItem>
+                    <SelectItem value="anual">{t("frequency.anual")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label>Início</Label>
+                <Label>{t("recurring.label_start")}</Label>
                 <Input type="date" value={recForm.start_date}
                   onChange={(e) => setRecForm({ ...recForm, start_date: e.target.value })} />
               </div>
               <div className="grid gap-2">
-                <Label>Fim (opcional)</Label>
+                <Label>{t("recurring.label_end_optional")}</Label>
                 <Input type="date" value={recForm.end_date}
                   onChange={(e) => setRecForm({ ...recForm, end_date: e.target.value })} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label>Categoria</Label>
+                <Label>{t("expenses.label_category")}</Label>
                 <Select value={recForm.category_id || "_none"} onValueChange={(v) => setRecForm({ ...recForm, category_id: v === "_none" ? "" : v })}>
-                  <SelectTrigger><SelectValue placeholder="Sem categoria" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("expenses.no_category")} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_none">Sem categoria</SelectItem>
+                    <SelectItem value="_none">{t("expenses.no_category")}</SelectItem>
                     {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label>Método de pagamento</Label>
+                <Label>{t("expenses.label_payment_method")}</Label>
                 <Input value={recForm.payment_method}
                   onChange={(e) => setRecForm({ ...recForm, payment_method: e.target.value })}
-                  placeholder="Ex: Transferência" />
+                  placeholder={t("expenses.payment_method_placeholder")} />
               </div>
             </div>
             <div className="grid gap-2">
-              <Label>Notas</Label>
+              <Label>{t("expenses.label_notes")}</Label>
               <Textarea rows={2} value={recForm.notes}
                 onChange={(e) => setRecForm({ ...recForm, notes: e.target.value })} />
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
-                <p className="text-sm font-medium">Recorrência ativa</p>
-                <p className="text-xs text-muted-foreground">Quando ativa, gera novas ocorrências automaticamente.</p>
+                <p className="text-sm font-medium">{t("recurring.active_label")}</p>
+                <p className="text-xs text-muted-foreground">{t("recurring.active_hint")}</p>
               </div>
               <Switch checked={recForm.is_active} onCheckedChange={(v) => setRecForm({ ...recForm, is_active: v })} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRecDialog(false)}>Cancelar</Button>
-            <Button onClick={saveRec}>Guardar</Button>
+            <Button variant="outline" onClick={() => setRecDialog(false)}>{t("common.cancel")}</Button>
+            <Button onClick={saveRec}>{t("common.save")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1042,14 +1070,14 @@ const Financas = () => {
       <AlertDialog open={!!deleteRec} onOpenChange={(o) => !o && setDeleteRec(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Apagar despesa recorrente?</AlertDialogTitle>
+            <AlertDialogTitle>{t("recurring.delete_title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Os lançamentos já criados nas despesas serão mantidos. Deixarão apenas de ser geradas novas ocorrências.
+              {t("recurring.delete_desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteRec}>Apagar</AlertDialogAction>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteRec}>{t("common.delete")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
