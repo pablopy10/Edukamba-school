@@ -194,33 +194,13 @@ type Props = {
   canManageTemplates: boolean;
 };
 
-const MODULE_LABEL: Record<AuthorizationModuleKind, string> = {
-  extracurricular: "Extracurriculares",
-  transport: "Transporte",
-  meal: "Refeições",
-  event: "Eventos",
-  enrollment: "Matrículas",
-};
-
-/** Um único formulário «público» por área nos separadores Preencher e Histórico (a gestão pode ter mais rascunhos com outro título). */
+/** Título canónico em PT na base de dados (filtro de submissões e modelo público). */
 const MODULE_PUBLICATION_TEMPLATE_TITLE: Record<AuthorizationModuleKind, string> = {
   extracurricular: "Formulário de Atividades extracurriculares",
   transport: "Formulário de Transportes",
   meal: "Formulário de Refeições",
   event: "Formulário de Eventos escolares",
   enrollment: "Formulário de Matrículas",
-};
-
-const RECIPIENT_MODE_META: Record<TemplateRecipientMode, { title: string; hint: string }> = {
-  classroom_homeroom_teachers: {
-    title: "Encarregados dos alunos de turmas seleccionadas",
-    hint:
-      "Todos os encarregados de educação dos alunos inscritos nas turmas que escolher abaixo recebem notificação (email e push) e podem preencher o formulário.",
-  },
-  named_student_assignee: {
-    title: "Encarregado nominal por aluno",
-    hint: "Para cada linha, indique o aluno: o formulário será enviado ao encarregado de educação associado a esse aluno.",
-  },
 };
 
 function normalizeRecipientMode(raw: unknown): TemplateRecipientMode {
@@ -239,23 +219,6 @@ function assigneePickToProfileId(pick: string): string | null {
   return null;
 }
 
-function templateRecipientSummary(t: TemplateRow): string {
-  const mode = normalizeRecipientMode(t.recipient_mode);
-  if (mode === "named_student_assignee") return "Destinatários nomeados";
-  return `${parseTemplateClassroomIds(t.recipient_classroom_ids).length} turma(s)`;
-}
-
-const FIELD_TYPE_META: Record<AuthorizationFieldType, { label: string }> = {
-  text: { label: "Texto curto" },
-  textarea: { label: "Texto longo" },
-  select: { label: "Lista (dropdown)" },
-  radio: { label: "Opção única (rádio)" },
-  checkbox: { label: "Caixa única (sim/não)" },
-  checkbox_group: { label: "Várias opções (caixas)" },
-  signature: { label: "Assinatura" },
-  file: { label: "Anexo (ficheiro)" },
-};
-
 function parseFields(raw: unknown): AuthorizationFieldDef[] {
   if (!raw || !Array.isArray(raw)) return [];
   return raw.filter((x) => x && typeof x === "object" && "id" in x && "type" in x) as AuthorizationFieldDef[];
@@ -263,7 +226,7 @@ function parseFields(raw: unknown): AuthorizationFieldDef[] {
 
 /** Opções tal como aparecem no editor (uma por linha); mantém entradas vazias para o Enter criar nova linha. */
 function optionsFromMultiline(raw: string): string[] {
-  return raw.split("\n").map((line) => line.trim());
+  return raw.splitr("\n").map((line) => line.trim());
 }
 
 function nonEmptyOptions(f: AuthorizationFieldDef): string[] {
@@ -286,8 +249,45 @@ export function ModuleAuthorizationsPanel({
   childIds,
   canManageTemplates,
 }: Props) {
-  const { t } = useTranslation("pages", { keyPrefix: "module_authorizations" });
+  const { t: tr, i18n } = useTranslation("pages", { keyPrefix: "module_authorizations" });
   const { selectedYearId, selectedYear } = useAcademicYear();
+
+  const dateLocaleTag =
+    i18n.language?.startsWith("fr") ? "fr-FR" : i18n.language?.startsWith("pt") ? "pt-PT" : "en-GB";
+  const moduleLabel = tr(`module_${module}`);
+  const publicationTitleDisplay = tr(`publication_title_${module}`);
+
+  const fieldTypeLabel = useCallback(
+    (type: AuthorizationFieldType) => tr(`field_type_${type}`),
+    [tr],
+  );
+
+  const summarizeRecipient = useCallback(
+    (row: TemplateRow) => {
+      const mode = normalizeRecipientMode(row.recipient_mode);
+      if (mode === "named_student_assignee") return tr("recipient_summary_named");
+      const count = parseTemplateClassroomIds(row.recipient_classroom_ids).length;
+      return tr("recipient_summary_classes", { count });
+    },
+    [tr],
+  );
+
+  const recipientModes: TemplateRecipientMode[] = ["classroom_homeroom_teachers", "named_student_assignee"];
+  const recipientModeTitle = (m: TemplateRecipientMode) =>
+    m === "classroom_homeroom_teachers" ? tr("recipient_mode_classroom_title") : tr("recipient_mode_named_title");
+  const recipientModeHint = (m: TemplateRecipientMode) =>
+    m === "classroom_homeroom_teachers" ? tr("recipient_mode_classroom_hint") : tr("recipient_mode_named_hint");
+  const fieldTypes: AuthorizationFieldType[] = [
+    "text",
+    "textarea",
+    "select",
+    "radio",
+    "checkbox",
+    "checkbox_group",
+    "signature",
+    "file",
+  ];
+
   const [innerTab, setInnerTab] = useState<"preencher" | "historico">("preencher");
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
@@ -337,7 +337,7 @@ export function ModuleAuthorizationsPanel({
     try {
       const { data: tData, error: tErr } = await supabase
         .from("module_authorization_templates")
-        .select("*")
+        .selectr("*")
         .eq("school_id", schoolId)
         .eq("module", module)
         .order("created_at", { ascending: false });
@@ -368,15 +368,15 @@ export function ModuleAuthorizationsPanel({
         canManageTemplates && selectedYearId
           ? supabase
               .from("classrooms")
-              .select("id, name")
+              .selectr("id, name")
               .eq("school_id", schoolId)
               .eq("academic_year_id", selectedYearId)
               .order("name")
           : Promise.resolve({ data: [], error: null }),
         userId
-          ? supabase.from("module_authorization_named_recipients").select("template_id, student_id").eq("assignee_profile_id", userId)
+          ? supabase.from("module_authorization_named_recipients").selectr("template_id, student_id").eq("assignee_profile_id", userId)
           : Promise.resolve({ data: [], error: null }),
-        supabase.from("schools").select("name").eq("id", schoolId).maybeSingle(),
+        supabase.from("schools").selectr("name").eq("id", schoolId).maybeSingle(),
       ]);
 
       const schoolNameRaw = schoolRes?.data?.name;
@@ -456,14 +456,14 @@ export function ModuleAuthorizationsPanel({
     async (t: TemplateRow) => {
       const fds = parseFields(t.fields);
       if (!fds.length) {
-        toast.error("O formulário não tem campos para exportar.");
+        toast.error(tr("toast_no_fields_export"));
         return;
       }
       try {
         await downloadModuleAuthorizationPdf(
           {
             mode: "blank",
-            moduleAreaLabel: MODULE_LABEL[module],
+            moduleAreaLabel: moduleLabel,
             schoolName: schoolDisplayName,
             templateTitle: t.title,
             templateDescription: t.description,
@@ -471,12 +471,12 @@ export function ModuleAuthorizationsPanel({
           },
           t.title,
         );
-        toast.success("PDF transferido.");
+        toast.success(tr("toast_pdf_downloaded"));
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Não foi possível gerar o PDF.");
+        toast.error(e instanceof Error ? e.message : tr("toast_pdf_error"));
       }
     },
-    [module, schoolDisplayName],
+    [module, moduleLabel, schoolDisplayName, t],
   );
 
   const handleDownloadSubmissionPdf = useCallback(
@@ -484,10 +484,10 @@ export function ModuleAuthorizationsPanel({
       const tmplRow = templates.find((x) => x.id === s.template_id);
       const fieldsDefs = parseFields((tmplRow?.fields ?? s.template?.fields) ?? []);
       if (!fieldsDefs.length) {
-        toast.error("Não há estrutura de campos disponível para este PDF.");
+        toast.error(tr("toast_no_fields_pdf"));
         return;
       }
-      const tmplTitle = tmplRow?.title ?? s.template?.title ?? "Autorização";
+      const tmplTitle = tmplRow?.title ?? s.template?.title ?? tr("authorization_fallback");
       const tmplDesc = tmplRow?.description ?? s.template?.description ?? null;
       try {
         const resp =
@@ -497,7 +497,7 @@ export function ModuleAuthorizationsPanel({
         await downloadModuleAuthorizationPdf(
           {
             mode: "response",
-            moduleAreaLabel: MODULE_LABEL[module],
+            moduleAreaLabel: moduleLabel,
             schoolName: schoolDisplayName,
             templateTitle: tmplTitle,
             templateDescription: tmplDesc,
@@ -511,12 +511,12 @@ export function ModuleAuthorizationsPanel({
           },
           tmplTitle,
         );
-        toast.success("PDF transferido.");
+        toast.success(tr("toast_pdf_downloaded"));
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Não foi possível gerar o PDF.");
+        toast.error(e instanceof Error ? e.message : tr("toast_pdf_error"));
       }
     },
-    [module, schoolDisplayName, templates],
+    [module, moduleLabel, schoolDisplayName, templates, t],
   );
 
   const openNewTemplate = () => {
@@ -543,7 +543,7 @@ export function ModuleAuthorizationsPanel({
     void (async () => {
       const { data: namedRows, error: namedErr } = await supabase
         .from("module_authorization_named_recipients")
-        .select("student_id, assignee_profile_id")
+        .selectr("student_id, assignee_profile_id")
         .eq("template_id", t.id);
       if (namedErr?.message?.includes("does not exist") || !namedRows?.length) {
         setTplNamedDrafts([{ rowKey: nanoid(), student_id: "", assignee_pick: "__" }]);
@@ -572,10 +572,12 @@ export function ModuleAuthorizationsPanel({
       {
         id: nanoid(),
         type,
-        label: FIELD_TYPE_META[type].label,
+        label: fieldTypeLabel(type),
         required: false,
         options:
-          type === "select" || type === "radio" || type === "checkbox_group" ? ["Opção A", "Opção B"] : undefined,
+          type === "select" || type === "radio" || type === "checkbox_group"
+            ? [tr("default_option_a"), tr("default_option_b")]
+            : undefined,
       },
     ]);
   };
@@ -607,11 +609,11 @@ export function ModuleAuthorizationsPanel({
 
   const saveTemplate = async () => {
     if (!schoolId || !tplTitle.trim()) {
-      toast.error("Indique o título.");
+      toast.error(tr("toast_title_required"));
       return;
     }
     if (tplFields.length === 0) {
-      toast.error("Adicione pelo menos um campo.");
+      toast.error(tr("toast_add_field"));
       return;
     }
     const fieldsToSave = tplFields.map(normalizeFieldForPersist);
@@ -619,13 +621,13 @@ export function ModuleAuthorizationsPanel({
       if (f.type === "select" || f.type === "radio" || f.type === "checkbox_group") {
         const opts = f.options ?? [];
         if (opts.length < 2) {
-          toast.error(`«${f.label}»: nas listas/rádios/caixas, indique pelo menos duas opções (uma por linha).`);
+          toast.error(tr("toast_field_min_options", { label: f.label }));
           return;
         }
       }
     }
     if (tplRecipientMode === "classroom_homeroom_teachers" && tplClassroomIds.size === 0) {
-      toast.error("Seleccione pelo menos uma turma.");
+      toast.error(tr("toast_pick_classroom"));
       return;
     }
 
@@ -636,12 +638,12 @@ export function ModuleAuthorizationsPanel({
         if (!row.student_id) continue;
         const st = studentsDetailed.find((s) => s.id === row.student_id);
         if (!st?.parent_id) {
-          toast.error("Cada aluno seleccionado tem de ter encarregado de educação associado no sistema.");
+          toast.error(tr("toast_student_needs_guardian"));
           return;
         }
         const pid = assigneePickToProfileId(row.assignee_pick);
         if (!pid || pid !== st.parent_id) {
-          toast.error("Em cada linha, confirme o encarregado de educação do aluno seleccionado.");
+          toast.error(tr("toast_confirm_guardian"));
           return;
         }
         const k = `${row.student_id}:${pid}`;
@@ -650,7 +652,7 @@ export function ModuleAuthorizationsPanel({
         namedPairs.push({ student_id: row.student_id, assignee_profile_id: pid });
       }
       if (namedPairs.length === 0) {
-        toast.error("Adicione pelo menos uma linha com aluno e encarregado de educação.");
+        toast.error(tr("toast_add_named_row"));
         return;
       }
     }
@@ -683,7 +685,7 @@ export function ModuleAuthorizationsPanel({
           } catch {
             return;
           }
-          toast.success("Formulário actualizado.");
+          toast.success(tr("toast_form_updated"));
           setTplDialog(false);
           await loadAll();
           if (canManageTemplates && userId && schoolId && editingTpl.is_active) {
@@ -699,9 +701,8 @@ export function ModuleAuthorizationsPanel({
                 recipient_classroom_ids: recipientPayload.recipient_classroom_ids,
               },
             });
-            if (nr.error) toast.warning(`Notificações: ${nr.error}`);
-            else if (nr.sent > 0)
-              toast.success(`${nr.sent} notificação(ões) enviadas (email e push segundo preferências dos encarregados).`);
+            if (nr.error) toast.warning(tr("toast_notifications_prefix", { error: nr.error }));
+            else if (nr.sent > 0) toast.success(tr("toast_notifications_sent", { count: nr.sent }));
           }
         }
       } else {
@@ -717,11 +718,11 @@ export function ModuleAuthorizationsPanel({
             created_by: userId ?? null,
             ...recipientPayload,
           } as never)
-          .select("id")
+          .selectr("id")
           .single();
 
         if (error) toast.error(error.message);
-        else if (!inserted?.id) toast.error("Não foi possível obter o id do formulário.");
+        else if (!inserted?.id) toast.error(tr("toast_form_id_error"));
         else {
           try {
             await persistNamedRecipients(
@@ -731,7 +732,7 @@ export function ModuleAuthorizationsPanel({
           } catch {
             return;
           }
-          toast.success("Formulário criado.");
+          toast.success(tr("toast_form_created"));
           setTplDialog(false);
           await loadAll();
           if (canManageTemplates && userId && schoolId) {
@@ -747,9 +748,8 @@ export function ModuleAuthorizationsPanel({
                 recipient_classroom_ids: recipientPayload.recipient_classroom_ids,
               },
             });
-            if (nr.error) toast.warning(`Notificações: ${nr.error}`);
-            else if (nr.sent > 0)
-              toast.success(`${nr.sent} notificação(ões) enviadas (email e push segundo preferências dos encarregados).`);
+            if (nr.error) toast.warning(tr("toast_notifications_prefix", { error: nr.error }));
+            else if (nr.sent > 0) toast.success(tr("toast_notifications_sent", { count: nr.sent }));
           }
         }
       }
@@ -763,7 +763,7 @@ export function ModuleAuthorizationsPanel({
     const { error } = await supabase.from("module_authorization_templates").delete().eq("id", deleteTplId);
     if (error) toast.error(error.message);
     else {
-      toast.success("Removido.");
+      toast.success(tr("toast_removed"));
       setDeleteTplId(null);
       await loadAll();
     }
@@ -777,7 +777,7 @@ export function ModuleAuthorizationsPanel({
       .eq("id", t.id);
     if (error) toast.error(error.message);
     else {
-      toast.success(activating ? "Formulário activado." : "Formulário desactivado.");
+      toast.success(activating ? tr("toast_form_activated") : tr("toast_form_deactivated"));
       await loadAll();
       if (activating && canManageTemplates && userId && schoolId && parseFields(t.fields).length > 0) {
         const nr = await notifyModuleAuthorizationAssignees({
@@ -792,9 +792,8 @@ export function ModuleAuthorizationsPanel({
             recipient_classroom_ids: t.recipient_classroom_ids,
           },
         });
-        if (nr.error) toast.warning(`Notificações: ${nr.error}`);
-        else if (nr.sent > 0)
-          toast.success(`${nr.sent} notificação(ões) enviadas (email e push segundo preferências dos encarregados).`);
+        if (nr.error) toast.warning(tr("toast_notifications_prefix", { error: nr.error }));
+        else if (nr.sent > 0) toast.success(tr("toast_notifications_sent", { count: nr.sent }));
       }
     }
   };
@@ -828,7 +827,7 @@ export function ModuleAuthorizationsPanel({
 
   const validateAndSubmit = async () => {
     if (!schoolId || !userId || !selectedTemplate || !fillStudentId) {
-      toast.error("Escolha o formulário e o aluno.");
+      toast.error(tr("toast_pick_form_student"));
       return;
     }
     const errs: string[] = [];
@@ -837,7 +836,7 @@ export function ModuleAuthorizationsPanel({
     for (const f of selectedFields) {
       if (f.type === "signature") {
         const sig = fillSignatures[f.id];
-        if (f.required && (!sig || !sig.trim())) errs.push(`${f.label} (assinatura)`);
+        if (f.required && (!sig || !sig.trim())) errs.push(`${f.label} ${tr("toast_signature_suffix")}`);
         else if (sig) mergedResponses[f.id] = sig;
         continue;
       }
@@ -860,7 +859,7 @@ export function ModuleAuthorizationsPanel({
     }
 
     if (errs.length > 0) {
-      toast.error(`Preencha: ${errs.join(", ")}`);
+      toast.error(tr("toast_fill_fields", { fields: errs.join(", ") }));
       return;
     }
 
@@ -901,7 +900,7 @@ export function ModuleAuthorizationsPanel({
       });
       if (error) toast.error(error.message);
       else {
-        toast.success("Autorização registada.");
+        toast.success(tr("toast_authorization_saved"));
         resetFillForm();
         setFillTemplateId("");
         setFillStudentId("");
@@ -916,7 +915,7 @@ export function ModuleAuthorizationsPanel({
   const openStaffCorrection = (s: SubmissionRow) => {
     const defs = parseFields(templates.find((x) => x.id === s.template_id)?.fields ?? s.template?.fields ?? []);
     if (!defs.length) {
-      toast.error("Não há campos disponíveis para corrigir esta submissão.");
+      toast.error(tr("toast_no_fields_correct"));
       return;
     }
     const { values: initVals, signatures: initSigs } = buildCorrectionDraftFromSubmission(defs, s);
@@ -940,7 +939,7 @@ export function ModuleAuthorizationsPanel({
       templates.find((x) => x.id === staffEditSub.template_id)?.fields ?? staffEditSub.template?.fields ?? [],
     );
     if (!defs.length) {
-      toast.error("Não há campos disponíveis para guardar esta correção.");
+      toast.error(tr("toast_no_fields_save_correction"));
       return;
     }
     const errs: string[] = [];
@@ -952,7 +951,7 @@ export function ModuleAuthorizationsPanel({
     for (const f of defs) {
       if (f.type === "signature") {
         const sig = staffEditSigs[f.id];
-        if (f.required && (!sig || !sig.trim())) errs.push(`${f.label} (assinatura)`);
+        if (f.required && (!sig || !sig.trim())) errs.push(`${f.label} ${tr("toast_signature_suffix")}`);
         else if (sig) mergedResponses[f.id] = sig;
         continue;
       }
@@ -975,7 +974,7 @@ export function ModuleAuthorizationsPanel({
     }
 
     if (errs.length > 0) {
-      toast.error(`Preencha: ${errs.join(", ")}`);
+      toast.error(tr("toast_fill_fields", { fields: errs.join(", ") }));
       return;
     }
 
@@ -1017,7 +1016,7 @@ export function ModuleAuthorizationsPanel({
         toast.error(error.message);
         return;
       }
-      toast.success("Submissão corrigida pela administração. A alteração ficou registada para auditoria.");
+      toast.success(tr("toast_correction_saved"));
       closeStaffCorrection();
       await loadAll();
     } finally {
@@ -1076,7 +1075,7 @@ export function ModuleAuthorizationsPanel({
               onValueChange={(v) => bindings.setValues((prev) => ({ ...prev, [f.id]: v }))}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Escolha…" />
+                <SelectValue placeholder={tr("choose_placeholder")} />
               </SelectTrigger>
               <SelectContent>
                 {choiceOpts.map((opt) => (
@@ -1217,7 +1216,7 @@ export function ModuleAuthorizationsPanel({
         }
       : null;
 
-  if (!schoolId) return <p className="text-sm text-muted-foreground">A carregar escola…</p>;
+  if (!schoolId) return <p className="text-sm text-muted-foreground">{tr("loading_school")}</p>;
 
   return (
     <div className="space-y-4">
@@ -1225,17 +1224,15 @@ export function ModuleAuthorizationsPanel({
         <div>
           <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
             <FileSignature className="h-5 w-5 text-primary" />
-            Autorizações ({MODULE_LABEL[module]})
+            {tr("panel_title", { module: moduleLabel })}
           </h2>
           <p className="mt-1 max-w-xl text-xs text-muted-foreground">
-            A escola configura formulários e define o envio aos encarregados de educação: ou todos os responsáveis dos alunos das
-            turmas escolhidas, ou o encarregado associado a cada aluno em modo nominal. As submissões ficam registadas aqui dentro
-            de {MODULE_LABEL[module]}.
+            {tr("panel_intro", { module: moduleLabel })}
           </p>
         </div>
         {canManageTemplates ? (
           <Button type="button" size="sm" className="gap-2" onClick={openNewTemplate}>
-            <Plus className="h-4 w-4" /> Novo formulário
+            <Plus className="h-4 w-4" /> {tr("new_form_button")}
           </Button>
         ) : null}
       </div>
@@ -1249,25 +1246,25 @@ export function ModuleAuthorizationsPanel({
           {canManageTemplates && templates.length > 0 ? (
             <Card className="overflow-hidden border-border shadow-card">
               <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-3">
-                <h3 className="text-sm font-semibold text-foreground">Formulários da escola</h3>
+                <h3 className="text-sm font-semibold text-foreground">{tr("school_forms_title")}</h3>
                 <span className="text-xs text-muted-foreground gap-1 inline-flex items-center">
-                  <ClipboardList className="h-3.5 w-3.5" /> Activo/inactivo
+                  <ClipboardList className="h-3.5 w-3.5" /> {tr("active_inactive_hint")}
                 </span>
               </div>
               <ScrollArea className="max-h-56">
                 <ul className="divide-y divide-border">
                   {templates.map((t) => (
                     <li key={t.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
-                      <Badge variant={t.is_active ? "default" : "secondary"}>{t.is_active ? "Activo" : "Inactivo"}</Badge>
+                      <Badge variant={t.is_active ? "default" : "secondary"}>{t.is_active ? tr("badge_active") : tr("badge_inactive")}</Badge>
                       <span className="flex-1 font-medium">{t.title}</span>
-                      <span className="text-muted-foreground">{parseFields(t.fields).length} campo(s)</span>
-                      <Badge variant="outline" className="border-dashed text-[10px] font-normal sm:text-xs">{templateRecipientSummary(t)}</Badge>
+                      <span className="text-muted-foreground">{tr("fields_count", { count: parseFields(t.fields).length })}</span>
+                      <Badge variant="outline" className="border-dashed text-[10px] font-normal sm:text-xs">{summarizeRecipient(t)}</Badge>
                       <div className="flex gap-1">
                         <Button
                           size="icon"
                           variant="ghost"
                           className="h-8 w-8"
-                          title="PDF do modelo (sem respostas)"
+                          title={tr("pdf_blank_title")}
                           type="button"
                           onClick={() => handleDownloadBlankTemplatePdf(t)}
                           disabled={parseFields(t.fields).length === 0}
@@ -1278,7 +1275,7 @@ export function ModuleAuthorizationsPanel({
                           size="icon"
                           variant="ghost"
                           className="h-8 w-8"
-                          title={t.is_active ? "Desactivar formulário" : "Activar formulário"}
+                          title={t.is_active ? tr("deactivate_form_title") : tr("activate_form_title")}
                           type="button"
                           onClick={() => void toggleTemplateActive(t)}
                         >
@@ -1301,10 +1298,10 @@ export function ModuleAuthorizationsPanel({
           <Tabs value={innerTab} onValueChange={(v) => setInnerTab(v as typeof innerTab)}>
             <TabsList className="h-auto flex-wrap gap-1">
               <TabsTrigger value="preencher" className="gap-2">
-                <Send className="h-4 w-4" /> {t("tab_fill")}
+                <Send className="h-4 w-4" /> {tr("tab_fill")}
               </TabsTrigger>
               <TabsTrigger value="historico" className="gap-2">
-                <User className="h-4 w-4" /> {t("tab_recent_history")}
+                <User className="h-4 w-4" /> {tr("tab_recent_history")}
               </TabsTrigger>
             </TabsList>
 
@@ -1312,26 +1309,19 @@ export function ModuleAuthorizationsPanel({
               {activeTemplates.length === 0 ? (
                 <p className="rounded-2xl border border-dashed border-border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
                   {canManageTemplates ? (
-                    <>
-                      Aqui só aparece o formulário público com o título exacto{" "}
-                      <span className="font-medium text-foreground">«{publicationTemplateTitle}»</span>. Crie ou active esse
-                      modelo em «Formulários da escola» (acima); outros títulos ficam só na gestão.
-                    </>
+                    tr("fill_empty_staff", { title: publicationTitleDisplay })
                   ) : (
-                    <>
-                      A escola ainda não tem um formulário activo com o título{" "}
-                      <span className="font-medium text-foreground">«{publicationTemplateTitle}»</span> nesta área.
-                    </>
+                    tr("fill_empty_user", { title: publicationTitleDisplay })
                   )}
                 </p>
               ) : (
                 <Card className="border-border bg-card p-5 shadow-card">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
-                      <Label>Formulário</Label>
+                      <Label>{tr("label_form")}</Label>
                       <Select value={fillTemplateId} onValueChange={setFillTemplateId}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Escolher…" />
+                          <SelectValue placeholder={tr("choose_placeholder")} />
                         </SelectTrigger>
                         <SelectContent>
                           {activeTemplates.map((t) => (
@@ -1343,10 +1333,10 @@ export function ModuleAuthorizationsPanel({
                       </Select>
                     </div>
                     <div className="grid gap-2">
-                      <Label>Aluno</Label>
+                      <Label>{tr("label_student")}</Label>
                       <Select value={fillStudentId} onValueChange={setFillStudentId} disabled={filteredStudentsForFill.length === 0}>
                         <SelectTrigger>
-                          <SelectValue placeholder={filteredStudentsForFill.length === 0 ? "Sem alunos disponíveis" : "Escolher aluno"} />
+                          <SelectValue placeholder={filteredStudentsForFill.length === 0 ? tr("no_students_available") : tr("choose_student")} />
                         </SelectTrigger>
                         <SelectContent>
                           {filteredStudentsForFill.map((s) => (
@@ -1366,7 +1356,7 @@ export function ModuleAuthorizationsPanel({
                   </div>
                   <div className="mt-6 flex justify-end gap-2">
                     <Button type="button" variant="outline" onClick={() => resetFillForm()} disabled={submitting}>
-                      Limpar
+                      {tr("clear")}
                     </Button>
                     <Button
                       type="button"
@@ -1375,7 +1365,7 @@ export function ModuleAuthorizationsPanel({
                       disabled={submitting || !fillTemplateId || !fillStudentId}
                     >
                       {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                      Submeter autorização
+                      {tr("submit_authorization")}
                     </Button>
                   </div>
                 </Card>
@@ -1385,30 +1375,28 @@ export function ModuleAuthorizationsPanel({
             <TabsContent value="historico" className="mt-4">
               {canManageTemplates && !canStaffCorrectSubmittedAuth && submissions.length > 0 ? (
                 <p className="mb-3 rounded-xl border border-border bg-muted/25 px-4 py-2 text-xs text-muted-foreground">
-                  Para <strong className="font-medium text-foreground">editar respostas já submetidas</strong> é preciso
-                  perfil de Administrador, Super‑administrador, Direcção, Secretariado ou Tesouraria — alinhado às permissões
-                  do sistema.
+                  {tr("history_edit_permission_hint")}
                 </p>
               ) : null}
               {submissions.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">Sem submissões ainda dentro do seu acesso.</p>
+                <p className="py-8 text-center text-sm text-muted-foreground">{tr("history_empty")}</p>
               ) : (
                 <div className="overflow-x-auto rounded-2xl border border-border shadow-card">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                        <th className="px-4 py-3">Data</th>
-                        <th className="px-4 py-3">Formulário</th>
-                        <th className="px-4 py-3">Aluno</th>
-                        {canManageTemplates ? <th className="px-4 py-3">Por</th> : null}
-                        <th className="px-4 py-3 text-right">Acções</th>
+                        <th className="px-4 py-3">{tr("col_date")}</th>
+                        <th className="px-4 py-3">{tr("col_form")}</th>
+                        <th className="px-4 py-3">{tr("col_student")}</th>
+                        {canManageTemplates ? <th className="px-4 py-3">{tr("col_by")}</th> : null}
+                        <th className="px-4 py-3 text-right">{tr("col_actions")}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {submissions.slice(0, 80).map((s) => (
                         <tr key={s.id} className="border-t border-border bg-card hover:bg-muted/20">
                           <td className="whitespace-nowrap px-4 py-2 text-muted-foreground">
-                            {new Date(s.created_at).toLocaleString("pt-PT")}
+                            {new Date(s.created_at).toLocaleString(dateLocaleTag)}
                           </td>
                           <td className="px-4 py-2 font-medium">{s.template?.title ?? "—"}</td>
                           <td className="px-4 py-2">{s.student?.full_name ?? "—"}</td>
@@ -1420,13 +1408,13 @@ export function ModuleAuthorizationsPanel({
                                 size="sm"
                                 variant="secondary"
                                 className="h-8 gap-1 text-xs"
-                                title="PDF com respostas do encarregado"
+                                title={tr("pdf_submission_title")}
                                 onClick={() => handleDownloadSubmissionPdf(s)}
                               >
-                                <FileDown className="h-3.5 w-3.5" /> PDF
+                                <FileDown className="h-3.5 w-3.5" /> {tr("pdf_short")}
                               </Button>
                               <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => setViewSub(s)}>
-                                Ver respostas
+                                {tr("view_answers")}
                               </Button>
                               {canStaffCorrectSubmittedAuth ? (
                                 <Button
@@ -1434,10 +1422,10 @@ export function ModuleAuthorizationsPanel({
                                   size="sm"
                                   variant="secondary"
                                   className="h-8 gap-1 text-xs"
-                                  title="Alterar respostas do encarregado (auditoria)"
+                                  title={tr("edit_answers_audit_title")}
                                   onClick={() => openStaffCorrection(s)}
                                 >
-                                  <Pencil className="h-3.5 w-3.5" /> Editar respostas
+                                  <Pencil className="h-3.5 w-3.5" /> {tr("edit_answers")}
                                 </Button>
                               ) : null}
                             </div>
@@ -1456,32 +1444,25 @@ export function ModuleAuthorizationsPanel({
       <Dialog open={tplDialog} onOpenChange={setTplDialog}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editingTpl ? "Editar formulário" : "Novo formulário"}</DialogTitle>
-            <DialogDescription>
-              Defina o título, o envio aos encarregados de educação e os campos. Para dropdown, rádio e várias caixas use uma
-              linha por opção.
-            </DialogDescription>
+            <DialogTitle>{editingTpl ? tr("dialog_edit_form") : tr("dialog_new_form")}</DialogTitle>
+            <DialogDescription>{tr("dialog_form_desc")}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-2">
             <div className="grid gap-2">
-              <Label>Título</Label>
-              <Input value={tplTitle} onChange={(e) => setTplTitle(e.target.value)} placeholder="Ex.: Autorização de transporte escolar" />
+              <Label>{tr("label_title")}</Label>
+              <Input value={tplTitle} onChange={(e) => setTplTitle(e.target.value)} placeholder={tr("title_placeholder")} />
             </div>
             <div className="grid gap-2">
-              <Label>Descrição (opcional)</Label>
-              <Textarea rows={3} value={tplDesc} onChange={(e) => setTplDesc(e.target.value)} placeholder="Instruções breves…" />
+              <Label>{tr("label_description_optional")}</Label>
+              <Textarea rows={3} value={tplDesc} onChange={(e) => setTplDesc(e.target.value)} placeholder={tr("description_placeholder")} />
             </div>
 
             {canManageTemplates ? (
               <div className="grid gap-2 rounded-xl border border-border bg-muted/20 p-3">
-                <Label className="text-sm font-semibold">Envio aos encarregados de educação</Label>
-                <p className="text-[11px] text-muted-foreground">
-                  As notificações (email e push) são enviadas aos perfis PARENT dos encarregados. Por turmas, todos os
-                  encarregados dos alunos dessas turmas são notificados; no modo nominal, confirme o encarregado associado ao
-                  aluno em cada linha.
-                </p>
+                <Label className="text-sm font-semibold">{tr("recipient_section_title")}</Label>
+                <p className="text-[11px] text-muted-foreground">{tr("recipient_section_intro")}</p>
                 <div className="flex flex-col gap-2">
-                  {(Object.keys(RECIPIENT_MODE_META) as TemplateRecipientMode[]).map((m) => (
+                  {recipientModes.map((m) => (
                     <button
                       key={m}
                       type="button"
@@ -1491,8 +1472,8 @@ export function ModuleAuthorizationsPanel({
                         tplRecipientMode === m ? "border-primary bg-primary/10 shadow-sm" : "border-border hover:bg-muted/50",
                       )}
                     >
-                      <span className="text-sm font-medium">{RECIPIENT_MODE_META[m].title}</span>
-                      <span className="mt-1 block text-xs leading-snug text-muted-foreground">{RECIPIENT_MODE_META[m].hint}</span>
+                      <span className="text-sm font-medium">{recipientModeTitle(m)}</span>
+                      <span className="mt-1 block text-xs leading-snug text-muted-foreground">{recipientModeHint(m)}</span>
                     </button>
                   ))}
                 </div>
@@ -1500,8 +1481,9 @@ export function ModuleAuthorizationsPanel({
                 {tplRecipientMode === "classroom_homeroom_teachers" ? (
                   <div className="mt-1 space-y-2">
                     <p className="text-[11px] text-muted-foreground">
-                      Lista limitada ao ano letivo globalmente seleccionado no cabeçalho
-                      {selectedYear?.label ? <span className="font-medium text-foreground"> ({selectedYear.label})</span> : null}.
+                      {tr("classroom_year_hint", {
+                        yearSuffix: selectedYear?.label ? tr("year_suffix", { label: selectedYear.label }) : "",
+                      })}
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -1514,7 +1496,7 @@ export function ModuleAuthorizationsPanel({
                           setTplClassroomIds(new Set(classroomsForSchool.map((c) => c.id)))
                         }
                       >
-                        Selecionar todas
+                        {tr("select_all_classrooms")}
                       </Button>
                       <Button
                         type="button"
@@ -1524,17 +1506,17 @@ export function ModuleAuthorizationsPanel({
                         disabled={tplClassroomIds.size === 0}
                         onClick={() => setTplClassroomIds(new Set())}
                       >
-                        Limpar seleção
+                        {tr("clear_selection")}
                       </Button>
                     </div>
                     <div className="max-h-44 space-y-2 overflow-y-auto rounded-lg border border-border bg-background/80 p-2">
                       {!selectedYearId ? (
                         <p className="text-xs text-muted-foreground">
-                          Seleccione o ano letivo no cabeçalho da aplicação para poder escolher turmas.
+                          {tr("pick_year_header")}
                         </p>
                       ) : classroomsForSchool.length === 0 ? (
                         <p className="text-xs text-muted-foreground">
-                          Sem turmas registadas nesta escola para {selectedYear.label}.
+                          {tr("no_classrooms_year", { year: selectedYear.label })}
                         </p>
                       ) : (
                         classroomsForSchool.map((c) => (
@@ -1573,20 +1555,20 @@ export function ModuleAuthorizationsPanel({
                           ])
                         }
                       >
-                        <Plus className="h-3 w-3" /> Destinatário
+                        <Plus className="h-3 w-3" /> {tr("add_recipient")}
                       </Button>
                     </div>
                     {tplNamedDrafts.map((row) => {
                       const st = studentsDetailed.find((s) => s.id === row.student_id);
                       const encOpts: Array<{ value: string; label: string }> = [];
                       if (st?.parent_id)
-                        encOpts.push({ value: `parent:${st.parent_id}`, label: "Encarregado de educação (associado ao aluno)" });
+                        encOpts.push({ value: `parent:${st.parent_id}`, label: tr("guardian_associated_label") });
                       const selectValue = encOpts.some((o) => o.value === row.assignee_pick) ? row.assignee_pick : "__";
                       return (
                         <Card key={row.rowKey} className="border-border bg-card p-3">
                           <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
                             <Badge variant="secondary" className="text-[10px]">
-                              Destinatário nominal
+                              {tr("badge_named_recipient")}
                             </Badge>
                             {tplNamedDrafts.length > 1 ? (
                               <Button
@@ -1600,13 +1582,13 @@ export function ModuleAuthorizationsPanel({
                                   )
                                 }
                               >
-                                Remover linha
+                                {tr("remove_row")}
                               </Button>
                             ) : null}
                           </div>
                           <div className="grid gap-3 md:grid-cols-2">
                             <div className="grid gap-2">
-                              <Label className="text-xs">Aluno</Label>
+                              <Label className="text-xs">{tr("label_student")}</Label>
                               <Select
                                 value={row.student_id || "__"}
                                 onValueChange={(v) => {
@@ -1617,7 +1599,7 @@ export function ModuleAuthorizationsPanel({
                                 }}
                               >
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Escolher aluno" />
+                                  <SelectValue placeholder={tr("choose_student")} />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="__">—</SelectItem>
@@ -1630,7 +1612,7 @@ export function ModuleAuthorizationsPanel({
                               </Select>
                             </div>
                             <div className="grid gap-2">
-                              <Label className="text-xs">Encarregado (notificado)</Label>
+                              <Label className="text-xs">{tr("label_guardian_notified")}</Label>
                               <Select
                                 value={selectValue}
                                 onValueChange={(v) =>
@@ -1644,10 +1626,10 @@ export function ModuleAuthorizationsPanel({
                                   <SelectValue
                                     placeholder={
                                       !row.student_id
-                                        ? "Escolha o aluno primeiro"
+                                        ? tr("pick_student_first")
                                         : encOpts.length === 0
-                                          ? "Sem encarregado associado a este aluno"
-                                          : "Confirmar encarregado"
+                                          ? tr("no_guardian_for_student")
+                                          : tr("confirm_guardian")
                                     }
                                   />
                                 </SelectTrigger>
@@ -1671,9 +1653,9 @@ export function ModuleAuthorizationsPanel({
             ) : null}
 
             <div className="flex flex-wrap gap-2 pt-2">
-              {(Object.keys(FIELD_TYPE_META) as AuthorizationFieldType[]).map((ft) => (
+              {fieldTypes.map((ft) => (
                 <Button key={ft} type="button" variant="secondary" size="sm" className="h-8 text-xs" onClick={() => addField(ft)}>
-                  + {FIELD_TYPE_META[ft].label}
+                  + {fieldTypeLabel(ft)}
                 </Button>
               ))}
             </div>
@@ -1682,13 +1664,13 @@ export function ModuleAuthorizationsPanel({
               {tplFields.map((f) => (
                 <Card key={f.id} className="space-y-3 border-border p-4">
                   <div className="flex items-start justify-between gap-2">
-                    <Badge variant="outline">{FIELD_TYPE_META[f.type]?.label ?? f.type}</Badge>
+                    <Badge variant="outline">{fieldTypeLabel(f.type)}</Badge>
                     <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-destructive" onClick={() => removeField(f.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                   <div className="grid gap-2">
-                    <Label className="text-xs">Etiqueta do campo</Label>
+                    <Label className="text-xs">{tr("field_label")}</Label>
                     <Input
                       value={f.label}
                       onChange={(e) =>
@@ -1705,12 +1687,12 @@ export function ModuleAuthorizationsPanel({
                       }
                     />
                     <Label htmlFor={`req-${f.id}`} className="cursor-pointer text-xs">
-                      Obrigatório
+                      {tr("required")}
                     </Label>
                   </div>
                   {(f.type === "select" || f.type === "radio" || f.type === "checkbox_group") && (
                     <div className="grid gap-2">
-                      <Label className="text-xs">Opções (uma por linha)</Label>
+                      <Label className="text-xs">{tr("options_one_per_line")}</Label>
                       <Textarea
                         rows={3}
                         value={(f.options ?? []).join("\n")}
@@ -1723,7 +1705,7 @@ export function ModuleAuthorizationsPanel({
                     </div>
                   )}
                   <div className="grid gap-2">
-                    <Label className="text-xs">Texto de ajuda (opcional)</Label>
+                    <Label className="text-xs">{tr("helper_optional")}</Label>
                     <Input
                       value={f.helper ?? ""}
                       onChange={(e) =>
@@ -1746,7 +1728,7 @@ export function ModuleAuthorizationsPanel({
                       });
                     }}
                   >
-                    Subir
+                    {tr("move_up")}
                   </Button>
                 </Card>
               ))}
@@ -1754,11 +1736,11 @@ export function ModuleAuthorizationsPanel({
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setTplDialog(false)}>
-              Cancelar
+              {tr("cancel")}
             </Button>
             <Button type="button" className="gap-2 bg-pastel-blue text-pastel-blue-foreground" onClick={() => void saveTemplate()} disabled={tplSaving}>
               {tplSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Guardar
+              {tr("save")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1767,12 +1749,12 @@ export function ModuleAuthorizationsPanel({
       <AlertDialog open={!!deleteTplId} onOpenChange={(o) => !o && setDeleteTplId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover formulário?</AlertDialogTitle>
+            <AlertDialogTitle>{tr("delete_form_title")}</AlertDialogTitle>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel>{tr("cancel")}</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive" onClick={() => void confirmDeleteTemplate()}>
-              Remover
+              {tr("remove")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1781,10 +1763,10 @@ export function ModuleAuthorizationsPanel({
       <Dialog open={!!viewSub} onOpenChange={(o) => !o && setViewSub(null)}>
         <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Submissão</DialogTitle>
+            <DialogTitle>{tr("submission_dialog_title")}</DialogTitle>
             <DialogDescription>
               {viewSub?.template?.title} · {viewSub?.student?.full_name ?? ""}
-              {viewSub ? ` · ${new Date(viewSub.created_at).toLocaleString("pt-PT")}` : ""}
+              {viewSub ? ` · ${new Date(viewSub.created_at).toLocaleString(dateLocaleTag)}` : ""}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 text-sm">
@@ -1802,7 +1784,7 @@ export function ModuleAuthorizationsPanel({
                     <p className="text-xs font-semibold text-muted-foreground">{f.label}</p>
                     <div className="mt-1 break-words">
                       {f.type === "signature" && typeof resp[f.id] === "string" ? (
-                        <img src={resp[f.id] as string} alt="Assinatura" className="max-h-24 rounded border bg-white p-1" />
+                        <img src={resp[f.id] as string} alt={tr("signature_alt")} className="max-h-24 rounded border bg-white p-1" />
                       ) : f.type === "file" &&
                         resp[f.id] &&
                         typeof resp[f.id] === "object" &&
@@ -1813,7 +1795,7 @@ export function ModuleAuthorizationsPanel({
                           rel="noreferrer"
                           className="text-primary underline"
                         >
-                          {(resp[f.id] as { name?: string }).name ?? "Ver ficheiro"}
+                          {(resp[f.id] as { name?: string }).name ?? tr("view_file")}
                         </a>
                       ) : f.type === "checkbox_group" && Array.isArray(resp[f.id]) ? (
                         (resp[f.id] as string[]).join(", ")
@@ -1828,8 +1810,8 @@ export function ModuleAuthorizationsPanel({
                 const legacySig =
                   viewSub.signature_data && !sawSignatureInResponses ? (
                     <div className="rounded-xl border border-border p-3">
-                      <p className="text-xs font-semibold text-muted-foreground">Assinatura (registo)</p>
-                      <img src={viewSub.signature_data} alt="Assinatura" className="mt-2 max-h-28 rounded bg-white p-1" />
+                      <p className="text-xs font-semibold text-muted-foreground">{tr("signature_record")}</p>
+                      <img src={viewSub.signature_data} alt={tr("signature_alt")} className="mt-2 max-h-28 rounded bg-white p-1" />
                     </div>
                   ) : null;
                 return (
@@ -1838,13 +1820,13 @@ export function ModuleAuthorizationsPanel({
                     {legacySig}
                     {Array.isArray(viewSub.attachment_urls) && viewSub.attachment_urls.length > 0 ? (
                       <div className="rounded-xl border border-border p-3 text-xs">
-                        <p className="font-semibold text-muted-foreground">Anexos</p>
+                        <p className="font-semibold text-muted-foreground">{tr("attachments")}</p>
                         <ul className="mt-2 list-disc pl-5">
                           {viewSub.attachment_urls.map((a, i) => (
                             <li key={`${a.url}-${i}`}>
                               {a.url ? (
                                 <a href={a.url} target="_blank" rel="noreferrer" className="text-primary underline">
-                                  {a.name ?? "ficheiro"}
+                                  {a.name ?? tr("file_fallback")}
                                 </a>
                               ) : (
                                 "—"
@@ -1864,12 +1846,12 @@ export function ModuleAuthorizationsPanel({
                 type="button"
                 variant="secondary"
                 className="gap-2 sm:mr-auto"
-                title="Alterar como administrador escolar (auditoria)"
+                title={tr("edit_answers_admin_title")}
                 onClick={() => {
                   openStaffCorrection(viewSub);
                 }}
               >
-                <Pencil className="h-4 w-4" /> Editar respostas
+                <Pencil className="h-4 w-4" /> {tr("edit_answers")}
               </Button>
             ) : (
               <span />
@@ -1882,7 +1864,7 @@ export function ModuleAuthorizationsPanel({
                 if (viewSub) handleDownloadSubmissionPdf(viewSub);
               }}
             >
-              <FileDown className="h-4 w-4" /> PDF com respostas
+              <FileDown className="h-4 w-4" /> {tr("pdf_with_answers")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1896,26 +1878,22 @@ export function ModuleAuthorizationsPanel({
       >
         <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Correção pela administração</DialogTitle>
-            <DialogDescription>
-              Pode alterar as respostas, assinaturas ou anexos desta submissão. Os campos modelo, aluno e autor original
-              mantêm‑se iguais. A auditoria guarda utilizador escolar, hora e conteúdo anterior/novo (Administrador › Logs de
-              auditoria).
-            </DialogDescription>
+            <DialogTitle>{tr("staff_correction_title")}</DialogTitle>
+            <DialogDescription>{tr("staff_correction_desc")}</DialogDescription>
           </DialogHeader>
           {staffEditSub && staffFieldBindings ? (
             <div className="space-y-4 text-sm">
               <div className="rounded-xl border border-border bg-muted/20 p-3 text-xs leading-relaxed">
-                <p className="font-semibold text-foreground">Contexto da submissão</p>
+                <p className="font-semibold text-foreground">{tr("submission_context")}</p>
                 <p className="mt-1 text-muted-foreground">
-                  Originalmente por <strong className="text-foreground">{staffEditSub.submitter?.full_name ?? "—"}</strong>
-                  · Aluno/a <strong className="text-foreground">{staffEditSub.student?.full_name ?? "—"}</strong>
-                  · {new Date(staffEditSub.created_at).toLocaleString("pt-PT")}
+                  {tr("originally_by")} <strong className="text-foreground">{staffEditSub.submitter?.full_name ?? "—"}</strong>
+                  · {tr("student_label")} <strong className="text-foreground">{staffEditSub.student?.full_name ?? "—"}</strong>
+                  · {new Date(staffEditSub.created_at).toLocaleString(dateLocaleTag)}
                 </p>
               </div>
               <div className="space-y-4 border-t border-border pt-4">
                 {staffCorrectionDefs.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Sem estrutura de campos disponível neste formulário.</p>
+                  <p className="text-sm text-muted-foreground">{tr("no_field_structure")}</p>
                 ) : (
                   staffCorrectionDefs.map((f) => renderFieldDraft(f, staffFieldBindings))
                 )}
@@ -1924,11 +1902,10 @@ export function ModuleAuthorizationsPanel({
           ) : null}
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" disabled={staffEditSaving} onClick={() => closeStaffCorrection()}>
-              Cancelar
+              {tr("cancel")}
             </Button>
             <Button type="button" className="gap-2 bg-pastel-blue text-pastel-blue-foreground" onClick={() => void saveStaffCorrection()} disabled={staffEditSaving || staffCorrectionDefs.length === 0}>
-              {staffEditSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />} Guardar
-              correções
+              {staffEditSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />} {tr("save_corrections")}
             </Button>
           </DialogFooter>
         </DialogContent>
