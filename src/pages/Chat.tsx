@@ -126,6 +126,7 @@ const Chat = () => {
   const [uploading, setUploading] = useState(false);
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [newChatSearch, setNewChatSearch] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -410,8 +411,46 @@ const Chat = () => {
       return !q || c.full_name.toLowerCase().includes(q) || roleLabel(c.role).toLowerCase().includes(q);
     });
 
+  const triggerImagePick = () => {
+    setShowAttachMenu(false);
+    setShowEmoji(false);
+    imageRef.current?.click();
+  };
+
+  const triggerFilePick = () => {
+    setShowAttachMenu(false);
+    setShowEmoji(false);
+    fileRef.current?.click();
+  };
+
+  const emojiPickerWidth = Math.min(320, Math.max(260, windowWidth - 48));
+
   return (
     <>
+      <input
+        ref={fileRef}
+        type="file"
+        className="sr-only"
+        tabIndex={-1}
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void onPickFile(f, "file");
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={imageRef}
+        type="file"
+        className="sr-only"
+        tabIndex={-1}
+        accept="image/*"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void onPickFile(f, "image");
+          e.target.value = "";
+        }}
+      />
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("title")}</h1>
@@ -597,22 +636,6 @@ const Chat = () => {
             {/* Composer */}
             <div className="border-t border-border bg-card p-3">
               <div className="flex items-end gap-2">
-                {/* Attach file */}
-                <input
-                  ref={fileRef}
-                  type="file"
-                  className="hidden"
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) onPickFile(f, "file"); e.target.value = ""; }}
-                />
-                <input
-                  ref={imageRef}
-                  type="file"
-                  className="hidden"
-                  accept="image/*"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) onPickFile(f, "image"); e.target.value = ""; }}
-                />
-
                 <Popover>
                   <PopoverTrigger asChild>
                     <button
@@ -625,13 +648,15 @@ const Chat = () => {
                   </PopoverTrigger>
                   <PopoverContent align="start" side="top" className="w-44 p-1">
                     <button
-                      onClick={() => imageRef.current?.click()}
+                      type="button"
+                      onClick={triggerImagePick}
                       className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent"
                     >
                       <ImageIcon className="h-4 w-4" /> {t("attach_image")}
                     </button>
                     <button
-                      onClick={() => fileRef.current?.click()}
+                      type="button"
+                      onClick={triggerFilePick}
                       className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent"
                     >
                       <FileText className="h-4 w-4" /> {t("attach_document")}
@@ -692,7 +717,13 @@ const Chat = () => {
       {isMobileLayout && (
         <Dialog
           open={!!activeId}
-          onOpenChange={(open) => { if (!open) { setActiveId(null); setShowEmoji(false); } }}
+          onOpenChange={(open) => {
+            if (!open) {
+              setActiveId(null);
+              setShowEmoji(false);
+              setShowAttachMenu(false);
+            }
+          }}
         >
           <DialogContent className="fixed inset-0 z-[150] flex h-[100dvh] w-full max-w-none flex-col gap-0 rounded-none border-0 p-0 [transform:none] pl-[max(0.75rem,var(--sal-r))] pr-[max(0.75rem,var(--sar-r))]">
             <DialogHeader className="sr-only">
@@ -703,7 +734,7 @@ const Chat = () => {
             {/* Header */}
             <div className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-4 pb-3 pt-[max(0.75rem,var(--sat-r))]">
               <button
-                onClick={() => { setActiveId(null); setShowEmoji(false); }}
+                onClick={() => { setActiveId(null); setShowEmoji(false); setShowAttachMenu(false); }}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground hover:bg-accent"
                 aria-label={t("back_aria")}
               >
@@ -787,9 +818,10 @@ const Chat = () => {
             {/* Composer */}
             <div className="shrink-0 border-t border-border bg-card px-3 pb-[max(0.75rem,var(--sab-r))] pt-3">
               <div className="flex items-end gap-2">
-                <Popover>
+                <Popover modal={false}>
                   <PopoverTrigger asChild>
                     <button
+                      type="button"
                       disabled={!active || uploading}
                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
                       aria-label={t("attach_aria")}
@@ -797,15 +829,17 @@ const Chat = () => {
                       {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" strokeWidth={1.75} />}
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent align="start" side="top" className="w-44 p-1">
+                  <PopoverContent align="start" side="top" className="z-[200] w-44 p-1">
                     <button
-                      onClick={() => imageRef.current?.click()}
+                      type="button"
+                      onClick={triggerImagePick}
                       className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent"
                     >
                       <ImageIcon className="h-4 w-4" /> {t("attach_image")}
                     </button>
                     <button
-                      onClick={() => fileRef.current?.click()}
+                      type="button"
+                      onClick={triggerFilePick}
                       className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent"
                     >
                       <FileText className="h-4 w-4" /> {t("attach_document")}
@@ -813,9 +847,10 @@ const Chat = () => {
                   </PopoverContent>
                 </Popover>
 
-                <Popover open={showEmoji} onOpenChange={setShowEmoji}>
+                <Popover modal={false} open={showEmoji} onOpenChange={setShowEmoji}>
                   <PopoverTrigger asChild>
                     <button
+                      type="button"
                       disabled={!active}
                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
                       aria-label={t("emoji_aria")}
@@ -823,13 +858,18 @@ const Chat = () => {
                       <Smile className="h-4 w-4" strokeWidth={1.75} />
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent align="start" side="top" className="w-auto border-0 p-0">
+                  <PopoverContent
+                    align="start"
+                    side="top"
+                    className="z-[200] w-auto border-0 p-0"
+                    onOpenAutoFocus={(e) => e.preventDefault()}
+                  >
                     <EmojiPicker
                       onEmojiClick={(e) => { setDraft((d) => d + e.emoji); }}
                       emojiStyle={EmojiStyle.NATIVE}
                       theme={Theme.AUTO}
-                      width={300}
-                      height={350}
+                      width={emojiPickerWidth}
+                      height={320}
                       searchPlaceHolder={t("emoji_search")}
                       previewConfig={{ showPreview: false }}
                     />
