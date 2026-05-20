@@ -29,6 +29,10 @@ export type SaftInvoiceRow = {
   exemption_code?: string;
   exemption_reason?: string;
   line_description?: string;
+  /** N = Normal, A = Anulada (SAF-T AO InvoiceStatus). */
+  invoice_status?: "N" | "A" | string | null;
+  cancellation_reason?: string | null;
+  cancelled_at?: string | null;
 };
 
 function esc(s: string): string {
@@ -104,6 +108,14 @@ function taxExemptionReasonText(raw: string): string {
     trimmed.length >= 6
       ? trimmed.slice(0, 60)
       : fallback.slice(0, 60);
+  if (t.length < 6) t = fallback.slice(0, 60);
+  return t;
+}
+
+/** Motivo de anulação / estado no DocumentStatus (6–60 caracteres). */
+function saftDocumentStatusReasonText(raw: string, fallback: string): string {
+  const trimmed = raw.trim();
+  let t = trimmed.length >= 6 ? trimmed.slice(0, 60) : fallback.slice(0, 60);
   if (t.length < 6) t = fallback.slice(0, 60);
   return t;
 }
@@ -318,9 +330,9 @@ export function generateSaftXml(input: {
     <Invoice>
       <InvoiceNo>${invNoEsc}</InvoiceNo>
       <DocumentStatus>
-        <InvoiceStatus>N</InvoiceStatus>
-        <InvoiceStatusDate>${entryDtEsc}</InvoiceStatusDate>
-        <Reason>Emitido pela aplicação</Reason>
+        <InvoiceStatus>${statusCode}</InvoiceStatus>
+        <InvoiceStatusDate>${statusDateEsc}</InvoiceStatusDate>
+        <Reason>${statusReasonEsc}</Reason>
         <SourceID>${sourceId}</SourceID>
         <SourceBilling>P</SourceBilling>
       </DocumentStatus>

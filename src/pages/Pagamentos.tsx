@@ -17,7 +17,17 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus, GraduationCap, FileDown, Utensils, CalendarDays } from "lucide-react";
+import {
+  Loader2, Plus, Pencil, Trash2, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus,
+  GraduationCap, FileDown, Utensils, CalendarDays, MoreVertical, Ban, Receipt,
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { GRADE_LEVELS } from "@/lib/grade-levels";
 import { useAuth } from "@/hooks/useAuth";
@@ -29,11 +39,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useUserRole } from "@/hooks/useUserRole";
-import { canValidateSchoolPaymentProofs } from "@/lib/schoolStaffRoles";
+import { canCancelFiscalInvoice, canValidateSchoolPaymentProofs } from "@/lib/schoolStaffRoles";
 import type { GuardianPaymentMode } from "@/lib/guardianPayment";
 import { encarregadosUsamAnexo, normalizeGuardianPaymentMode } from "@/lib/guardianPayment";
 import { invokeEmitFiscalInvoices, type EmitFiscalInvoicesResult } from "@/lib/fiscal/invokeEmitFiscalInvoices";
 import { downloadFiscalInvoicePdfById } from "@/lib/fiscal/downloadFiscalInvoicePdf";
+import { invokeCancelFiscalInvoice } from "@/lib/fiscal/invokeCancelFiscalInvoice";
+import {
+  FISCAL_CANCELLATION_REASON_CODES,
+  type FiscalCancellationReasonCode,
+  resolveCancellationReasonText,
+} from "@/lib/fiscal/cancellationReasons";
 import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 import { uploadFileToR2, R2UploadError } from "@/lib/r2/uploadFileToR2";
 import { openFileUrl } from "@/lib/r2/resolveFileUrl";
@@ -393,6 +409,13 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     teacherUserId,
   );
   const canValidatePaymentProofs = canValidateSchoolPaymentProofs(role);
+  const canCancelInvoice = canCancelFiscalInvoice(role);
+
+  const fiscalT = useCallback(
+    (key: string, options?: Record<string, unknown>) =>
+      tPages(`pagamentos.fiscal_invoice.${key}`, options ?? ({} as Record<string, unknown>)),
+    [tPages],
+  );
   const { isParent, childIds, classroomIds: parentClassroomIds, loading: parentLoading } = useParentChildren();
   const { selectedYearId: globalAcademicYearId } = useAcademicYear();
   const [years, setYears] = useState<AcademicYear[]>([]);
@@ -500,9 +523,17 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
 
   /** Fatura fiscal (FACTURA‑RECIBO) por id de pagamento — para ícone/link na lista. */
   const [invoiceByPaymentId, setInvoiceByPaymentId] = useState<
-    Record<string, { invoiceId: string; documentNumber: string }>
+    Record<string, { invoiceId: string; documentNumber: string; invoiceStatus: "N" | "A" }>
   >({});
   const [downloadingInvoicePdfId, setDownloadingInvoicePdfId] = useState<string | null>(null);
+  const [cancelInvoiceDialog, setCancelInvoiceDialog] = useState<{
+    invoiceId: string;
+    documentNumber: string;
+    paymentId: string;
+  } | null>(null);
+  const [cancelReasonCode, setCancelReasonCode] = useState<FiscalCancellationReasonCode>("data_error_nif");
+  const [cancelReasonOther, setCancelReasonOther] = useState("");
+  const [cancellingInvoiceId, setCancellingInvoiceId] = useState<string | null>(null);
 
   // Staff "registar pagamento" dialog (works for both tuition and activity fees)
   const [recordDialog, setRecordDialog] = useState<
@@ -1541,7 +1572,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       for (const slice of chunkBySize(pidList, 200)) {
         const { data, error } = await supabase
           .from("invoices")
-          .select("id, payment_id, document_number")
+          .select("id, payment_id, document_number, invoice_status")
           .eq("school_id", schoolId)
           .in("payment_id", slice);
 
@@ -1557,9 +1588,11 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         for (const row of data ?? []) {
           const payId = row.payment_id as string | null;
           if (!payId?.trim()) continue;
+          const st = String(row.invoice_status ?? "N").trim().toUpperCase();
           next[payId] = {
             invoiceId: row.id as string,
             documentNumber: String(row.document_number ?? "").trim(),
+            invoiceStatus: st === "A" ? "A" : "N",
           };
         }
       }
@@ -2891,48 +2924,134 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
 
   const recordNeedsFile = isParent ? usarAnexoEncarregado : guardianPaymentMode === "proof_attachment";
 
-  /** Ícone na lista quando a cobrança está paga, o pagamento validado e existir FT. */
-  const invoiceIconForValidatedPayment = (feeMarkedPaid: boolean, pay?: PaymentListRow) => {
+  const downloadInvoicePdf = async (inv: { invoiceId: string; documentNumber: string }) => {
+    setDownloadingInvoicePdfId(inv.invoiceId);
+    try {
+      await downloadFiscalInvoicePdfById(inv.invoiceId);
+      toast({
+        title: fiscalT("pdf_downloaded_title"),
+        description: inv.documentNumber
+          ? fiscalT("pdf_downloaded_desc", { document: inv.documentNumber })
+          : fiscalT("pdf_downloaded_desc_generic"),
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: fiscalT("pdf_error_title"), description: msg, variant: "destructive" });
+    } finally {
+      setDownloadingInvoicePdfId(null);
+    }
+  };
+
+  const confirmCancelInvoice = async () => {
+    if (!cancelInvoiceDialog) return;
+    let reasonText: string;
+    try {
+      reasonText = resolveCancellationReasonText(cancelReasonCode, cancelReasonOther);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: fiscalT("cancel_error_title"), description: msg, variant: "destructive" });
+      return;
+    }
+    setCancellingInvoiceId(cancelInvoiceDialog.invoiceId);
+    const fx = await invokeCancelFiscalInvoice(cancelInvoiceDialog.invoiceId, reasonText);
+    setCancellingInvoiceId(null);
+    if (!fx.ok) {
+      toast({
+        title: fiscalT("cancel_error_title"),
+        description: fx.message ?? fiscalT("cancel_error_generic"),
+        variant: "destructive",
+      });
+      return;
+    }
+    setInvoiceByPaymentId((prev) => {
+      const payId = cancelInvoiceDialog.paymentId;
+      const cur = prev[payId];
+      if (!cur) return prev;
+      return { ...prev, [payId]: { ...cur, invoiceStatus: "A" as const } };
+    });
+    setCancelInvoiceDialog(null);
+    setCancelReasonOther("");
+    setCancelReasonCode("data_error_nif");
+    toast({
+      title: fiscalT("cancel_success_title"),
+      description: fiscalT("cancel_success_desc", {
+        document: fx.documentNumber ?? cancelInvoiceDialog.documentNumber,
+      }),
+    });
+  };
+
+  /** Menu FT na lista quando a cobrança está paga, o pagamento validado e existir FT. */
+  const invoiceActionsForValidatedPayment = (feeMarkedPaid: boolean, pay?: PaymentListRow) => {
     if (!feeMarkedPaid || !pay || pay.status !== "validado" || !pay.id?.trim()) return null;
     const inv = invoiceByPaymentId[pay.id];
     if (!inv?.invoiceId) return null;
     const busy = downloadingInvoicePdfId === inv.invoiceId;
+    const isCancelled = inv.invoiceStatus === "A";
+    const menuTitle = inv.documentNumber
+      ? fiscalT("menu_title", { document: inv.documentNumber })
+      : fiscalT("menu_title_generic");
+
     return (
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        className="h-8 w-8 shrink-0 text-primary"
-        disabled={busy}
-        title={
-          busy
-            ? "A gerar PDF…"
-            : inv.documentNumber
-              ? `Factura-recibo ${inv.documentNumber} — transferir PDF`
-              : "Transferir PDF da fatura"
-        }
-        onClick={() => {
-          void (async () => {
-            setDownloadingInvoicePdfId(inv.invoiceId);
-            try {
-              await downloadFiscalInvoicePdfById(inv.invoiceId);
-              toast({
-                title: "PDF transferido",
-                description: inv.documentNumber
-                  ? `FACTURA‑RECIBO ${inv.documentNumber} guardada.`
-                  : "Guarde ou partilhe o ficheiro conforme necessário.",
-              });
-            } catch (e: unknown) {
-              const msg = e instanceof Error ? e.message : String(e);
-              toast({ title: "Erro ao gerar PDF", description: msg, variant: "destructive" });
-            } finally {
-              setDownloadingInvoicePdfId(null);
-            }
-          })();
-        }}
-      >
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
-      </Button>
+      <div className="flex flex-col items-center gap-0.5">
+        {isCancelled && (
+          <Badge variant="outline" className="border-destructive text-destructive text-[10px] px-1 py-0">
+            {fiscalT("badge_cancelled")}
+          </Badge>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 shrink-0 text-primary"
+              disabled={busy || cancellingInvoiceId === inv.invoiceId}
+              title={menuTitle}
+            >
+              {busy || cancellingInvoiceId === inv.invoiceId ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MoreVertical className="h-4 w-4" />
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuItem
+              className="gap-2"
+              onClick={() => void downloadInvoicePdf(inv)}
+            >
+              <FileDown className="h-4 w-4" />
+              {fiscalT("action_download_pdf")}
+            </DropdownMenuItem>
+            {!isParent && canCancelInvoice && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="gap-2 text-destructive focus:text-destructive"
+                  disabled={isCancelled}
+                  onClick={() => {
+                    if (isCancelled) return;
+                    setCancelReasonCode("data_error_nif");
+                    setCancelReasonOther("");
+                    setCancelInvoiceDialog({
+                      invoiceId: inv.invoiceId,
+                      documentNumber: inv.documentNumber,
+                      paymentId: pay.id,
+                    });
+                  }}
+                >
+                  <Ban className="h-4 w-4" />
+                  {fiscalT("action_cancel_invoice")}
+                </DropdownMenuItem>
+                <DropdownMenuItem className="gap-2 opacity-50" disabled>
+                  <Receipt className="h-4 w-4" />
+                  {fiscalT("action_credit_note_soon")}
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     );
   };
 
@@ -3294,7 +3413,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   <Badge variant="secondary">{tuitionT("status_pending")}</Badge>
                                 )}
                               </td>
-                              <td className="py-2 px-2 align-middle text-center">{invoiceIconForValidatedPayment(!!f.is_paid, pay)}</td>
+                              <td className="py-2 px-2 align-middle text-center">{invoiceActionsForValidatedPayment(!!f.is_paid, pay)}</td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
                                   {pendingValidation && pay && !isParent && (
@@ -3647,7 +3766,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   <Badge variant="secondary">{tuitionT("status_pending")}</Badge>
                                 )}
                               </td>
-                              <td className="py-2 px-2 align-middle text-center">{invoiceIconForValidatedPayment(!!f.is_paid, pay)}</td>
+                              <td className="py-2 px-2 align-middle text-center">{invoiceActionsForValidatedPayment(!!f.is_paid, pay)}</td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
                                   {pendingValidation && pay && !isParent && (
@@ -3995,7 +4114,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   <Badge variant="secondary">{tuitionT("status_pending")}</Badge>
                                 )}
                               </td>
-                              <td className="py-2 px-2 align-middle text-center">{invoiceIconForValidatedPayment(!!f.is_paid, pay)}</td>
+                              <td className="py-2 px-2 align-middle text-center">{invoiceActionsForValidatedPayment(!!f.is_paid, pay)}</td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
                                   {pendingValidation && pay && !isParent && (
@@ -4343,7 +4462,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   <Badge variant="secondary">{tuitionT("status_pending")}</Badge>
                                 )}
                               </td>
-                              <td className="py-2 px-2 align-middle text-center">{invoiceIconForValidatedPayment(!!f.is_paid, pay)}</td>
+                              <td className="py-2 px-2 align-middle text-center">{invoiceActionsForValidatedPayment(!!f.is_paid, pay)}</td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
                                   {pendingValidation && pay && !isParent && (
@@ -4698,7 +4817,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   <Badge variant="secondary">{tuitionT("status_pending")}</Badge>
                                 )}
                               </td>
-                              <td className="py-2 px-2 align-middle text-center">{invoiceIconForValidatedPayment(!!f.is_paid, pay)}</td>
+                              <td className="py-2 px-2 align-middle text-center">{invoiceActionsForValidatedPayment(!!f.is_paid, pay)}</td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
                                   {pendingValidation && pay && !isParent && (
@@ -5040,7 +5159,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   <Badge variant="secondary">{tuitionT("status_pending")}</Badge>
                                 )}
                               </td>
-                              <td className="py-2 px-2 align-middle text-center">{invoiceIconForValidatedPayment(!!f.is_paid, pay)}</td>
+                              <td className="py-2 px-2 align-middle text-center">{invoiceActionsForValidatedPayment(!!f.is_paid, pay)}</td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
                                   {pendingValidation && pay && !isParent && (
@@ -5680,6 +5799,82 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             <Button onClick={submitStaffPayment} disabled={recordUploading || (recordNeedsFile && !recordFile)} className="gap-2">
               {recordUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               {isParent ? "Submeter para validação" : "Registar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!cancelInvoiceDialog}
+        onOpenChange={(o) => {
+          if (!o && !cancellingInvoiceId) {
+            setCancelInvoiceDialog(null);
+            setCancelReasonOther("");
+            setCancelReasonCode("data_error_nif");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{fiscalT("cancel_dialog_title")}</DialogTitle>
+            <DialogDescription>
+              {cancelInvoiceDialog?.documentNumber
+                ? fiscalT("cancel_dialog_desc", { document: cancelInvoiceDialog.documentNumber })
+                : fiscalT("cancel_dialog_desc_generic")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label>{fiscalT("cancel_reason_label")}</Label>
+              <Select
+                value={cancelReasonCode}
+                onValueChange={(v) => setCancelReasonCode(v as FiscalCancellationReasonCode)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {FISCAL_CANCELLATION_REASON_CODES.map((code) => (
+                    <SelectItem key={code} value={code}>
+                      {fiscalT(`cancel_reason_${code}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {cancelReasonCode === "other" && (
+              <div className="grid gap-2">
+                <Label htmlFor="cancel-reason-other">{fiscalT("cancel_reason_other_label")}</Label>
+                <Textarea
+                  id="cancel-reason-other"
+                  rows={3}
+                  value={cancelReasonOther}
+                  onChange={(e) => setCancelReasonOther(e.target.value)}
+                  placeholder={fiscalT("cancel_reason_other_placeholder")}
+                />
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">{fiscalT("cancel_dialog_hint")}</p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={!!cancellingInvoiceId}
+              onClick={() => setCancelInvoiceDialog(null)}
+            >
+              {fiscalT("cancel_dialog_abort")}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!!cancellingInvoiceId}
+              onClick={() => void confirmCancelInvoice()}
+            >
+              {cancellingInvoiceId ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Ban className="h-4 w-4 mr-2" />
+              )}
+              {fiscalT("cancel_dialog_confirm")}
             </Button>
           </DialogFooter>
         </DialogContent>

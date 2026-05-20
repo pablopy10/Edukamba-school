@@ -67,6 +67,9 @@ export type FiscalInvoicePdfInput = {
   exemptionReason?: string | null;
   documentHashFootnote?: string | null;
   digitalSignatureSha1?: string | null;
+  /** FT anulada (cancelamento directo — marca no PDF). */
+  isCancelled?: boolean;
+  cancellationReason?: string | null;
 };
 
 /** @deprecated use FiscalInvoicePdfInput */
@@ -352,6 +355,8 @@ export async function resolveFiscalInvoicePdfInput(
     exemptionReason: invoice.exemption_reason ?? null,
     documentHashFootnote: invoice.document_hash,
     digitalSignatureSha1: invoice.digital_signature_sha1_b64,
+    isCancelled: String((invoice as { invoice_status?: string }).invoice_status ?? "N").toUpperCase() === "A",
+    cancellationReason: (invoice as { cancellation_reason?: string | null }).cancellation_reason ?? null,
   };
 }
 
@@ -648,6 +653,10 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
   doc.text("edukamba.com", rhs, pageH - margin, { align: "right" });
 
+  if (opts.isCancelled) {
+    drawCancelledInvoiceOverlay(doc, pageW, pageH, opts.cancellationReason);
+  }
+
   doc.setTextColor(0);
   doc.setDrawColor(0);
 
@@ -656,4 +665,44 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
 
 function formatIvaExemptionParagraph(code: string, reason: string): string {
   return `Isenção de IVA (${code}), nos termos fiscalmente comunicados pelo emitente neste documento. ${reason}`;
+}
+
+/** Marca d'água e aviso visível quando a FT foi anulada no sistema. */
+function drawCancelledInvoiceOverlay(
+  doc: jsPDF,
+  pageW: number,
+  pageH: number,
+  cancellationReason?: string | null,
+): void {
+  const cx = pageW / 2;
+  const cy = pageH / 2;
+
+  doc.setTextColor(230, 70, 70);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(64);
+  doc.text("ANULADA", cx, cy - 8, { align: "center", angle: 35 });
+  doc.setFontSize(48);
+  doc.text("ANULADA", cx, cy + 28, { align: "center", angle: -25 });
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(pxToPt(14));
+  doc.setTextColor(180, 40, 40);
+  doc.text("FACTURA ANULADA", cx, 52, { align: "center" });
+
+  const reason = cancellationReason?.trim();
+  if (reason) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(pxToPt(10));
+    doc.setTextColor(120, 40, 40);
+    const margin = 15;
+    const usableW = pageW - margin * 2;
+    let ry = pageH - margin - pxMm(28);
+    doc.splitTextToSize(`Motivo da anulação: ${reason}`, usableW).forEach((line) => {
+      doc.text(line, margin, ry);
+      ry -= pxMm(12);
+    });
+  }
+
+  doc.setTextColor(0);
+  doc.setDrawColor(0);
 }

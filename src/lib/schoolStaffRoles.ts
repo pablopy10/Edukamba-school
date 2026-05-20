@@ -43,6 +43,13 @@ export function canValidateSchoolPaymentProofs(role: string | null | undefined):
   return role != null && (SCHOOL_PAYMENT_VALIDATE_ROLES as readonly string[]).includes(role);
 }
 
+/** Anulação directa de FT (alinhado a `billing_reserve_next_invoice` / emissão fiscal). */
+export const SCHOOL_FISCAL_CANCEL_ROLES = ["ADMIN", "SUPER_ADMIN", "DIRECTOR", "TREASURER"] as const;
+
+export function canCancelFiscalInvoice(role: string | null | undefined): boolean {
+  return role != null && (SCHOOL_FISCAL_CANCEL_ROLES as readonly string[]).includes(role);
+}
+
 /** Apenas estes perfis podem apagar registos de forma irreversível (RLS deve limitar igual). */
 export function canSchoolHardDeleteRole(role: string | null | undefined): boolean {
   return role === "ADMIN" || role === "SUPER_ADMIN" || role === "DIRECTOR";

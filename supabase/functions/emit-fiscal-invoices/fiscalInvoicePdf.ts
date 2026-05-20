@@ -59,6 +59,8 @@ export type FiscalInvoicePdfInput = {
   exemptionReason?: string | null;
   documentHashFootnote?: string | null;
   digitalSignatureSha1?: string | null;
+  isCancelled?: boolean;
+  cancellationReason?: string | null;
 };
 
 export type InvoiceRecordForPdf = {
@@ -76,6 +78,8 @@ export type InvoiceRecordForPdf = {
   exemption_reason: string | null;
   document_hash: string | null;
   digital_signature_sha1_b64: string | null;
+  invoice_status?: string | null;
+  cancellation_reason?: string | null;
 };
 
 /** Mapa da linha `invoices` (pós-insert) para o resolver do PDF. */
@@ -97,6 +101,8 @@ export function invoiceRowToPdfPayload(row: Record<string, unknown>): InvoiceRec
     digital_signature_sha1_b64: row.digital_signature_sha1_b64 != null
       ? String(row.digital_signature_sha1_b64)
       : null,
+    invoice_status: row.invoice_status != null ? String(row.invoice_status) : null,
+    cancellation_reason: row.cancellation_reason != null ? String(row.cancellation_reason) : null,
   };
 }
 
@@ -373,11 +379,52 @@ async function resolveFiscalInvoicePdfInput(
     exemptionReason: invoice.exemption_reason ?? null,
     documentHashFootnote: invoice.document_hash,
     digitalSignatureSha1: invoice.digital_signature_sha1_b64,
+    isCancelled: String(invoice.invoice_status ?? "N").toUpperCase() === "A",
+    cancellationReason: invoice.cancellation_reason ?? null,
   };
 }
 
 function formatIvaExemptionParagraph(code: string, reason: string): string {
   return `Isenção de IVA (${code}), nos termos fiscalmente comunicados pelo emitente neste documento. ${reason}`;
+}
+
+function drawCancelledInvoiceOverlay(
+  doc: jsPDF,
+  pageW: number,
+  pageH: number,
+  cancellationReason?: string | null,
+): void {
+  const cx = pageW / 2;
+  const cy = pageH / 2;
+
+  doc.setTextColor(230, 70, 70);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(64);
+  doc.text("ANULADA", cx, cy - 8, { align: "center", angle: 35 });
+  doc.setFontSize(48);
+  doc.text("ANULADA", cx, cy + 28, { align: "center", angle: -25 });
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(pxToPt(14));
+  doc.setTextColor(180, 40, 40);
+  doc.text("FACTURA ANULADA", cx, 52, { align: "center" });
+
+  const reason = cancellationReason?.trim();
+  if (reason) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(pxToPt(10));
+    doc.setTextColor(120, 40, 40);
+    const margin = 15;
+    const usableW = pageW - margin * 2;
+    let ry = pageH - margin - pxMm(28);
+    doc.splitTextToSize(`Motivo da anulação: ${reason}`, usableW).forEach((line) => {
+      doc.text(line, margin, ry);
+      ry -= pxMm(12);
+    });
+  }
+
+  doc.setTextColor(0);
+  doc.setDrawColor(0);
 }
 
 export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
@@ -662,6 +709,10 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   doc.setFontSize(pxToPt(10));
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
   doc.text("edukamba.com", rhs, pageH - margin, { align: "right" });
+
+  if (opts.isCancelled) {
+    drawCancelledInvoiceOverlay(doc, pageW, pageH, opts.cancellationReason);
+  }
 
   doc.setTextColor(0);
   doc.setDrawColor(0);

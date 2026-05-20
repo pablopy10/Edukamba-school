@@ -48,7 +48,7 @@ export function SaftExportCard({ schoolId }: Props) {
       const { data: rows, error: iErr } = await supabase
         .from("invoices")
         .select(
-          "invoice_date, document_number, document_hash, digital_signature_sha1_b64, hash_control, invoice_issued_at, cliente_nome, cliente_nif, gross_total, currency, exemption_code, exemption_reason, line_description",
+          "invoice_date, document_number, document_hash, digital_signature_sha1_b64, hash_control, invoice_issued_at, cliente_nome, cliente_nif, gross_total, currency, exemption_code, exemption_reason, line_description, invoice_status, cancellation_reason, cancelled_at",
         )
         .eq("school_id", schoolId)
         .order("invoice_date", { ascending: true });
@@ -70,6 +70,9 @@ export function SaftExportCard({ schoolId }: Props) {
         exemption_code: r.exemption_code ? String(r.exemption_code) : "M10",
         exemption_reason: r.exemption_reason ? String(r.exemption_reason) : "Isenção no domínio da educação",
         line_description: r.line_description ? String(r.line_description) : undefined,
+        invoice_status: r.invoice_status ? String(r.invoice_status) : "N",
+        cancellation_reason: r.cancellation_reason ? String(r.cancellation_reason) : null,
+        cancelled_at: r.cancelled_at ? String(r.cancelled_at) : null,
       }));
 
       const prodTax = import.meta.env.VITE_SAFT_PRODUCT_COMPANY_TAX_ID?.trim();
