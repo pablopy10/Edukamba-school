@@ -42,7 +42,11 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { canCancelFiscalInvoice, canValidateSchoolPaymentProofs } from "@/lib/schoolStaffRoles";
 import type { GuardianPaymentMode } from "@/lib/guardianPayment";
 import { encarregadosUsamAnexo, normalizeGuardianPaymentMode } from "@/lib/guardianPayment";
-import { invokeEmitFiscalInvoices, type EmitFiscalInvoicesResult } from "@/lib/fiscal/invokeEmitFiscalInvoices";
+import {
+  formatEmitFiscalInvoicesFailureDescription,
+  invokeEmitFiscalInvoices,
+  type EmitFiscalInvoicesResult,
+} from "@/lib/fiscal/invokeEmitFiscalInvoices";
 import { downloadFiscalInvoicePdfById } from "@/lib/fiscal/downloadFiscalInvoicePdf";
 import { invokeCancelFiscalInvoice } from "@/lib/fiscal/invokeCancelFiscalInvoice";
 import {
@@ -1640,26 +1644,26 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       });
     }
 
-    if (!fx.ok || errored.length > 0) {
-      const errs = errored.map((r) => r.detail ?? r.payment_id).slice(0, 3);
+    const showFiscalFailureToast = () => {
       toast({
         title: "Fatura fiscal (AGT)",
-        description:
-          fx.message ??
-          (errs.length ? errs.join(" · ") : "Não foi possível gerar a FT automaticamente."),
+        description: formatEmitFiscalInvoicesFailureDescription(fx.results, {
+          includeSkipped: emitted.length === 0,
+          topLevelMessage: fx.message,
+        }),
         variant: "destructive",
       });
+    };
+
+    if (!fx.ok && !fx.results?.length) {
+      showFiscalFailureToast();
       return fx;
     }
 
-    if (skipped.length > 0 && emitted.length === 0) {
-      const detail = skipped.map((r) => r.detail ?? r.payment_id).filter(Boolean).slice(0, 2).join(" · ");
-      toast({
-        title: "Fatura fiscal (AGT)",
-        description: detail || "A fatura não foi emitida para este pagamento.",
-        variant: "destructive",
-      });
-      return fx;
+    if (errored.length > 0) {
+      showFiscalFailureToast();
+    } else if (skipped.length > 0 && emitted.length === 0) {
+      showFiscalFailureToast();
     }
 
     if (emitted.length > 0) {
