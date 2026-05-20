@@ -170,7 +170,7 @@ function drawWrappedTexts(
     parts.forEach((p) => flat.push(typeof p === "string" ? p : String(p)));
   });
   for (let i = 0; i < flat.length; i++) {
-    doc.text(flat[i], xMm, y);
+    doc.text(flat[i], xMm, y, { baseline: "top" });
     y += leading;
   }
   return y;
@@ -185,23 +185,83 @@ function chunkTextForPdf(value: string, chunkSize: number): string[] {
   return rows;
 }
 
-function estimatePanelContentHeightMm(doc: jsPDF, titleUpper: string, bodyLines: string[], maxWidthMm: number): number {
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(pxToPt(10));
-  const titleLines = doc.splitTextToSize(titleUpper.toUpperCase(), maxWidthMm);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(pxToPt(13));
-  let bodyCount = 0;
-  for (const line of bodyLines) {
-    const parts = doc.splitTextToSize(line, maxWidthMm);
-    bodyCount += Math.max(1, parts.length);
+const PANEL_TITLE_SIZE = pxToPt(10);
+const PANEL_BODY_SIZE = pxToPt(12);
+const PANEL_TITLE_LEADING = pxMm(13);
+const PANEL_BODY_LEADING = pxMm(15);
+const PANEL_PAD_TOP = pxMm(6);
+const PANEL_TITLE_GAP = pxMm(8);
+const PANEL_UNDERLINE_GAP = pxMm(10);
+
+function countWrappedLines(
+  doc: jsPDF,
+  lines: string[],
+  maxW: number,
+  fontSize: number,
+  fontStyle: "normal" | "bold",
+): number {
+  doc.setFont("helvetica", fontStyle);
+  doc.setFontSize(fontSize);
+  let n = 0;
+  for (const raw of lines) {
+    const t = raw?.trim() ?? "";
+    if (!t) continue;
+    n += doc.splitTextToSize(t, maxW).length;
   }
-  const underlinePad = pxMm(3) + pxMm(8);
+  return Math.max(n, 1);
+}
+
+function measureDetailPanelInnerHeightMm(
+  doc: jsPDF,
+  titlePt: string,
+  bodyLines: string[],
+  innerMaxW: number,
+): number {
+  const titleLineCount = countWrappedLines(doc, [titlePt.toUpperCase()], innerMaxW, PANEL_TITLE_SIZE, "bold");
+  const bodyLineCount = countWrappedLines(doc, bodyLines, innerMaxW, PANEL_BODY_SIZE, "normal");
   return (
-    Math.max(pxMm(1), titleLines.length * pxMm(13) * 0.52) +
-    underlinePad +
-    bodyCount * pxMm(13 * 1.5 * 0.35)
+    PANEL_PAD_TOP +
+    titleLineCount * PANEL_TITLE_LEADING +
+    PANEL_TITLE_GAP +
+    PANEL_UNDERLINE_GAP +
+    bodyLineCount * PANEL_BODY_LEADING +
+    pxMm(6)
   );
+}
+
+function drawDetailPanelInner(
+  doc: jsPDF,
+  bx: number,
+  boxTop: number,
+  padInner: number,
+  titlePt: string,
+  bodyPts: string[],
+  innerMaxW: number,
+): void {
+  let yt = boxTop + padInner + PANEL_PAD_TOP;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(PANEL_TITLE_SIZE);
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  yt = drawWrappedTexts(doc, [titlePt.toUpperCase()], bx + padInner, yt, innerMaxW, {
+    leading: PANEL_TITLE_LEADING,
+    size: PANEL_TITLE_SIZE,
+    style: "bold",
+    color: NAVY,
+  });
+
+  doc.setDrawColor(BORDER_DDD[0], BORDER_DDD[1], BORDER_DDD[2]);
+  doc.setLineWidth(pxMm(0.9));
+  doc.line(bx + padInner, yt + pxMm(2), bx + padInner + innerMaxW, yt + pxMm(2));
+  yt += PANEL_UNDERLINE_GAP;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(PANEL_BODY_SIZE);
+  doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
+  drawWrappedTexts(doc, bodyPts, bx + padInner, yt, innerMaxW, {
+    leading: PANEL_BODY_LEADING,
+    size: PANEL_BODY_SIZE,
+    color: BODY_TEXT,
+  });
 }
 
 type DocWithAutoTable = jsPDF & {
@@ -388,43 +448,61 @@ function formatIvaExemptionParagraph(code: string, reason: string): string {
   return `Isenção de IVA (${code}), nos termos fiscalmente comunicados pelo emitente neste documento. ${reason}`;
 }
 
+type JsPdfGState = { opacity: number };
+
+function setPdfTextOpacity(doc: jsPDF, opacity: number): void {
+  const d = doc as jsPDF & {
+    GState?: new (p: JsPdfGState) => JsPdfGState;
+    setGState?: (g: JsPdfGState) => void;
+  };
+  try {
+    if (d.GState && d.setGState) d.setGState(new d.GState({ opacity }));
+  } catch {
+    /* jsPDF sem GState */
+  }
+}
+
 function drawCancelledInvoiceOverlay(
   doc: jsPDF,
   pageW: number,
   pageH: number,
   cancellationReason?: string | null,
 ): void {
+  const margin = 15;
   const cx = pageW / 2;
-  const cy = pageH / 2;
+  const cy = pageH / 2 + pxMm(12);
 
-  doc.setTextColor(230, 70, 70);
+  const d = doc as jsPDF & { saveGraphicsState?: () => void; restoreGraphicsState?: () => void };
+  d.saveGraphicsState?.();
+  setPdfTextOpacity(doc, 0.09);
+  doc.setTextColor(210, 120, 120);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(64);
-  doc.text("ANULADA", cx, cy - 8, { align: "center", angle: 35 });
-  doc.setFontSize(48);
-  doc.text("ANULADA", cx, cy + 28, { align: "center", angle: -25 });
+  doc.setFontSize(50);
+  doc.text("ANULADA", cx, cy, { align: "center", angle: 38, baseline: "middle" });
+  setPdfTextOpacity(doc, 1);
+  d.restoreGraphicsState?.();
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(pxToPt(14));
-  doc.setTextColor(180, 40, 40);
-  doc.text("FACTURA ANULADA", cx, 52, { align: "center" });
+  doc.setFontSize(pxToPt(11));
+  doc.setTextColor(195, 130, 130);
+  doc.text("FACTURA ANULADA", cx, cy - pxMm(38), { align: "center", baseline: "middle" });
 
   const reason = cancellationReason?.trim();
   if (reason) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(pxToPt(10));
-    doc.setTextColor(120, 40, 40);
-    const margin = 15;
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(pxToPt(9));
+    doc.setTextColor(130, 130, 135);
     const usableW = pageW - margin * 2;
-    let ry = pageH - margin - pxMm(28);
-    doc.splitTextToSize(`Motivo da anulação: ${reason}`, usableW).forEach((line) => {
-      doc.text(line, margin, ry);
-      ry -= pxMm(12);
-    });
+    const lines = doc.splitTextToSize(`Motivo da anulação: ${reason}`, usableW * 0.9);
+    let ry = pageH - margin - pxMm(36) - lines.length * pxMm(10);
+    for (const line of lines) {
+      doc.text(line, margin, ry, { baseline: "top" });
+      ry += pxMm(10);
+    }
   }
 
-  doc.setTextColor(0);
-  doc.setDrawColor(0);
+  doc.setTextColor(0, 0, 0);
+  doc.setDrawColor(0, 0, 0);
 }
 
 export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
@@ -517,11 +595,11 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   const encBody = [`Nome: ${encNomeReal}`, `NIF (efeitos fiscais): ${opts.clienteNif.trim()}`];
   const studBody = [`Nome: ${opts.studentName.trim()}`, `Turma: ${turma}`, `Ano lectivo: ${ano}`];
 
-  const innerEncW = panelW - padInner * 2 - pxMm(1);
-  const innerStudW = panelW - padInner * 2 - pxMm(1);
-  const hEnc = estimatePanelContentHeightMm(doc, "Dados do encarregado", encBody, innerEncW);
-  const hStud = estimatePanelContentHeightMm(doc, "Dados do aluno", studBody, innerStudW);
-  const boxH = Math.max(hEnc + padInner * 2 + pxMm(4), hStud + padInner * 2 + pxMm(4), pxMm(108));
+  const innerEncW = panelW - padInner * 2;
+  const innerStudW = panelW - padInner * 2;
+  const hEncInner = measureDetailPanelInnerHeightMm(doc, "Dados do encarregado", encBody, innerEncW);
+  const hStudInner = measureDetailPanelInnerHeightMm(doc, "Dados do aluno", studBody, innerStudW);
+  const boxH = Math.max(hEncInner, hStudInner) + padInner * 2;
 
   const boxTop = y;
 
@@ -531,38 +609,8 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   doc.roundedRect(bx1, boxTop, panelW, boxH, rBox, rBox, "FD");
   doc.roundedRect(bx2, boxTop, panelW, boxH, rBox, rBox, "FD");
 
-  const drawModernBoxInner = (
-    bx: number,
-    titlePt: string,
-    bodyPts: string[],
-    innerMaxW: number,
-  ): void => {
-    let yt = boxTop + padInner + pxMm(4);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(pxToPt(10));
-    doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-    yt = drawWrappedTexts(doc, [titlePt.toUpperCase()], bx + padInner, yt, innerMaxW, {
-      leading: pxMm(12) * 0.48,
-      style: "bold",
-    });
-
-    doc.setDrawColor(BORDER_DDD[0], BORDER_DDD[1], BORDER_DDD[2]);
-    doc.setLineWidth(pxMm(0.9));
-    doc.line(bx + padInner, yt + pxMm(2), bx + padInner + innerMaxW, yt + pxMm(2));
-    yt += pxMm(10);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(pxToPt(13));
-    doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-    drawWrappedTexts(doc, bodyPts, bx + padInner, yt, innerMaxW, {
-      leading: pxMm(16),
-      size: pxToPt(13),
-      color: BODY_TEXT,
-    });
-  };
-
-  drawModernBoxInner(bx1, "Dados do encarregado", encBody, innerEncW);
-  drawModernBoxInner(bx2, "Dados do aluno", studBody, innerStudW);
+  drawDetailPanelInner(doc, bx1, boxTop, padInner, "Dados do encarregado", encBody, innerEncW);
+  drawDetailPanelInner(doc, bx2, boxTop, padInner, "Dados do aluno", studBody, innerStudW);
 
   y = boxTop + boxH + pxMm(18);
 
@@ -599,12 +647,18 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
       valign: "middle",
       cellPadding: { top: pxMm(10), right: pxMm(10), bottom: pxMm(10), left: pxMm(10) },
     },
-    columnStyles: {
-      0: { cellWidth: usableW - 63 },
-      1: { cellWidth: 18, halign: "center" },
-      2: { cellWidth: 24, halign: "right" },
-      3: { cellWidth: 24, halign: "right", fontStyle: "bold", textColor: [35, 40, 48] },
-    },
+    columnStyles: (() => {
+      const colQty = 16;
+      const colMoney = 32;
+      const colDesc = usableW - colQty - colMoney * 2;
+      const moneyStyle = { fontSize: pxToPt(11), halign: "right" as const, valign: "middle" as const };
+      return {
+        0: { cellWidth: colDesc, valign: "middle" as const },
+        1: { cellWidth: colQty, halign: "center" as const, valign: "middle" as const },
+        2: { cellWidth: colMoney, ...moneyStyle },
+        3: { cellWidth: colMoney, ...moneyStyle, fontStyle: "bold" as const, textColor: [35, 40, 48] as [number, number, number] },
+      };
+    })(),
   });
 
   const d = doc as DocWithAutoTable;
