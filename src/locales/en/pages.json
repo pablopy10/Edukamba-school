@@ -212,6 +212,7 @@
       "year_has_no_start_error": "This school year has no start date; due dates couldn’t be calculated.",
       "rule_detail_empty": "Nothing to show—no students are covered by this rule this year, or the rule is tied to another year.",
       "detail_estimate_hint": "Rule amount; discounts applied when generating",
+      "detail_tbl_student": "Student",
       "detail_tbl_period": "Period",
       "detail_tbl_due": "Due",
       "detail_tbl_amount": "Amount",

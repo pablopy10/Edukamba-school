@@ -212,6 +212,7 @@
       "year_has_no_start_error": "Este ano letivo não tem data de início na base de dados; não foi possível calcular os vencimentos dos períodos.",
       "rule_detail_empty": "Nenhuma linha para mostrar — não há alunos abrangidos por esta regra neste ano, ou a regra está ligada noutro ano letivo.",
       "detail_estimate_hint": "Valor da regra; descontos na geração",
+      "detail_tbl_student": "Aluno",
       "detail_tbl_period": "Período",
       "detail_tbl_due": "Vencimento",
       "detail_tbl_amount": "Valor",

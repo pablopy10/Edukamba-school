@@ -212,6 +212,7 @@
       "year_has_no_start_error": "Cette année n’a pas de date de début : impossible de calculer les échéances.",
       "rule_detail_empty": "Aucune ligne à afficher — aucun élève ne correspond à cette règle cette année, ou la règle est attachée à une autre année.",
       "detail_estimate_hint": "Montant de la règle ; remises lors de la génération",
+      "detail_tbl_student": "Élève",
       "detail_tbl_period": "Période",
       "detail_tbl_due": "Échéance",
       "detail_tbl_amount": "Montant",

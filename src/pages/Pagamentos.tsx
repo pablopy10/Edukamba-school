@@ -1619,9 +1619,29 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     const ids = [...new Set(paymentIds.filter(Boolean))];
     if (!ids.length) return { ok: true, results: [] };
     const fx = await invokeEmitFiscalInvoices(ids);
-    if (!fx.ok) {
-      const errs =
-        fx.results?.filter((r) => r.status === "error").map((r) => r.detail ?? r.payment_id).slice(0, 3) ?? [];
+    const emitted = fx.results?.filter((r) => r.status === "emitted" && r.invoice_id?.trim()) ?? [];
+    const skipped = fx.results?.filter((r) => r.status === "skipped") ?? [];
+    const errored = fx.results?.filter((r) => r.status === "error") ?? [];
+
+    if (emitted.length > 0) {
+      setInvoiceByPaymentId((prev) => {
+        const next = { ...prev };
+        for (const r of emitted) {
+          const pid = r.payment_id?.trim();
+          const iid = r.invoice_id?.trim();
+          if (!pid || !iid) continue;
+          next[pid] = {
+            invoiceId: iid,
+            documentNumber: r.document_number?.trim() ?? "",
+            invoiceStatus: "N",
+          };
+        }
+        return next;
+      });
+    }
+
+    if (!fx.ok || errored.length > 0) {
+      const errs = errored.map((r) => r.detail ?? r.payment_id).slice(0, 3);
       toast({
         title: "Fatura fiscal (AGT)",
         description:
@@ -1631,7 +1651,17 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       });
       return fx;
     }
-    const emitted = fx.results?.filter((r) => r.status === "emitted" && r.invoice_id?.trim()) ?? [];
+
+    if (skipped.length > 0 && emitted.length === 0) {
+      const detail = skipped.map((r) => r.detail ?? r.payment_id).filter(Boolean).slice(0, 2).join(" · ");
+      toast({
+        title: "Fatura fiscal (AGT)",
+        description: detail || "A fatura não foi emitida para este pagamento.",
+        variant: "destructive",
+      });
+      return fx;
+    }
+
     if (emitted.length > 0) {
       toast({
         title: emitted.length > 1 ? "Faturas emitidas" : "Fatura emitida",

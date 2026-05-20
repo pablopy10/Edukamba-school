@@ -165,12 +165,22 @@ async function resolveFiscalContext(
   } else if (payment.activity_fee_id) {
     const { data: row, error } = await sb
       .from("activity_fees")
-      .select("student_id, activity:extracurricular_activities(name)")
+      .select("student_id, activity_id")
       .eq("id", payment.activity_fee_id)
       .maybeSingle();
     if (error) throw new Error(error.message);
     studentId = row?.student_id ?? null;
-    const actName = (row as { activity?: { name: string | null } | null })?.activity?.name?.trim() || "atividade";
+    let actName = "atividade";
+    const activityId = (row as { activity_id?: string | null } | null)?.activity_id;
+    if (activityId) {
+      const { data: act, error: actErr } = await sb
+        .from("extracurricular_activities")
+        .select("name")
+        .eq("id", activityId)
+        .maybeSingle();
+      if (actErr) throw new Error(actErr.message);
+      actName = act?.name?.trim() || actName;
+    }
     lineDescription = `Atividade extracurricular (${actName})`;
   } else if (payment.transport_fee_id) {
     const { data: row, error } = await sb
