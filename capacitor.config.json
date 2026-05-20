@@ -1,5 +1,5 @@
 {
-  "appId": "com.edukamba.app",
+  "appId": "edukamba.app",
   "appName": "Edukamba",
   "webDir": "dist",
   "ios": {

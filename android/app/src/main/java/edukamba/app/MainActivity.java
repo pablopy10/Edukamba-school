@@ -1,4 +1,4 @@
-package com.edukamba.app;
+package edukamba.app;
 
 import com.getcapacitor.BridgeActivity;
 
