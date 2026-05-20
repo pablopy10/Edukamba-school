@@ -474,8 +474,8 @@ function drawCancelledInvoiceOverlay(
 
   const d = doc as jsPDF & { saveGraphicsState?: () => void; restoreGraphicsState?: () => void };
   d.saveGraphicsState?.();
-  setPdfTextOpacity(doc, 0.09);
-  doc.setTextColor(210, 120, 120);
+  setPdfTextOpacity(doc, 0.17);
+  doc.setTextColor(205, 95, 95);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(50);
   doc.text("ANULADA", cx, cy, { align: "center", angle: 38, baseline: "middle" });
@@ -514,33 +514,38 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   const usableW = pageW - margin * 2;
   const rhs = pageW - margin;
 
-  const logoW = pxMm(64);
-  const logoH = pxMm(42);
+  const logoW = pxMm(52);
+  const logoH = pxMm(52);
+  const logoGap = pxMm(12);
   const hdrTop = margin;
-
-  const schoolColRight = margin + usableW * 0.61;
-  const schoolTextX = margin + logoW + pxMm(14);
-  const schoolTextMax = Math.max(pxMm(24), schoolColRight - schoolTextX - pxMm(4));
+  const docInfoColW = usableW * 0.36;
+  const schoolTextX = margin + logoW + logoGap;
+  const schoolTextMax = Math.max(pxMm(32), usableW - logoW - logoGap - docInfoColW);
 
   addLogoIfPossible(doc, opts.logoDataUrl ?? undefined, margin, hdrTop, logoW, logoH);
 
+  const schoolNameSize = pxToPt(20);
+  const schoolNameLeading = pxMm(24);
+
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(pxToPt(24));
+  doc.setFontSize(schoolNameSize);
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
   let ySchool = drawWrappedTexts(
     doc,
     [opts.schoolName.trim() || "Instituição de ensino"],
     schoolTextX,
-    hdrTop + pxMm(2),
+    hdrTop,
     schoolTextMax,
-    { leading: pxMm(24) * 0.55, size: pxToPt(24), style: "bold", color: NAVY },
+    { leading: schoolNameLeading, size: schoolNameSize, style: "bold", color: NAVY },
   );
 
+  ySchool += pxMm(5);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(pxToPt(11));
+  doc.setFontSize(pxToPt(10));
   doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
-  ySchool = drawWrappedTexts(doc, ["Edukamba • documento fiscal"], schoolTextX, ySchool + pxMm(6), schoolTextMax, {
-    leading: pxMm(12) * 0.45,
+  ySchool = drawWrappedTexts(doc, ["Edukamba • documento fiscal"], schoolTextX, ySchool, schoolTextMax, {
+    leading: pxMm(12),
+    size: pxToPt(10),
   });
 
   const schoolLines: string[] = [];
@@ -550,13 +555,19 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
     opts.schoolContactLines.forEach((l) => l?.trim() && schoolLines.push(l.trim()));
   }
 
-  doc.setFontSize(pxToPt(12));
-  doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-  ySchool = drawWrappedTexts(doc, schoolLines, schoolTextX, ySchool + pxMm(14), schoolTextMax, {
-    leading: pxMm(15),
-  });
+  if (schoolLines.length > 0) {
+    ySchool += pxMm(7);
+    doc.setFontSize(pxToPt(11));
+    doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
+    ySchool = drawWrappedTexts(doc, schoolLines, schoolTextX, ySchool, schoolTextMax, {
+      leading: pxMm(13),
+      size: pxToPt(11),
+    });
+  }
 
-  let yDoc = hdrTop + pxMm(16);
+  const leftHeaderBottom = Math.max(hdrTop + logoH, ySchool);
+
+  let yDoc = hdrTop;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(pxToPt(20));
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
@@ -574,7 +585,7 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   doc.text(`Emissão: ${issueLabel}`, rhs, yDoc, { align: "right", baseline: "top" });
   yDoc += pxMm(10);
 
-  const headerBottomInner = Math.max(ySchool + pxMm(4), yDoc);
+  const headerBottomInner = Math.max(leftHeaderBottom + pxMm(4), yDoc);
   const dividerY = headerBottomInner + pxMm(18);
   doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
   doc.setLineWidth(Math.max(pxMm(1.75), 0.45));
