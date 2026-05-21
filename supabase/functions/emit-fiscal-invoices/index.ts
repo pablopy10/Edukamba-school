@@ -327,15 +327,49 @@ async function emitOne(
     if (seq > 1) {
       const { data: prev, error: prevErr } = await sb
         .from("invoices")
-        .select("document_hash")
+        .select("id, document_hash, agt_signing_plaintext, document_number, doc_number")
         .eq("school_id", payment.school_id)
         .eq("series", series)
         .eq("doc_number", seq - 1)
         .maybeSingle();
       if (prevErr) return { payment_id, status: "error", detail: prevErr.message };
-      const h = prev?.document_hash?.trim() ?? "";
+
+      let h = prev?.document_hash?.trim() ?? "";
+      if (!h && prev?.agt_signing_plaintext?.trim()) {
+        h = await sha1HexUtf8(prev.agt_signing_plaintext.trim());
+        if (prev?.id) {
+          await sb.from("invoices").update({ document_hash: h }).eq("id", prev.id);
+        }
+      }
+
       if (!h) {
-        return { payment_id, status: "error", detail: "Documento anterior sem hash — contacte suporte." };
+        const prevLabel = prev?.document_number?.trim() || `FT ${series}/${seq - 1}`;
+        if (!prev?.id) {
+          const { data: lastIssued } = await sb
+            .from("invoices")
+            .select("document_number, doc_number, document_hash")
+            .eq("school_id", payment.school_id)
+            .eq("series", series)
+            .order("doc_number", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const lastLabel = lastIssued?.document_number?.trim() || "(nenhuma)";
+          return {
+            payment_id,
+            status: "error",
+            detail:
+              `Falta a fatura anterior ${prevLabel} na série ${series}. ` +
+              `Última emitida: ${lastLabel}. ` +
+              `Execute «npx supabase db push» (migração billing_sequence_reconcile) ou contacte suporte.`,
+          };
+        }
+        return {
+          payment_id,
+          status: "error",
+          detail:
+            `${prevLabel} existe mas não tem hash AGT (dados incompletos). ` +
+            `Contacte suporte para reparar a cadeia fiscal.`,
+        };
       }
       previousDocumentHash = h;
       previousHashForInsert = h;
