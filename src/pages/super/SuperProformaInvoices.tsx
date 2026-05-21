@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, Download, FileText, Trash2 } from "lucide-react";
+import { Loader2, Plus, Download, FileText, Trash2, FileCheck } from "lucide-react";
 import { toast } from "sonner";
 
 const CONSUMER_FALLBACK_NIF = "999999999";
@@ -50,6 +50,7 @@ type ProformaRow = {
   currency: string;
   footer_note: string | null;
   hash_control: string | null;
+  converted_invoice_id: string | null;
   created_at: string;
   created_by_id: string | null;
 };
@@ -346,6 +347,42 @@ const SuperProformaInvoices = () => {
     }
   };
 
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+
+  const convertToInvoice = async (row: ProformaRow) => {
+    if (row.converted_invoice_id) {
+      toast.info("Esta pró-forma já foi convertida em fatura.");
+      return;
+    }
+    if (!confirm(`Converter ${row.document_number} numa Fatura (FT)?\nIsto gera uma FT com OrderReferences apontando para esta PP.`)) return;
+
+    // Precisamos do school_id — pedir ao utilizador ou usar a escola Edukamba
+    const schoolIdInput = prompt("ID da escola emissora (UUID).\nDeixe vazio para usar a escola padrão Edukamba:");
+    if (schoolIdInput === null) return; // cancelou
+
+    setConvertingId(row.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("convert-proforma-to-invoice", {
+        body: {
+          proforma_id: row.id,
+          school_id: schoolIdInput.trim() || undefined,
+        },
+      });
+      if (error) throw error;
+      const result = data as { ok?: boolean; error?: string; document_number?: string; order_reference?: string };
+      if (!result?.ok && result?.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(`Fatura ${result.document_number} gerada com sucesso! (OrderRef: ${result.order_reference})`);
+      reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao converter");
+    } finally {
+      setConvertingId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
       <div className="max-w-7xl mx-auto">
@@ -614,6 +651,26 @@ const SuperProformaInvoices = () => {
                         <Download className="w-4 h-4" />
                         PDF
                       </Button>
+                      {!row.converted_invoice_id ? (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => convertToInvoice(row)}
+                          disabled={convertingId === row.id}
+                          className="gap-1 bg-green-600 hover:bg-green-700"
+                        >
+                          {convertingId === row.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <FileCheck className="w-4 h-4" />
+                          )}
+                          Converter em FT
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-green-600 font-medium self-center px-2">
+                          ✓ Convertida
+                        </span>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
