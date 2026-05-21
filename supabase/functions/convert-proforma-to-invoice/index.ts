@@ -93,10 +93,19 @@ Deno.serve(async (req) => {
     return corsJson({ error: `Já convertida na fatura ${pp.converted_invoice_id}` }, 409);
   }
 
-  // Determine school_id — use provided or default Edukamba school
-  const targetSchoolId = school_id?.trim() || null;
+  // Determine school_id — use provided or fetch first school from platform
+  let targetSchoolId = school_id?.trim() || null;
   if (!targetSchoolId) {
-    return corsJson({ error: "school_id é obrigatório (escola emissora da FT)" }, 400);
+    const { data: firstSchool } = await adminClient
+      .from("schools")
+      .select("id")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    targetSchoolId = firstSchool?.id ?? null;
+  }
+  if (!targetSchoolId) {
+    return corsJson({ error: "Nenhuma escola encontrada na plataforma. Crie uma escola primeiro." }, 400);
   }
 
   // Reserve next invoice number

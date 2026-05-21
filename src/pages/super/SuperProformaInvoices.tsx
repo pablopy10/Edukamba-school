@@ -356,17 +356,10 @@ const SuperProformaInvoices = () => {
     }
     if (!confirm(`Converter ${row.document_number} numa Fatura (FT)?\nIsto gera uma FT com OrderReferences apontando para esta PP.`)) return;
 
-    // Precisamos do school_id — pedir ao utilizador ou usar a escola Edukamba
-    const schoolIdInput = prompt("ID da escola emissora (UUID).\nDeixe vazio para usar a escola padrão Edukamba:");
-    if (schoolIdInput === null) return; // cancelou
-
     setConvertingId(row.id);
     try {
       const { data, error } = await supabase.functions.invoke("convert-proforma-to-invoice", {
-        body: {
-          proforma_id: row.id,
-          school_id: schoolIdInput.trim() || undefined,
-        },
+        body: { proforma_id: row.id },
       });
       if (error) throw error;
       const result = data as { ok?: boolean; error?: string; document_number?: string; order_reference?: string };
@@ -374,7 +367,7 @@ const SuperProformaInvoices = () => {
         toast.error(result.error);
         return;
       }
-      toast.success(`Fatura ${result.document_number} gerada com sucesso! (OrderRef: ${result.order_reference})`);
+      toast.success(`Fatura ${result.document_number} gerada! (OrderRef: ${result.order_reference})`);
       reload();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao converter");
