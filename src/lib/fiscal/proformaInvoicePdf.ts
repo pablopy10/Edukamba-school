@@ -261,7 +261,7 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(pxToPt(10));
   doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
-  ySchool = drawWrappedTexts(doc, ["Edukamba • documento de referência (não-fiscal)"], schoolTextX, ySchool, schoolTextMax, {
+  ySchool = drawWrappedTexts(doc, ["Edukamba • fatura pró-forma / orçamento (não-fiscal)"], schoolTextX, ySchool, schoolTextMax, {
     leading: pxMm(12),
     size: pxToPt(10),
   });
@@ -289,7 +289,7 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(pxToPt(20));
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-  doc.text("PROPOSTA COMERCIAL", rhs, yDoc, { align: "right", baseline: "top" });
+  doc.text("FATURA PRÓ-FORMA", rhs, yDoc, { align: "right", baseline: "top" });
   yDoc += pxMm(34);
 
   doc.setFontSize(pxToPt(13));
@@ -440,7 +440,7 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   // Footer
   let footY = blockY + grandH + pxMm(48);
   const footerParagraph =
-    "Esta proposta comercial é um documento de referência para fins de adjudicação e planeamento. " +
+    "Esta fatura pró-forma é um documento de referência para fins de adjudicação e planeamento. " +
     "Não possui valor fiscal e não substitui a Fatura-Recibo definitiva que será emitida após o pagamento validado. " +
     "O documento tem validade de " + opts.validityDays + " dias a partir da data de emissão.";
 
@@ -469,7 +469,7 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   doc.setFont("helvetica", "italic");
   doc.setFontSize(pxToPt(10));
   doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
-  doc.text("Edukamba — Proposta comercial gerada automaticamente", rhs, pageH - margin, { align: "right" });
+  doc.text("Edukamba — Fatura Pró-Forma gerada automaticamente", rhs, pageH - margin, { align: "right" });
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(pxToPt(10));

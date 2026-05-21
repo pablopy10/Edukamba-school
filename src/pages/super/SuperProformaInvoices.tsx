@@ -58,6 +58,7 @@ const SuperProformaInvoices = () => {
     validityDays: "30",
     items: [{ description: "", quantity: 1, unitAmount: "", totalAmount: "" }],
     currency: "AOA",
+    ivaPct: "14",
     footerNote: "",
   });
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
@@ -90,29 +91,25 @@ const SuperProformaInvoices = () => {
       const total = parseFloat(item.totalAmount) || 0;
       subtotal += total;
     }
-    const iva = (subtotal * 14) / 100;
+    const ivaPct = parseFloat(form.ivaPct) || 0;
+    const iva = (subtotal * ivaPct) / 100;
     const total = subtotal + iva;
-    return {
-      subtotal: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(subtotal),
-      iva: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(iva),
-      total: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total),
-    };
-  }, [form.items]);
+    const fmt = (n: number) =>
+      new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+    return { subtotal: fmt(subtotal), iva: fmt(iva), total: fmt(total) };
+  }, [form.items, form.ivaPct]);
 
   const getNextDocNumber = async (): Promise<string> => {
+    const year = new Date().getFullYear();
     try {
-      const { data: config, error: configError } = await supabase
-        .from("billing_config")
-        .select("last_sequence")
-        .single();
-
-      if (!configError && config) {
-        const nextSeq = (config.last_sequence || 0) + 1;
-        return `PP ${new Date().getFullYear()}/${nextSeq}`;
-      }
-      return `PP ${new Date().getFullYear()}/1`;
+      const { count } = await supabase
+        .from("proforma_invoices")
+        .select("id", { count: "exact", head: true })
+        .like("document_number", `PP ${year}/%`);
+      const nextSeq = (count ?? 0) + 1;
+      return `PP ${year}/${nextSeq}`;
     } catch {
-      return `PP ${new Date().getFullYear()}/1`;
+      return `PP ${year}/1`;
     }
   };
 
@@ -171,7 +168,7 @@ const SuperProformaInvoices = () => {
           totalAmountFmt: it.totalAmount,
         })),
         subtotalFmt: totalsCalc.subtotal,
-        ivaPercentage: 14,
+        ivaPercentage: parseFloat(form.ivaPct) || 0,
         ivaFmt: totalsCalc.iva,
         totalFmt: totalsCalc.total,
         currencyLabel,
@@ -200,7 +197,7 @@ const SuperProformaInvoices = () => {
             total_amount: it.totalAmount,
           })),
           subtotal: totalsCalc.subtotal,
-          iva_percentage: 14,
+          iva_percentage: parseFloat(form.ivaPct) || 0,
           iva_amount: totalsCalc.iva,
           total: totalsCalc.total,
           currency: form.currency,
@@ -224,6 +221,7 @@ const SuperProformaInvoices = () => {
         validityDays: "30",
         items: [{ description: "", quantity: 1, unitAmount: "", totalAmount: "" }],
         currency: "AOA",
+        ivaPct: "14",
         footerNote: "",
       });
       reload();
@@ -291,19 +289,19 @@ const SuperProformaInvoices = () => {
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-4xl font-bold text-slate-900">Propostas Comerciais (PP)</h1>
-            <p className="text-slate-600 mt-2">Gerencie orçamentos e faturas pró-forma para escolas</p>
+            <h1 className="text-4xl font-bold text-slate-900">Faturas Pró-Forma (PP)</h1>
+            <p className="text-slate-600 mt-2">Crie e gira orçamentos e faturas pró-forma para escolas</p>
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2 bg-blue-600 hover:bg-blue-700">
                 <Plus className="w-5 h-5" />
-                Nova Proposta
+                Nova Pró-Forma
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Criar Nova Proposta Comercial</DialogTitle>
+                <DialogTitle>Nova Fatura Pró-Forma / Orçamento</DialogTitle>
               </DialogHeader>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -378,6 +376,19 @@ const SuperProformaInvoices = () => {
                     </SelectContent>
                   </Select>
                 </div>
+
+                <div>
+                  <Label>IVA (%)</Label>
+                  <Select value={form.ivaPct} onValueChange={(v) => setForm({ ...form, ivaPct: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">0% (Isento)</SelectItem>
+                      <SelectItem value="14">14%</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               {/* Items section */}
@@ -449,7 +460,7 @@ const SuperProformaInvoices = () => {
                       <p className="font-semibold">{totalsCalc.subtotal} {currencyLabel}</p>
                     </div>
                     <div>
-                      <p className="text-slate-600">IVA (14%):</p>
+                      <p className="text-slate-600">IVA ({form.ivaPct}%):</p>
                       <p className="font-semibold">{totalsCalc.iva} {currencyLabel}</p>
                     </div>
                     <div>
@@ -476,7 +487,7 @@ const SuperProformaInvoices = () => {
                 </Button>
                 <Button onClick={handleCreateProforma} disabled={busy}>
                   {busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Criar Proposta
+                  Criar Fatura Pró-Forma
                 </Button>
               </div>
             </DialogContent>
@@ -493,7 +504,7 @@ const SuperProformaInvoices = () => {
           ) : rows.length === 0 ? (
             <Card className="p-12 text-center">
               <FileText className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-              <p className="text-slate-500">Nenhuma proposta criada ainda</p>
+              <p className="text-slate-500">Nenhuma fatura pró-forma criada ainda</p>
             </Card>
           ) : (
             <div className="grid gap-4">
