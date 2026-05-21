@@ -6,6 +6,7 @@ import {
   LayoutGrid,
   Loader2,
   LogOut,
+  Receipt,
   ScrollText,
   Shield,
   Workflow,
@@ -49,6 +50,10 @@ function SidebarNav({
       <NavLink to="/super/propostas" className={linkCls}>
         <FileText className="h-4 w-4 shrink-0 opacity-90" />
         {!compact ? <span>Propostas</span> : <span className="pr-2">Propostas</span>}
+      </NavLink>
+      <NavLink to="/super/proforma-invoices" className={linkCls}>
+        <Receipt className="h-4 w-4 shrink-0 opacity-90" />
+        {!compact ? <span>Pró-formas (PP)</span> : <span className="pr-2">Pró-formas</span>}
       </NavLink>
       <NavLink to="/super/auditoria" className={linkCls}>
         <ScrollText className="h-4 w-4 shrink-0 opacity-90" />

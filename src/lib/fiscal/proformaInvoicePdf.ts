@@ -1,0 +1,483 @@
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+
+/**
+ * Pro-forma Invoice / Orçamento (PP)
+ * Layout idêntico às faturas fiscais, mas sem assinatura digital ou hash chain
+ * Propósito: Documentos de referência para AGT e orçamentos para escolas
+ */
+
+const NAVY: [number, number, number] = [26, 58, 90];
+const BODY_TEXT: [number, number, number] = [51, 51, 51];
+const FOOTER_MUTED: [number, number, number] = [102, 102, 102];
+const BORDER_EEE: [number, number, number] = [238, 238, 238];
+const BORDER_DDD: [number, number, number] = [221, 221, 221];
+const PANEL_FCFCFC: [number, number, number] = [252, 252, 252];
+const HASH_F5: [number, number, number] = [245, 245, 245];
+
+const pxToPt = (px: number) => Math.round(((px * 72) / 96) * 10) / 10;
+const pxMm = (px: number) => (px / 96) * 25.4;
+
+const PT_MONTH_NAMES = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+] as const;
+
+export type ProformaInvoiceLine = {
+  description: string;
+  quantity: number;
+  unitAmountFmt: string;
+  totalAmountFmt: string;
+};
+
+export type ProformaInvoicePdfInput = {
+  // Document info
+  documentNumber: string; // "PP 2026/1"
+  issueDateYYYYMMDD: string;
+  validityDays: number;
+
+  // School/Issuer info
+  schoolName: string;
+  schoolNif?: string | null;
+  schoolAddress?: string | null;
+  schoolContactLines?: string[];
+  logoDataUrl?: string | null;
+
+  // Client info (escola que está recebendo a proposta)
+  clientName: string;
+  clientLines: string[];
+  clientNif?: string | null;
+  clientEmail?: string | null;
+
+  // Items
+  lineItems: ProformaInvoiceLine[];
+  subtotalFmt: string;
+  ivaPercentage: number;
+  ivaFmt: string;
+  totalFmt: string;
+
+  // Currency
+  currencyLabel: string; // "AKZ" or "AOA"
+
+  // Footer note (opcional)
+  footerNote?: string | null;
+};
+
+type DocWithAutoTable = jsPDF & {
+  lastAutoTable?: { finalY: number };
+};
+
+function fmtPtLongDateYYYYMMDD(yyyymmdd: string): string {
+  const raw = yyyymmdd?.trim()?.slice(0, 10);
+  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "Data não definida";
+  const [y, m, d] = raw.split("-");
+  const dt = new Date(`${y}-${m}-${d}T00:00:00Z`);
+  if (Number.isNaN(dt.getTime())) return "Data inválida";
+  const dayNum = dt.getUTCDate();
+  const monthName = PT_MONTH_NAMES[dt.getUTCMonth()];
+  const yearNum = dt.getUTCFullYear();
+  return `${dayNum} de ${monthName} de ${yearNum}`;
+}
+
+function addLogoIfPossible(
+  doc: jsPDF,
+  logoDataUrl: string | undefined,
+  x: number,
+  y: number,
+  maxW: number,
+  maxH: number,
+) {
+  if (!logoDataUrl?.trim() || logoDataUrl === "undefined") return;
+  try {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0);
+        const scaled = canvas.toDataURL("image/png");
+        const ratio = img.naturalWidth / img.naturalHeight;
+        const w = Math.min(maxW, maxH * ratio);
+        const h = w / ratio;
+        doc.addImage(scaled, "PNG", x, y, w, h);
+      } catch {
+        /* ignore rendering error */
+      }
+    };
+    img.onerror = () => {
+      /* ignore load error */
+    };
+    img.src = logoDataUrl;
+  } catch {
+    /* ignore any error */
+  }
+}
+
+interface DrawOptions {
+  leading?: number;
+  size?: number;
+  style?: "normal" | "bold";
+  color?: [number, number, number];
+}
+
+function drawWrappedTexts(
+  doc: jsPDF,
+  lines: string[],
+  x: number,
+  y: number,
+  maxW: number,
+  opts: DrawOptions = {},
+): number {
+  let currentY = y;
+  const leading = opts.leading ?? pxMm(14);
+  const size = opts.size ?? pxToPt(12);
+  const style = opts.style ?? "normal";
+  const color = opts.color ?? BODY_TEXT;
+
+  doc.setFont("helvetica", style);
+  doc.setFontSize(size);
+  doc.setTextColor(color[0], color[1], color[2]);
+
+  for (const line of lines) {
+    const wrapped = doc.splitTextToSize(line, maxW);
+    for (const txt of wrapped) {
+      doc.text(txt, x, currentY);
+      currentY += leading;
+    }
+  }
+
+  return currentY;
+}
+
+function measureDetailPanelInnerHeightMm(
+  doc: jsPDF,
+  title: string,
+  lines: string[],
+  innerW: number,
+): number {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(pxToPt(11));
+  const titleLines = doc.splitTextToSize(title, innerW);
+  let h = titleLines.length * pxMm(13) + pxMm(8);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(pxToPt(10));
+  for (const line of lines) {
+    const wrapped = doc.splitTextToSize(line, innerW);
+    h += wrapped.length * pxMm(12);
+  }
+
+  return h;
+}
+
+function drawDetailPanelInner(
+  doc: jsPDF,
+  panelX: number,
+  panelY: number,
+  padding: number,
+  title: string,
+  lines: string[],
+  innerW: number,
+): void {
+  let y = panelY + padding;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(pxToPt(11));
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  for (const ln of doc.splitTextToSize(title, innerW)) {
+    doc.text(ln, panelX + padding, y);
+    y += pxMm(13);
+  }
+
+  y += pxMm(6);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(pxToPt(10));
+  doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
+  for (const line of lines) {
+    for (const ln of doc.splitTextToSize(line, innerW)) {
+      doc.text(ln, panelX + padding, y);
+      y += pxMm(12);
+    }
+  }
+}
+
+function chunkTextForPdf(text: string, chunkSize: number): string[] {
+  if (!text.trim()) return [];
+  const chunks: string[] = [];
+  for (let i = 0; i < text.length; i += chunkSize) {
+    chunks.push(text.substring(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+
+  const margin = 15;
+  const usableW = pageW - margin * 2;
+  const rhs = pageW - margin;
+
+  const logoW = pxMm(52);
+  const logoH = pxMm(52);
+  const logoGap = pxMm(12);
+  const hdrTop = margin;
+  const docInfoColW = usableW * 0.36;
+  const schoolTextX = margin + logoW + logoGap;
+  const schoolTextMax = Math.max(pxMm(32), usableW - logoW - logoGap - docInfoColW);
+
+  addLogoIfPossible(doc, opts.logoDataUrl ?? undefined, margin, hdrTop, logoW, logoH);
+
+  const schoolNameSize = pxToPt(20);
+  const schoolNameLeading = pxMm(24);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(schoolNameSize);
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  let ySchool = drawWrappedTexts(
+    doc,
+    [opts.schoolName.trim() || "Instituição de ensino"],
+    schoolTextX,
+    hdrTop,
+    schoolTextMax,
+    { leading: schoolNameLeading, size: schoolNameSize, style: "bold", color: NAVY },
+  );
+
+  ySchool += pxMm(5);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(pxToPt(10));
+  doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
+  ySchool = drawWrappedTexts(doc, ["Edukamba • documento de referência (não-fiscal)"], schoolTextX, ySchool, schoolTextMax, {
+    leading: pxMm(12),
+    size: pxToPt(10),
+  });
+
+  const schoolLines: string[] = [];
+  if (opts.schoolNif?.trim()) schoolLines.push(`NIF: ${opts.schoolNif.trim()}`);
+  if (opts.schoolAddress?.trim()) schoolLines.push(`Morada: ${opts.schoolAddress.trim()}`);
+  if (opts.schoolContactLines?.length)
+    opts.schoolContactLines.forEach((l) => l?.trim() && schoolLines.push(l.trim()));
+
+  if (schoolLines.length > 0) {
+    ySchool += pxMm(7);
+    doc.setFontSize(pxToPt(11));
+    doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
+    ySchool = drawWrappedTexts(doc, schoolLines, schoolTextX, ySchool, schoolTextMax, {
+      leading: pxMm(13),
+      size: pxToPt(11),
+    });
+  }
+
+  const leftHeaderBottom = Math.max(hdrTop + logoH, ySchool);
+
+  // Right side document header
+  let yDoc = hdrTop;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(pxToPt(20));
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text("PROPOSTA COMERCIAL", rhs, yDoc, { align: "right", baseline: "top" });
+  yDoc += pxMm(34);
+
+  doc.setFontSize(pxToPt(13));
+  doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
+  doc.text(opts.documentNumber.trim(), rhs, yDoc, { align: "right", baseline: "top" });
+  yDoc += pxMm(22);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(pxToPt(13));
+  const issueLabel = fmtPtLongDateYYYYMMDD(opts.issueDateYYYYMMDD);
+  doc.text(`Emissão: ${issueLabel}`, rhs, yDoc, { align: "right", baseline: "top" });
+  yDoc += pxMm(10);
+  doc.text(`Validade: ${opts.validityDays} dias`, rhs, yDoc, { align: "right", baseline: "top" });
+  yDoc += pxMm(10);
+
+  const headerBottomInner = Math.max(leftHeaderBottom + pxMm(4), yDoc);
+  const dividerY = headerBottomInner + pxMm(18);
+  doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.setLineWidth(Math.max(pxMm(1.75), 0.45));
+  doc.line(margin, dividerY, rhs, dividerY);
+
+  let y = dividerY + pxMm(26);
+
+  // Client and Issuer details boxes
+  const boxGap = usableW * 0.038;
+  const panelW = (usableW - boxGap) / 2;
+  const bx1 = margin;
+  const bx2 = margin + panelW + boxGap;
+  const padInner = pxMm(15);
+  const rBox = pxMm(4);
+
+  const clientBody = [
+    opts.clientName.trim(),
+    ...opts.clientLines.filter((l) => l?.trim()),
+  ];
+  if (opts.clientNif?.trim()) clientBody.push(`NIF: ${opts.clientNif.trim()}`);
+  if (opts.clientEmail?.trim()) clientBody.push(`Email: ${opts.clientEmail.trim()}`);
+
+  const issuerName = "Edukamba Tecnologia";
+  const issuerBody = [
+    "Luanda, Angola",
+    "Email: geral@edukamba.com",
+    "Website: www.edukamba.com",
+  ];
+
+  const innerW = panelW - padInner * 2;
+  const hClientInner = measureDetailPanelInnerHeightMm(doc, "Dados do Cliente", clientBody, innerW);
+  const hIssuerInner = measureDetailPanelInnerHeightMm(doc, "Dados do Emitente", issuerBody, innerW);
+  const boxH = Math.max(hClientInner, hIssuerInner) + padInner * 2;
+
+  const boxTop = y;
+
+  doc.setDrawColor(BORDER_EEE[0], BORDER_EEE[1], BORDER_EEE[2]);
+  doc.setFillColor(PANEL_FCFCFC[0], PANEL_FCFCFC[1], PANEL_FCFCFC[2]);
+  doc.setLineWidth(pxMm(1));
+  doc.roundedRect(bx1, boxTop, panelW, boxH, rBox, rBox, "FD");
+  doc.roundedRect(bx2, boxTop, panelW, boxH, rBox, rBox, "FD");
+
+  drawDetailPanelInner(doc, bx1, boxTop, padInner, "Dados do Cliente", clientBody, innerW);
+  drawDetailPanelInner(doc, bx2, boxTop, padInner, "Dados do Emitente", issuerBody, innerW);
+
+  y = boxTop + boxH + pxMm(18);
+
+  // Items table
+  const head = [["DESCRIÇÃO DO SERVIÇO", "QTD", "P. UNITÁRIO", "TOTAL"]];
+  const body = opts.lineItems.map((it) => [
+    it.description.replace(/\u00a0/g, " "),
+    String(it.quantity),
+    it.unitAmountFmt,
+    it.totalAmountFmt,
+  ]);
+
+  autoTable(doc, {
+    startY: y,
+    head,
+    body,
+    margin: { left: margin, right: margin },
+    theme: "plain",
+    styles: {
+      fontSize: pxToPt(13),
+      cellPadding: { top: pxMm(10), right: pxMm(10), bottom: pxMm(11), left: pxMm(10) },
+      lineWidth: pxMm(0.7),
+      lineColor: BORDER_EEE,
+      textColor: BODY_TEXT,
+      valign: "middle",
+      overflow: "linebreak",
+      fontStyle: "normal",
+    },
+    headStyles: {
+      fillColor: NAVY,
+      textColor: 255,
+      fontStyle: "bold",
+      fontSize: pxToPt(12),
+      halign: "left",
+      valign: "middle",
+      cellPadding: { top: pxMm(10), right: pxMm(10), bottom: pxMm(10), left: pxMm(10) },
+    },
+    columnStyles: (() => {
+      const colQty = 16;
+      const colMoney = 32;
+      const colDesc = usableW - colQty - colMoney * 2;
+      const moneyStyle = { fontSize: pxToPt(11), halign: "right" as const, valign: "middle" as const };
+      return {
+        0: { cellWidth: colDesc, valign: "middle" as const },
+        1: { cellWidth: colQty, halign: "center" as const, valign: "middle" as const },
+        2: { cellWidth: colMoney, ...moneyStyle },
+        3: { cellWidth: colMoney, ...moneyStyle, fontStyle: "bold" as const, textColor: [35, 40, 48] as [number, number, number] },
+      };
+    })(),
+  });
+
+  const d = doc as DocWithAutoTable;
+  const tableFinalY = d.lastAutoTable?.finalY ?? y + pxMm(90);
+
+  // Totals section
+  const totalsW = pxMm(250);
+  const totalsX = rhs - totalsW;
+  let blockY = tableFinalY + pxMm(14);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(pxToPt(12));
+  doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
+  doc.text("Subtotal", totalsX, blockY + pxMm(4));
+  doc.text(opts.subtotalFmt, totalsX + totalsW, blockY + pxMm(4), { align: "right" });
+
+  blockY += pxMm(10) + pxMm(10);
+
+  doc.text(`IVA (${opts.ivaPercentage}%)`, totalsX, blockY + pxMm(4));
+  doc.text(opts.ivaFmt, totalsX + totalsW, blockY + pxMm(4), { align: "right" });
+
+  blockY += pxMm(10) + pxMm(10);
+
+  const grandH = pxMm(42);
+  doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.rect(totalsX, blockY, totalsW, grandH, "F");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(pxToPt(16));
+  doc.setTextColor(255, 255, 255);
+  doc.text("TOTAL", totalsX + pxMm(12), blockY + grandH / 2 + pxMm(2), {
+    baseline: "middle",
+  });
+  doc.text(opts.totalFmt, totalsX + totalsW - pxMm(12), blockY + grandH / 2 + pxMm(2), {
+    align: "right",
+    baseline: "middle",
+  });
+
+  // Footer
+  let footY = blockY + grandH + pxMm(48);
+  const footerParagraph =
+    "Esta proposta comercial é um documento de referência para fins de adjudicação e planeamento. " +
+    "Não possui valor fiscal e não substitui a Fatura-Recibo definitiva que será emitida após o pagamento validado. " +
+    "O documento tem validade de " + opts.validityDays + " dias a partir da data de emissão.";
+
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(pxToPt(11));
+  doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
+  for (const ln of doc.splitTextToSize(footerParagraph, usableW)) {
+    doc.text(ln, margin, footY);
+    footY += pxMm(16);
+  }
+
+  footY += pxMm(12);
+
+  // Additional footer note if provided
+  if (opts.footerNote?.trim()) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(pxToPt(10));
+    doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
+    for (const ln of doc.splitTextToSize(opts.footerNote.trim(), usableW)) {
+      doc.text(ln, margin, footY);
+      footY += pxMm(14);
+    }
+  }
+
+  // Watermark
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(pxToPt(10));
+  doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
+  doc.text("Edukamba — Proposta comercial gerada automaticamente", rhs, pageH - margin, { align: "right" });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(pxToPt(10));
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text("edukamba.com", rhs, pageH - pxMm(24), { align: "right" });
+
+  doc.setTextColor(0);
+  doc.setDrawColor(0);
+
+  return doc;
+}
