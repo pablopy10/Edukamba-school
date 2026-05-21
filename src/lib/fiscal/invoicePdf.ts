@@ -686,7 +686,7 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   doc.setFont("helvetica", "italic");
   doc.setFontSize(pxToPt(10));
   doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
-  doc.text(`Processado por computador • ${opts.schoolName}`, rhs, wmY, { align: "right" });
+  doc.text("Processado por programa válido nº31.1/AGT20", rhs, wmY, { align: "right" });
   doc.setFontSize(pxToPt(10));
   doc.text("Edukamba — dados dinâmicos conforme o portal.", rhs, wmY + pxMm(14), { align: "right" });
 

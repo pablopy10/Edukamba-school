@@ -3,6 +3,7 @@
  * JWT do utilizador staff (RLS às tabelas). Secret: AGT_RSA_PRIVATE_KEY_PEM (PKCS#8 RSA, assinatura SHA-1 PKCS#1).
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import forge from "https://esm.sh/node-forge@1.3.1";
 import {
   buildOfficialFiscalInvoicePdfBytes,
   invoiceRowToPdfPayload,
@@ -109,35 +110,55 @@ function formatTotalForSigning(amount: number): string {
   return (Math.round((amount + Number.EPSILON) * 100) / 100).toFixed(2);
 }
 
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary);
+/** Secrets Supabase podem guardar PEM numa linha com \\n literais. */
+function normalizePrivateKeyPem(raw: string): string {
+  let pem = raw.trim();
+  if (!pem) return "";
+  if (
+    (pem.startsWith('"') && pem.endsWith('"')) ||
+    (pem.startsWith("'") && pem.endsWith("'"))
+  ) {
+    pem = pem.slice(1, -1).trim();
+  }
+  return pem.replace(/\\n/g, "\n").trim();
 }
 
-function pemToPkcs8Der(pem: string): ArrayBuffer {
-  const lines = pem.split(/\r?\n/).filter((l) => l && !l.startsWith("-----"));
-  const b64 = lines.join("");
-  const raw = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-  return raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
+function assertPrivateKeyPem(pem: string): void {
+  if (!pem || !/PRIVATE KEY/.test(pem)) {
+    throw new Error(
+      "AGT_RSA_PRIVATE_KEY_PEM inválida ou vazia. Configure a chave RSA nas secrets do Supabase (Project Settings → Edge Functions).",
+    );
+  }
 }
 
-async function signPlaintextRSA_SHA1_PKCS1(plaintext: string, pem: string): Promise<string> {
-  const pkcs8 = pemToPkcs8Der(pem.trim());
-  const key = await crypto.subtle.importKey(
-    "pkcs8",
-    pkcs8,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-1" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign(
-    "RSASSA-PKCS1-v1_5",
-    key,
-    new TextEncoder().encode(plaintext),
-  );
-  return arrayBufferToBase64(sig);
+/** Assinatura RSA-SHA1 PKCS#1 v1.5 (AGT). Aceita PEM PKCS#8 e «RSA PRIVATE KEY» (PKCS#1). */
+function signPlaintextRSA_SHA1_PKCS1(plaintext: string, pemRaw: string): string {
+  const pem = normalizePrivateKeyPem(pemRaw);
+  assertPrivateKeyPem(pem);
+  let privateKey: ReturnType<typeof forge.pki.privateKeyFromPem>;
+  try {
+    privateKey = forge.pki.privateKeyFromPem(pem);
+  } catch {
+    throw new Error(
+      "Não foi possível ler AGT_RSA_PRIVATE_KEY_PEM. Exporte com: openssl pkcs8 -topk8 -nocrypt -in chave_rsa.pem -out chave_agt.pem",
+    );
+  }
+  const md = forge.md.sha1.create();
+  md.update(plaintext, "utf8");
+  return forge.util.encode64(privateKey.sign(md));
+}
+
+function formatSigningErrorDetail(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/ASN\.1|DER message is incomplete|privateKeyFromPem/i.test(msg)) {
+    return (
+      "Chave RSA fiscal (AGT_RSA_PRIVATE_KEY_PEM) inválida ou em formato incorrecto. " +
+      "Nas secrets do Supabase, cole o PEM completo (BEGIN … END) ou use PKCS#8: " +
+      "openssl pkcs8 -topk8 -nocrypt -in chave.pem -out chave_agt.pem"
+    );
+  }
+  if (/AGT_RSA_PRIVATE_KEY_PEM/i.test(msg)) return msg;
+  return msg;
 }
 
 type FiscalContext = {
@@ -399,7 +420,7 @@ async function emitOne(
     });
 
     const document_hash = await sha1HexUtf8(plaintext);
-    const signatureBase64 = await signPlaintextRSA_SHA1_PKCS1(plaintext, pem);
+    const signatureBase64 = signPlaintextRSA_SHA1_PKCS1(plaintext, pem);
     const hash_control = (((Math.max(seq, 1) - 1) % 10) + 1).toString();
 
     const { data: inserted, error: insErr } = await sb.from("invoices").insert({
@@ -455,7 +476,7 @@ async function emitOne(
       document_number: inserted?.document_number ?? documentNumberFull,
     };
   } catch (e) {
-    return { payment_id, status: "error", detail: String(e) };
+    return { payment_id, status: "error", detail: formatSigningErrorDetail(e) };
   }
 }
 
@@ -463,9 +484,14 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return corsJson({ error: "Method not allowed" }, 405);
 
-  const pemRaw = Deno.env.get("AGT_RSA_PRIVATE_KEY_PEM")?.trim();
-  if (!pemRaw) {
-    return corsJson({ error: "AGT_RSA_PRIVATE_KEY_PEM não configurada nas secrets.", results: [] }, 503);
+  const pemRaw = Deno.env.get("AGT_RSA_PRIVATE_KEY_PEM") ?? "";
+  const pemNormalized = normalizePrivateKeyPem(pemRaw);
+  if (!pemNormalized || !/PRIVATE KEY/.test(pemNormalized)) {
+    return corsJson({
+      error:
+        "AGT_RSA_PRIVATE_KEY_PEM não configurada ou inválida nas secrets (necessário PEM com BEGIN PRIVATE KEY ou BEGIN RSA PRIVATE KEY).",
+      results: [],
+    }, 503);
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -523,7 +549,7 @@ Deno.serve(async (req) => {
 
   const chain = sortPaymentsForChain([...foundMap.values()]);
   for (const p of chain) {
-    results.push(await emitOne(userClient, adminSb, pemRaw, p));
+    results.push(await emitOne(userClient, adminSb, pemNormalized, p));
   }
 
   return corsJson({ results });
