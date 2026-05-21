@@ -476,28 +476,10 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
     baseline: "middle",
   });
 
-  // Hash extract box (AGT) — mesmo sendo PP, mostra o extrato se fornecido
-  const hashExtract = opts.hashExtract?.trim() ? `${opts.hashExtract.trim().slice(0, 4)}-` : null;
-  let footY: number;
-  if (hashExtract) {
-    const hashBoxH = pxMm(28);
-    const hashBoxY = blockY + grandH + pxMm(18);
-    doc.setFillColor(HASH_F5[0], HASH_F5[1], HASH_F5[2]);
-    doc.setDrawColor(BORDER_DDD[0], BORDER_DDD[1], BORDER_DDD[2]);
-    doc.setLineWidth(pxMm(0.7));
-    doc.roundedRect(margin, hashBoxY, usableW, hashBoxH, pxMm(3), pxMm(3), "FD");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(pxToPt(11));
-    doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-    doc.text("Extrato da Chave:", margin + pxMm(10), hashBoxY + hashBoxH / 2, { baseline: "middle" });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(pxToPt(13));
-    doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-    doc.text(hashExtract, margin + pxMm(60), hashBoxY + hashBoxH / 2, { baseline: "middle" });
-    footY = hashBoxY + hashBoxH + pxMm(14);
-  } else {
-    footY = blockY + grandH + pxMm(32);
-  }
+  // Hash extract box removida — hash aparece no rodapé junto à linha AGT
+  const hashExtract = opts.hashExtract?.trim() ? opts.hashExtract.trim().slice(0, 4) : null;
+  const footY = blockY + grandH + pxMm(32);
+  let currentFootY = footY;
 
   // Disclaimer paragraph
   const footerParagraph =
@@ -509,11 +491,11 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   doc.setFontSize(pxToPt(11));
   doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
   for (const ln of doc.splitTextToSize(footerParagraph, usableW)) {
-    doc.text(ln, margin, footY);
-    footY += pxMm(16);
+    doc.text(ln, margin, currentFootY);
+    currentFootY += pxMm(16);
   }
 
-  footY += pxMm(8);
+  currentFootY += pxMm(8);
 
   // Additional footer note if provided
   if (opts.footerNote?.trim()) {
@@ -521,17 +503,16 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
     doc.setFontSize(pxToPt(10));
     doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
     for (const ln of doc.splitTextToSize(opts.footerNote.trim(), usableW)) {
-      doc.text(ln, margin, footY);
-      footY += pxMm(14);
+      doc.text(ln, margin, currentFootY);
+      currentFootY += pxMm(14);
     }
-    footY += pxMm(6);
+    currentFootY += pxMm(6);
   }
 
   // AGT mandatory certification line + hash extract
   // Hash: usa o fornecido ou gera stub determinístico a partir do número do documento
-  const hashForFooter = opts.hashExtract?.trim()
-    ? opts.hashExtract.trim().slice(0, 4)
-    : opts.documentNumber.replace(/[^A-Za-z0-9]/g, "").slice(-4).toUpperCase() || "0000";
+  const hashForFooter = hashExtract
+    ?? (opts.documentNumber.replace(/[^A-Za-z0-9]/g, "").slice(-4).toUpperCase() || "0000");
   const hashDisplay = `${hashForFooter}-`;
 
   doc.setFont("helvetica", "normal");
