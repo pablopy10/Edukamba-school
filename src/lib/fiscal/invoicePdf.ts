@@ -430,73 +430,72 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   const usableW = pageW - margin * 2;
   const rhs = pageW - margin;
 
-  const logoW = pxMm(52);
-  const logoH = pxMm(52);
-  const logoGap = pxMm(12);
   const hdrTop = margin;
-  const docInfoColW = usableW * 0.36;
-  const schoolTextX = margin + logoW + logoGap;
-  const schoolTextMax = Math.max(pxMm(32), usableW - logoW - logoGap - docInfoColW);
+  const leftColW = usableW * 0.52;
 
+  // Logo (opcional)
+  const logoW = pxMm(48);
+  const logoH = pxMm(48);
   addLogoIfPossible(doc, opts.logoDataUrl ?? undefined, margin, hdrTop, logoW, logoH);
 
-  const schoolNameSize = pxToPt(20);
-  const schoolNameLeading = pxMm(24);
+  // ── Lado esquerdo: nome + subtítulo + NIF/morada/contactos (alinhado à margem)
+  const textStartX = margin;
+  const hasLogo = !!opts.logoDataUrl?.startsWith("data:image");
+  let yLeft = hasLogo ? hdrTop + logoH + pxMm(4) : hdrTop;
 
+  const schoolNameSize = pxToPt(18);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(schoolNameSize);
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-  let ySchool = drawWrappedTexts(
+  yLeft = drawWrappedTexts(
     doc,
-    [opts.schoolName.trim() || "Instituição de ensino"],
-    schoolTextX,
-    hdrTop,
-    schoolTextMax,
-    { leading: schoolNameLeading, size: schoolNameSize, style: "bold", color: NAVY },
+    [opts.schoolName.trim() || "Edukamba"],
+    textStartX,
+    yLeft,
+    leftColW,
+    { leading: pxMm(22), size: schoolNameSize, style: "bold", color: NAVY },
   );
 
-  ySchool += pxMm(5);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(pxToPt(10));
-  doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
-  ySchool = drawWrappedTexts(doc, ["Edukamba • documento fiscal"], schoolTextX, ySchool, schoolTextMax, {
+  yLeft += pxMm(3);
+  yLeft = drawWrappedTexts(doc, ["Factura-Recibo (documento fiscal)"], textStartX, yLeft, leftColW, {
     leading: pxMm(12),
-    size: pxToPt(10),
+    size: pxToPt(9),
+    color: FOOTER_MUTED,
   });
 
-  const schoolLines: string[] = [];
-  if (opts.schoolNif?.trim()) schoolLines.push(`NIF: ${opts.schoolNif.trim()}`);
-  if (opts.schoolAddress?.trim()) schoolLines.push(`Morada: ${opts.schoolAddress.trim()}`);
+  yLeft += pxMm(5);
+  const detailLines: string[] = [];
+  if (opts.schoolNif?.trim()) detailLines.push(`NIF: ${opts.schoolNif.trim()}`);
+  if (opts.schoolAddress?.trim()) detailLines.push(opts.schoolAddress.trim());
   if (opts.schoolContactLines?.length)
-    opts.schoolContactLines.forEach((l) => l?.trim() && schoolLines.push(l.trim()));
+    opts.schoolContactLines.forEach((l) => l?.trim() && detailLines.push(l.trim()));
 
-  if (schoolLines.length > 0) {
-    ySchool += pxMm(7);
-    doc.setFontSize(pxToPt(11));
+  if (detailLines.length > 0) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(pxToPt(10));
     doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-    ySchool = drawWrappedTexts(doc, schoolLines, schoolTextX, ySchool, schoolTextMax, {
+    yLeft = drawWrappedTexts(doc, detailLines, textStartX, yLeft, leftColW, {
       leading: pxMm(13),
-      size: pxToPt(11),
+      size: pxToPt(10),
     });
   }
 
-  const leftHeaderBottom = Math.max(hdrTop + logoH, ySchool);
-
-  /* .doc-info — alinhamento à direita */
+  // ── Lado direito: tipo de documento + número + datas
   let yDoc = hdrTop;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(pxToPt(20));
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
   doc.text("FACTURA RECIBO", rhs, yDoc, { align: "right", baseline: "top" });
-  yDoc += pxMm(34);
+  yDoc += pxMm(28);
 
   doc.setFontSize(pxToPt(13));
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
   doc.text(opts.documentNumber.trim(), rhs, yDoc, { align: "right", baseline: "top" });
-  yDoc += pxMm(22);
+  yDoc += pxMm(18);
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(pxToPt(13));
+  doc.setFontSize(pxToPt(11));
+  doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
   const issueLabel = fmtPtLongDateYYYYMMDD(opts.invoiceDateYYYYMMDD);
   doc.text(`Emissão: ${issueLabel}`, rhs, yDoc, { align: "right", baseline: "top" });
   yDoc += pxMm(10);
@@ -521,7 +520,7 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
     yDoc += pxMm(10);
   }
 
-  const headerBottomInner = Math.max(leftHeaderBottom + pxMm(4), yDoc);
+  const headerBottomInner = Math.max(yLeft + pxMm(4), yDoc);
   const dividerY = headerBottomInner + pxMm(18);
   doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
   doc.setLineWidth(Math.max(pxMm(1.75), 0.45));
@@ -537,17 +536,33 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   const padInner = pxMm(15);
   const rBox = pxMm(4);
 
+  // Dados do Cliente
+  const clientBody: string[] = [];
   const encNomeReal = opts.encarregadoNome?.trim() || opts.clienteNome.trim() || "—";
-  const turma = opts.studentClassroom?.trim() || "—";
-  const ano = opts.academicYearLabel?.trim() || "—";
-  const encBody = [`Nome: ${encNomeReal}`, `NIF (efeitos fiscais): ${opts.clienteNif.trim()}`];
-  const studBody = [`Nome: ${opts.studentName.trim()}`, `Turma: ${turma}`, `Ano lectivo: ${ano}`];
+  clientBody.push(encNomeReal);
+  if (opts.studentName?.trim() && opts.studentName.trim() !== "—") {
+    clientBody.push(`Aluno: ${opts.studentName.trim()}`);
+  }
+  if (opts.studentClassroom?.trim() && opts.studentClassroom.trim() !== "—") {
+    clientBody.push(`Turma: ${opts.studentClassroom.trim()}`);
+  }
+  if (opts.academicYearLabel?.trim() && opts.academicYearLabel.trim() !== "—") {
+    clientBody.push(`Ano lectivo: ${opts.academicYearLabel.trim()}`);
+  }
+  clientBody.push(`NIF: ${opts.clienteNif.trim()}`);
 
-  const innerEncW = panelW - padInner * 2;
-  const innerStudW = panelW - padInner * 2;
-  const hEncInner = measureDetailPanelInnerHeightMm(doc, "Dados do encarregado", encBody, innerEncW);
-  const hStudInner = measureDetailPanelInnerHeightMm(doc, "Dados do aluno", studBody, innerStudW);
-  const boxH = Math.max(hEncInner, hStudInner) + padInner * 2;
+  // Dados do Emitente
+  const issuerBody: string[] = [opts.schoolName.trim() || "Edukamba"];
+  if (opts.schoolAddress?.trim()) issuerBody.push(opts.schoolAddress.trim());
+  if (opts.schoolNif?.trim()) issuerBody.push(`NIF: ${opts.schoolNif.trim()}`);
+  if (opts.schoolContactLines?.length) {
+    opts.schoolContactLines.forEach((l) => l?.trim() && issuerBody.push(l.trim()));
+  }
+
+  const innerW = panelW - padInner * 2;
+  const hClientInner = measureDetailPanelInnerHeightMm(doc, "Dados do Cliente", clientBody, innerW);
+  const hIssuerInner = measureDetailPanelInnerHeightMm(doc, "Dados do Emitente", issuerBody, innerW);
+  const boxH = Math.max(hClientInner, hIssuerInner) + padInner * 2;
 
   const boxTop = y;
 
@@ -557,8 +572,8 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   doc.roundedRect(bx1, boxTop, panelW, boxH, rBox, rBox, "FD");
   doc.roundedRect(bx2, boxTop, panelW, boxH, rBox, rBox, "FD");
 
-  drawDetailPanelInner(doc, bx1, boxTop, padInner, "Dados do encarregado", encBody, innerEncW);
-  drawDetailPanelInner(doc, bx2, boxTop, padInner, "Dados do aluno", studBody, innerStudW);
+  drawDetailPanelInner(doc, bx1, boxTop, padInner, "Dados do Cliente", clientBody, innerW);
+  drawDetailPanelInner(doc, bx2, boxTop, padInner, "Dados do Emitente", issuerBody, innerW);
 
   y = boxTop + boxH + pxMm(18);
 
