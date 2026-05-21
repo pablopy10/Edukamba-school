@@ -26,6 +26,13 @@ import { toast } from "sonner";
 
 const CONSUMER_FALLBACK_NIF = "999999999";
 
+const EDUKAMBA_ISSUER = {
+  schoolName: "Edukamba",
+  schoolNif: "5480041924",
+  schoolAddress: "Zona Verde, Rua 18, Casa 26, Belas, Luanda",
+  schoolContactLines: ["Email: geral@edukamba.com", "Website: www.edukamba.com"],
+} as const;
+
 type ProformaRow = {
   id: string;
   document_number: string;
@@ -181,10 +188,7 @@ const SuperProformaInvoices = () => {
         documentNumber: docNumber,
         issueDateYYYYMMDD: form.issueDate,
         validityDays: parseInt(form.validityDays) || 30,
-        schoolName: "Edukamba Tecnologia",
-        schoolNif: "1234567890",
-        schoolAddress: "Luanda, Angola",
-        schoolContactLines: ["Email: geral@edukamba.com", "Website: www.edukamba.com"],
+        ...EDUKAMBA_ISSUER,
         clientName: form.clientName.trim(),
         clientLines: form.clientLines
           .split("\n")
@@ -270,10 +274,7 @@ const SuperProformaInvoices = () => {
         documentNumber: row.document_number,
         issueDateYYYYMMDD: row.issue_date,
         validityDays: row.validity_days,
-        schoolName: "Edukamba Tecnologia",
-        schoolNif: "1234567890",
-        schoolAddress: "Luanda, Angola",
-        schoolContactLines: ["Email: geral@edukamba.com", "Website: www.edukamba.com"],
+        ...EDUKAMBA_ISSUER,
         clientName: row.client_name,
         clientLines: row.client_lines,
         clientNif: row.client_nif,

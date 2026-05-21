@@ -255,87 +255,93 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   const usableW = pageW - margin * 2;
   const rhs = pageW - margin;
 
-  const logoW = pxMm(52);
-  const logoH = pxMm(52);
-  const logoGap = pxMm(12);
+  // ── Layout: esquerda ocupa ~55% da largura, direita os restantes ~45%
+  const leftColW = usableW * 0.52;
+  const rightColX = margin + leftColW + pxMm(8);
+  const rightColW = rhs - rightColX;
   const hdrTop = margin;
-  const docInfoColW = usableW * 0.36;
-  const schoolTextX = margin + logoW + logoGap;
-  const schoolTextMax = Math.max(pxMm(32), usableW - logoW - logoGap - docInfoColW);
 
+  // Logo (opcional) — acima do nome, alinhado à esquerda
+  const logoW = pxMm(48);
+  const logoH = pxMm(48);
   addLogoIfPossible(doc, opts.logoDataUrl ?? undefined, margin, hdrTop, logoW, logoH);
+  const textStartX = margin; // texto começa sempre na margem esquerda
 
-  const schoolNameSize = pxToPt(20);
-  const schoolNameLeading = pxMm(24);
-
+  // Nome da empresa (bold, navy)
+  const schoolNameSize = pxToPt(18);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(schoolNameSize);
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-  let ySchool = drawWrappedTexts(
-    doc,
-    [opts.schoolName.trim() || "Instituição de ensino"],
-    schoolTextX,
-    hdrTop,
-    schoolTextMax,
-    { leading: schoolNameLeading, size: schoolNameSize, style: "bold", color: NAVY },
-  );
-
-  ySchool += pxMm(5);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(pxToPt(10));
-  doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
-  ySchool = drawWrappedTexts(doc, ["Edukamba • fatura pró-forma / orçamento (não-fiscal)"], schoolTextX, ySchool, schoolTextMax, {
-    leading: pxMm(12),
-    size: pxToPt(10),
+  // Se tiver logo, começa abaixo dele; senão começa no topo
+  const hasLogo = !!opts.logoDataUrl?.trim();
+  let yLeft = hasLogo ? hdrTop + logoH + pxMm(4) : hdrTop;
+  yLeft = drawWrappedTexts(doc, [opts.schoolName.trim() || "Edukamba"], textStartX, yLeft, leftColW, {
+    leading: pxMm(22),
+    size: schoolNameSize,
+    style: "bold",
+    color: NAVY,
   });
 
-  const schoolLines: string[] = [];
-  if (opts.schoolNif?.trim()) schoolLines.push(`NIF: ${opts.schoolNif.trim()}`);
-  if (opts.schoolAddress?.trim()) schoolLines.push(`Morada: ${opts.schoolAddress.trim()}`);
-  if (opts.schoolContactLines?.length)
-    opts.schoolContactLines.forEach((l) => l?.trim() && schoolLines.push(l.trim()));
+  // Subtítulo muted
+  yLeft += pxMm(3);
+  yLeft = drawWrappedTexts(doc, ["Fatura Pró-Forma / Orçamento (não-fiscal)"], textStartX, yLeft, leftColW, {
+    leading: pxMm(12),
+    size: pxToPt(9),
+    color: FOOTER_MUTED,
+  });
 
-  if (schoolLines.length > 0) {
-    ySchool += pxMm(7);
-    doc.setFontSize(pxToPt(11));
+  // Detalhes: NIF, Morada, contactos — todos alinhados à esquerda
+  yLeft += pxMm(5);
+  const detailLines: string[] = [];
+  if (opts.schoolNif?.trim()) detailLines.push(`NIF: ${opts.schoolNif.trim()}`);
+  if (opts.schoolAddress?.trim()) detailLines.push(opts.schoolAddress.trim());
+  if (opts.schoolContactLines?.length)
+    opts.schoolContactLines.forEach((l) => l?.trim() && detailLines.push(l.trim()));
+
+  if (detailLines.length > 0) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(pxToPt(10));
     doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-    ySchool = drawWrappedTexts(doc, schoolLines, schoolTextX, ySchool, schoolTextMax, {
+    yLeft = drawWrappedTexts(doc, detailLines, textStartX, yLeft, leftColW, {
       leading: pxMm(13),
-      size: pxToPt(11),
+      size: pxToPt(10),
     });
   }
 
-  const leftHeaderBottom = Math.max(hdrTop + logoH, ySchool);
+  // ── Lado direito: tipo de documento + número + datas
+  let yRight = hdrTop;
 
-  // Right side document header
-  let yDoc = hdrTop;
+  // "FATURA PRÓ-FORMA" — título grande alinhado à direita
   doc.setFont("helvetica", "bold");
   doc.setFontSize(pxToPt(20));
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-  doc.text("FATURA PRÓ-FORMA", rhs, yDoc, { align: "right", baseline: "top" });
-  yDoc += pxMm(34);
+  doc.text("FATURA PRÓ-FORMA", rhs, yRight, { align: "right", baseline: "top" });
+  yRight += pxMm(28);
 
+  // Número do documento
   doc.setFontSize(pxToPt(13));
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-  doc.text(opts.documentNumber.trim(), rhs, yDoc, { align: "right", baseline: "top" });
-  yDoc += pxMm(22);
+  doc.text(opts.documentNumber.trim(), rhs, yRight, { align: "right", baseline: "top" });
+  yRight += pxMm(18);
 
+  // Datas e período — fonte menor, alinhados à direita
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(pxToPt(13));
+  doc.setFontSize(pxToPt(11));
+  doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
   const issueLabel = fmtPtLongDateYYYYMMDD(opts.issueDateYYYYMMDD);
   const period = accountingPeriod(opts.issueDateYYYYMMDD);
-  doc.text(`Emissão: ${issueLabel}`, rhs, yDoc, { align: "right", baseline: "top" });
-  yDoc += pxMm(10);
-  doc.text(`Validade: ${opts.validityDays} dias`, rhs, yDoc, { align: "right", baseline: "top" });
-  yDoc += pxMm(10);
-  doc.setFontSize(pxToPt(11));
+  doc.text(`Emissão: ${issueLabel}`, rhs, yRight, { align: "right", baseline: "top" });
+  yRight += pxMm(12);
+  doc.text(`Validade: ${opts.validityDays} dias`, rhs, yRight, { align: "right", baseline: "top" });
+  yRight += pxMm(12);
   doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
-  doc.text(`Período Contabilístico: ${period}`, rhs, yDoc, { align: "right", baseline: "top" });
+  doc.setFontSize(pxToPt(10));
+  doc.text(`Período Contabilístico: ${period}`, rhs, yRight, { align: "right", baseline: "top" });
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-  yDoc += pxMm(10);
+  yRight += pxMm(10);
 
-  const headerBottomInner = Math.max(leftHeaderBottom + pxMm(4), yDoc);
-  const dividerY = headerBottomInner + pxMm(18);
+  // Linha divisória abaixo do header
+  const dividerY = Math.max(yLeft, yRight) + pxMm(10);
   doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
   doc.setLineWidth(Math.max(pxMm(1.75), 0.45));
   doc.line(margin, dividerY, rhs, dividerY);
