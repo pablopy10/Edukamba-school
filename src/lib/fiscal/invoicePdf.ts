@@ -388,10 +388,10 @@ export async function resolveFiscalInvoicePdfInput(
   const totalFmt = formatMoney(Number.isFinite(gross) ? gross : 0);
 
   return {
-    schoolName: school?.name?.trim() || "Escola",
-    schoolNif: school?.nif ?? null,
-    schoolAddress: school?.address ?? null,
-    schoolContactLines: undefined,
+    schoolName: school?.name?.trim() || "Edukamba",
+    schoolNif: school?.nif?.trim() || "5480041924",
+    schoolAddress: school?.address?.trim() || "Zona Verde, Rua 18, Casa 26, Belas, Luanda",
+    schoolContactLines: ["Email: geral@edukamba.com", "Website: www.edukamba.com"],
     logoDataUrl: logoDataUrlFinal,
     documentNumber: invoice.document_number.trim(),
     invoiceDateYYYYMMDD: invoice.invoice_date.slice(0, 10),
@@ -689,11 +689,6 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
   doc.text(`Hash: ${hashControl4} | Processado por programa válido nº31.1/AGT20`, margin, wmY);
   doc.text("edukamba.com", rhs, wmY, { align: "right" });
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(pxToPt(10));
-  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-  doc.text("edukamba.com", rhs, pageH - margin, { align: "right" });
 
   if (opts.isCancelled) {
     drawCancelledInvoiceOverlay(doc, pageW, pageH, opts.cancellationReason);
