@@ -37,5 +37,7 @@
   "meal_search_placeholder": "Search student or plan…",
   "meal_filter_label": "Plan",
   "meal_filter_all": "All plans",
-  "col_plan": "Plan"
+  "col_plan": "Plan",
+  "view_details": "View details",
+  "change_status": "Change status"
 }

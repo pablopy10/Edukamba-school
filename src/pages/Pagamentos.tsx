@@ -555,6 +555,145 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   const [recordNotes, setRecordNotes] = useState("");
   const [recordUploading, setRecordUploading] = useState(false);
 
+  // Status change dialog
+  const [statusChangeDialog, setStatusChangeDialog] = useState<
+    | { kind: "fee"; fee: FeeListRow; payment: PaymentListRow | null }
+    | { kind: "activity"; fee: ActivityFeeRow; payment: PaymentListRow | null }
+    | { kind: "transport"; fee: TransportFeeRow; payment: PaymentListRow | null }
+    | { kind: "meal"; fee: MealFeeRow; payment: PaymentListRow | null }
+    | { kind: "event"; fee: EventFeeRow; payment: PaymentListRow | null }
+    | { kind: "enrollment"; fee: EnrollmentFeeRow; payment: PaymentListRow | null }
+    | null
+  >(null);
+  const [newStatus, setNewStatus] = useState<"paid" | "unpaid" | "rejected">("paid");
+  const [statusChanging, setStatusChanging] = useState(false);
+
+  // Details dialog
+  const [detailsDialog, setDetailsDialog] = useState<
+    | { kind: "fee"; fee: FeeListRow; payment: PaymentListRow | null }
+    | { kind: "activity"; fee: ActivityFeeRow; payment: PaymentListRow | null }
+    | { kind: "transport"; fee: TransportFeeRow; payment: PaymentListRow | null }
+    | { kind: "meal"; fee: MealFeeRow; payment: PaymentListRow | null }
+    | { kind: "event"; fee: EventFeeRow; payment: PaymentListRow | null }
+    | { kind: "enrollment"; fee: EnrollmentFeeRow; payment: PaymentListRow | null }
+    | null
+  >(null);
+
+  const openStatusChangeForFee = (fee: FeeListRow, payment: PaymentListRow | null) => {
+    setStatusChangeDialog({ kind: "fee", fee, payment });
+    setNewStatus(fee.is_paid ? "paid" : "unpaid");
+  };
+  const openStatusChangeForActivity = (fee: ActivityFeeRow, payment: PaymentListRow | null) => {
+    setStatusChangeDialog({ kind: "activity", fee, payment });
+    setNewStatus(fee.is_paid ? "paid" : "unpaid");
+  };
+  const openStatusChangeForTransport = (fee: TransportFeeRow, payment: PaymentListRow | null) => {
+    setStatusChangeDialog({ kind: "transport", fee, payment });
+    setNewStatus(fee.is_paid ? "paid" : "unpaid");
+  };
+  const openStatusChangeForMeal = (fee: MealFeeRow, payment: PaymentListRow | null) => {
+    setStatusChangeDialog({ kind: "meal", fee, payment });
+    setNewStatus(fee.is_paid ? "paid" : "unpaid");
+  };
+  const openStatusChangeForEvent = (fee: EventFeeRow, payment: PaymentListRow | null) => {
+    setStatusChangeDialog({ kind: "event", fee, payment });
+    setNewStatus(fee.is_paid ? "paid" : "unpaid");
+  };
+  const openStatusChangeForEnrollment = (fee: EnrollmentFeeRow, payment: PaymentListRow | null) => {
+    setStatusChangeDialog({ kind: "enrollment", fee, payment });
+    setNewStatus(fee.is_paid ? "paid" : "unpaid");
+  };
+
+  const openDetailsForFee = (fee: FeeListRow, payment: PaymentListRow | null) => {
+    setDetailsDialog({ kind: "fee", fee, payment });
+  };
+  const openDetailsForActivity = (fee: ActivityFeeRow, payment: PaymentListRow | null) => {
+    setDetailsDialog({ kind: "activity", fee, payment });
+  };
+  const openDetailsForTransport = (fee: TransportFeeRow, payment: PaymentListRow | null) => {
+    setDetailsDialog({ kind: "transport", fee, payment });
+  };
+  const openDetailsForMeal = (fee: MealFeeRow, payment: PaymentListRow | null) => {
+    setDetailsDialog({ kind: "meal", fee, payment });
+  };
+  const openDetailsForEvent = (fee: EventFeeRow, payment: PaymentListRow | null) => {
+    setDetailsDialog({ kind: "event", fee, payment });
+  };
+  const openDetailsForEnrollment = (fee: EnrollmentFeeRow, payment: PaymentListRow | null) => {
+    setDetailsDialog({ kind: "enrollment", fee, payment });
+  };
+
+  const submitStatusChange = async () => {
+    if (!statusChangeDialog || !schoolId) return;
+    const kind = statusChangeDialog.kind;
+    const fee = statusChangeDialog.fee;
+
+    setStatusChanging(true);
+    try {
+      let table = "";
+      let feeId = "";
+
+      if (kind === "fee") {
+        table = "student_fees";
+        feeId = (fee as FeeListRow).id;
+      } else if (kind === "activity") {
+        table = "activity_fees";
+        feeId = (fee as ActivityFeeRow).id;
+      } else if (kind === "transport") {
+        table = "transport_fees";
+        feeId = (fee as TransportFeeRow).id;
+      } else if (kind === "meal") {
+        table = "meal_fees";
+        feeId = (fee as MealFeeRow).id;
+      } else if (kind === "event") {
+        table = "event_fees";
+        feeId = (fee as EventFeeRow).id;
+      } else if (kind === "enrollment") {
+        table = "enrollment_fees";
+        feeId = (fee as EnrollmentFeeRow).id;
+      }
+
+      const isPaid = newStatus === "paid";
+      const { error } = await supabase.from(table).update({ is_paid: isPaid }).eq("id", feeId);
+
+      if (error) {
+        toast({ title: "Erro", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Sucesso", description: "Estado do pagamento alterado com sucesso." });
+        // Update local state
+        if (kind === "fee") {
+          setAllFees(prevFees =>
+            prevFees.map(f => f.id === feeId ? { ...f, is_paid: isPaid } : f)
+          );
+        } else if (kind === "activity") {
+          setAllActivityFees(prevFees =>
+            prevFees.map(f => f.id === feeId ? { ...f, is_paid: isPaid } : f)
+          );
+        } else if (kind === "transport") {
+          setAllTransportFees(prevFees =>
+            prevFees.map(f => f.id === feeId ? { ...f, is_paid: isPaid } : f)
+          );
+        } else if (kind === "meal") {
+          setAllMealFees(prevFees =>
+            prevFees.map(f => f.id === feeId ? { ...f, is_paid: isPaid } : f)
+          );
+        } else if (kind === "event") {
+          setAllEventFees(prevFees =>
+            prevFees.map(f => f.id === feeId ? { ...f, is_paid: isPaid } : f)
+          );
+        } else if (kind === "enrollment") {
+          setAllEnrollmentFees(prevFees =>
+            prevFees.map(f => f.id === feeId ? { ...f, is_paid: isPaid } : f)
+          );
+        }
+        setStatusChangeDialog(null);
+      }
+    } finally {
+      setStatusChanging(false);
+    }
+  };
+
+
   const openRecordForFee = (fee: FeeListRow) => {
     setRecordDialog({ kind: "fee", fee });
     setRecordFile(null);
@@ -3506,6 +3645,14 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                       )}
                                     </>
                                   )}
+                                  <Button size="sm" variant="outline" className="gap-1" onClick={() => openDetailsForFee(f, pay)}>
+                                    <FileText className="h-3.5 w-3.5" /> {embeddedT("view_details")}
+                                  </Button>
+                                  {!isParent && (
+                                    <Button size="sm" variant="outline" className="gap-1" onClick={() => openStatusChangeForFee(f, pay)}>
+                                      <Pencil className="h-3.5 w-3.5" /> {embeddedT("change_status")}
+                                    </Button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -3853,6 +4000,14 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                         </Button>
                                       )}
                                     </>
+                                  )}
+                                  <Button size="sm" variant="outline" className="gap-1" onClick={() => openDetailsForActivity(f, pay)}>
+                                    <FileText className="h-3.5 w-3.5" /> {embeddedT("view_details")}
+                                  </Button>
+                                  {!isParent && (
+                                    <Button size="sm" variant="outline" className="gap-1" onClick={() => openStatusChangeForActivity(f, pay)}>
+                                      <Pencil className="h-3.5 w-3.5" /> {embeddedT("change_status")}
+                                    </Button>
                                   )}
                                 </div>
                               </td>
@@ -4202,6 +4357,14 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                       )}
                                     </>
                                   )}
+                                  <Button size="sm" variant="outline" className="gap-1" onClick={() => openDetailsForTransport(f, pay)}>
+                                    <FileText className="h-3.5 w-3.5" /> {embeddedT("view_details")}
+                                  </Button>
+                                  {!isParent && (
+                                    <Button size="sm" variant="outline" className="gap-1" onClick={() => openStatusChangeForTransport(f, pay)}>
+                                      <Pencil className="h-3.5 w-3.5" /> {embeddedT("change_status")}
+                                    </Button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -4549,6 +4712,14 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                         </Button>
                                       )}
                                     </>
+                                  )}
+                                  <Button size="sm" variant="outline" className="gap-1" onClick={() => openDetailsForMeal(f, pay)}>
+                                    <FileText className="h-3.5 w-3.5" /> {embeddedT("view_details")}
+                                  </Button>
+                                  {!isParent && (
+                                    <Button size="sm" variant="outline" className="gap-1" onClick={() => openStatusChangeForMeal(f, pay)}>
+                                      <Pencil className="h-3.5 w-3.5" /> {embeddedT("change_status")}
+                                    </Button>
                                   )}
                                 </div>
                               </td>
@@ -4905,6 +5076,14 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                       )}
                                     </>
                                   )}
+                                  <Button size="sm" variant="outline" className="gap-1" onClick={() => openDetailsForEvent(f, pay)}>
+                                    <FileText className="h-3.5 w-3.5" /> {embeddedT("view_details")}
+                                  </Button>
+                                  {!isParent && (
+                                    <Button size="sm" variant="outline" className="gap-1" onClick={() => openStatusChangeForEvent(f, pay)}>
+                                      <Pencil className="h-3.5 w-3.5" /> {embeddedT("change_status")}
+                                    </Button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -5246,6 +5425,14 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                         </Button>
                                       )}
                                     </>
+                                  )}
+                                  <Button size="sm" variant="outline" className="gap-1" onClick={() => openDetailsForEnrollment(f, pay)}>
+                                    <FileText className="h-3.5 w-3.5" /> {embeddedT("view_details")}
+                                  </Button>
+                                  {!isParent && (
+                                    <Button size="sm" variant="outline" className="gap-1" onClick={() => openStatusChangeForEnrollment(f, pay)}>
+                                      <Pencil className="h-3.5 w-3.5" /> {embeddedT("change_status")}
+                                    </Button>
                                   )}
                                 </div>
                               </td>
@@ -5909,6 +6096,124 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 <Ban className="h-4 w-4 mr-2" />
               )}
               {fiscalT("cancel_dialog_confirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* STATUS CHANGE DIALOG */}
+      <Dialog open={!!statusChangeDialog} onOpenChange={(o) => { if (!o && !statusChanging) setStatusChangeDialog(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Alterar estado do pagamento</DialogTitle>
+            <DialogDescription>
+              Altere o estado do pagamento de {statusChangeDialog?.fee.student?.full_name ?? "—"}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label>Novo estado</Label>
+              <Select value={newStatus} onValueChange={(v) => setNewStatus(v as typeof newStatus)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="paid">Pago</SelectItem>
+                  <SelectItem value="unpaid">Pendente</SelectItem>
+                  <SelectItem value="rejected">Rejeitado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {statusChangeDialog && (
+              <>
+                <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
+                  <div><strong>Aluno:</strong> {statusChangeDialog.fee.student?.full_name ?? "—"}</div>
+                  <div><strong>Estado atual:</strong> {statusChangeDialog.fee.is_paid ? "Pago" : "Pendente"}</div>
+                  <div><strong>Valor:</strong> {fmtAOA(Number(statusChangeDialog.fee.amount_due))}</div>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStatusChangeDialog(null)} disabled={statusChanging}>
+              Cancelar
+            </Button>
+            <Button onClick={submitStatusChange} disabled={statusChanging} className="gap-2">
+              {statusChanging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+              Alterar estado
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* PAYMENT DETAILS DIALOG */}
+      <Dialog open={!!detailsDialog} onOpenChange={(o) => { if (!o) setDetailsDialog(null); }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Detalhes do pagamento</DialogTitle>
+            <DialogDescription>
+              Informações completas sobre o pagamento de {detailsDialog?.fee.student?.full_name ?? "—"}.
+            </DialogDescription>
+          </DialogHeader>
+          {detailsDialog && (
+            <div className="grid gap-4">
+              {/* Informações do Aluno */}
+              <div className="grid gap-2">
+                <h3 className="font-medium text-sm">Informações do Aluno</h3>
+                <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
+                  <div><strong>Nome:</strong> {detailsDialog.fee.student?.full_name ?? "—"}</div>
+                  {detailsDialog.fee.student?.classroom?.name && (
+                    <div><strong>Turma:</strong> {detailsDialog.fee.student.classroom.name}</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Informações da Cobrança */}
+              <div className="grid gap-2">
+                <h3 className="font-medium text-sm">Informações da Cobrança</h3>
+                <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
+                  <div><strong>Valor:</strong> {fmtAOA(Number(detailsDialog.fee.amount_due))}</div>
+                  <div><strong>Data de vencimento:</strong> {new Date(detailsDialog.fee.due_date).toLocaleDateString(dateLocaleTag)}</div>
+                  <div><strong>Estado do pagamento:</strong> 
+                    {detailsDialog.fee.is_paid ? (
+                      <Badge className="ml-2 bg-pastel-green text-pastel-green-foreground">Pago</Badge>
+                    ) : (
+                      <Badge className="ml-2 variant-secondary">Pendente</Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Informações do Pagamento (se houver) */}
+              {detailsDialog.payment && (
+                <div className="grid gap-2">
+                  <h3 className="font-medium text-sm">Informações do Pagamento</h3>
+                  <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
+                    <div><strong>Valor pago:</strong> {fmtAOA(Number(detailsDialog.payment.amount_paid))}</div>
+                    <div><strong>Método:</strong> {detailsDialog.payment.method ?? "—"}</div>
+                    <div><strong>Data:</strong> {detailsDialog.payment.payment_date ? new Date(detailsDialog.payment.payment_date).toLocaleDateString(dateLocaleTag) : "—"}</div>
+                    <div><strong>Status:</strong> 
+                      <Badge className="ml-2" variant={
+                        detailsDialog.payment.status === "validado" ? "default" :
+                        detailsDialog.payment.status === "rejeitado" ? "destructive" :
+                        "secondary"
+                      }>
+                        {detailsDialog.payment.status === "validado" ? "Validado" :
+                         detailsDialog.payment.status === "rejeitado" ? "Rejeitado" :
+                         "Pendente"}
+                      </Badge>
+                    </div>
+                    {detailsDialog.payment.notes && (
+                      <div><strong>Notas:</strong> {detailsDialog.payment.notes}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailsDialog(null)}>
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>

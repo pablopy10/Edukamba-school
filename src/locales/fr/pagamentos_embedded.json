@@ -37,5 +37,7 @@
   "meal_search_placeholder": "Rechercher élève ou forfait…",
   "meal_filter_label": "Forfait",
   "meal_filter_all": "Tous les forfaits",
-  "col_plan": "Forfait"
+  "col_plan": "Forfait",
+  "view_details": "Voir les détails",
+  "change_status": "Modifier l'état"
 }
