@@ -69,6 +69,10 @@ export type ProformaInvoicePdfInput = {
   // Currency
   currencyLabel: string; // "AKZ" or "AOA"
 
+  // AGT compliance fields
+  /** 4-char hash extract, ex: "XyZ1" — shown as "XyZ1-" per AGT spec */
+  hashExtract?: string | null;
+
   // Footer note (opcional)
   footerNote?: string | null;
 };
@@ -223,6 +227,25 @@ function chunkTextForPdf(text: string, chunkSize: number): string[] {
   return chunks;
 }
 
+/** Período contabilístico = mês da data de emissão (1–12). */
+function accountingPeriod(yyyymmdd: string): number {
+  const raw = yyyymmdd?.trim()?.slice(0, 10);
+  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return new Date().getMonth() + 1;
+  return parseInt(raw.split("-")[1], 10);
+}
+
+/** Formata preço unitário com 4 casas decimais (requisito AGT). */
+function fmtUnitPrice4Dec(raw: string): string {
+  // tenta interpretar o valor pt-AO (ex: "3.000.000,00") e reformatar com 4 dec
+  const normalized = raw.trim().replace(/\./g, "").replace(",", ".");
+  const n = Number(normalized);
+  if (!Number.isFinite(n)) return raw; // devolve original se não parseable
+  return new Intl.NumberFormat("pt-AO", {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
+  }).format(n);
+}
+
 export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
@@ -300,9 +323,15 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(pxToPt(13));
   const issueLabel = fmtPtLongDateYYYYMMDD(opts.issueDateYYYYMMDD);
+  const period = accountingPeriod(opts.issueDateYYYYMMDD);
   doc.text(`Emissão: ${issueLabel}`, rhs, yDoc, { align: "right", baseline: "top" });
   yDoc += pxMm(10);
   doc.text(`Validade: ${opts.validityDays} dias`, rhs, yDoc, { align: "right", baseline: "top" });
+  yDoc += pxMm(10);
+  doc.setFontSize(pxToPt(11));
+  doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
+  doc.text(`Período Contabilístico: ${period}`, rhs, yDoc, { align: "right", baseline: "top" });
+  doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
   yDoc += pxMm(10);
 
   const headerBottomInner = Math.max(leftHeaderBottom + pxMm(4), yDoc);
@@ -326,18 +355,22 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
     ...opts.clientLines.filter((l) => l?.trim()),
   ];
   if (opts.clientNif?.trim()) clientBody.push(`NIF: ${opts.clientNif.trim()}`);
+  else clientBody.push("NIF: 999999999");
   if (opts.clientEmail?.trim()) clientBody.push(`Email: ${opts.clientEmail.trim()}`);
 
-  const issuerName = "Edukamba Tecnologia";
-  const issuerBody = [
-    "Luanda, Angola",
-    "Email: geral@edukamba.com",
-    "Website: www.edukamba.com",
-  ];
+  const issuerBody: string[] = [];
+  if (opts.schoolAddress?.trim()) issuerBody.push(opts.schoolAddress.trim());
+  if (opts.schoolNif?.trim()) issuerBody.push(`NIF: ${opts.schoolNif.trim()}`);
+  if (opts.schoolContactLines?.length) {
+    opts.schoolContactLines.forEach((l) => l?.trim() && issuerBody.push(l.trim()));
+  } else {
+    issuerBody.push("Email: geral@edukamba.com");
+    issuerBody.push("Website: www.edukamba.com");
+  }
 
   const innerW = panelW - padInner * 2;
   const hClientInner = measureDetailPanelInnerHeightMm(doc, "Dados do Cliente", clientBody, innerW);
-  const hIssuerInner = measureDetailPanelInnerHeightMm(doc, "Dados do Emitente", issuerBody, innerW);
+  const hIssuerInner = measureDetailPanelInnerHeightMm(doc, "Dados do Emitente", [opts.schoolName.trim(), ...issuerBody], innerW);
   const boxH = Math.max(hClientInner, hIssuerInner) + padInner * 2;
 
   const boxTop = y;
@@ -349,7 +382,7 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   doc.roundedRect(bx2, boxTop, panelW, boxH, rBox, rBox, "FD");
 
   drawDetailPanelInner(doc, bx1, boxTop, padInner, "Dados do Cliente", clientBody, innerW);
-  drawDetailPanelInner(doc, bx2, boxTop, padInner, "Dados do Emitente", issuerBody, innerW);
+  drawDetailPanelInner(doc, bx2, boxTop, padInner, "Dados do Emitente", [opts.schoolName.trim(), ...issuerBody], innerW);
 
   y = boxTop + boxH + pxMm(18);
 
@@ -358,7 +391,7 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   const body = opts.lineItems.map((it) => [
     it.description.replace(/\u00a0/g, " "),
     String(it.quantity),
-    it.unitAmountFmt,
+    fmtUnitPrice4Dec(it.unitAmountFmt),
     it.totalAmountFmt,
   ]);
 
@@ -437,8 +470,29 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
     baseline: "middle",
   });
 
-  // Footer
-  let footY = blockY + grandH + pxMm(48);
+  // Hash extract box (AGT) — mesmo sendo PP, mostra o extrato se fornecido
+  const hashExtract = opts.hashExtract?.trim() ? `${opts.hashExtract.trim().slice(0, 4)}-` : null;
+  if (hashExtract) {
+    const hashBoxH = pxMm(28);
+    const hashBoxY = blockY + grandH + pxMm(18);
+    doc.setFillColor(HASH_F5[0], HASH_F5[1], HASH_F5[2]);
+    doc.setDrawColor(BORDER_DDD[0], BORDER_DDD[1], BORDER_DDD[2]);
+    doc.setLineWidth(pxMm(0.7));
+    doc.roundedRect(margin, hashBoxY, usableW, hashBoxH, pxMm(3), pxMm(3), "FD");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(pxToPt(11));
+    doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+    doc.text("Extrato da Chave:", margin + pxMm(10), hashBoxY + hashBoxH / 2, { baseline: "middle" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(pxToPt(13));
+    doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
+    doc.text(hashExtract, margin + pxMm(60), hashBoxY + hashBoxH / 2, { baseline: "middle" });
+    footY = hashBoxY + hashBoxH + pxMm(14);
+  } else {
+    footY = blockY + grandH + pxMm(32);
+  }
+
+  // Disclaimer paragraph
   const footerParagraph =
     "Esta fatura pró-forma é um documento de referência para fins de adjudicação e planeamento. " +
     "Não possui valor fiscal e não substitui a Fatura-Recibo definitiva que será emitida após o pagamento validado. " +
@@ -452,7 +506,7 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
     footY += pxMm(16);
   }
 
-  footY += pxMm(12);
+  footY += pxMm(8);
 
   // Additional footer note if provided
   if (opts.footerNote?.trim()) {
@@ -463,18 +517,15 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
       doc.text(ln, margin, footY);
       footY += pxMm(14);
     }
+    footY += pxMm(6);
   }
 
-  // Watermark
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(pxToPt(10));
-  doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
-  doc.text("Edukamba — Fatura Pró-Forma gerada automaticamente", rhs, pageH - margin, { align: "right" });
-
+  // AGT mandatory certification line
   doc.setFont("helvetica", "normal");
   doc.setFontSize(pxToPt(10));
-  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-  doc.text("edukamba.com", rhs, pageH - pxMm(24), { align: "right" });
+  doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
+  doc.text("Processado por programa válido nº31.1/AGT20", margin, pageH - margin);
+  doc.text("edukamba.com", rhs, pageH - margin, { align: "right" });
 
   doc.setTextColor(0);
   doc.setDrawColor(0);
