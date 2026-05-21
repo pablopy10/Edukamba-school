@@ -21,8 +21,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, Download, FileText, Trash2, Eye } from "lucide-react";
+import { Loader2, Plus, Download, FileText, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+
+const CONSUMER_FALLBACK_NIF = "999999999";
 
 type ProformaRow = {
   id: string;
@@ -44,12 +46,21 @@ type ProformaRow = {
   created_by_id: string | null;
 };
 
+type LeadOption = {
+  id: string;
+  organization_name: string;
+  nif: string | null;
+  contact_email: string | null;
+};
+
 const SuperProformaInvoices = () => {
   const { user } = useAuth();
   const [rows, setRows] = useState<ProformaRow[] | null>(null);
+  const [leads, setLeads] = useState<LeadOption[]>([]);
   const [busy, setBusy] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({
+    leadId: "__none",
     clientName: "",
     clientLines: "",
     clientNif: "",
@@ -66,17 +77,36 @@ const SuperProformaInvoices = () => {
   const reload = useCallback(() => {
     void (async () => {
       try {
-        const { data, error } = await supabase
-          .from("proforma_invoices")
-          .select("*")
-          .order("created_at", { ascending: false });
-        if (error) throw error;
-        setRows((data ?? []) as unknown as ProformaRow[]);
+        const [pfRes, leRes] = await Promise.all([
+          supabase.from("proforma_invoices").select("*").order("created_at", { ascending: false }),
+          supabase.from("saas_sales_leads").select("id, organization_name, nif, contact_email").order("organization_name"),
+        ]);
+        if (pfRes.error) throw pfRes.error;
+        setRows((pfRes.data ?? []) as unknown as ProformaRow[]);
+        setLeads((leRes.data ?? []) as unknown as LeadOption[]);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Erro ao carregar pro-formas");
       }
     })();
   }, []);
+
+  // Quando a lead muda, pré-preenche nome, email e NIF
+  const handleLeadChange = (leadId: string) => {
+    if (leadId === "__none") {
+      setForm((f) => ({ ...f, leadId: "__none" }));
+      return;
+    }
+    const lead = leads.find((l) => l.id === leadId);
+    if (!lead) return;
+    const resolvedNif = lead.nif?.trim() || CONSUMER_FALLBACK_NIF;
+    setForm((f) => ({
+      ...f,
+      leadId,
+      clientName: lead.organization_name,
+      clientNif: resolvedNif,
+      clientEmail: lead.contact_email ?? f.clientEmail,
+    }));
+  };
 
   useEffect(() => {
     reload();
@@ -146,6 +176,7 @@ const SuperProformaInvoices = () => {
     setBusy(true);
     try {
       const docNumber = await getNextDocNumber();
+      const resolvedClientNif = form.clientNif.trim() || CONSUMER_FALLBACK_NIF;
       const pdfInput: ProformaInvoicePdfInput = {
         documentNumber: docNumber,
         issueDateYYYYMMDD: form.issueDate,
@@ -159,7 +190,7 @@ const SuperProformaInvoices = () => {
           .split("\n")
           .map((l) => l.trim())
           .filter((l) => l),
-        clientNif: form.clientNif.trim() || undefined,
+        clientNif: resolvedClientNif,
         clientEmail: form.clientEmail.trim() || undefined,
         lineItems: form.items.map((it) => ({
           description: it.description,
@@ -188,7 +219,7 @@ const SuperProformaInvoices = () => {
           validity_days: parseInt(form.validityDays) || 30,
           client_name: form.clientName.trim(),
           client_lines: form.clientLines.split("\n").map((l) => l.trim()).filter((l) => l),
-          client_nif: form.clientNif.trim() || null,
+          client_nif: resolvedClientNif,
           client_email: form.clientEmail.trim() || null,
           items: form.items.map((it) => ({
             description: it.description,
@@ -213,6 +244,7 @@ const SuperProformaInvoices = () => {
       toast.success(`Pro-forma ${docNumber} criada com sucesso!`);
       setDialogOpen(false);
       setForm({
+        leadId: "__none",
         clientName: "",
         clientLines: "",
         clientNif: "",
@@ -305,6 +337,23 @@ const SuperProformaInvoices = () => {
               </DialogHeader>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="md:col-span-2">
+                  <Label>Vincular a lead (opcional)</Label>
+                  <Select value={form.leadId} onValueChange={handleLeadChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sem lead" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">Sem lead</SelectItem>
+                      {leads.map((l) => (
+                        <SelectItem key={l.id} value={l.id}>
+                          {l.organization_name}{l.nif ? ` · NIF ${l.nif}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div>
                   <Label>Nome do Cliente *</Label>
                   <Input
@@ -320,7 +369,11 @@ const SuperProformaInvoices = () => {
                     value={form.clientNif}
                     onChange={(e) => setForm({ ...form, clientNif: e.target.value })}
                     placeholder="0000000000"
+                    maxLength={10}
                   />
+                  {form.clientNif === CONSUMER_FALLBACK_NIF && (
+                    <p className="text-xs text-muted-foreground mt-1">NIF padrão consumidor final (AGT)</p>
+                  )}
                 </div>
 
                 <div className="md:col-span-2">

@@ -16,6 +16,7 @@ type LeadRow = {
   contact_email: string | null;
   contact_name: string | null;
   phone: string | null;
+  nif: string | null;
   pipeline_stage: string;
   assigned_to: string | null;
   notes: string | null;
@@ -44,6 +45,7 @@ const SuperCrm = () => {
     contact_name: "",
     contact_email: "",
     phone: "",
+    nif: "",
     estimated_seats: "",
     notes: "",
   });
@@ -93,6 +95,7 @@ const SuperCrm = () => {
           contact_name: partial.contact_name ?? null,
           contact_email: partial.contact_email ?? null,
           phone: partial.phone ?? null,
+          nif: partial.nif ?? null,
           pipeline_stage: partial.pipeline_stage ?? "new",
           assigned_to: partial.assigned_to ?? null,
           notes: partial.notes ?? null,
@@ -207,6 +210,16 @@ const SuperCrm = () => {
                 </div>
               </div>
               <div className="space-y-1">
+                <Label htmlFor="nif">NIF fiscal</Label>
+                <Input
+                  id="nif"
+                  value={newLead.nif}
+                  onChange={(e) => setNewLead({ ...newLead, nif: e.target.value })}
+                  placeholder="0000000000 (10 dígitos)"
+                  maxLength={10}
+                />
+              </div>
+              <div className="space-y-1">
                 <Label htmlFor="nts">Notas internas</Label>
                 <Textarea id="nts" rows={3} value={newLead.notes} onChange={(e) => setNewLead({ ...newLead, notes: e.target.value })} />
               </div>
@@ -221,6 +234,7 @@ const SuperCrm = () => {
                       contact_name: newLead.contact_name || null,
                       contact_email: newLead.contact_email || null,
                       phone: newLead.phone || null,
+                      nif: newLead.nif.trim() || null,
                       pipeline_stage: "new",
                       notes: newLead.notes || null,
                       estimated_seats: newLead.estimated_seats === "" ? null : Number(newLead.estimated_seats),
@@ -228,7 +242,7 @@ const SuperCrm = () => {
                     undefined,
                   );
                   setNewOpen(false);
-                  setNewLead({ organization_name: "", contact_name: "", contact_email: "", phone: "", estimated_seats: "", notes: "" });
+                  setNewLead({ organization_name: "", contact_name: "", contact_email: "", phone: "", nif: "", estimated_seats: "", notes: "" });
                 }}
               >
                 Guardar

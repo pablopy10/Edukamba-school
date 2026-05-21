@@ -38,7 +38,7 @@ type ProposalRow = {
   brevo_message_id?: string | null;
 };
 
-type LeadTiny = { id: string; organization_name: string };
+type LeadTiny = { id: string; organization_name: string; nif: string | null };
 
 const SuperProposals = () => {
   const { user } = useAuth();
@@ -60,7 +60,7 @@ const SuperProposals = () => {
     void (async () => {
       const [pRes, lRes] = await Promise.all([
         supabase.from("saas_sales_proposals").select("*").order("created_at", { ascending: false }),
-        supabase.from("saas_sales_leads").select("id, organization_name").order("organization_name"),
+        supabase.from("saas_sales_leads").select("id, organization_name, nif").order("organization_name"),
       ]);
       setRows(((pRes.data ?? []) as unknown) as ProposalRow[]);
       setLeads(((lRes.data ?? []) as unknown) as LeadTiny[]);
