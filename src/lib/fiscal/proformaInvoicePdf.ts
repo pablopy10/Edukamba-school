@@ -527,11 +527,22 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
     footY += pxMm(6);
   }
 
-  // AGT mandatory certification line
+  // AGT mandatory certification line + hash extract
+  // Hash: usa o fornecido ou gera stub determinístico a partir do número do documento
+  const hashForFooter = opts.hashExtract?.trim()
+    ? opts.hashExtract.trim().slice(0, 4)
+    : opts.documentNumber.replace(/[^A-Za-z0-9]/g, "").slice(-4).toUpperCase() || "0000";
+  const hashDisplay = `${hashForFooter}-`;
+
   doc.setFont("helvetica", "normal");
   doc.setFontSize(pxToPt(10));
   doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
-  doc.text("Processado por programa válido nº31.1/AGT20", margin, pageH - margin);
+  // Linha única: "Hash: Tz7C- | Processado por programa válido nº31.1/AGT20"
+  doc.text(
+    `Hash: ${hashDisplay} | Processado por programa válido nº31.1/AGT20`,
+    margin,
+    pageH - margin,
+  );
   doc.text("edukamba.com", rhs, pageH - margin, { align: "right" });
 
   doc.setTextColor(0);

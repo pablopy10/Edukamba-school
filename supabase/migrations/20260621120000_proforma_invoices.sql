@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS public.proforma_invoices (
     currency TEXT NOT NULL DEFAULT 'AOA',
     footer_note TEXT,
     pdf_base64 TEXT,
+    hash_control TEXT,
     created_by_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

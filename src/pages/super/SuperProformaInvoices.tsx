@@ -49,6 +49,7 @@ type ProformaRow = {
   total: string;
   currency: string;
   footer_note: string | null;
+  hash_control: string | null;
   created_at: string;
   created_by_id: string | null;
 };
@@ -184,6 +185,31 @@ const SuperProformaInvoices = () => {
     try {
       const docNumber = await getNextDocNumber();
       const resolvedClientNif = form.clientNif.trim() || CONSUMER_FALLBACK_NIF;
+
+      // Calcular total numérico para assinar
+      let subtotalNum = 0;
+      for (const item of form.items) subtotalNum += parseFloat(item.totalAmount) || 0;
+      const ivaPct = parseFloat(form.ivaPct) || 0;
+      const totalNum = subtotalNum + (subtotalNum * ivaPct) / 100;
+      const totalForSigning = (Math.round((totalNum + Number.EPSILON) * 100) / 100).toFixed(2);
+
+      // Obter hash real da edge function (chave privada AGT)
+      let hashExtract: string | null = null;
+      try {
+        const { data: signData, error: signError } = await supabase.functions.invoke("sign-proforma", {
+          body: {
+            document_number: docNumber,
+            issue_date: form.issueDate,
+            total: totalForSigning,
+          },
+        });
+        if (!signError && signData?.hash_control) {
+          hashExtract = String(signData.hash_control).slice(0, 4).toUpperCase();
+        }
+      } catch {
+        // fallback: continua sem hash (não bloqueia criação)
+      }
+
       const pdfInput: ProformaInvoicePdfInput = {
         documentNumber: docNumber,
         issueDateYYYYMMDD: form.issueDate,
@@ -196,6 +222,7 @@ const SuperProformaInvoices = () => {
           .filter((l) => l),
         clientNif: resolvedClientNif,
         clientEmail: form.clientEmail.trim() || undefined,
+        hashExtract,
         lineItems: form.items.map((it) => ({
           description: it.description,
           quantity: parseInt(String(it.quantity)) || 1,
@@ -237,6 +264,7 @@ const SuperProformaInvoices = () => {
           total: totalsCalc.total,
           currency: form.currency,
           footer_note: form.footerNote.trim() || null,
+          hash_control: hashExtract,
           pdf_base64: pdfBase64,
           created_by_id: user?.id,
         })
@@ -291,6 +319,7 @@ const SuperProformaInvoices = () => {
         totalFmt: row.total,
         currencyLabel: row.currency === "AOA" ? "AKZ" : row.currency,
         footerNote: row.footer_note,
+        hashExtract: row.hash_control ?? null,
       };
 
       const pdf = buildProformaInvoicePdf(pdfInput);
