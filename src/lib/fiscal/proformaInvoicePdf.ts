@@ -472,6 +472,7 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
 
   // Hash extract box (AGT) — mesmo sendo PP, mostra o extrato se fornecido
   const hashExtract = opts.hashExtract?.trim() ? `${opts.hashExtract.trim().slice(0, 4)}-` : null;
+  let footY: number;
   if (hashExtract) {
     const hashBoxH = pxMm(28);
     const hashBoxY = blockY + grandH + pxMm(18);
