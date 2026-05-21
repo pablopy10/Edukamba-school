@@ -35,6 +35,7 @@ WITH CHECK (
   AND public.get_auth_role() IN ('ADMIN'::public.user_role, 'SUPER_ADMIN'::public.user_role, 'DIRECTOR'::public.user_role, 'TREASURER'::public.user_role)
 );
 
+DROP TRIGGER IF EXISTS update_billing_config_updated_at ON public.billing_config;
 CREATE TRIGGER update_billing_config_updated_at
 BEFORE UPDATE ON public.billing_config
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
