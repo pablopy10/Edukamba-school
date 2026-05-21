@@ -164,8 +164,8 @@ const SuperCrm = () => {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">CRM — Kanban de leads</h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Funil por colunas (<em>Nova lead</em> até <em>Ganho</em>/<em>Perdido</em>); distribua trabalho pela equipa e ligue cada lead às{" "}
-            <strong className="font-medium text-foreground">propostas comerciais</strong> na outra página.
+            Funil por colunas (<em>Nova lead</em> até <em>Ganho</em>/<em>Perdido</em>); distribua trabalho pela equipa e ligue cada lead aos{" "}
+            <strong className="font-medium text-foreground">orçamentos</strong> na página Orçamentos.
           </p>
         </div>
         <Dialog open={newOpen} onOpenChange={setNewOpen}>

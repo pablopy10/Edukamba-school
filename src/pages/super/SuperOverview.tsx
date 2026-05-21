@@ -349,13 +349,13 @@ const SuperOverview = () => {
       </section>
 
       <section id="growth" className="space-y-3 scroll-mt-6">
-        <h2 className="text-lg font-semibold text-foreground">4 · CRM Kanban · 5 · Propostas & contratos · 6 · Auditoria</h2>
+        <h2 className="text-lg font-semibold text-foreground">4 · CRM Kanban · 5 · Orçamentos · 6 · Auditoria</h2>
         <div className="flex flex-wrap gap-3">
           <Button asChild variant="outline" className="rounded-full">
             <Link to="/super/crm">CRM — Nova lead → Ganho/perdido</Link>
           </Button>
           <Button asChild variant="outline" className="rounded-full">
-            <Link to="/super/propostas">Propostas comerciais e PDF</Link>
+            <Link to="/super/proforma-invoices">Orçamentos e Faturas Pró-Forma</Link>
           </Button>
           <Button asChild variant="outline" className="rounded-full">
             <Link to="/super/auditoria">Auditoria + Sentry</Link>

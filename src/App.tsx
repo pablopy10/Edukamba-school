@@ -54,7 +54,6 @@ import SuperAdminPortal from "@/pages/super/SuperAdminPortal.tsx";
 import SuperOverview from "@/pages/super/SuperOverview.tsx";
 import SuperSchools from "@/pages/super/SuperSchools.tsx";
 import SuperCrm from "@/pages/super/SuperCrm.tsx";
-import SuperProposals from "@/pages/super/SuperProposals.tsx";
 import SuperProformaInvoices from "@/pages/super/SuperProformaInvoices.tsx";
 import SuperAudit from "@/pages/super/SuperAudit.tsx";
 import { ModulesProvider } from "./context/ModulesContext";
@@ -145,7 +144,6 @@ const App = () => (
                         <Route index element={<SuperOverview />} />
                         <Route path="escolas" element={<SuperSchools />} />
                         <Route path="crm" element={<SuperCrm />} />
-                        <Route path="propostas" element={<SuperProposals />} />
                         <Route path="proforma-invoices" element={<SuperProformaInvoices />} />
                         <Route path="auditoria" element={<SuperAudit />} />
                       </Route>

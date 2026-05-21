@@ -1,7 +1,6 @@
 import { NavLink, Navigate, Outlet, useNavigate } from "react-router-dom";
 import {
   Building2,
-  FileText,
   Gauge,
   LayoutGrid,
   Loader2,
@@ -47,13 +46,9 @@ function SidebarNav({
         <Workflow className="h-4 w-4 shrink-0 opacity-90" />
         {!compact ? <span>CRM (leads)</span> : <span className="pr-2">CRM</span>}
       </NavLink>
-      <NavLink to="/super/propostas" className={linkCls}>
-        <FileText className="h-4 w-4 shrink-0 opacity-90" />
-        {!compact ? <span>Propostas</span> : <span className="pr-2">Propostas</span>}
-      </NavLink>
       <NavLink to="/super/proforma-invoices" className={linkCls}>
         <Receipt className="h-4 w-4 shrink-0 opacity-90" />
-        {!compact ? <span>Pró-formas (PP)</span> : <span className="pr-2">Pró-formas</span>}
+        {!compact ? <span>Orçamentos</span> : <span className="pr-2">Orçamentos</span>}
       </NavLink>
       <NavLink to="/super/auditoria" className={linkCls}>
         <ScrollText className="h-4 w-4 shrink-0 opacity-90" />

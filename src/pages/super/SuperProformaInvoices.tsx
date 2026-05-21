@@ -322,7 +322,7 @@ const SuperProformaInvoices = () => {
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-4xl font-bold text-slate-900">Faturas Pró-Forma (PP)</h1>
+            <h1 className="text-4xl font-bold text-slate-900">Orçamentos (PP)</h1>
             <p className="text-slate-600 mt-2">Crie e gira orçamentos e faturas pró-forma para escolas</p>
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
