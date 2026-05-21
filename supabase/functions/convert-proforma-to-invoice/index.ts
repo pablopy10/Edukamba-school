@@ -108,8 +108,8 @@ Deno.serve(async (req) => {
       return corsJson({ error: "Nenhuma escola encontrada." }, 400);
     }
 
-    // Reserve next invoice number
-    const { data: rpcRows, error: rpcErr } = await adminClient.rpc("billing_reserve_next_invoice", {
+    // Reserve next invoice number (use userClient — RPC checks auth role)
+    const { data: rpcRows, error: rpcErr } = await userClient.rpc("billing_reserve_next_invoice", {
       _school_id: targetSchoolId,
     });
     if (rpcErr) return corsJson({ error: `Reserva FT: ${rpcErr.message}` }, 500);
