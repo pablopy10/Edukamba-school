@@ -70,6 +70,8 @@ export type FiscalInvoicePdfInput = {
   /** FT anulada (cancelamento directo — marca no PDF). */
   isCancelled?: boolean;
   cancellationReason?: string | null;
+  /** Referência à Pró-Forma que originou esta FT (OrderReferences AGT). Ex: "PP 2026/4" */
+  orderReferencePP?: string | null;
 };
 
 /** @deprecated use FiscalInvoicePdfInput */
@@ -414,6 +416,7 @@ export async function resolveFiscalInvoicePdfInput(
     digitalSignatureSha1: invoice.digital_signature_sha1_b64,
     isCancelled: String((invoice as { invoice_status?: string }).invoice_status ?? "N").toUpperCase() === "A",
     cancellationReason: (invoice as { cancellation_reason?: string | null }).cancellation_reason ?? null,
+    orderReferencePP: (invoice as { order_reference_pp?: string | null }).order_reference_pp ?? null,
   };
 }
 
@@ -497,6 +500,26 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   const issueLabel = fmtPtLongDateYYYYMMDD(opts.invoiceDateYYYYMMDD);
   doc.text(`Emissão: ${issueLabel}`, rhs, yDoc, { align: "right", baseline: "top" });
   yDoc += pxMm(10);
+
+  // Período Contabilístico
+  const periodMonth = (() => {
+    const raw = opts.invoiceDateYYYYMMDD?.trim()?.slice(0, 10);
+    if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return new Date().getMonth() + 1;
+    return parseInt(raw.split("-")[1], 10);
+  })();
+  doc.setFontSize(pxToPt(11));
+  doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
+  doc.text(`Período Contabilístico: ${periodMonth}`, rhs, yDoc, { align: "right", baseline: "top" });
+  yDoc += pxMm(10);
+
+  // OrderReferences — origem PP
+  if (opts.orderReferencePP?.trim()) {
+    doc.setFontSize(pxToPt(11));
+    doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+    doc.text(`Origem: ${opts.orderReferencePP.trim()}`, rhs, yDoc, { align: "right", baseline: "top" });
+    doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
+    yDoc += pxMm(10);
+  }
 
   const headerBottomInner = Math.max(leftHeaderBottom + pxMm(4), yDoc);
   const dividerY = headerBottomInner + pxMm(18);
@@ -621,10 +644,10 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
 
   /* .footer … .fiscal-text */
   let footY = blockY + grandH + pxMm(48);
-  const code = (opts.exemptionCode ?? "M10").trim();
+  const code = (opts.exemptionCode ?? "M11").trim();
   const reason =
     opts.exemptionReason?.trim() ||
-    "Isenção de IVA no domínio da educação nos termos legais aplicáveis ao estabelecimento.";
+    "Isento nos termos do Artigo 12.º do CIVA — Isenção no domínio da educação.";
   const exemptText = formatIvaExemptionParagraph(code, reason);
   doc.setFont("helvetica", "italic");
   doc.setFontSize(pxToPt(11));
@@ -636,59 +659,21 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
 
   footY += pxMm(12);
 
-  /* .hash-container: #f5f5f5, border-left 4px solid navy, Courier */
-  let hashRows = chunkTextForPdf(opts.documentHashFootnote?.trim() || "", 92);
-  if (!hashRows.length) hashRows = ["(hash não disponível)"];
-  const stripW = pxMm(4);
-  const padHash = pxMm(10);
-
-  let hashBoxMinH = padHash * 2 + hashRows.length * pxMm(16) + (opts.digitalSignatureSha1?.trim() ? pxMm(42) : 0);
-  hashBoxMinH = Math.max(hashBoxMinH, pxMm(64));
-
-  const hashTop = footY;
-
-  doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
-  doc.rect(margin, hashTop, stripW, hashBoxMinH, "F");
-  doc.setFillColor(HASH_F5[0], HASH_F5[1], HASH_F5[2]);
-  doc.rect(margin + stripW, hashTop, usableW - stripW, hashBoxMinH, "F");
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(pxToPt(11));
-  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-  doc.text("Hash AGT — assinatura digital", margin + stripW + padHash, hashTop + padHash + pxMm(11));
-
-  doc.setFont("courier", "normal");
-  doc.setFontSize(pxToPt(11));
-  doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-  let hx = hashTop + padHash + pxMm(30);
-  for (const row of hashRows) {
-    doc.splitTextToSize(row, usableW - stripW - padHash * 2 - pxMm(4)).forEach((line) => {
-      doc.text(line, margin + stripW + padHash, hx);
-      hx += pxMm(14.5);
-    });
-  }
-
-  if (opts.digitalSignatureSha1?.trim()) {
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(pxToPt(10));
-    doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
-    const sigTxt = opts.digitalSignatureSha1.trim();
-    const sigShow = sigTxt.length <= 92 ? sigTxt : `${sigTxt.slice(0, 40)} … ${sigTxt.slice(-40)}`;
-    hx += pxMm(6);
-    doc.splitTextToSize(`Assinatura digital PKCS#1 RSA-SHA1 (Base64): ${sigShow}`, usableW - stripW - padHash * 2).forEach((line) => {
-      doc.text(line, margin + stripW + padHash, hx);
-      hx += pxMm(14);
-    });
-  }
+  /* Hash control: apenas 4 caracteres extraídos do hash (posições 1,11,21,31) + hífen */
+  const fullHash = opts.documentHashFootnote?.trim() || "";
+  const hashChar1 = fullHash.charAt(0) || "0";
+  const hashChar2 = fullHash.charAt(10) || "0";
+  const hashChar3 = fullHash.charAt(20) || "0";
+  const hashChar4 = fullHash.charAt(30) || "0";
+  const hashControl4 = `${hashChar1}${hashChar2}${hashChar3}${hashChar4}-`;
 
   /* .watermark + processado por computador */
-  const wmY = Math.min(pageH - pxMm(16), hx + pxMm(40));
-  doc.setFont("helvetica", "italic");
+  const wmY = Math.min(pageH - pxMm(16), footY + pxMm(20));
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(pxToPt(10));
   doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
-  doc.text("Processado por programa válido nº31.1/AGT20", rhs, wmY, { align: "right" });
-  doc.setFontSize(pxToPt(10));
-  doc.text("Edukamba — dados dinâmicos conforme o portal.", rhs, wmY + pxMm(14), { align: "right" });
+  doc.text(`Hash: ${hashControl4} | Processado por programa válido nº31.1/AGT20`, margin, wmY);
+  doc.text("edukamba.com", rhs, wmY, { align: "right" });
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(pxToPt(10));
