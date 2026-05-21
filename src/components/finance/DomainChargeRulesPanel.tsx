@@ -433,6 +433,7 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
       ruleDetailEnrolledIds,
       students,
       classrooms,
+      rules as DomainChargeRuleRow[],
     );
     const rows: Array<{
       key: string;
