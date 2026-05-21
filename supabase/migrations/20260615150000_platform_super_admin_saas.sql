@@ -310,6 +310,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.platform_saas_list_schools_with_counts();
 CREATE OR REPLACE FUNCTION public.platform_saas_list_schools_with_counts()
 RETURNS TABLE (
   school_id uuid,
