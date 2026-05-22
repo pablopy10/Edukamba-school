@@ -4,7 +4,7 @@ import { buildInvoicePdf, resolveFiscalInvoicePdfInput } from "./invoicePdf";
 import { buildProformaInvoicePdf, type ProformaInvoicePdfInput } from "./proformaInvoicePdf";
 
 const fmtAOA = (n: number) =>
-  new Intl.NumberFormat("pt-PT", { style: "currency", currency: "AOA", maximumFractionDigits: 0 }).format(n || 0);
+  new Intl.NumberFormat("pt-AO", { style: "currency", currency: "AOA", maximumFractionDigits: 0 }).format(n || 0);
 
 /** Gera o PDF FACTURA‑RECIBO a partir da linha `invoices` já carregada (RLS aplica‑se só na lectura inicial). */
 export async function downloadFiscalInvoicePdfFromInvoice(invoice: Tables<"invoices">): Promise<void> {
