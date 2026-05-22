@@ -655,6 +655,9 @@ const Orcamentos = () => {
                   {row.converted_invoice_id && (
                     <>
                       <span className="text-xs text-green-600 font-medium self-center">✓ Convertida</span>
+                      <Button variant="outline" size="sm" onClick={() => void downloadFiscalInvoicePdfById(row.converted_invoice_id!)} className="gap-1" title="Descarregar Fatura">
+                        <Download className="w-4 h-4" /> FT
+                      </Button>
                       {canManage && (
                         <Button variant="outline" size="sm" onClick={() => {
                           const totalNum = parseFloat(row.total.replace(/\./g, "").replace(",", ".")) || 0;

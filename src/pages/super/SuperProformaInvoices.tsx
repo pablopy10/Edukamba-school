@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { buildProformaInvoicePdf, type ProformaInvoicePdfInput } from "@/lib/fiscal/proformaInvoicePdf";
-import { downloadConvertedInvoiceWithProforma } from "@/lib/fiscal/downloadFiscalInvoicePdf";
+import { downloadConvertedInvoiceWithProforma, downloadFiscalInvoicePdfById } from "@/lib/fiscal/downloadFiscalInvoicePdf";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -737,6 +737,18 @@ const SuperProformaInvoices = () => {
                         <span className="text-xs text-green-600 font-medium self-center px-2">
                           ✓ Convertida
                         </span>
+                      )}
+                      {row.converted_invoice_id && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void downloadFiscalInvoicePdfById(row.converted_invoice_id!)}
+                          className="gap-1"
+                          title="Descarregar Fatura"
+                        >
+                          <Download className="w-4 h-4" />
+                          FT
+                        </Button>
                       )}
                       {row.converted_invoice_id && (
                         <Button
