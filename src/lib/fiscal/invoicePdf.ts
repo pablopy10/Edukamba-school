@@ -404,16 +404,18 @@ export async function resolveFiscalInvoicePdfInput(
     academicYearLabel,
     lineItems: (() => {
       // Se line_description contém múltiplos itens separados por ";" (conversão PP→FT), criar linhas distintas
-      // Formato: "Desc:Valor:IvaPct; Desc2:Valor2:IvaPct2"
+      // Formato novo: "Desc:Valor:IvaPct; Desc2:Valor2:IvaPct2"
+      // Formato antigo: "Desc:Valor; Desc2:Valor2" ou "Desc; Desc2"
       const parts = lineDescription.split(";").map((s) => s.trim()).filter(Boolean);
       if (parts.length > 1) {
         return parts.map((part) => {
-          const segments = part.split(":");
-          if (segments.length >= 3) {
-            // Formato completo: Desc:Valor:IvaPct
-            const desc = segments.slice(0, -2).join(":").trim();
-            const val = segments[segments.length - 2].trim();
-            const ivaPct = segments[segments.length - 1].trim();
+          // Usar regex para extrair: tudo antes do último ou penúltimo ":" é descrição
+          // Formato: "Descrição:valor_numerico:iva_pct"
+          const match3 = /^(.+):(\d[\d\s.,]*):(\d+(?:_M\d+)?)$/.exec(part);
+          if (match3) {
+            const desc = match3[1].trim();
+            const val = match3[2].trim();
+            const ivaPct = match3[3].trim();
             const num = parseFloat(val.replace(/\s/g, "").replace(",", "."));
             const taxLabel = ivaPct === "0" ? "Isento (M11)" : ivaPct === "0_M04" ? "Não sujeito (M04)" : `${ivaPct}%`;
             return {
@@ -422,10 +424,12 @@ export async function resolveFiscalInvoicePdfInput(
               totalAmountFmt: Number.isFinite(num) ? formatMoney(num) : totalFmt,
               taxLabel,
             };
-          } else if (segments.length === 2) {
-            // Formato antigo: Desc:Valor
-            const desc = segments[0].trim();
-            const val = segments[1].trim();
+          }
+          // Formato antigo: "Desc:Valor"
+          const match2 = /^(.+):(\d[\d\s.,]*)$/.exec(part);
+          if (match2) {
+            const desc = match2[1].trim();
+            const val = match2[2].trim();
             const num = parseFloat(val.replace(/\s/g, "").replace(",", "."));
             return {
               description: desc,
