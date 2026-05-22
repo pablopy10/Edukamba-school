@@ -58,6 +58,12 @@ export type CreditNotePdfInput = {
   
   lineItems: CreditNoteLine[];
   grossTotalFmt: string;
+  /** Subtotal (soma das bases sem IVA). Se omitido, usa grossTotalFmt. */
+  subtotalFmt?: string;
+  /** Valor total do IVA a creditar. */
+  ivaFmt?: string;
+  /** Quadro de Resumo de IVA */
+  taxSummary?: Array<{ label: string; base: string; iva: string }>;
   
   exemptionCode?: string | null;
   exemptionReason?: string | null;
@@ -406,17 +412,62 @@ export function buildCreditNotePdf(opts: CreditNotePdfInput): jsPDF {
   const d = doc as DocWithAutoTable;
   const tableFinalY = d.lastAutoTable?.finalY ?? y + pxMm(90);
 
-  // Totais — usar largura generosa para caber "TOTAL A CREDITAR" + valor
+  let blockY = tableFinalY + pxMm(14);
+
+  // Quadro de Resumo de IVA (obrigatório AGT)
+  if (opts.taxSummary && opts.taxSummary.length > 0) {
+    const taxHead = [["TAXA / ISENÇÃO", "BASE TRIBUTÁVEL", "IVA"]];
+    const taxBody = opts.taxSummary.map((ts) => [ts.label, ts.base, ts.iva]);
+
+    autoTable(doc, {
+      startY: blockY,
+      head: taxHead,
+      body: taxBody,
+      margin: { left: margin + usableW * 0.35, right: margin },
+      theme: "plain",
+      styles: {
+        fontSize: pxToPt(10),
+        cellPadding: { top: pxMm(6), right: pxMm(8), bottom: pxMm(6), left: pxMm(8) },
+        lineWidth: pxMm(0.5),
+        lineColor: BORDER_EEE,
+        textColor: BODY_TEXT,
+        valign: "middle",
+      },
+      headStyles: {
+        fillColor: [240, 240, 240] as [number, number, number],
+        textColor: NAVY,
+        fontStyle: "bold",
+        fontSize: pxToPt(9),
+      },
+      columnStyles: {
+        0: { halign: "left" as const },
+        1: { halign: "right" as const },
+        2: { halign: "right" as const },
+      },
+    });
+
+    const d2 = doc as DocWithAutoTable;
+    blockY = (d2.lastAutoTable?.finalY ?? blockY) + pxMm(10);
+  }
+
+  // Totais
   const totalsW = usableW * 0.55;
   const totalsX = rhs - totalsW;
-  let blockY = tableFinalY + pxMm(14);
+
+  const subtotalDisplay = opts.subtotalFmt ?? opts.grossTotalFmt;
+  const ivaDisplay = opts.ivaFmt ?? "0 AOA";
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(pxToPt(12));
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-  const subLabel = "Subtotal";
-  doc.text(subLabel, totalsX, blockY + pxMm(4));
-  doc.text(opts.grossTotalFmt, totalsX + totalsW, blockY + pxMm(4), { align: "right" });
+  doc.text("Subtotal a Creditar", totalsX, blockY + pxMm(4));
+  doc.text(subtotalDisplay, totalsX + totalsW, blockY + pxMm(4), { align: "right" });
+
+  blockY += pxMm(10) + pxMm(10);
+
+  // Linha de IVA
+  doc.text("IVA a Creditar", totalsX, blockY + pxMm(4));
+  doc.text(ivaDisplay, totalsX + totalsW, blockY + pxMm(4), { align: "right" });
 
   blockY += pxMm(10) + pxMm(10);
 

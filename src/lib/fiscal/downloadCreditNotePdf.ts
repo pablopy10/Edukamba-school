@@ -80,6 +80,41 @@ export async function downloadCreditNotePdfById(creditNoteId: string): Promise<v
   const gross = Number((nc as Record<string, unknown>).gross_total);
   const totalFmt = fmtAOA(Number.isFinite(gross) ? gross : 0);
 
+  // Determinar a taxa de IVA do item creditado a partir da FT original
+  let itemTaxLabel = "Isento (M11)";
+  let itemTaxPct = 0;
+  
+  if (sourceInvoiceNumber !== "—") {
+    const { data: originalFT } = await supabase
+      .from("invoices")
+      .select("line_description, gross_total")
+      .eq("document_number", sourceInvoiceNumber)
+      .maybeSingle();
+    
+    if (originalFT?.line_description) {
+      // Parsear itens da FT para encontrar o que corresponde ao valor da NC
+      const parts = originalFT.line_description.split(";").map((s: string) => s.trim()).filter(Boolean);
+      for (const part of parts) {
+        const match3 = /^(.+):(\d[\d\s.,]*):(\d+(?:_M\d+)?)$/.exec(part);
+        if (match3) {
+          const val = parseFloat(match3[2].replace(/\s/g, "").replace(",", ".")) || 0;
+          const ivaPctStr = match3[3].trim();
+          // Se o valor do item corresponde ao valor da NC, usar a sua taxa
+          if (Math.abs(val - gross) < 1) {
+            itemTaxPct = ivaPctStr === "0_M04" ? 0 : (parseFloat(ivaPctStr) || 0);
+            itemTaxLabel = ivaPctStr === "0" ? "Isento (M11)" : ivaPctStr === "0_M04" ? "Não sujeito (M04)" : `${ivaPctStr}%`;
+            originalServiceDescription = match3[1].trim();
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // Calcular subtotal, IVA e total
+  const ivaAmount = (gross * itemTaxPct) / 100;
+  const totalWithIva = gross + ivaAmount;
+
   const pdfInput: CreditNotePdfInput = {
     schoolName: "Edukamba",
     schoolNif: "5480041924",
@@ -98,8 +133,16 @@ export async function downloadCreditNotePdfById(creditNoteId: string): Promise<v
       description: originalServiceDescription,
       quantity: 1,
       totalAmountFmt: totalFmt,
+      taxLabel: itemTaxLabel,
     }],
-    grossTotalFmt: totalFmt,
+    subtotalFmt: totalFmt,
+    ivaFmt: fmtAOA(ivaAmount),
+    grossTotalFmt: fmtAOA(totalWithIva),
+    taxSummary: [{
+      label: itemTaxLabel,
+      base: totalFmt,
+      iva: fmtAOA(ivaAmount),
+    }],
     exemptionCode: (nc as Record<string, unknown>).exemption_code as string | null,
     exemptionReason: (nc as Record<string, unknown>).exemption_reason as string | null,
     documentHashFootnote: (nc as Record<string, unknown>).document_hash as string | null,
