@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { buildProformaInvoicePdf, type ProformaInvoicePdfInput } from "@/lib/fiscal/proformaInvoicePdf";
+import { downloadFiscalInvoicePdfById } from "@/lib/fiscal/downloadFiscalInvoicePdf";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -417,9 +418,10 @@ const Orcamentos = () => {
       // Download automático do PDF da FT gerada
       if (result.invoice_id) {
         try {
-          const { downloadFiscalInvoicePdfById } = await import("@/lib/fiscal/downloadFiscalInvoicePdf");
           await downloadFiscalInvoicePdfById(result.invoice_id);
-        } catch { /* não bloqueia */ }
+        } catch (pdfErr) {
+          console.error("Download PDF FT:", pdfErr);
+        }
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao converter");
