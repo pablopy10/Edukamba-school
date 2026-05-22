@@ -123,14 +123,21 @@ const Orcamentos = () => {
         setSchoolAddress(sch.address || null);
       }
 
-      // Apenas orçamentos desta escola (school_id preenchido e igual ao da escola)
+      // Tentar filtrar por school_id; se a coluna não existir, mostrar vazio
       const { data, error } = await supabase
         .from("proforma_invoices")
         .select("*")
         .eq("school_id", sid)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        // Se erro é por coluna inexistente, mostrar lista vazia
+        if (error.message?.includes("school_id") || error.code === "PGRST204") {
+          setRows([]);
+          return;
+        }
+        throw error;
+      }
       setRows((data ?? []) as unknown as ProformaRow[]);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao carregar orçamentos");
