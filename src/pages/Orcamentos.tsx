@@ -49,7 +49,6 @@ const IVA_OPTIONS = [
 type FormItem = {
   description: string;
   quantity: number;
-  unitAmount: string;
   totalAmount: string;
   ivaPct: string; // "0", "14", "5", "0_M04"
 };
@@ -103,7 +102,7 @@ const Orcamentos = () => {
     clientEmail: "",
     issueDate: new Date().toISOString().slice(0, 10),
     validityDays: "30",
-    items: [{ description: "", quantity: 1, unitAmount: "", totalAmount: "", ivaPct: "0" }] as FormItem[],
+    items: [{ description: "", quantity: 1, totalAmount: "", ivaPct: "0" }] as FormItem[],
     currency: "AOA",
     footerNote: "",
   });
@@ -247,7 +246,7 @@ const Orcamentos = () => {
   };
 
   const handleAddItem = () => {
-    setForm({ ...form, items: [...form.items, { description: "", quantity: 1, unitAmount: "", totalAmount: "", ivaPct: "0" }] });
+    setForm({ ...form, items: [...form.items, { description: "", quantity: 1, totalAmount: "", ivaPct: "0" }] });
   };
   const handleRemoveItem = (idx: number) => {
     setForm({ ...form, items: form.items.filter((_, i) => i !== idx) });
@@ -299,16 +298,24 @@ const Orcamentos = () => {
         clientNif: resolvedNif,
         clientEmail: form.clientEmail.trim() || undefined,
         hashExtract,
-        lineItems: form.items.map((it) => ({
-          description: it.description,
-          quantity: parseInt(String(it.quantity)) || 1,
-          unitAmountFmt: it.unitAmount,
-          totalAmountFmt: it.totalAmount,
-        })),
+        lineItems: form.items.map((it) => {
+          const ivaOpt = IVA_OPTIONS.find((o) => o.value === it.ivaPct) ?? IVA_OPTIONS[0];
+          return {
+            description: it.description,
+            quantity: parseInt(String(it.quantity)) || 1,
+            totalAmountFmt: it.totalAmount,
+            taxLabel: ivaOpt.label,
+          };
+        }),
         subtotalFmt: totalsCalc.subtotal,
-        ivaPercentage: 0, // misto — resumo no footer
+        ivaPercentage: 0,
         ivaFmt: totalsCalc.iva,
         totalFmt: totalsCalc.total,
+        taxSummary: Object.entries(totalsCalc.taxGroups).map(([key, g]) => {
+          const label = IVA_OPTIONS.find((o) => o.value === key)?.label ?? key;
+          const fmt = (n: number) => new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+          return { label, base: `${fmt(g.base)} AOA`, iva: `${fmt(g.iva)} AOA` };
+        }),
         currencyLabel,
         footerNote: form.footerNote.trim() || null,
       };
@@ -326,7 +333,6 @@ const Orcamentos = () => {
           items: form.items.map((it) => ({
             description: it.description,
             quantity: parseInt(String(it.quantity)) || 1,
-            unit_amount: it.unitAmount,
             total_amount: it.totalAmount,
             iva_pct: it.ivaPct,
           })),
@@ -351,7 +357,7 @@ const Orcamentos = () => {
       setForm({
         clientName: "", clientLines: "", clientNif: "", clientEmail: "",
         issueDate: new Date().toISOString().slice(0, 10), validityDays: "30",
-        items: [{ description: "", quantity: 1, unitAmount: "", totalAmount: "", ivaPct: "0" }],
+        items: [{ description: "", quantity: 1, totalAmount: "", ivaPct: "0" }],
         currency: "AOA", footerNote: "",
       });
       setClientType("encarregado");
@@ -380,7 +386,6 @@ const Orcamentos = () => {
       lineItems: row.items.map((it) => ({
         description: it.description,
         quantity: it.quantity,
-        unitAmountFmt: it.unit_amount,
         totalAmountFmt: it.total_amount,
       })),
       subtotalFmt: row.subtotal,
@@ -543,10 +548,6 @@ const Orcamentos = () => {
                       <div className="w-14">
                         <Label className="text-xs">Qtd</Label>
                         <Input type="number" value={item.quantity} onChange={(e) => handleItemChange(idx, "quantity", parseInt(e.target.value) || 1)} min="1" />
-                      </div>
-                      <div className="w-24">
-                        <Label className="text-xs">P. Unit.</Label>
-                        <Input value={item.unitAmount} onChange={(e) => handleItemChange(idx, "unitAmount", e.target.value)} placeholder="0,00" />
                       </div>
                       <div className="w-24">
                         <Label className="text-xs">Total</Label>

@@ -41,8 +41,9 @@ const PT_MONTH_NAMES = [
 export type FiscalInvoiceLine = {
   description: string;
   quantity: number;
-  unitAmountFmt: string;
   totalAmountFmt: string;
+  /** Taxa IVA: "14%", "Isento (M11)", etc. */
+  taxLabel?: string;
 };
 
 export type FiscalInvoicePdfInput = {
@@ -405,7 +406,6 @@ export async function resolveFiscalInvoicePdfInput(
       {
         description: lineDescription,
         quantity: 1,
-        unitAmountFmt: totalFmt,
         totalAmountFmt: totalFmt,
       },
     ],
@@ -570,11 +570,11 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
 
   y = boxTop + boxH + pxMm(18);
 
-  const head = [["DESCRIÇÃO DO SERVIÇO", "QTD", "P. UNITÁRIO", "TOTAL"]];
+  const head = [["DESCRIÇÃO DO SERVIÇO", "QTD", "TAXA", "TOTAL"]];
   const body = opts.lineItems.map((it) => [
     it.description.replace(/\u00a0/g, " "),
     String(it.quantity),
-    it.unitAmountFmt,
+    it.taxLabel || "Isento (M11)",
     it.totalAmountFmt,
   ]);
 
@@ -605,13 +605,14 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
     },
     columnStyles: (() => {
       const colQty = 16;
+      const colTax = 28;
       const colMoney = 32;
-      const colDesc = usableW - colQty - colMoney * 2;
+      const colDesc = usableW - colQty - colTax - colMoney;
       const moneyStyle = { fontSize: pxToPt(11), halign: "right" as const, valign: "middle" as const };
       return {
         0: { cellWidth: colDesc, valign: "middle" as const },
         1: { cellWidth: colQty, halign: "center" as const, valign: "middle" as const },
-        2: { cellWidth: colMoney, ...moneyStyle },
+        2: { cellWidth: colTax, halign: "center" as const, valign: "middle" as const },
         3: { cellWidth: colMoney, ...moneyStyle, fontStyle: "bold" as const, textColor: [35, 40, 48] as [number, number, number] },
       };
     })(),

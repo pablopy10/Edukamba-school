@@ -36,8 +36,9 @@ const PT_MONTH_NAMES = [
 export type ProformaInvoiceLine = {
   description: string;
   quantity: number;
-  unitAmountFmt: string;
   totalAmountFmt: string;
+  /** Taxa IVA aplicada: "14%", "Isento (M11)", etc. */
+  taxLabel?: string;
 };
 
 export type ProformaInvoicePdfInput = {
@@ -65,6 +66,9 @@ export type ProformaInvoicePdfInput = {
   ivaPercentage: number;
   ivaFmt: string;
   totalFmt: string;
+
+  /** Quadro de Resumo de IVA (obrigatório AGT quando há taxas mistas) */
+  taxSummary?: Array<{ label: string; base: string; iva: string }>;
 
   // Currency
   currencyLabel: string; // "AKZ" or "AOA"
@@ -393,11 +397,11 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   y = boxTop + boxH + pxMm(18);
 
   // Items table
-  const head = [["DESCRIÇÃO DO SERVIÇO", "QTD", "P. UNITÁRIO", "TOTAL"]];
+  const head = [["DESCRIÇÃO DO SERVIÇO", "QTD", "TAXA", "TOTAL"]];
   const body = opts.lineItems.map((it) => [
     it.description.replace(/\u00a0/g, " "),
     String(it.quantity),
-    fmtUnitPrice4Dec(it.unitAmountFmt),
+    it.taxLabel || "Isento",
     it.totalAmountFmt,
   ]);
 
@@ -428,13 +432,14 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
     },
     columnStyles: (() => {
       const colQty = 16;
+      const colTax = 28;
       const colMoney = 32;
-      const colDesc = usableW - colQty - colMoney * 2;
+      const colDesc = usableW - colQty - colTax - colMoney;
       const moneyStyle = { fontSize: pxToPt(11), halign: "right" as const, valign: "middle" as const };
       return {
         0: { cellWidth: colDesc, valign: "middle" as const },
         1: { cellWidth: colQty, halign: "center" as const, valign: "middle" as const },
-        2: { cellWidth: colMoney, ...moneyStyle },
+        2: { cellWidth: colTax, halign: "center" as const, valign: "middle" as const },
         3: { cellWidth: colMoney, ...moneyStyle, fontStyle: "bold" as const, textColor: [35, 40, 48] as [number, number, number] },
       };
     })(),
@@ -443,10 +448,47 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   const d = doc as DocWithAutoTable;
   const tableFinalY = d.lastAutoTable?.finalY ?? y + pxMm(90);
 
-  // Totals section
-  const totalsW = pxMm(250);
-  const totalsX = rhs - totalsW;
+  // Tax Summary Table (Quadro de Resumo de IVA — obrigatório AGT para taxas mistas)
   let blockY = tableFinalY + pxMm(14);
+  
+  if (opts.taxSummary && opts.taxSummary.length > 0) {
+    const taxHead = [["TAXA / ISENÇÃO", "BASE TRIBUTÁVEL", "IVA"]];
+    const taxBody = opts.taxSummary.map((ts) => [ts.label, ts.base, ts.iva]);
+    
+    autoTable(doc, {
+      startY: blockY,
+      head: taxHead,
+      body: taxBody,
+      margin: { left: margin + usableW * 0.35, right: margin },
+      theme: "plain",
+      styles: {
+        fontSize: pxToPt(10),
+        cellPadding: { top: pxMm(6), right: pxMm(8), bottom: pxMm(6), left: pxMm(8) },
+        lineWidth: pxMm(0.5),
+        lineColor: BORDER_EEE,
+        textColor: BODY_TEXT,
+        valign: "middle",
+      },
+      headStyles: {
+        fillColor: [240, 240, 240] as [number, number, number],
+        textColor: NAVY,
+        fontStyle: "bold",
+        fontSize: pxToPt(9),
+      },
+      columnStyles: {
+        0: { halign: "left" as const },
+        1: { halign: "right" as const },
+        2: { halign: "right" as const },
+      },
+    });
+    
+    const d2 = doc as DocWithAutoTable;
+    blockY = (d2.lastAutoTable?.finalY ?? blockY) + pxMm(10);
+  }
+
+  // Totals section
+  const totalsW = usableW * 0.55;
+  const totalsX = rhs - totalsW;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(pxToPt(12));
@@ -456,7 +498,7 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
 
   blockY += pxMm(10) + pxMm(10);
 
-  doc.text(`IVA (${opts.ivaPercentage}%)`, totalsX, blockY + pxMm(4));
+  doc.text("IVA", totalsX, blockY + pxMm(4));
   doc.text(opts.ivaFmt, totalsX + totalsW, blockY + pxMm(4), { align: "right" });
 
   blockY += pxMm(10) + pxMm(10);
@@ -466,15 +508,11 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   doc.rect(totalsX, blockY, totalsW, grandH, "F");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(pxToPt(16));
+  doc.setFontSize(pxToPt(11));
   doc.setTextColor(255, 255, 255);
-  doc.text("TOTAL", totalsX + pxMm(12), blockY + grandH / 2 + pxMm(2), {
-    baseline: "middle",
-  });
-  doc.text(opts.totalFmt, totalsX + totalsW - pxMm(12), blockY + grandH / 2 + pxMm(2), {
-    align: "right",
-    baseline: "middle",
-  });
+  doc.text("TOTAL", totalsX + pxMm(10), blockY + grandH * 0.35, { baseline: "middle" });
+  doc.setFontSize(pxToPt(16));
+  doc.text(opts.totalFmt, totalsX + pxMm(10), blockY + grandH * 0.7, { baseline: "middle" });
 
   // Hash extract box removida — hash aparece no rodapé junto à linha AGT
   const hashExtract = opts.hashExtract?.trim() ? opts.hashExtract.trim().slice(0, 4) : null;

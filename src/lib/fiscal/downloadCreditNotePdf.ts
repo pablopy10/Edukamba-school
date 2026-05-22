@@ -97,7 +97,6 @@ export async function downloadCreditNotePdfById(creditNoteId: string): Promise<v
     lineItems: [{
       description: originalServiceDescription,
       quantity: 1,
-      unitAmountFmt: totalFmt,
       totalAmountFmt: totalFmt,
     }],
     grossTotalFmt: totalFmt,

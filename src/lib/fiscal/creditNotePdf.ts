@@ -28,8 +28,8 @@ const PT_MONTH_NAMES = [
 export type CreditNoteLine = {
   description: string;
   quantity: number;
-  unitAmountFmt: string;
   totalAmountFmt: string;
+  taxLabel?: string;
 };
 
 export type CreditNotePdfInput = {
@@ -356,11 +356,11 @@ export function buildCreditNotePdf(opts: CreditNotePdfInput): jsPDF {
   y += pxMm(8);
 
   // Tabela de itens
-  const head = [["DESCRIÇÃO DO SERVIÇO", "QTD", "P. UNITÁRIO", "TOTAL"]];
+  const head = [["DESCRIÇÃO DO SERVIÇO", "QTD", "TAXA", "TOTAL"]];
   const body = opts.lineItems.map((it) => [
     it.description.replace(/\u00a0/g, " "),
     String(it.quantity),
-    it.unitAmountFmt,
+    it.taxLabel || "Isento (M11)",
     it.totalAmountFmt,
   ]);
 

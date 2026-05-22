@@ -236,7 +236,6 @@ const SuperProformaInvoices = () => {
         lineItems: form.items.map((it) => ({
           description: it.description,
           quantity: parseInt(String(it.quantity)) || 1,
-          unitAmountFmt: it.unitAmount,
           totalAmountFmt: it.totalAmount,
         })),
         subtotalFmt: totalsCalc.subtotal,
@@ -320,7 +319,6 @@ const SuperProformaInvoices = () => {
         lineItems: row.items.map((it) => ({
           description: it.description,
           quantity: it.quantity,
-          unitAmountFmt: it.unit_amount,
           totalAmountFmt: it.total_amount,
         })),
         subtotalFmt: row.subtotal,
@@ -430,7 +428,6 @@ const SuperProformaInvoices = () => {
             lineItems: row.items.map((it) => ({
               description: it.description,
               quantity: it.quantity,
-              unitAmountFmt: it.unit_amount,
               totalAmountFmt: it.total_amount,
             })),
             subtotalFmt: row.subtotal,
