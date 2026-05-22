@@ -223,8 +223,11 @@ const Orcamentos = () => {
 
   const getNextDocNumber = async (): Promise<string> => {
     const year = new Date().getFullYear();
-    const prefix = `PP ${year}/`;
-    // Buscar todos os documentos com este prefixo e encontrar o número máximo
+    // Usar prefixo com school para evitar colisão com orçamentos do Super Admin
+    // Super Admin usa "PP 2026/X", escolas usam "PP 2026/S-X" (S = primeiros 4 chars do school_id)
+    const schoolPrefix = schoolId ? schoolId.slice(0, 4).toUpperCase() : "GEN";
+    const prefix = `PP ${year}/${schoolPrefix}-`;
+    
     const { data } = await (supabase
       .from("proforma_invoices" as any)
       .select("document_number")
@@ -233,7 +236,7 @@ const Orcamentos = () => {
     let maxSeq = 0;
     if (data && Array.isArray(data)) {
       for (const row of data) {
-        const match = /\/(\d+)$/.exec(row.document_number as string);
+        const match = /-(\d+)$/.exec(row.document_number as string);
         if (match) {
           const n = parseInt(match[1], 10);
           if (n > maxSeq) maxSeq = n;
