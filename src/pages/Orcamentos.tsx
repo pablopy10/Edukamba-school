@@ -384,11 +384,16 @@ const Orcamentos = () => {
       clientLines: row.client_lines,
       clientNif: row.client_nif,
       clientEmail: row.client_email,
-      lineItems: row.items.map((it) => ({
-        description: it.description,
-        quantity: it.quantity,
-        totalAmountFmt: it.total_amount,
-      })),
+      lineItems: row.items.map((it) => {
+        const ivaPct = (it as { iva_pct?: string }).iva_pct ?? "0";
+        const ivaOpt = IVA_OPTIONS.find((o) => o.value === ivaPct);
+        return {
+          description: it.description,
+          quantity: it.quantity,
+          totalAmountFmt: it.total_amount,
+          taxLabel: ivaOpt?.label ?? "Isento (M11)",
+        };
+      }),
       subtotalFmt: row.subtotal,
       ivaPercentage: row.iva_percentage,
       ivaFmt: row.iva_amount,

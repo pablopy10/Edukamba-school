@@ -316,11 +316,16 @@ const SuperProformaInvoices = () => {
         clientLines: row.client_lines,
         clientNif: row.client_nif,
         clientEmail: row.client_email,
-        lineItems: row.items.map((it) => ({
-          description: it.description,
-          quantity: it.quantity,
-          totalAmountFmt: it.total_amount,
-        })),
+        lineItems: row.items.map((it) => {
+          const ivaPct = (it as { iva_pct?: string }).iva_pct ?? "0";
+          const taxLabel = ivaPct === "0" ? "Isento (M11)" : ivaPct === "0_M04" ? "Não sujeito (M04)" : `${ivaPct}%`;
+          return {
+            description: it.description,
+            quantity: it.quantity,
+            totalAmountFmt: it.total_amount,
+            taxLabel,
+          };
+        }),
         subtotalFmt: row.subtotal,
         ivaPercentage: row.iva_percentage,
         ivaFmt: row.iva_amount,
@@ -425,11 +430,16 @@ const SuperProformaInvoices = () => {
             clientLines: row.client_lines,
             clientNif: row.client_nif,
             clientEmail: row.client_email,
-            lineItems: row.items.map((it) => ({
-              description: it.description,
-              quantity: it.quantity,
-              totalAmountFmt: it.total_amount,
-            })),
+            lineItems: row.items.map((it) => {
+              const ivaPct = (it as { iva_pct?: string }).iva_pct ?? "0";
+              const taxLabel = ivaPct === "0" ? "Isento (M11)" : ivaPct === "0_M04" ? "Não sujeito (M04)" : `${ivaPct}%`;
+              return {
+                description: it.description,
+                quantity: it.quantity,
+                totalAmountFmt: it.total_amount,
+                taxLabel,
+              };
+            }),
             subtotalFmt: row.subtotal,
             ivaPercentage: row.iva_percentage,
             ivaFmt: row.iva_amount,

@@ -151,11 +151,12 @@ Deno.serve(async (req) => {
     const hash_control = (((Math.max(seq, 1) - 1) % 10) + 1).toString();
 
     // Build line description from proforma items (inclui valor por item para PDF multi-linha)
-    const items = pp.items as Array<{ description?: string; total_amount?: string }> | null;
+    const items = pp.items as Array<{ description?: string; total_amount?: string; iva_pct?: string }> | null;
     const lineDescription = items?.map((i) => {
       const desc = i.description || "Serviço";
-      const amount = i.total_amount || "";
-      return amount ? `${desc}:${amount}` : desc;
+      const amount = i.total_amount || "0";
+      const iva = i.iva_pct || "0";
+      return `${desc}:${amount}:${iva}`;
     }).filter(Boolean).join("; ") || "Serviços (conversão PP)";
 
     // Insert invoice — try with order_reference_pp, fallback without if column missing

@@ -404,14 +404,28 @@ export async function resolveFiscalInvoicePdfInput(
     academicYearLabel,
     lineItems: (() => {
       // Se line_description contém múltiplos itens separados por ";" (conversão PP→FT), criar linhas distintas
-      // Formato: "Desc:Valor; Desc2:Valor2" ou "Desc; Desc2" (sem valores)
+      // Formato: "Desc:Valor:IvaPct; Desc2:Valor2:IvaPct2"
       const parts = lineDescription.split(";").map((s) => s.trim()).filter(Boolean);
       if (parts.length > 1) {
         return parts.map((part) => {
-          const colonIdx = part.lastIndexOf(":");
-          if (colonIdx > 0) {
-            const desc = part.slice(0, colonIdx).trim();
-            const val = part.slice(colonIdx + 1).trim();
+          const segments = part.split(":");
+          if (segments.length >= 3) {
+            // Formato completo: Desc:Valor:IvaPct
+            const desc = segments.slice(0, -2).join(":").trim();
+            const val = segments[segments.length - 2].trim();
+            const ivaPct = segments[segments.length - 1].trim();
+            const num = parseFloat(val.replace(/\s/g, "").replace(",", "."));
+            const taxLabel = ivaPct === "0" ? "Isento (M11)" : ivaPct === "0_M04" ? "Não sujeito (M04)" : `${ivaPct}%`;
+            return {
+              description: desc,
+              quantity: 1,
+              totalAmountFmt: Number.isFinite(num) ? formatMoney(num) : totalFmt,
+              taxLabel,
+            };
+          } else if (segments.length === 2) {
+            // Formato antigo: Desc:Valor
+            const desc = segments[0].trim();
+            const val = segments[1].trim();
             const num = parseFloat(val.replace(/\s/g, "").replace(",", "."));
             return {
               description: desc,
