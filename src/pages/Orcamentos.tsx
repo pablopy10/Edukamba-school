@@ -451,30 +451,39 @@ const Orcamentos = () => {
 
     // Determinar valor parcial baseado na seleção de item ou input manual
     let partialAmount: number | undefined;
-    if (creditNotePartialAmount.trim()) {
-      // Valor manual tem prioridade
+    let selectedItemDesc: string | undefined;
+
+    if (creditNoteItemSelection !== "all" && creditNoteDialog.items.length > 1) {
+      // Item específico seleccionado — usar sempre este item
+      const idx = parseInt(creditNoteItemSelection, 10);
+      const item = creditNoteDialog.items[idx];
+      if (item) {
+        selectedItemDesc = `${item.description}:${item.amount}:${item.ivaPct}`;
+        // Se valor parcial manual preenchido, usar esse; senão usar valor do item
+        if (creditNotePartialAmount.trim()) {
+          partialAmount = parseFloat(creditNotePartialAmount.replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
+          if (isNaN(partialAmount) || partialAmount <= 0 || partialAmount > creditNoteDialog.grossTotal) {
+            toast.error("Valor parcial inválido.");
+            return;
+          }
+        } else {
+          partialAmount = item.amount;
+        }
+      }
+    } else if (creditNotePartialAmount.trim()) {
+      // Nenhum item seleccionado mas valor parcial preenchido — tentar encontrar item pelo valor
       partialAmount = parseFloat(creditNotePartialAmount.replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
       if (isNaN(partialAmount) || partialAmount <= 0 || partialAmount > creditNoteDialog.grossTotal) {
         toast.error("Valor parcial inválido.");
         return;
       }
-    } else if (creditNoteItemSelection !== "all" && creditNoteDialog.items.length > 1) {
-      const idx = parseInt(creditNoteItemSelection, 10);
-      const selectedItem = creditNoteDialog.items[idx];
-      if (selectedItem) {
-        partialAmount = selectedItem.amount;
+      // Procurar item com valor correspondente
+      const matchedItem = creditNoteDialog.items.find((it) => Math.abs(it.amount - partialAmount!) < 1);
+      if (matchedItem) {
+        selectedItemDesc = `${matchedItem.description}:${matchedItem.amount}:${matchedItem.ivaPct}`;
       }
     }
-
-    // Construir descrição do item seleccionado para a Edge Function
-    let selectedItemDesc: string | undefined;
-    if (creditNoteItemSelection !== "all" && creditNoteDialog.items.length > 1) {
-      const idx = parseInt(creditNoteItemSelection, 10);
-      const item = creditNoteDialog.items[idx];
-      if (item) {
-        selectedItemDesc = `${item.description}:${item.amount}:${item.ivaPct}`;
-      }
-    }
+    // Se nem item nem valor parcial → fatura total (partialAmount = undefined, selectedItemDesc = undefined)
 
     setEmittingCreditNote(true);
     const fx = await invokeCreditNote(creditNoteDialog.invoiceId, reasonText, partialAmount, selectedItemDesc);
