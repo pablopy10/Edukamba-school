@@ -44,7 +44,9 @@ export async function downloadConvertedInvoiceWithProforma(
   payload.lineItems = proformaInput.lineItems.map((it) => ({
     description: it.description,
     quantity: it.quantity,
+    unitPriceFmt: it.unitPriceFmt,
     totalAmountFmt: it.totalAmountFmt,
+    taxLabel: it.taxLabel,
   }));
   const ftDoc = buildInvoicePdf(payload);
 

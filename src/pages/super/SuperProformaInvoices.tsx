@@ -233,11 +233,17 @@ const SuperProformaInvoices = () => {
         clientNif: resolvedClientNif,
         clientEmail: form.clientEmail.trim() || undefined,
         hashExtract,
-        lineItems: form.items.map((it) => ({
-          description: it.description,
-          quantity: parseInt(String(it.quantity)) || 1,
-          totalAmountFmt: it.totalAmount,
-        })),
+        lineItems: form.items.map((it) => {
+          const qty = parseInt(String(it.quantity)) || 1;
+          const up = parseFloat(it.unitAmount) || 0;
+          const total = qty * up;
+          return {
+            description: it.description,
+            quantity: qty,
+            unitPriceFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(up),
+            totalAmountFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total),
+          };
+        }),
         subtotalFmt: totalsCalc.subtotal,
         ivaPercentage: parseFloat(form.ivaPct) || 0,
         ivaFmt: totalsCalc.iva,
@@ -319,10 +325,14 @@ const SuperProformaInvoices = () => {
         lineItems: row.items.map((it) => {
           const ivaPct = (it as { iva_pct?: string }).iva_pct ?? "0";
           const taxLabel = ivaPct === "0" ? "Isento (M11)" : ivaPct === "0_M04" ? "Não sujeito (M04)" : `${ivaPct}%`;
+          const qty = it.quantity || 1;
+          const up = parseFloat((it as { unit_price?: string }).unit_price || it.total_amount || "0") || 0;
+          const total = qty * up;
           return {
             description: it.description,
-            quantity: it.quantity,
-            totalAmountFmt: it.total_amount,
+            quantity: qty,
+            unitPriceFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(up),
+            totalAmountFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total),
             taxLabel,
           };
         }),
@@ -433,10 +443,14 @@ const SuperProformaInvoices = () => {
             lineItems: row.items.map((it) => {
               const ivaPct = (it as { iva_pct?: string }).iva_pct ?? "0";
               const taxLabel = ivaPct === "0" ? "Isento (M11)" : ivaPct === "0_M04" ? "Não sujeito (M04)" : `${ivaPct}%`;
+              const qty = it.quantity || 1;
+              const up = parseFloat((it as { unit_price?: string }).unit_price || it.total_amount || "0") || 0;
+              const total = qty * up;
               return {
                 description: it.description,
-                quantity: it.quantity,
-                totalAmountFmt: it.total_amount,
+                quantity: qty,
+                unitPriceFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(up),
+                totalAmountFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total),
                 taxLabel,
               };
             }),

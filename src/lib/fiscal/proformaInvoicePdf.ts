@@ -36,6 +36,7 @@ const PT_MONTH_NAMES = [
 export type ProformaInvoiceLine = {
   description: string;
   quantity: number;
+  unitPriceFmt: string;
   totalAmountFmt: string;
   /** Taxa IVA aplicada: "14%", "Isento (M11)", etc. */
   taxLabel?: string;
@@ -397,10 +398,11 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   y = boxTop + boxH + pxMm(18);
 
   // Items table
-  const head = [["DESCRIÇÃO DO SERVIÇO", "QTD", "TAXA", "TOTAL"]];
+  const head = [["DESCRIÇÃO DO SERVIÇO", "QTD", "P. UNITÁRIO", "TAXA", "TOTAL"]];
   const body = opts.lineItems.map((it) => [
     it.description.replace(/\u00a0/g, " "),
     String(it.quantity),
+    it.unitPriceFmt,
     it.taxLabel || "Isento",
     it.totalAmountFmt,
   ]);
@@ -431,16 +433,18 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
       cellPadding: { top: pxMm(10), right: pxMm(10), bottom: pxMm(10), left: pxMm(10) },
     },
     columnStyles: (() => {
-      const colQty = 16;
-      const colTax = 28;
-      const colMoney = 32;
-      const colDesc = usableW - colQty - colTax - colMoney;
+      const colQty = 14;
+      const colUnit = 28;
+      const colTax = 24;
+      const colTotal = 30;
+      const colDesc = usableW - colQty - colUnit - colTax - colTotal;
       const moneyStyle = { fontSize: pxToPt(11), halign: "right" as const, valign: "middle" as const };
       return {
         0: { cellWidth: colDesc, valign: "middle" as const },
         1: { cellWidth: colQty, halign: "center" as const, valign: "middle" as const },
-        2: { cellWidth: colTax, halign: "center" as const, valign: "middle" as const },
-        3: { cellWidth: colMoney, ...moneyStyle, fontStyle: "bold" as const, textColor: [35, 40, 48] as [number, number, number] },
+        2: { cellWidth: colUnit, ...moneyStyle },
+        3: { cellWidth: colTax, halign: "center" as const, valign: "middle" as const },
+        4: { cellWidth: colTotal, ...moneyStyle, fontStyle: "bold" as const, textColor: [35, 40, 48] as [number, number, number] },
       };
     })(),
   });

@@ -50,7 +50,7 @@ const IVA_OPTIONS = [
 type FormItem = {
   description: string;
   quantity: number;
-  totalAmount: string;
+  unitPrice: string;
   ivaPct: string; // "0", "14", "5", "0_M04"
 };
 
@@ -103,7 +103,7 @@ const Orcamentos = () => {
     clientEmail: "",
     issueDate: new Date().toISOString().slice(0, 10),
     validityDays: "30",
-    items: [{ description: "", quantity: 1, totalAmount: "", ivaPct: "0" }] as FormItem[],
+    items: [{ description: "", quantity: 1, unitPrice: "", ivaPct: "0" }] as FormItem[],
     currency: "AOA",
     footerNote: "",
   });
@@ -202,7 +202,9 @@ const Orcamentos = () => {
     const taxGroups: Record<string, { base: number; iva: number; pct: number; code: string; reason: string }> = {};
 
     for (const item of form.items) {
-      const itemTotal = parseFloat(item.totalAmount) || 0;
+      const qty = item.quantity || 1;
+      const unitPrice = parseFloat(item.unitPrice) || 0;
+      const itemTotal = qty * unitPrice;
       subtotal += itemTotal;
 
       const ivaOpt = IVA_OPTIONS.find((o) => o.value === item.ivaPct) ?? IVA_OPTIONS[0];
@@ -251,7 +253,7 @@ const Orcamentos = () => {
   };
 
   const handleAddItem = () => {
-    setForm({ ...form, items: [...form.items, { description: "", quantity: 1, totalAmount: "", ivaPct: "0" }] });
+    setForm({ ...form, items: [...form.items, { description: "", quantity: 1, unitPrice: "", ivaPct: "0" }] });
   };
   const handleRemoveItem = (idx: number) => {
     setForm({ ...form, items: form.items.filter((_, i) => i !== idx) });
@@ -284,7 +286,9 @@ const Orcamentos = () => {
       let subtotalNum = 0;
       let totalIvaNum = 0;
       for (const item of form.items) {
-        const t = parseFloat(item.totalAmount) || 0;
+        const qty = item.quantity || 1;
+        const up = parseFloat(item.unitPrice) || 0;
+        const t = qty * up;
         subtotalNum += t;
         const pct = item.ivaPct === "0_M04" ? 0 : (parseFloat(item.ivaPct) || 0);
         totalIvaNum += (t * pct) / 100;
@@ -305,10 +309,16 @@ const Orcamentos = () => {
         hashExtract,
         lineItems: form.items.map((it) => {
           const ivaOpt = IVA_OPTIONS.find((o) => o.value === it.ivaPct) ?? IVA_OPTIONS[0];
+          const qty = parseInt(String(it.quantity)) || 1;
+          const up = parseFloat(it.unitPrice) || 0;
+          const total = qty * up;
+          const fmtNum = (n: number) => new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(n);
+          const fmtTotal = (n: number) => new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
           return {
             description: it.description,
-            quantity: parseInt(String(it.quantity)) || 1,
-            totalAmountFmt: it.totalAmount,
+            quantity: qty,
+            unitPriceFmt: fmtNum(up),
+            totalAmountFmt: fmtTotal(total),
             taxLabel: ivaOpt.label,
           };
         }),
@@ -338,7 +348,8 @@ const Orcamentos = () => {
           items: form.items.map((it) => ({
             description: it.description,
             quantity: parseInt(String(it.quantity)) || 1,
-            total_amount: it.totalAmount,
+            unit_price: it.unitPrice,
+            total_amount: String((parseInt(String(it.quantity)) || 1) * (parseFloat(it.unitPrice) || 0)),
             iva_pct: it.ivaPct,
           })),
           subtotal: totalsCalc.subtotal,
@@ -362,7 +373,7 @@ const Orcamentos = () => {
       setForm({
         clientName: "", clientLines: "", clientNif: "", clientEmail: "",
         issueDate: new Date().toISOString().slice(0, 10), validityDays: "30",
-        items: [{ description: "", quantity: 1, totalAmount: "", ivaPct: "0" }],
+        items: [{ description: "", quantity: 1, unitPrice: "", ivaPct: "0" }],
         currency: "AOA", footerNote: "",
       });
       setClientType("encarregado");
@@ -391,10 +402,16 @@ const Orcamentos = () => {
       lineItems: row.items.map((it) => {
         const ivaPct = (it as { iva_pct?: string }).iva_pct ?? "0";
         const ivaOpt = IVA_OPTIONS.find((o) => o.value === ivaPct);
+        const qty = it.quantity || 1;
+        const unitPrice = parseFloat((it as { unit_price?: string }).unit_price || it.total_amount || "0") || 0;
+        const total = qty * unitPrice;
+        const fmtUp = new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(unitPrice);
+        const fmtTotal = new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total);
         return {
           description: it.description,
-          quantity: it.quantity,
-          totalAmountFmt: it.total_amount,
+          quantity: qty,
+          unitPriceFmt: fmtUp,
+          totalAmountFmt: fmtTotal,
           taxLabel: ivaOpt?.label ?? "Isento (M11)",
         };
       }),
@@ -599,8 +616,12 @@ const Orcamentos = () => {
                         <Input type="number" value={item.quantity} onChange={(e) => handleItemChange(idx, "quantity", parseInt(e.target.value) || 1)} min="1" />
                       </div>
                       <div className="w-24">
+                        <Label className="text-xs">P. Unitário</Label>
+                        <Input value={item.unitPrice} onChange={(e) => handleItemChange(idx, "unitPrice", e.target.value)} placeholder="0,00" />
+                      </div>
+                      <div className="w-24">
                         <Label className="text-xs">Total</Label>
-                        <Input value={item.totalAmount} onChange={(e) => handleItemChange(idx, "totalAmount", e.target.value)} placeholder="0,00" />
+                        <Input value={((item.quantity || 1) * (parseFloat(item.unitPrice) || 0)).toFixed(2)} readOnly className="bg-muted/50" />
                       </div>
                       <div className="w-32">
                         <Label className="text-xs">IVA</Label>
