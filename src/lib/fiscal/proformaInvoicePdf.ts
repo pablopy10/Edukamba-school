@@ -38,6 +38,8 @@ export type ProformaInvoiceLine = {
   quantity: number;
   unitPriceFmt: string;
   totalAmountFmt: string;
+  /** Desconto aplicado: "10%" */
+  discountPct?: string;
   /** Taxa IVA aplicada: "14%", "Isento (M11)", etc. */
   taxLabel?: string;
 };
@@ -397,15 +399,22 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
 
   y = boxTop + boxH + pxMm(18);
 
-  // Items table
-  const head = [["DESCRIÇÃO DO SERVIÇO", "QTD", "P. UNITÁRIO", "TAXA", "TOTAL"]];
-  const body = opts.lineItems.map((it) => [
-    it.description.replace(/\u00a0/g, " "),
-    String(it.quantity),
-    it.unitPriceFmt,
-    it.taxLabel || "Isento",
-    it.totalAmountFmt,
-  ]);
+  // Items table — include DESC. column if any item has discount
+  const hasAnyDiscount = opts.lineItems.some((it) => it.discountPct);
+  const head = hasAnyDiscount
+    ? [["DESCRIÇÃO DO SERVIÇO", "QTD", "P. UNITÁRIO", "DESC.", "TAXA", "TOTAL"]]
+    : [["DESCRIÇÃO DO SERVIÇO", "QTD", "P. UNITÁRIO", "TAXA", "TOTAL"]];
+  const body = opts.lineItems.map((it) => {
+    const row = [
+      it.description.replace(/\u00a0/g, " "),
+      String(it.quantity),
+      it.unitPriceFmt,
+    ];
+    if (hasAnyDiscount) row.push(it.discountPct || "—");
+    row.push(it.taxLabel || "Isento");
+    row.push(it.totalAmountFmt);
+    return row;
+  });
 
   autoTable(doc, {
     startY: y,
@@ -433,12 +442,21 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
       cellPadding: { top: pxMm(10), right: pxMm(10), bottom: pxMm(10), left: pxMm(10) },
     },
     columnStyles: (() => {
-      const colQty = 14;
-      const colUnit = 28;
-      const colTax = 24;
-      const colTotal = 30;
-      const colDesc = usableW - colQty - colUnit - colTax - colTotal;
       const moneyStyle = { fontSize: pxToPt(11), halign: "right" as const, valign: "middle" as const };
+      if (hasAnyDiscount) {
+        const colQty = 12; const colUnit = 26; const colDisc = 14; const colTax = 22; const colTotal = 28;
+        const colDesc = usableW - colQty - colUnit - colDisc - colTax - colTotal;
+        return {
+          0: { cellWidth: colDesc, valign: "middle" as const },
+          1: { cellWidth: colQty, halign: "center" as const, valign: "middle" as const },
+          2: { cellWidth: colUnit, ...moneyStyle },
+          3: { cellWidth: colDisc, halign: "center" as const, valign: "middle" as const },
+          4: { cellWidth: colTax, halign: "center" as const, valign: "middle" as const },
+          5: { cellWidth: colTotal, ...moneyStyle, fontStyle: "bold" as const, textColor: [35, 40, 48] as [number, number, number] },
+        };
+      }
+      const colQty = 14; const colUnit = 28; const colTax = 24; const colTotal = 30;
+      const colDesc = usableW - colQty - colUnit - colTax - colTotal;
       return {
         0: { cellWidth: colDesc, valign: "middle" as const },
         1: { cellWidth: colQty, halign: "center" as const, valign: "middle" as const },

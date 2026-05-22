@@ -51,6 +51,7 @@ type FormItem = {
   description: string;
   quantity: number;
   unitPrice: string;
+  discount: string; // percentagem de desconto (ex: "10")
   ivaPct: string; // "0", "14", "5", "0_M04"
 };
 
@@ -103,7 +104,7 @@ const Orcamentos = () => {
     clientEmail: "",
     issueDate: new Date().toISOString().slice(0, 10),
     validityDays: "30",
-    items: [{ description: "", quantity: 1, unitPrice: "", ivaPct: "0" }] as FormItem[],
+    items: [{ description: "", quantity: 1, unitPrice: "", discount: "", ivaPct: "0" }] as FormItem[],
     currency: "AOA",
     footerNote: "",
   });
@@ -195,36 +196,66 @@ const Orcamentos = () => {
 
   const currencyLabel = form.currency === "AOA" ? "AKZ" : form.currency;
 
-  // Calculate totals with per-item IVA
+  // Calculate totals with per-item IVA and discount (regras AGT arredondamento)
   const totalsCalc = useMemo(() => {
-    let subtotal = 0;
+    let subtotalBruto = 0;
+    let totalDesconto = 0;
+    let baseImponivel = 0;
     let totalIva = 0;
     const taxGroups: Record<string, { base: number; iva: number; pct: number; code: string; reason: string }> = {};
 
     for (const item of form.items) {
       const qty = item.quantity || 1;
       const unitPrice = parseFloat(item.unitPrice) || 0;
-      const itemTotal = qty * unitPrice;
-      subtotal += itemTotal;
+      const discountPct = parseFloat(item.discount) || 0;
 
+      // Passo 1: Valor bruto da linha
+      const valorBruto = qty * unitPrice;
+      subtotalBruto += valorBruto;
+
+      // Passo 2: Desconto
+      const desconto = valorBruto * (discountPct / 100);
+      totalDesconto += desconto;
+
+      // Passo 3: Base tributável (arredondada a 2 casas)
+      const baseLinha = Math.round((valorBruto - desconto) * 100) / 100;
+      baseImponivel += baseLinha;
+
+      // Passo 4: IVA sobre a base arredondada
       const ivaOpt = IVA_OPTIONS.find((o) => o.value === item.ivaPct) ?? IVA_OPTIONS[0];
       const pct = item.ivaPct === "0_M04" ? 0 : (parseFloat(item.ivaPct) || 0);
-      const ivaAmount = (itemTotal * pct) / 100;
+      const ivaAmount = Math.round((baseLinha * pct / 100) * 100) / 100;
       totalIva += ivaAmount;
 
       const groupKey = item.ivaPct;
       if (!taxGroups[groupKey]) {
         taxGroups[groupKey] = { base: 0, iva: 0, pct, code: ivaOpt.code, reason: ivaOpt.reason };
       }
-      taxGroups[groupKey].base += itemTotal;
+      taxGroups[groupKey].base += baseLinha;
       taxGroups[groupKey].iva += ivaAmount;
     }
 
-    const total = subtotal + totalIva;
+    // Arredondamentos finais a 2 casas
+    subtotalBruto = Math.round(subtotalBruto * 100) / 100;
+    totalDesconto = Math.round(totalDesconto * 100) / 100;
+    baseImponivel = Math.round(baseImponivel * 100) / 100;
+    totalIva = Math.round(totalIva * 100) / 100;
+    const total = Math.round((baseImponivel + totalIva) * 100) / 100;
+
     const fmt = (n: number) =>
       new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
-    return { subtotal: fmt(subtotal), iva: fmt(totalIva), total: fmt(total), totalNum: total, taxGroups };
+    return {
+      subtotalBruto: fmt(subtotalBruto),
+      totalDesconto: fmt(totalDesconto),
+      baseImponivel: fmt(baseImponivel),
+      subtotal: fmt(baseImponivel), // para compatibilidade com PDF
+      iva: fmt(totalIva),
+      total: fmt(total),
+      totalNum: total,
+      hasDiscount: totalDesconto > 0,
+      taxGroups,
+    };
   }, [form.items]);
 
   const getNextDocNumber = async (): Promise<string> => {
@@ -253,7 +284,7 @@ const Orcamentos = () => {
   };
 
   const handleAddItem = () => {
-    setForm({ ...form, items: [...form.items, { description: "", quantity: 1, unitPrice: "", ivaPct: "0" }] });
+    setForm({ ...form, items: [...form.items, { description: "", quantity: 1, unitPrice: "", discount: "", ivaPct: "0" }] });
   };
   const handleRemoveItem = (idx: number) => {
     setForm({ ...form, items: form.items.filter((_, i) => i !== idx) });
@@ -288,10 +319,12 @@ const Orcamentos = () => {
       for (const item of form.items) {
         const qty = item.quantity || 1;
         const up = parseFloat(item.unitPrice) || 0;
-        const t = qty * up;
-        subtotalNum += t;
+        const discPct = parseFloat(item.discount) || 0;
+        const bruto = qty * up;
+        const base = Math.round((bruto - bruto * discPct / 100) * 100) / 100;
+        subtotalNum += base;
         const pct = item.ivaPct === "0_M04" ? 0 : (parseFloat(item.ivaPct) || 0);
-        totalIvaNum += (t * pct) / 100;
+        totalIvaNum += Math.round((base * pct / 100) * 100) / 100;
       }
 
       const pdfInput: ProformaInvoicePdfInput = {
@@ -311,14 +344,17 @@ const Orcamentos = () => {
           const ivaOpt = IVA_OPTIONS.find((o) => o.value === it.ivaPct) ?? IVA_OPTIONS[0];
           const qty = parseInt(String(it.quantity)) || 1;
           const up = parseFloat(it.unitPrice) || 0;
-          const total = qty * up;
+          const discPct = parseFloat(it.discount) || 0;
+          const bruto = qty * up;
+          const base = Math.round((bruto - bruto * discPct / 100) * 100) / 100;
           const fmtNum = (n: number) => new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(n);
           const fmtTotal = (n: number) => new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
           return {
             description: it.description,
             quantity: qty,
             unitPriceFmt: fmtNum(up),
-            totalAmountFmt: fmtTotal(total),
+            discountPct: discPct > 0 ? `${discPct}%` : undefined,
+            totalAmountFmt: fmtTotal(base),
             taxLabel: ivaOpt.label,
           };
         }),
@@ -349,7 +385,8 @@ const Orcamentos = () => {
             description: it.description,
             quantity: parseInt(String(it.quantity)) || 1,
             unit_price: it.unitPrice,
-            total_amount: String((parseInt(String(it.quantity)) || 1) * (parseFloat(it.unitPrice) || 0)),
+            discount_pct: it.discount || "0",
+            total_amount: String(Math.round(((parseInt(String(it.quantity)) || 1) * (parseFloat(it.unitPrice) || 0) * (1 - (parseFloat(it.discount) || 0) / 100)) * 100) / 100),
             iva_pct: it.ivaPct,
           })),
           subtotal: totalsCalc.subtotal,
@@ -373,7 +410,7 @@ const Orcamentos = () => {
       setForm({
         clientName: "", clientLines: "", clientNif: "", clientEmail: "",
         issueDate: new Date().toISOString().slice(0, 10), validityDays: "30",
-        items: [{ description: "", quantity: 1, unitPrice: "", ivaPct: "0" }],
+        items: [{ description: "", quantity: 1, unitPrice: "", discount: "", ivaPct: "0" }],
         currency: "AOA", footerNote: "",
       });
       setClientType("encarregado");
@@ -617,11 +654,21 @@ const Orcamentos = () => {
                       </div>
                       <div className="w-24">
                         <Label className="text-xs">P. Unitário</Label>
-                        <Input value={item.unitPrice} onChange={(e) => handleItemChange(idx, "unitPrice", e.target.value)} placeholder="0,00" />
+                        <Input value={item.unitPrice} onChange={(e) => handleItemChange(idx, "unitPrice", e.target.value)} placeholder="0,0000" />
+                      </div>
+                      <div className="w-16">
+                        <Label className="text-xs">Desc. %</Label>
+                        <Input value={item.discount} onChange={(e) => handleItemChange(idx, "discount", e.target.value)} placeholder="0" />
                       </div>
                       <div className="w-24">
                         <Label className="text-xs">Total</Label>
-                        <Input value={((item.quantity || 1) * (parseFloat(item.unitPrice) || 0)).toFixed(2)} readOnly className="bg-muted/50" />
+                        <Input value={(() => {
+                          const qty = item.quantity || 1;
+                          const up = parseFloat(item.unitPrice) || 0;
+                          const disc = parseFloat(item.discount) || 0;
+                          const bruto = qty * up;
+                          return (Math.round((bruto - bruto * disc / 100) * 100) / 100).toFixed(2);
+                        })()} readOnly className="bg-muted/50" />
                       </div>
                       <div className="w-32">
                         <Label className="text-xs">IVA</Label>
@@ -641,6 +688,13 @@ const Orcamentos = () => {
 
                 {/* Tax Summary */}
                 <div className="bg-muted/50 p-3 rounded mt-3 text-sm space-y-2">
+                  {totalsCalc.hasDiscount && (
+                    <div className="grid grid-cols-2 gap-2 text-xs border-b pb-2 mb-1">
+                      <span>Subtotal Bruto:</span><span className="text-right">{totalsCalc.subtotalBruto} {currencyLabel}</span>
+                      <span>Total Desconto:</span><span className="text-right">-{totalsCalc.totalDesconto} {currencyLabel}</span>
+                      <span className="font-medium">Base Imponível:</span><span className="text-right font-medium">{totalsCalc.baseImponivel} {currencyLabel}</span>
+                    </div>
+                  )}
                   <p className="font-semibold text-xs uppercase text-muted-foreground">Resumo de Impostos</p>
                   <div className="grid grid-cols-4 gap-2 text-xs font-medium border-b pb-1">
                     <span>Taxa</span><span className="text-right">Base</span><span className="text-right">IVA</span><span className="text-right">Total</span>
