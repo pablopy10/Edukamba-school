@@ -223,11 +223,22 @@ const Orcamentos = () => {
 
   const getNextDocNumber = async (): Promise<string> => {
     const year = new Date().getFullYear();
-    const { count } = await (supabase
+    const prefix = `PP ${year}/`;
+    // Buscar o último documento com este prefixo para determinar o próximo número
+    const { data } = await (supabase
       .from("proforma_invoices" as any)
-      .select("id", { count: "exact", head: true })
-      .like("document_number", `PP ${year}/%`) as any);
-    return `PP ${year}/${(count ?? 0) + 1}`;
+      .select("document_number")
+      .like("document_number", `${prefix}%`)
+      .order("created_at", { ascending: false })
+      .limit(1) as any);
+    
+    let nextSeq = 1;
+    if (data && data.length > 0) {
+      const last = data[0].document_number as string;
+      const match = /\/(\d+)$/.exec(last);
+      if (match) nextSeq = parseInt(match[1], 10) + 1;
+    }
+    return `${prefix}${nextSeq}`;
   };
 
   const handleAddItem = () => {
