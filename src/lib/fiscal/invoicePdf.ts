@@ -433,15 +433,9 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   const hdrTop = margin;
   const leftColW = usableW * 0.52;
 
-  // Logo (opcional)
-  const logoW = pxMm(48);
-  const logoH = pxMm(48);
-  addLogoIfPossible(doc, opts.logoDataUrl ?? undefined, margin, hdrTop, logoW, logoH);
-
-  // ── Lado esquerdo: SEMPRE Edukamba (emitente fixo)
+  // Logo removido — header começa directamente com texto
   const textStartX = margin;
-  const hasLogo = !!opts.logoDataUrl?.startsWith("data:image");
-  let yLeft = hasLogo ? hdrTop + logoH + pxMm(4) : hdrTop;
+  let yLeft = hdrTop;
 
   const schoolNameSize = pxToPt(18);
   doc.setFont("helvetica", "bold");
@@ -661,7 +655,7 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   const code = (opts.exemptionCode ?? "M11").trim();
   const reason =
     opts.exemptionReason?.trim() ||
-    "Isento nos termos do Artigo 12.º do CIVA — Isenção no domínio da educação.";
+    "Isento nos termos do Artigo 12.º do CIVA - Isenção no domínio da educação.";
   const exemptText = formatIvaExemptionParagraph(code, reason);
   doc.setFont("helvetica", "italic");
   doc.setFontSize(pxToPt(11));
