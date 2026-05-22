@@ -1,9 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { Tables } from "@/integrations/supabase/types";
 import { buildCreditNotePdf, type CreditNotePdfInput, type CreditNoteLine } from "./creditNotePdf";
 
-const fmtKz = (n: number) =>
-  new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0) + " Kz";
+/** Formata valor monetário com espaço como separador de milhares: "5 000,00 Kz" */
+const fmtKz = (n: number): string => {
+  const formatted = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
+  // fr-FR usa espaço fino (narrow no-break space) — normalizar para espaço normal
+  return formatted.replace(/\u202F/g, " ").replace(/\u00A0/g, " ") + " Kz";
+};
 
 type ParsedItem = {
   description: string;
@@ -114,8 +117,10 @@ export async function downloadCreditNotePdfById(creditNoteId: string): Promise<v
           if (matched) {
             creditItems = [matched];
           } else {
-            // Fallback: usar o valor da NC como item genérico
-            creditItems = [{ description: "Crédito parcial", amount: ncGrossTotal, ivaPct: 0, taxLabel: "Isento (M11)" }];
+            // Fallback: usar descrição do primeiro item da FT com o valor parcial
+            // A AGT exige referência ao serviço original, não texto genérico
+            const refItem = allItems[0];
+            creditItems = [{ description: refItem.description, amount: ncGrossTotal, ivaPct: refItem.ivaPct, taxLabel: refItem.taxLabel }];
           }
         }
       }
