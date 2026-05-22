@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { buildProformaInvoicePdf, type ProformaInvoicePdfInput } from "@/lib/fiscal/proformaInvoicePdf";
-import { downloadFiscalInvoicePdfById } from "@/lib/fiscal/downloadFiscalInvoicePdf";
+import { downloadConvertedInvoiceWithProforma } from "@/lib/fiscal/downloadFiscalInvoicePdf";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -371,10 +371,33 @@ const SuperProformaInvoices = () => {
       toast.success(`Fatura ${result.document_number} gerada! (OrderRef: ${result.order_reference})`);
       reload();
 
-      // Download do PDF da fatura gerada
+      // Download do PDF combinado: FT (pág 1) + PP original (pág 2)
       if (result.invoice_id) {
         try {
-          await downloadFiscalInvoicePdfById(result.invoice_id);
+          const ppInput: ProformaInvoicePdfInput = {
+            documentNumber: row.document_number,
+            issueDateYYYYMMDD: row.issue_date,
+            validityDays: row.validity_days,
+            ...EDUKAMBA_ISSUER,
+            clientName: row.client_name,
+            clientLines: row.client_lines,
+            clientNif: row.client_nif,
+            clientEmail: row.client_email,
+            lineItems: row.items.map((it) => ({
+              description: it.description,
+              quantity: it.quantity,
+              unitAmountFmt: it.unit_amount,
+              totalAmountFmt: it.total_amount,
+            })),
+            subtotalFmt: row.subtotal,
+            ivaPercentage: row.iva_percentage,
+            ivaFmt: row.iva_amount,
+            totalFmt: row.total,
+            currencyLabel: row.currency === "AOA" ? "AKZ" : row.currency,
+            footerNote: row.footer_note,
+            hashExtract: row.hash_control ?? null,
+          };
+          await downloadConvertedInvoiceWithProforma(result.invoice_id, ppInput);
         } catch (pdfErr) {
           toast.error("Fatura criada mas erro ao descarregar PDF: " + (pdfErr instanceof Error ? pdfErr.message : ""));
         }
