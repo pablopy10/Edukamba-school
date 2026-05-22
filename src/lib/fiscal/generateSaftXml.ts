@@ -122,9 +122,9 @@ function saftDocumentStatusReasonText(raw: string, fallback: string): string {
 
 /** Código tipo M10, M11 … (SAFAOTaxExemptionCode). */
 function taxExemptionSaftCode(raw: string | undefined): string {
-  const t = (raw ?? "M10").trim().toUpperCase();
+  const t = (raw ?? "M11").trim().toUpperCase();
   if (/^(M[0-9]{2})+$/.test(t)) return t;
-  return "M10";
+  return "M11";
 }
 
 /** Conforme restrição pattern do XSD (ex.: FT EDK/123). */
