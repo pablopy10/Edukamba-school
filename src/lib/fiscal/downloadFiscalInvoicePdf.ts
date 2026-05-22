@@ -38,8 +38,15 @@ export async function downloadConvertedInvoiceWithProforma(
   if (error) throw new Error(error.message);
   if (!inv) throw new Error("Fatura não encontrada ou sem permissão.");
 
-  // Gera FT
+  // Gera FT — usa os itens da PP original para manter P. Unitário como foi escrito
   const payload = await resolveFiscalInvoicePdfInput(inv as Tables<"invoices">, fmtAOA);
+  // Sobrescreve lineItems com os da PP (preserva o P. Unitário original)
+  payload.lineItems = proformaInput.lineItems.map((it) => ({
+    description: it.description,
+    quantity: it.quantity,
+    unitAmountFmt: it.unitAmountFmt,
+    totalAmountFmt: it.totalAmountFmt,
+  }));
   const ftDoc = buildInvoicePdf(payload);
 
   // Gera PP
