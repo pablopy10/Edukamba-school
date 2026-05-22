@@ -707,7 +707,6 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
         2: { cellWidth: colUnit, ...moneyStyle },
         3: { cellWidth: colTax, halign: "center" as const, valign: "middle" as const },
         4: { cellWidth: colTotal, ...moneyStyle, fontStyle: "bold" as const, textColor: [35, 40, 48] as [number, number, number] },
-        3: { cellWidth: colMoney, ...moneyStyle, fontStyle: "bold" as const, textColor: [35, 40, 48] as [number, number, number] },
       };
     })(),
   });
