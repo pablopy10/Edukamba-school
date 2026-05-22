@@ -64,6 +64,12 @@ export type FiscalInvoicePdfInput = {
   academicYearLabel?: string | null;
   lineItems: FiscalInvoiceLine[];
   grossTotalFmt: string;
+  /** Subtotal (soma das bases sem IVA). Se omitido, usa grossTotalFmt. */
+  subtotalFmt?: string;
+  /** Valor total do IVA. Se omitido, assume 0. */
+  ivaFmt?: string;
+  /** Quadro de Resumo de IVA (obrigatório AGT quando há taxas mistas) */
+  taxSummary?: Array<{ label: string; base: string; iva: string }>;
   exemptionCode?: string | null;
   exemptionReason?: string | null;
   documentHashFootnote?: string | null;
@@ -446,6 +452,47 @@ export async function resolveFiscalInvoicePdfInput(
         totalAmountFmt: totalFmt,
       }];
     })(),
+    ...(() => {
+      // Calcular subtotal, IVA e taxSummary a partir dos itens parseados
+      const parts = lineDescription.split(";").map((s) => s.trim()).filter(Boolean);
+      if (parts.length > 1) {
+        let subtotal = 0;
+        let totalIva = 0;
+        const taxGroups: Record<string, { base: number; iva: number; label: string }> = {};
+
+        for (const part of parts) {
+          const match3 = /^(.+):(\d[\d\s.,]*):(\d+(?:_M\d+)?)$/.exec(part);
+          if (match3) {
+            const val = parseFloat(match3[2].replace(/\s/g, "").replace(",", ".")) || 0;
+            const ivaPctStr = match3[3].trim();
+            const pct = ivaPctStr === "0_M04" ? 0 : (parseFloat(ivaPctStr) || 0);
+            const ivaAmt = (val * pct) / 100;
+            subtotal += val;
+            totalIva += ivaAmt;
+            const label = ivaPctStr === "0" ? "Isento (M11)" : ivaPctStr === "0_M04" ? "Não sujeito (M04)" : `${ivaPctStr}%`;
+            if (!taxGroups[ivaPctStr]) taxGroups[ivaPctStr] = { base: 0, iva: 0, label };
+            taxGroups[ivaPctStr].base += val;
+            taxGroups[ivaPctStr].iva += ivaAmt;
+          } else {
+            const match2 = /^(.+):(\d[\d\s.,]*)$/.exec(part);
+            const val = match2 ? (parseFloat(match2[2].replace(/\s/g, "").replace(",", ".")) || 0) : 0;
+            subtotal += val;
+          }
+        }
+
+        const fmtNum = (n: number) => formatMoney(Number.isFinite(n) ? n : 0);
+        return {
+          subtotalFmt: fmtNum(subtotal),
+          ivaFmt: fmtNum(totalIva),
+          taxSummary: Object.values(taxGroups).map((g) => ({
+            label: g.label,
+            base: fmtNum(g.base),
+            iva: fmtNum(g.iva),
+          })),
+        };
+      }
+      return {};
+    })(),
     grossTotalFmt: totalFmt,
     exemptionCode: invoice.exemption_code ?? null,
     exemptionReason: invoice.exemption_reason ?? null,
@@ -658,35 +705,76 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   const d = doc as DocWithAutoTable;
   const tableFinalY = d.lastAutoTable?.finalY ?? y + pxMm(90);
 
-  /* .totals-container float:right width:250px + .grand-total */
-  const totalsW = pxMm(250);
-  const totalsX = rhs - totalsW;
   let blockY = tableFinalY + pxMm(14);
 
-  /* linha antes do destacado navy (tipo .total-row) */
+  // Quadro de Resumo de IVA (obrigatório AGT quando há taxas mistas)
+  if (opts.taxSummary && opts.taxSummary.length > 0) {
+    const taxHead = [["TAXA / ISENÇÃO", "BASE TRIBUTÁVEL", "IVA"]];
+    const taxBody = opts.taxSummary.map((ts) => [ts.label, ts.base, ts.iva]);
+
+    autoTable(doc, {
+      startY: blockY,
+      head: taxHead,
+      body: taxBody,
+      margin: { left: margin + usableW * 0.35, right: margin },
+      theme: "plain",
+      styles: {
+        fontSize: pxToPt(10),
+        cellPadding: { top: pxMm(6), right: pxMm(8), bottom: pxMm(6), left: pxMm(8) },
+        lineWidth: pxMm(0.5),
+        lineColor: BORDER_EEE,
+        textColor: BODY_TEXT,
+        valign: "middle",
+      },
+      headStyles: {
+        fillColor: [240, 240, 240] as [number, number, number],
+        textColor: NAVY,
+        fontStyle: "bold",
+        fontSize: pxToPt(9),
+      },
+      columnStyles: {
+        0: { halign: "left" as const },
+        1: { halign: "right" as const },
+        2: { halign: "right" as const },
+      },
+    });
+
+    const d2 = doc as DocWithAutoTable;
+    blockY = (d2.lastAutoTable?.finalY ?? blockY) + pxMm(10);
+  }
+
+  // Totals section
+  const totalsW = usableW * 0.55;
+  const totalsX = rhs - totalsW;
+
+  const subtotalDisplay = opts.subtotalFmt ?? opts.grossTotalFmt;
+  const ivaDisplay = opts.ivaFmt ?? "0 AOA";
+  const hasIva = opts.ivaFmt && opts.ivaFmt !== "0 AOA" && opts.ivaFmt !== "0,00" && opts.ivaFmt !== "0,00 AOA";
+
   doc.setFont("helvetica", "normal");
   doc.setFontSize(pxToPt(12));
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-  const subLabel = "Subtotal";
-  doc.text(subLabel, totalsX, blockY + pxMm(4));
-  doc.text(opts.grossTotalFmt, totalsX + totalsW, blockY + pxMm(4), { align: "right" });
+  doc.text("Subtotal", totalsX, blockY + pxMm(4));
+  doc.text(subtotalDisplay, totalsX + totalsW, blockY + pxMm(4), { align: "right" });
 
-  blockY += pxMm(10) + pxMm(10); /* espaço tipo margin-top antes do grande total */
+  blockY += pxMm(10) + pxMm(10);
+
+  // Linha de IVA (sempre mostrar)
+  doc.text("IVA", totalsX, blockY + pxMm(4));
+  doc.text(ivaDisplay, totalsX + totalsW, blockY + pxMm(4), { align: "right" });
+
+  blockY += pxMm(10) + pxMm(10);
 
   const grandH = pxMm(42);
   doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
   doc.rect(totalsX, blockY, totalsW, grandH, "F");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(pxToPt(16));
+  doc.setFontSize(pxToPt(11));
   doc.setTextColor(255, 255, 255);
-  doc.text("TOTAL PAGO", totalsX + pxMm(12), blockY + grandH / 2 + pxMm(2), {
-    baseline: "middle",
-  });
-  doc.text(opts.grossTotalFmt, totalsX + totalsW - pxMm(12), blockY + grandH / 2 + pxMm(2), {
-    align: "right",
-    baseline: "middle",
-  });
+  doc.text("TOTAL PAGO", totalsX + pxMm(10), blockY + grandH * 0.35, { baseline: "middle" });
+  doc.setFontSize(pxToPt(16));
+  doc.text(opts.grossTotalFmt, totalsX + pxMm(10), blockY + grandH * 0.7, { baseline: "middle" });
 
   /* .footer … .fiscal-text */
   let footY = blockY + grandH + pxMm(48);
