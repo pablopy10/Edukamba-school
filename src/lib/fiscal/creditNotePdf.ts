@@ -406,8 +406,8 @@ export function buildCreditNotePdf(opts: CreditNotePdfInput): jsPDF {
   const d = doc as DocWithAutoTable;
   const tableFinalY = d.lastAutoTable?.finalY ?? y + pxMm(90);
 
-  // Totais
-  const totalsW = pxMm(250);
+  // Totais — usar largura generosa para caber "TOTAL A CREDITAR" + valor
+  const totalsW = usableW * 0.55;
   const totalsX = rhs - totalsW;
   let blockY = tableFinalY + pxMm(14);
 
@@ -425,12 +425,12 @@ export function buildCreditNotePdf(opts: CreditNotePdfInput): jsPDF {
   doc.rect(totalsX, blockY, totalsW, grandH, "F");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(pxToPt(16));
+  doc.setFontSize(pxToPt(14));
   doc.setTextColor(255, 255, 255);
-  doc.text("TOTAL A CREDITAR", totalsX + pxMm(12), blockY + grandH / 2 + pxMm(2), {
+  doc.text("TOTAL A CREDITAR", totalsX + pxMm(10), blockY + grandH / 2 + pxMm(2), {
     baseline: "middle",
   });
-  doc.text(opts.grossTotalFmt, totalsX + totalsW - pxMm(12), blockY + grandH / 2 + pxMm(2), {
+  doc.text(opts.grossTotalFmt, totalsX + totalsW - pxMm(10), blockY + grandH / 2 + pxMm(2), {
     align: "right",
     baseline: "middle",
   });
