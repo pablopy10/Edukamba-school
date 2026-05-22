@@ -445,7 +445,7 @@ const Orcamentos = () => {
       return;
     }
     const partialAmount = creditNotePartialAmount.trim()
-      ? parseFloat(creditNotePartialAmount.replace(/\./g, "").replace(",", "."))
+      ? parseFloat(creditNotePartialAmount.replace(/\s/g, "").replace(/\./g, "").replace(",", "."))
       : undefined;
     if (partialAmount !== undefined && (isNaN(partialAmount) || partialAmount <= 0 || partialAmount > creditNoteDialog.grossTotal)) {
       toast.error("Valor parcial inválido.");
@@ -667,7 +667,7 @@ const Orcamentos = () => {
                       </Button>
                       {canManage && (
                         <Button variant="outline" size="sm" onClick={() => {
-                          const totalNum = parseFloat(row.total.replace(/\./g, "").replace(",", ".")) || 0;
+                          const totalNum = parseFloat(row.total.replace(/\s/g, "").replace(/\./g, "").replace(",", ".")) || 0;
                           setCreditNoteDialog({ invoiceId: row.converted_invoice_id!, documentNumber: row.document_number, grossTotal: totalNum });
                         }} className="gap-1" title="Emitir Nota de Crédito">
                           <Receipt className="w-4 h-4" /> NC
