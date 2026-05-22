@@ -105,27 +105,30 @@ const Orcamentos = () => {
       const sid = effectiveSchoolIdFromProfile(profile);
       setSchoolId(sid);
 
-      if (sid) {
-        const { data: sch } = await supabase
-          .from("schools")
-          .select("name, nif, address")
-          .eq("id", sid)
-          .maybeSingle();
-        if (sch) {
-          setSchoolName(sch.name || "Edukamba");
-          setSchoolNif(sch.nif || null);
-          setSchoolAddress(sch.address || null);
-        }
+      // Escola obrigatória — sem school_id não mostra nada
+      if (!sid) {
+        setRows([]);
+        return;
       }
 
-      const query = supabase
+      const { data: sch } = await supabase
+        .from("schools")
+        .select("name, nif, address")
+        .eq("id", sid)
+        .maybeSingle();
+      if (sch) {
+        setSchoolName(sch.name || "Edukamba");
+        setSchoolNif(sch.nif || null);
+        setSchoolAddress(sch.address || null);
+      }
+
+      // Apenas orçamentos desta escola (school_id preenchido e igual ao da escola)
+      const { data, error } = await supabase
         .from("proforma_invoices")
         .select("*")
+        .eq("school_id", sid)
         .order("created_at", { ascending: false });
 
-      if (sid) query.eq("school_id", sid);
-
-      const { data, error } = await query;
       if (error) throw error;
       setRows((data ?? []) as unknown as ProformaRow[]);
     } catch (e) {
