@@ -120,6 +120,7 @@ const Orcamentos = () => {
   const [creditNoteReasonOther, setCreditNoteReasonOther] = useState("");
   /** "all" = fatura total, ou índice do item específico */
   const [creditNoteItemSelection, setCreditNoteItemSelection] = useState<string>("all");
+  const [creditNotePartialAmount, setCreditNotePartialAmount] = useState("");
   const [emittingCreditNote, setEmittingCreditNote] = useState(false);
 
   const reload = useCallback(async () => {
@@ -448,9 +449,16 @@ const Orcamentos = () => {
       return;
     }
 
-    // Determinar valor parcial baseado na seleção de item
+    // Determinar valor parcial baseado na seleção de item ou input manual
     let partialAmount: number | undefined;
-    if (creditNoteItemSelection !== "all" && creditNoteDialog.items.length > 1) {
+    if (creditNotePartialAmount.trim()) {
+      // Valor manual tem prioridade
+      partialAmount = parseFloat(creditNotePartialAmount.replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
+      if (isNaN(partialAmount) || partialAmount <= 0 || partialAmount > creditNoteDialog.grossTotal) {
+        toast.error("Valor parcial inválido.");
+        return;
+      }
+    } else if (creditNoteItemSelection !== "all" && creditNoteDialog.items.length > 1) {
       const idx = parseInt(creditNoteItemSelection, 10);
       const selectedItem = creditNoteDialog.items[idx];
       if (selectedItem) {
@@ -466,6 +474,7 @@ const Orcamentos = () => {
     setCreditNoteReasonOther("");
     setCreditNoteReasonCode("data_error");
     setCreditNoteItemSelection("all");
+    setCreditNotePartialAmount("");
     toast.success(`Nota de Crédito ${fx.documentNumber} emitida!`);
     if (fx.creditNoteId) {
       try { await downloadCreditNotePdfById(fx.creditNoteId); } catch { /* não bloqueia */ }
@@ -752,6 +761,11 @@ const Orcamentos = () => {
                 </p>
               </div>
             )}
+            <div className="grid gap-2">
+              <Label>Valor parcial (opcional)</Label>
+              <Input type="text" value={creditNotePartialAmount} onChange={(e) => setCreditNotePartialAmount(e.target.value)} placeholder="Deixe vazio para usar o valor do item seleccionado" />
+              <p className="text-xs text-muted-foreground">Preencha apenas se quiser creditar um valor diferente do item completo.</p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" disabled={emittingCreditNote} onClick={() => setCreditNoteDialog(null)}>Cancelar</Button>
