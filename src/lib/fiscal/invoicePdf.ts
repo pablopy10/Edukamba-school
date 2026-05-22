@@ -490,7 +490,7 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
   const issueLabel = fmtPtLongDateYYYYMMDD(opts.invoiceDateYYYYMMDD);
   doc.text(`Emissão: ${issueLabel}`, rhs, yDoc, { align: "right", baseline: "top" });
-  yDoc += pxMm(10);
+  yDoc += pxMm(16);
 
   // Período Contabilístico
   const periodMonth = (() => {
@@ -501,7 +501,7 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   doc.setFontSize(pxToPt(11));
   doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
   doc.text(`Período Contabilístico: ${periodMonth}`, rhs, yDoc, { align: "right", baseline: "top" });
-  yDoc += pxMm(10);
+  yDoc += pxMm(16);
 
   // OrderReferences — origem PP
   if (opts.orderReferencePP?.trim()) {
@@ -509,7 +509,7 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
     doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
     doc.text(`Origem: ${opts.orderReferencePP.trim()}`, rhs, yDoc, { align: "right", baseline: "top" });
     doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-    yDoc += pxMm(10);
+    yDoc += pxMm(16);
   }
 
   const headerBottomInner = Math.max(yLeft + pxMm(4), yDoc);
