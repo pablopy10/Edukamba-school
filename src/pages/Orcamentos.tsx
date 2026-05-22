@@ -642,7 +642,10 @@ const Orcamentos = () => {
                   </p>
                   <p className="font-bold text-primary mt-1">{row.total} {row.currency === "AOA" ? "AKZ" : row.currency}</p>
                 </div>
-                <div className="flex gap-2 flex-wrap justify-end">
+                <div className="flex gap-2 flex-wrap justify-end items-center">
+                  {row.converted_invoice_id && (
+                    <span className="text-xs text-green-600 font-medium">✓ Convertida</span>
+                  )}
                   <Button variant="outline" size="sm" onClick={() => downloadPdf(row)} className="gap-1">
                     <Download className="w-4 h-4" /> PDF
                   </Button>
@@ -654,7 +657,6 @@ const Orcamentos = () => {
                   )}
                   {row.converted_invoice_id && (
                     <>
-                      <span className="text-xs text-green-600 font-medium self-center">✓ Convertida</span>
                       <Button variant="outline" size="sm" onClick={() => void downloadFiscalInvoicePdfById(row.converted_invoice_id!)} className="gap-1" title="Descarregar Fatura">
                         <Download className="w-4 h-4" /> FT
                       </Button>

@@ -150,9 +150,13 @@ Deno.serve(async (req) => {
     const signatureBase64 = signPlaintextRSA_SHA1(plaintext, pem);
     const hash_control = (((Math.max(seq, 1) - 1) % 10) + 1).toString();
 
-    // Build line description from proforma items
-    const items = pp.items as Array<{ description?: string }> | null;
-    const lineDescription = items?.map((i: { description?: string }) => i.description).filter(Boolean).join("; ") || "Serviços (conversão PP)";
+    // Build line description from proforma items (inclui valor por item para PDF multi-linha)
+    const items = pp.items as Array<{ description?: string; total_amount?: string }> | null;
+    const lineDescription = items?.map((i) => {
+      const desc = i.description || "Serviço";
+      const amount = i.total_amount || "";
+      return amount ? `${desc}:${amount}` : desc;
+    }).filter(Boolean).join("; ") || "Serviços (conversão PP)";
 
     // Insert invoice — try with order_reference_pp, fallback without if column missing
     const basePayload = {

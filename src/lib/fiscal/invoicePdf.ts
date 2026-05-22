@@ -402,13 +402,32 @@ export async function resolveFiscalInvoicePdfInput(
     studentName: studentFullName || "—",
     studentClassroom: studentClassroom || null,
     academicYearLabel,
-    lineItems: [
-      {
+    lineItems: (() => {
+      // Se line_description contém múltiplos itens separados por ";" (conversão PP→FT), criar linhas distintas
+      // Formato: "Desc:Valor; Desc2:Valor2" ou "Desc; Desc2" (sem valores)
+      const parts = lineDescription.split(";").map((s) => s.trim()).filter(Boolean);
+      if (parts.length > 1) {
+        return parts.map((part) => {
+          const colonIdx = part.lastIndexOf(":");
+          if (colonIdx > 0) {
+            const desc = part.slice(0, colonIdx).trim();
+            const val = part.slice(colonIdx + 1).trim();
+            const num = parseFloat(val.replace(/\s/g, "").replace(",", "."));
+            return {
+              description: desc,
+              quantity: 1,
+              totalAmountFmt: Number.isFinite(num) ? formatMoney(num) : totalFmt,
+            };
+          }
+          return { description: part, quantity: 1, totalAmountFmt: totalFmt };
+        });
+      }
+      return [{
         description: lineDescription,
         quantity: 1,
         totalAmountFmt: totalFmt,
-      },
-    ],
+      }];
+    })(),
     grossTotalFmt: totalFmt,
     exemptionCode: invoice.exemption_code ?? null,
     exemptionReason: invoice.exemption_reason ?? null,

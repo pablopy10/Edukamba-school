@@ -708,7 +708,10 @@ const SuperProformaInvoices = () => {
                         {row.total} {row.currency === "AOA" ? "AKZ" : row.currency}
                       </p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 items-center">
+                      {row.converted_invoice_id && (
+                        <span className="text-xs text-green-600 font-medium">✓ Convertida</span>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
@@ -734,43 +737,38 @@ const SuperProformaInvoices = () => {
                           Converter em FT
                         </Button>
                       ) : (
-                        <span className="text-xs text-green-600 font-medium self-center px-2">
-                          ✓ Convertida
-                        </span>
-                      )}
-                      {row.converted_invoice_id && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => void downloadFiscalInvoicePdfById(row.converted_invoice_id!)}
-                          className="gap-1"
-                          title="Descarregar Fatura"
-                        >
-                          <Download className="w-4 h-4" />
-                          FT
-                        </Button>
-                      )}
-                      {row.converted_invoice_id && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const totalNum = parseFloat(row.total.replace(/\./g, "").replace(",", ".")) || 0;
-                            setCreditNoteReasonCode("data_error");
-                            setCreditNoteReasonOther("");
-                            setCreditNotePartialAmount("");
-                            setCreditNoteDialog({
-                              invoiceId: row.converted_invoice_id!,
-                              documentNumber: row.document_number,
-                              grossTotal: totalNum,
-                            });
-                          }}
-                          className="gap-1"
-                          title="Emitir Nota de Crédito para a FT convertida"
-                        >
-                          <Receipt className="w-4 h-4" />
-                          NC
-                        </Button>
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void downloadFiscalInvoicePdfById(row.converted_invoice_id!)}
+                            className="gap-1"
+                            title="Descarregar Fatura"
+                          >
+                            <Download className="w-4 h-4" />
+                            FT
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const totalNum = parseFloat(row.total.replace(/\./g, "").replace(",", ".")) || 0;
+                              setCreditNoteReasonCode("data_error");
+                              setCreditNoteReasonOther("");
+                              setCreditNotePartialAmount("");
+                              setCreditNoteDialog({
+                                invoiceId: row.converted_invoice_id!,
+                                documentNumber: row.document_number,
+                                grossTotal: totalNum,
+                              });
+                            }}
+                            className="gap-1"
+                            title="Emitir Nota de Crédito"
+                          >
+                            <Receipt className="w-4 h-4" />
+                            NC
+                          </Button>
+                        </>
                       )}
                       {/* Botão de remover desabilitado — pró-formas não devem ser eliminadas */}
                     </div>
