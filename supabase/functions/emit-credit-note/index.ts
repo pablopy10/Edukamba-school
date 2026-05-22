@@ -1,13 +1,14 @@
 /**
  * Emite Nota de Crédito (NC) que retifica uma FT existente.
+ * Usa a tabela `invoices` com document_number prefixado "NC" para manter
+ * compatibilidade com a estrutura existente.
  * 
- * Regras AGT para NC:
+ * Regras AGT:
  * 1. Nunca apagar ou editar a FT original
  * 2. NC tem numeração própria (NC EDK/1, NC EDK/2...)
- * 3. Referência obrigatória à FT retificada (SourceBilling no XML)
+ * 3. Referência obrigatória à FT retificada (SourceBilling)
  * 4. Motivo justificado obrigatório (6-60 caracteres)
- * 5. Valores positivos no PDF mas subtraem do volume de faturação
- * 6. Hash e assinatura AGT próprios
+ * 5. Hash e assinatura AGT próprios
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import forge from "https://esm.sh/node-forge@1.3.1";
@@ -144,16 +145,16 @@ Deno.serve(async (req) => {
     ncAmount = partial_amount;
   }
 
-  // Obter última NC da escola para numeração
+  // Obter última NC da escola para numeração sequencial
   const schoolId = originalInvoice.school_id;
-  const series = "EDK"; // Série padrão Edukamba
+  const series = "EDK";
 
   const { data: lastNC } = await adminClient
-    .from("credit_notes")
+    .from("invoices")
     .select("document_number, document_hash")
     .eq("school_id", schoolId)
     .like("document_number", `NC ${series}/%`)
-    .order("created_at", { ascending: false })
+    .order("doc_number", { ascending: false })
     .limit(1)
     .maybeSingle();
 
@@ -168,7 +169,7 @@ Deno.serve(async (req) => {
   const issuedAt = new Date().toISOString();
   const totalStr = formatTotalForSigning(ncAmount);
 
-  // Plaintext AGT para NC
+  // Plaintext AGT para NC: DataFatura;DataHoraCriacao;NumeroFatura;Total;HashAnterior
   const previousHash = lastNC?.document_hash?.trim() || "";
   const plaintext = `${invoiceDate};${issuedAt};${documentNumber};${totalStr};${previousHash}`;
 
@@ -178,42 +179,50 @@ Deno.serve(async (req) => {
   // Assinatura RSA-SHA1
   const signatureBase64 = signPlaintextRSA_SHA1(plaintext, pem);
 
-  // Hash control (primeiros 4 caracteres)
-  const hashControl = documentHash.slice(0, 4).toUpperCase();
+  // Hash control
+  const hashControl = (((Math.max(nextNumber, 1) - 1) % 10) + 1).toString();
 
-  // Inserir NC na tabela credit_notes
-  const { data: newNC, error: insertErr } = await adminClient
-    .from("credit_notes")
-    .insert({
-      school_id: schoolId,
-      source_invoice_id: originalInvoice.id,
-      source_invoice_number: originalInvoice.document_number,
-      document_number: documentNumber,
-      invoice_date: invoiceDate,
-      invoice_issued_at: issuedAt,
-      gross_total: ncAmount,
-      currency: originalInvoice.currency,
-      cliente_nome: originalInvoice.cliente_nome,
-      cliente_nif: originalInvoice.cliente_nif,
-      student_id: originalInvoice.student_id,
-      line_description: originalInvoice.line_description,
-      exemption_code: originalInvoice.exemption_code,
-      exemption_reason: originalInvoice.exemption_reason,
-      reason,
-      document_hash: documentHash,
-      digital_signature_sha1_b64: signatureBase64,
-      hash_control: hashControl,
-      created_by_id: userData.user.id,
-    })
+  // Inserir NC na tabela invoices (mesma tabela que FT, com document_number prefixado NC)
+  const insertPayload: Record<string, unknown> = {
+    school_id: schoolId,
+    student_id: originalInvoice.student_id ?? null,
+    parent_profile_id: originalInvoice.parent_profile_id ?? null,
+    series,
+    doc_number: nextNumber,
+    document_number: documentNumber,
+    invoice_date: invoiceDate,
+    invoice_issued_at: issuedAt,
+    gross_total: ncAmount,
+    currency: originalInvoice.currency ?? "AOA",
+    line_description: `NC ref. ${originalInvoice.document_number} — ${reason}`,
+    agt_signing_plaintext: plaintext,
+    digital_signature_sha1_b64: signatureBase64,
+    document_hash: documentHash,
+    previous_document_hash: previousHash || null,
+    hash_control: hashControl,
+    cliente_nome: originalInvoice.cliente_nome,
+    cliente_nif: originalInvoice.cliente_nif,
+    exemption_code: originalInvoice.exemption_code ?? null,
+    exemption_reason: originalInvoice.exemption_reason ?? null,
+    invoice_status: "N",
+    cancellation_reason: reason,
+  };
+
+  const { data: inserted, error: insertErr } = await adminClient
+    .from("invoices")
+    .insert(insertPayload)
     .select("id, document_number")
     .single();
 
-  if (insertErr) return corsJson({ error: insertErr.message }, 500);
+  if (insertErr) {
+    console.error("emit-credit-note: insert error", insertErr);
+    return corsJson({ error: insertErr.message }, 500);
+  }
 
   return corsJson({
     ok: true,
-    credit_note_id: newNC.id,
-    document_number: newNC.document_number,
+    credit_note_id: inserted.id,
+    document_number: inserted.document_number,
     source_invoice_number: originalInvoice.document_number,
   });
 });
