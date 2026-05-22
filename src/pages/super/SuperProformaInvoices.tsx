@@ -22,8 +22,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, Download, FileText, FileCheck, Trash2 } from "lucide-react";
+import { Loader2, Plus, Download, FileText, FileCheck, Trash2, Receipt } from "lucide-react";
 import { toast } from "sonner";
+import { invokeCreditNote } from "@/lib/fiscal/invokeCreditNote";
+import {
+  CREDIT_NOTE_REASON_CODES,
+  type CreditNoteReasonCode,
+  resolveCreditNoteReasonText,
+} from "@/lib/fiscal/creditNoteReasons";
+import { DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 const CONSUMER_FALLBACK_NIF = "999999999";
 
@@ -335,6 +342,47 @@ const SuperProformaInvoices = () => {
   // Pró-formas não devem ser removidas — apenas convertidas em FT ou mantidas como histórico
 
   const [convertingId, setConvertingId] = useState<string | null>(null);
+
+  // Credit Note dialog
+  const [creditNoteDialog, setCreditNoteDialog] = useState<{
+    invoiceId: string;
+    documentNumber: string;
+    grossTotal: number;
+  } | null>(null);
+  const [creditNoteReasonCode, setCreditNoteReasonCode] = useState<CreditNoteReasonCode>("data_error");
+  const [creditNoteReasonOther, setCreditNoteReasonOther] = useState("");
+  const [creditNotePartialAmount, setCreditNotePartialAmount] = useState("");
+  const [emittingCreditNote, setEmittingCreditNote] = useState(false);
+
+  const confirmEmitCreditNote = async () => {
+    if (!creditNoteDialog) return;
+    let reasonText: string;
+    try {
+      reasonText = resolveCreditNoteReasonText(creditNoteReasonCode, creditNoteReasonOther);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Motivo inválido");
+      return;
+    }
+    const partialAmount = creditNotePartialAmount.trim()
+      ? parseFloat(creditNotePartialAmount.replace(/\./g, "").replace(",", "."))
+      : undefined;
+    if (partialAmount !== undefined && (isNaN(partialAmount) || partialAmount <= 0 || partialAmount > creditNoteDialog.grossTotal)) {
+      toast.error("Valor parcial inválido.");
+      return;
+    }
+    setEmittingCreditNote(true);
+    const fx = await invokeCreditNote(creditNoteDialog.invoiceId, reasonText, partialAmount);
+    setEmittingCreditNote(false);
+    if (!fx.ok) {
+      toast.error(fx.message ?? "Não foi possível emitir a nota de crédito.");
+      return;
+    }
+    setCreditNoteDialog(null);
+    setCreditNoteReasonOther("");
+    setCreditNoteReasonCode("data_error");
+    setCreditNotePartialAmount("");
+    toast.success(`Nota de Crédito ${fx.documentNumber} emitida com sucesso!`);
+  };
 
   const convertToInvoice = async (row: ProformaRow) => {
     if (row.converted_invoice_id) {
@@ -683,6 +731,28 @@ const SuperProformaInvoices = () => {
                           ✓ Convertida
                         </span>
                       )}
+                      {row.converted_invoice_id && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const totalNum = parseFloat(row.total.replace(/\./g, "").replace(",", ".")) || 0;
+                            setCreditNoteReasonCode("data_error");
+                            setCreditNoteReasonOther("");
+                            setCreditNotePartialAmount("");
+                            setCreditNoteDialog({
+                              invoiceId: row.converted_invoice_id!,
+                              documentNumber: row.document_number,
+                              grossTotal: totalNum,
+                            });
+                          }}
+                          className="gap-1"
+                          title="Emitir Nota de Crédito para a FT convertida"
+                        >
+                          <Receipt className="w-4 h-4" />
+                          NC
+                        </Button>
+                      )}
                       {/* Botão de remover desabilitado — pró-formas não devem ser eliminadas */}
                     </div>
                   </div>
@@ -692,6 +762,98 @@ const SuperProformaInvoices = () => {
           )}
         </div>
       </div>
+
+      {/* Credit Note Dialog */}
+      <Dialog
+        open={!!creditNoteDialog}
+        onOpenChange={(o) => {
+          if (!o && !emittingCreditNote) {
+            setCreditNoteDialog(null);
+            setCreditNoteReasonOther("");
+            setCreditNoteReasonCode("data_error");
+            setCreditNotePartialAmount("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Emitir Nota de Crédito</DialogTitle>
+            <DialogDescription>
+              A NC retifica a fatura convertida a partir de {creditNoteDialog?.documentNumber ?? "—"} sem apagar o documento original. Tem numeração própria (NC EDK/X).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label>Motivo da retificação</Label>
+              <Select
+                value={creditNoteReasonCode}
+                onValueChange={(v) => setCreditNoteReasonCode(v as CreditNoteReasonCode)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CREDIT_NOTE_REASON_CODES.map((code) => (
+                    <SelectItem key={code} value={code}>
+                      {code === "data_error" ? "Erro de digitação nos dados"
+                        : code === "value_error" ? "Erro no valor cobrado"
+                        : code === "enrollment_cancellation" ? "Desistência de matrícula"
+                        : code === "commercial_discount" ? "Desconto comercial concedido"
+                        : code === "service_not_provided" ? "Serviço não prestado"
+                        : code === "duplicate_charge" ? "Cobrança duplicada"
+                        : "Outro motivo"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {creditNoteReasonCode === "other" && (
+              <div className="grid gap-2">
+                <Label>Descreva o motivo</Label>
+                <Textarea
+                  rows={3}
+                  value={creditNoteReasonOther}
+                  onChange={(e) => setCreditNoteReasonOther(e.target.value)}
+                  placeholder="Mínimo 6 caracteres…"
+                />
+              </div>
+            )}
+            <div className="grid gap-2">
+              <Label>Valor parcial (opcional)</Label>
+              <Input
+                type="text"
+                value={creditNotePartialAmount}
+                onChange={(e) => setCreditNotePartialAmount(e.target.value)}
+                placeholder="Deixe vazio para creditar o valor total"
+              />
+              <p className="text-xs text-muted-foreground">Deixe vazio para creditar o valor total da fatura</p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              A NC gera um novo documento com assinatura AGT própria. O PDF e XML referenciam explicitamente a FT retificada.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={emittingCreditNote}
+              onClick={() => setCreditNoteDialog(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              disabled={emittingCreditNote}
+              onClick={() => void confirmEmitCreditNote()}
+            >
+              {emittingCreditNote ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Receipt className="w-4 h-4 mr-2" />
+              )}
+              Emitir NC
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
