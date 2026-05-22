@@ -25,6 +25,7 @@ import {
 import { Loader2, Plus, Download, FileText, FileCheck, Trash2, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { invokeCreditNote } from "@/lib/fiscal/invokeCreditNote";
+import { downloadCreditNotePdfById } from "@/lib/fiscal/downloadCreditNotePdf";
 import {
   CREDIT_NOTE_REASON_CODES,
   type CreditNoteReasonCode,
@@ -382,6 +383,15 @@ const SuperProformaInvoices = () => {
     setCreditNoteReasonCode("data_error");
     setCreditNotePartialAmount("");
     toast.success(`Nota de Crédito ${fx.documentNumber} emitida com sucesso!`);
+
+    // Download automático do PDF da NC
+    if (fx.creditNoteId) {
+      try {
+        await downloadCreditNotePdfById(fx.creditNoteId);
+      } catch {
+        // Não bloqueia — NC já foi emitida
+      }
+    }
   };
 
   const convertToInvoice = async (row: ProformaRow) => {

@@ -50,6 +50,7 @@ import {
 import { downloadFiscalInvoicePdfById } from "@/lib/fiscal/downloadFiscalInvoicePdf";
 import { invokeCancelFiscalInvoice } from "@/lib/fiscal/invokeCancelFiscalInvoice";
 import { invokeCreditNote } from "@/lib/fiscal/invokeCreditNote";
+import { downloadCreditNotePdfById } from "@/lib/fiscal/downloadCreditNotePdf";
 import {
   FISCAL_CANCELLATION_REASON_CODES,
   type FiscalCancellationReasonCode,
@@ -3220,6 +3221,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         source: creditNoteDialog.documentNumber,
       }),
     });
+
+    // Download automático do PDF da NC
+    if (fx.creditNoteId) {
+      try {
+        await downloadCreditNotePdfById(fx.creditNoteId);
+      } catch {
+        // Não bloqueia — NC já foi emitida com sucesso
+      }
+    }
   };
 
   /** Menu FT na lista quando a cobrança está paga, o pagamento validado e existir FT. */
