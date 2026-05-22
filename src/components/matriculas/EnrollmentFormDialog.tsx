@@ -69,6 +69,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
   const [birthDate, setBirthDate] = useState("");
   const [gender, setGender] = useState<string>("");
   const [enrollmentNumber, setEnrollmentNumber] = useState("");
+  const [taxId, setTaxId] = useState("");
 
   // Post-save: prompt to create student platform access when eligible
   const [accessPrompt, setAccessPrompt] = useState<{ studentId: string; studentName: string; defaultEmail: string | null } | null>(null);
@@ -94,7 +95,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         setStudentId(""); setClassroomId(""); setYearId(selectedYearId ?? activeYear?.id ?? ""); setStatus("ACTIVE");
         setResult("EM_CURSO"); setResultNotes(""); setPublishResult(false); setAlreadyPublished(false);
         setTab("renew");
-        setFullName(""); setEmail(""); setPhone(""); setBirthDate(""); setGender(""); setEnrollmentNumber("");
+        setFullName(""); setEmail(""); setPhone(""); setBirthDate(""); setGender(""); setEnrollmentNumber(""); setTaxId("");
       }
     }
   }, [open, enrollment, years, selectedYearId]);
@@ -214,6 +215,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
           full_name: fullName.trim(),
           email: email || null,
           phone: phone || null,
+          tax_id: taxId.replace(/\D/g, "").trim() || null,
           birth_date: birthDate || null,
           gender: gender || null,
           enrollment_number: enrollmentNumber || null,
@@ -332,6 +334,10 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
                 <div>
                   <Label htmlFor="ph">{t("matriculas.form.phone")}</Label>
                   <Input id="ph" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t("matriculas.form.placeholder_phone")} />
+                </div>
+                <div>
+                  <Label htmlFor="nif">NIF</Label>
+                  <Input id="nif" value={taxId} onChange={(e) => setTaxId(e.target.value)} placeholder="0000000000" maxLength={10} />
                 </div>
                 <div>
                   <Label htmlFor="en">{t("matriculas.form.enrollment_number")}</Label>

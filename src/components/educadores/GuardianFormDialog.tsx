@@ -37,6 +37,7 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [taxId, setTaxId] = useState("");
   const [studentIds, setStudentIds] = useState<string[]>([]);
   const [studentSearch, setStudentSearch] = useState("");
   const [password, setPassword] = useState("");
@@ -48,9 +49,10 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
         setFullName(guardian.full_name ?? "");
         setEmail(guardian.email ?? "");
         setPhone(guardian.phone ?? "");
+        setTaxId("");
         setStudentIds(guardian.student_ids ?? []);
       } else {
-        setFullName(""); setEmail(""); setPhone("");
+        setFullName(""); setEmail(""); setPhone(""); setTaxId("");
         setStudentIds([]);
         setPassword("");
       }
@@ -87,6 +89,7 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
         const { error: pErr } = await supabase.from("profiles").update({
           full_name: fullName.trim(),
           phone: phone || null,
+          tax_id: taxId.replace(/\D/g, "").trim() || null,
         }).eq("id", guardian.profile_id);
         if (pErr) throw pErr;
 
@@ -117,6 +120,7 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
             full_name: fullName.trim(),
             email: email.trim(),
             phone: phone || null,
+            tax_id: taxId.replace(/\D/g, "").trim() || null,
             student_ids: studentIds,
             password,
           },
@@ -172,6 +176,10 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
           <div>
             <Label htmlFor="gp">{t("phone_label")}</Label>
             <Input id="gp" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t("phone_placeholder")} />
+          </div>
+          <div>
+            <Label htmlFor="gnif">NIF</Label>
+            <Input id="gnif" value={taxId} onChange={(e) => setTaxId(e.target.value)} placeholder="0000000000" maxLength={10} />
           </div>
           <div className="sm:col-span-2">
             <Label>{t("students_label", { count: studentIds.length })}</Label>

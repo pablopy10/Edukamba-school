@@ -50,6 +50,7 @@ export const StudentFormDialog = ({ open, onOpenChange, classrooms, student, onS
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [taxId, setTaxId] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [gender, setGender] = useState<string>("");
   const [enrollmentNumber, setEnrollmentNumber] = useState("");
@@ -62,13 +63,14 @@ export const StudentFormDialog = ({ open, onOpenChange, classrooms, student, onS
         setFullName(student.full_name ?? "");
         setEmail(student.email ?? "");
         setPhone(student.phone ?? "");
+        setTaxId("");
         setBirthDate(student.birth_date ?? "");
         setGender(student.gender ?? "");
         setEnrollmentNumber(student.enrollment_number ?? "");
         setClassroomId(student.classroom_id ?? "");
         setAvatarColor(student.avatar_color ?? "blue");
       } else {
-        setFullName(""); setEmail(""); setPhone(""); setBirthDate("");
+        setFullName(""); setEmail(""); setPhone(""); setTaxId(""); setBirthDate("");
         setGender(""); setEnrollmentNumber(""); setClassroomId(""); setAvatarColor("blue");
       }
     }
@@ -106,6 +108,7 @@ export const StudentFormDialog = ({ open, onOpenChange, classrooms, student, onS
           full_name: fullName.trim(),
           email: email || null,
           phone: phone || null,
+          tax_id: taxId.replace(/\D/g, "").trim() || null,
           birth_date: birthDate || null,
           gender: gender || null,
           enrollment_number: enrollmentNumber || null,
@@ -126,6 +129,7 @@ export const StudentFormDialog = ({ open, onOpenChange, classrooms, student, onS
           full_name: fullName.trim(),
           email: email || null,
           phone: phone || null,
+          tax_id: taxId.replace(/\D/g, "").trim() || null,
           birth_date: birthDate || null,
           gender: gender || null,
           enrollment_number: enrollmentNumber || null,
@@ -175,6 +179,10 @@ export const StudentFormDialog = ({ open, onOpenChange, classrooms, student, onS
           <div>
             <Label htmlFor="ph">{t("alunos.form.phone")}</Label>
             <Input id="ph" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t("alunos.form.placeholder_phone")} />
+          </div>
+          <div>
+            <Label htmlFor="nif">NIF</Label>
+            <Input id="nif" value={taxId} onChange={(e) => setTaxId(e.target.value)} placeholder="0000000000" maxLength={10} />
           </div>
           <div>
             <Label htmlFor="en">{t("alunos.form.enrollment_number")}</Label>
