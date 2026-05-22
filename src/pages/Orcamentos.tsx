@@ -96,11 +96,12 @@ const Orcamentos = () => {
   const [emittingCreditNote, setEmittingCreditNote] = useState(false);
 
   const reload = useCallback(async () => {
+    if (!user?.id) return;
     try {
       const { data: profile } = await supabase
         .from("profiles")
         .select("school_id")
-        .eq("id", user?.id ?? "")
+        .eq("id", user.id)
         .maybeSingle();
       const sid = effectiveSchoolIdFromProfile(profile);
       setSchoolId(sid);
