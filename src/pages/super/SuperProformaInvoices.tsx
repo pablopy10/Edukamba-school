@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, Download, FileText, FileCheck } from "lucide-react";
+import { Loader2, Plus, Download, FileText, FileCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 const CONSUMER_FALLBACK_NIF = "999999999";
