@@ -67,7 +67,7 @@ export function SaftExportCard({ schoolId }: Props) {
         customer_nif: String(r.cliente_nif ?? ""),
         gross_total: Number(r.gross_total ?? 0),
         currency: r.currency ? String(r.currency) : "AOA",
-        exemption_code: r.exemption_code ? String(r.exemption_code) : "M10",
+        exemption_code: r.exemption_code ? String(r.exemption_code) : "M11",
         exemption_reason: r.exemption_reason ? String(r.exemption_reason) : "Isenção no domínio da educação",
         line_description: r.line_description ? String(r.line_description) : undefined,
         invoice_status: r.invoice_status ? String(r.invoice_status) : "N",

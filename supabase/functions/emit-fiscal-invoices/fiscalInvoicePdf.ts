@@ -445,7 +445,7 @@ async function resolveFiscalInvoicePdfInput(
 }
 
 function formatIvaExemptionParagraph(code: string, reason: string): string {
-  return `Isenção de IVA (${code}), nos termos fiscalmente comunicados pelo emitente neste documento. ${reason}`;
+  return `Isenção de IVA (${code}), ${reason}`;
 }
 
 type JsPdfGState = { opacity: number };
@@ -703,10 +703,10 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   });
 
   let footY = blockY + grandH + pxMm(48);
-  const code = (opts.exemptionCode ?? "M10").trim();
+  const code = (opts.exemptionCode ?? "M11").trim();
   const reason =
     opts.exemptionReason?.trim() ||
-    "Isenção de IVA no domínio da educação nos termos legais aplicáveis ao estabelecimento.";
+    "nos termos do Artigo 12.º do CIVA - Isenção no domínio da educação.";
   const exemptText = formatIvaExemptionParagraph(code, reason);
   doc.setFont("helvetica", "italic");
   doc.setFontSize(pxToPt(11));

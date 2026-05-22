@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS public.invoices (
   invoice_issued_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   gross_total NUMERIC(14, 2) NOT NULL,
   currency TEXT NOT NULL DEFAULT 'AOA',
-  exemption_code TEXT NOT NULL DEFAULT 'M10',
+  exemption_code TEXT NOT NULL DEFAULT 'M11',
   exemption_reason TEXT NOT NULL DEFAULT 'Isenção no domínio da educação',
   line_description TEXT NOT NULL DEFAULT 'Propina / serviços educativos',
   agt_signing_plaintext TEXT,
