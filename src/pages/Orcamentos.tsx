@@ -113,10 +113,13 @@ const Orcamentos = () => {
     invoiceId: string;
     documentNumber: string;
     grossTotal: number;
+    /** Itens parseados da FT original (carregados ao abrir diálogo) */
+    items: Array<{ description: string; amount: number; ivaPct: string; taxLabel: string }>;
   } | null>(null);
   const [creditNoteReasonCode, setCreditNoteReasonCode] = useState<CreditNoteReasonCode>("data_error");
   const [creditNoteReasonOther, setCreditNoteReasonOther] = useState("");
-  const [creditNotePartialAmount, setCreditNotePartialAmount] = useState("");
+  /** "all" = fatura total, ou índice do item específico */
+  const [creditNoteItemSelection, setCreditNoteItemSelection] = useState<string>("all");
   const [emittingCreditNote, setEmittingCreditNote] = useState(false);
 
   const reload = useCallback(async () => {
@@ -444,13 +447,17 @@ const Orcamentos = () => {
       toast.error(e instanceof Error ? e.message : "Motivo inválido");
       return;
     }
-    const partialAmount = creditNotePartialAmount.trim()
-      ? parseFloat(creditNotePartialAmount.replace(/\s/g, "").replace(/\./g, "").replace(",", "."))
-      : undefined;
-    if (partialAmount !== undefined && (isNaN(partialAmount) || partialAmount <= 0 || partialAmount > creditNoteDialog.grossTotal)) {
-      toast.error("Valor parcial inválido.");
-      return;
+
+    // Determinar valor parcial baseado na seleção de item
+    let partialAmount: number | undefined;
+    if (creditNoteItemSelection !== "all" && creditNoteDialog.items.length > 1) {
+      const idx = parseInt(creditNoteItemSelection, 10);
+      const selectedItem = creditNoteDialog.items[idx];
+      if (selectedItem) {
+        partialAmount = selectedItem.amount;
+      }
     }
+
     setEmittingCreditNote(true);
     const fx = await invokeCreditNote(creditNoteDialog.invoiceId, reasonText, partialAmount);
     setEmittingCreditNote(false);
@@ -458,7 +465,7 @@ const Orcamentos = () => {
     setCreditNoteDialog(null);
     setCreditNoteReasonOther("");
     setCreditNoteReasonCode("data_error");
-    setCreditNotePartialAmount("");
+    setCreditNoteItemSelection("all");
     toast.success(`Nota de Crédito ${fx.documentNumber} emitida!`);
     if (fx.creditNoteId) {
       try { await downloadCreditNotePdfById(fx.creditNoteId); } catch { /* não bloqueia */ }
@@ -666,9 +673,25 @@ const Orcamentos = () => {
                         <Download className="w-4 h-4" /> FT
                       </Button>
                       {canManage && (
-                        <Button variant="outline" size="sm" onClick={() => {
+                        <Button variant="outline" size="sm" onClick={async () => {
                           const totalNum = parseFloat(row.total.replace(/\s/g, "").replace(/\./g, "").replace(",", ".")) || 0;
-                          setCreditNoteDialog({ invoiceId: row.converted_invoice_id!, documentNumber: row.document_number, grossTotal: totalNum });
+                          // Carregar itens da FT para seleção
+                          let items: Array<{ description: string; amount: number; ivaPct: string; taxLabel: string }> = [];
+                          const { data: ft } = await supabase.from("invoices").select("line_description").eq("id", row.converted_invoice_id!).maybeSingle();
+                          if (ft?.line_description) {
+                            const parts = ft.line_description.split(";").map((s: string) => s.trim()).filter(Boolean);
+                            for (const part of parts) {
+                              const m = /^(.+):(\d[\d\s.,]*):(\d+(?:_M\d+)?)$/.exec(part);
+                              if (m) {
+                                const amount = parseFloat(m[2].replace(/\s/g, "").replace(",", ".")) || 0;
+                                const ivaPct = m[3].trim();
+                                const taxLabel = ivaPct === "0" ? "Isento (M11)" : ivaPct === "0_M04" ? "Não sujeito (M04)" : `${ivaPct}%`;
+                                items.push({ description: m[1].trim(), amount, ivaPct, taxLabel });
+                              }
+                            }
+                          }
+                          setCreditNoteItemSelection("all");
+                          setCreditNoteDialog({ invoiceId: row.converted_invoice_id!, documentNumber: row.document_number, grossTotal: totalNum, items });
                         }} className="gap-1" title="Emitir Nota de Crédito">
                           <Receipt className="w-4 h-4" /> NC
                         </Button>
@@ -709,10 +732,26 @@ const Orcamentos = () => {
                 <Textarea rows={3} value={creditNoteReasonOther} onChange={(e) => setCreditNoteReasonOther(e.target.value)} placeholder="Mínimo 6 caracteres…" />
               </div>
             )}
-            <div className="grid gap-2">
-              <Label>Valor parcial (opcional)</Label>
-              <Input type="text" value={creditNotePartialAmount} onChange={(e) => setCreditNotePartialAmount(e.target.value)} placeholder="Deixe vazio para creditar o total" />
-            </div>
+            {/* Seleção de item a creditar */}
+            {creditNoteDialog && creditNoteDialog.items.length > 1 && (
+              <div className="grid gap-2">
+                <Label>Item a creditar</Label>
+                <Select value={creditNoteItemSelection} onValueChange={setCreditNoteItemSelection}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Fatura total (todos os itens)</SelectItem>
+                    {creditNoteDialog.items.map((item, idx) => (
+                      <SelectItem key={idx} value={String(idx)}>
+                        {item.description} — {new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2 }).format(item.amount)} Kz ({item.taxLabel})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Selecione "Fatura total" para anular todos os itens, ou escolha um item específico para crédito parcial.
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" disabled={emittingCreditNote} onClick={() => setCreditNoteDialog(null)}>Cancelar</Button>
