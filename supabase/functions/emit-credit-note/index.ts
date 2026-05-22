@@ -146,25 +146,22 @@ Deno.serve(async (req) => {
   }
 
   // Obter última NC da escola para numeração sequencial
+  // Usa série separada "NC-EDK" para evitar colisão com FT na constraint (school_id, series, doc_number)
   const schoolId = originalInvoice.school_id;
-  const series = "EDK";
+  const ncSeries = "NC-EDK";
 
   const { data: lastNC } = await adminClient
     .from("invoices")
-    .select("document_number, document_hash")
+    .select("document_number, document_hash, doc_number")
     .eq("school_id", schoolId)
-    .like("document_number", `NC ${series}/%`)
+    .eq("series", ncSeries)
     .order("doc_number", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  let nextNumber = 1;
-  if (lastNC?.document_number) {
-    const match = /NC\s+\w+\/(\d+)$/i.exec(lastNC.document_number);
-    if (match) nextNumber = parseInt(match[1], 10) + 1;
-  }
+  const nextNumber = (lastNC?.doc_number ?? 0) + 1;
 
-  const documentNumber = `NC ${series}/${nextNumber}`;
+  const documentNumber = `NC EDK/${nextNumber}`;
   const invoiceDate = formatInvoiceDate(new Date());
   const issuedAt = new Date().toISOString();
   const totalStr = formatTotalForSigning(ncAmount);
@@ -182,12 +179,12 @@ Deno.serve(async (req) => {
   // Hash control
   const hashControl = (((Math.max(nextNumber, 1) - 1) % 10) + 1).toString();
 
-  // Inserir NC na tabela invoices (mesma tabela que FT, com document_number prefixado NC)
+  // Inserir NC na tabela invoices com série separada NC-EDK
   const insertPayload: Record<string, unknown> = {
     school_id: schoolId,
     student_id: originalInvoice.student_id ?? null,
     parent_profile_id: originalInvoice.parent_profile_id ?? null,
-    series,
+    series: ncSeries,
     doc_number: nextNumber,
     document_number: documentNumber,
     invoice_date: invoiceDate,
