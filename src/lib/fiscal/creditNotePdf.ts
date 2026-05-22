@@ -425,13 +425,13 @@ export function buildCreditNotePdf(opts: CreditNotePdfInput): jsPDF {
   doc.rect(totalsX, blockY, totalsW, grandH, "F");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(pxToPt(14));
+  doc.setFontSize(pxToPt(11));
   doc.setTextColor(255, 255, 255);
-  doc.text("TOTAL A CREDITAR", totalsX + pxMm(10), blockY + grandH / 2 + pxMm(2), {
+  doc.text("TOTAL A CREDITAR", totalsX + pxMm(10), blockY + grandH * 0.35, {
     baseline: "middle",
   });
-  doc.text(opts.grossTotalFmt, totalsX + totalsW - pxMm(10), blockY + grandH / 2 + pxMm(2), {
-    align: "right",
+  doc.setFontSize(pxToPt(16));
+  doc.text(opts.grossTotalFmt, totalsX + pxMm(10), blockY + grandH * 0.7, {
     baseline: "middle",
   });
 

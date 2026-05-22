@@ -7,7 +7,9 @@ const fmtAOA = (n: number) =>
 
 /**
  * Gera e descarrega o PDF da Nota de Crédito a partir do ID na tabela invoices.
- * Carrega os dados da NC e da FT original para preencher o campo "Documento Retificado".
+ * Carrega os dados da NC e da FT original para preencher:
+ * - "Documento Retificado" (referência obrigatória AGT)
+ * - Descrição do item (deve ser idêntica ao serviço da FT, não o motivo)
  */
 export async function downloadCreditNotePdfById(creditNoteId: string): Promise<void> {
   const id = creditNoteId?.trim();
@@ -26,12 +28,26 @@ export async function downloadCreditNotePdfById(creditNoteId: string): Promise<v
   const lineDesc = (nc as Record<string, unknown>).line_description as string | null;
   let sourceInvoiceNumber = "—";
   let reason = (nc as Record<string, unknown>).cancellation_reason as string || "Retificação";
+  let originalServiceDescription = "Serviços educativos";
   
   if (lineDesc) {
     const refMatch = /NC ref\.\s*(FT\s+\S+\/\d+)\s*—\s*(.+)/.exec(lineDesc);
     if (refMatch) {
       sourceInvoiceNumber = refMatch[1];
       reason = refMatch[2];
+    }
+  }
+
+  // Carregar FT original para obter a descrição do serviço (regra AGT: item da NC = item da FT)
+  if (sourceInvoiceNumber !== "—") {
+    const { data: originalFT } = await supabase
+      .from("invoices")
+      .select("line_description")
+      .eq("document_number", sourceInvoiceNumber)
+      .maybeSingle();
+    
+    if (originalFT?.line_description?.trim()) {
+      originalServiceDescription = originalFT.line_description.trim();
     }
   }
 
@@ -79,7 +95,7 @@ export async function downloadCreditNotePdfById(creditNoteId: string): Promise<v
     studentName,
     studentClassroom,
     lineItems: [{
-      description: reason,
+      description: originalServiceDescription,
       quantity: 1,
       unitAmountFmt: totalFmt,
       totalAmountFmt: totalFmt,
