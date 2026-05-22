@@ -224,21 +224,23 @@ const Orcamentos = () => {
   const getNextDocNumber = async (): Promise<string> => {
     const year = new Date().getFullYear();
     const prefix = `PP ${year}/`;
-    // Buscar o último documento com este prefixo para determinar o próximo número
+    // Buscar todos os documentos com este prefixo e encontrar o número máximo
     const { data } = await (supabase
       .from("proforma_invoices" as any)
       .select("document_number")
-      .like("document_number", `${prefix}%`)
-      .order("created_at", { ascending: false })
-      .limit(1) as any);
+      .like("document_number", `${prefix}%`) as any);
     
-    let nextSeq = 1;
-    if (data && data.length > 0) {
-      const last = data[0].document_number as string;
-      const match = /\/(\d+)$/.exec(last);
-      if (match) nextSeq = parseInt(match[1], 10) + 1;
+    let maxSeq = 0;
+    if (data && Array.isArray(data)) {
+      for (const row of data) {
+        const match = /\/(\d+)$/.exec(row.document_number as string);
+        if (match) {
+          const n = parseInt(match[1], 10);
+          if (n > maxSeq) maxSeq = n;
+        }
+      }
     }
-    return `${prefix}${nextSeq}`;
+    return `${prefix}${maxSeq + 1}`;
   };
 
   const handleAddItem = () => {
