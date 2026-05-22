@@ -21,6 +21,8 @@ export async function invokeCreditNote(
   invoiceId: string,
   reason: string,
   partialAmount?: number,
+  /** Descrição do item seleccionado para crédito (ex: "Lápis:5000:14") */
+  selectedItemDesc?: string,
 ): Promise<{ ok: boolean; message?: string; documentNumber?: string; creditNoteId?: string }> {
   const id = invoiceId?.trim();
   const reasonText = reason?.trim();
@@ -35,6 +37,7 @@ export async function invokeCreditNote(
       invoice_id: id, 
       reason: reasonText,
       partial_amount: partialAmount ?? null,
+      selected_item: selectedItemDesc ?? null,
     },
   });
 

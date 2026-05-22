@@ -55,12 +55,21 @@ export async function downloadCreditNotePdfById(creditNoteId: string): Promise<v
   const lineDesc = (nc as Record<string, unknown>).line_description as string | null;
   let sourceInvoiceNumber = "—";
   let reason = (nc as Record<string, unknown>).cancellation_reason as string || "Retificação";
+  let selectedItemRaw: string | null = null;
 
   if (lineDesc) {
+    // Formato: "NC ref. FT EDK/X — motivo [Desc:Valor:IvaPct]" ou sem [...]
     const refMatch = /NC ref\.\s*(FT\s+\S+\/\d+)\s*—\s*(.+)/.exec(lineDesc);
     if (refMatch) {
       sourceInvoiceNumber = refMatch[1];
-      reason = refMatch[2];
+      let reasonPart = refMatch[2];
+      // Extrair item seleccionado entre [...]
+      const itemMatch = /^(.+?)\s*\[(.+)\]$/.exec(reasonPart);
+      if (itemMatch) {
+        reasonPart = itemMatch[1].trim();
+        selectedItemRaw = itemMatch[2].trim();
+      }
+      reason = reasonPart;
     }
   }
 
@@ -95,7 +104,16 @@ export async function downloadCreditNotePdfById(creditNoteId: string): Promise<v
   // Carregar FT original para obter itens com taxas
   let creditItems: ParsedItem[] = [];
 
-  if (sourceInvoiceNumber !== "—") {
+  // Se temos o item seleccionado explicitamente guardado na NC, usar directamente
+  if (selectedItemRaw) {
+    const parsed = parseLineDescription(selectedItemRaw);
+    if (parsed.length > 0) {
+      creditItems = parsed;
+    }
+  }
+
+  // Senão, resolver a partir da FT original
+  if (creditItems.length === 0 && sourceInvoiceNumber !== "—") {
     const { data: originalFT } = await supabase
       .from("invoices")
       .select("line_description, gross_total")

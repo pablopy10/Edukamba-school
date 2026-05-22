@@ -466,8 +466,18 @@ const Orcamentos = () => {
       }
     }
 
+    // Construir descrição do item seleccionado para a Edge Function
+    let selectedItemDesc: string | undefined;
+    if (creditNoteItemSelection !== "all" && creditNoteDialog.items.length > 1) {
+      const idx = parseInt(creditNoteItemSelection, 10);
+      const item = creditNoteDialog.items[idx];
+      if (item) {
+        selectedItemDesc = `${item.description}:${item.amount}:${item.ivaPct}`;
+      }
+    }
+
     setEmittingCreditNote(true);
-    const fx = await invokeCreditNote(creditNoteDialog.invoiceId, reasonText, partialAmount);
+    const fx = await invokeCreditNote(creditNoteDialog.invoiceId, reasonText, partialAmount, selectedItemDesc);
     setEmittingCreditNote(false);
     if (!fx.ok) { toast.error(fx.message ?? "Erro ao emitir NC."); return; }
     setCreditNoteDialog(null);

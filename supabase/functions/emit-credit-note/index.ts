@@ -95,6 +95,7 @@ Deno.serve(async (req) => {
   const invoice_id = (body as { invoice_id?: unknown }).invoice_id;
   const reason = normalizeReason((body as { reason?: unknown }).reason);
   const partial_amount = (body as { partial_amount?: unknown }).partial_amount;
+  const selected_item = (body as { selected_item?: unknown }).selected_item;
 
   if (typeof invoice_id !== "string" || !invoice_id.trim()) {
     return corsJson({ error: "invoice_id obrigatório" }, 400);
@@ -191,7 +192,9 @@ Deno.serve(async (req) => {
     invoice_issued_at: issuedAt,
     gross_total: ncAmount,
     currency: originalInvoice.currency ?? "AOA",
-    line_description: `NC ref. ${originalInvoice.document_number} — ${reason}`,
+    line_description: typeof selected_item === "string" && selected_item.trim()
+      ? `NC ref. ${originalInvoice.document_number} — ${reason} [${selected_item.trim()}]`
+      : `NC ref. ${originalInvoice.document_number} — ${reason}`,
     agt_signing_plaintext: plaintext,
     digital_signature_sha1_b64: signatureBase64,
     document_hash: documentHash,
