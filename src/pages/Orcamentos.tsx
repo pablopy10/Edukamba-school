@@ -410,10 +410,17 @@ const Orcamentos = () => {
         body: { proforma_id: row.id, school_id: schoolId },
       });
       if (error) throw error;
-      const result = data as { ok?: boolean; error?: string; document_number?: string };
+      const result = data as { ok?: boolean; error?: string; document_number?: string; invoice_id?: string };
       if (!result?.ok && result?.error) { toast.error(result.error); return; }
       toast.success(`Fatura ${result.document_number} gerada!`);
       reload();
+      // Download automático do PDF da FT gerada
+      if (result.invoice_id) {
+        try {
+          const { downloadFiscalInvoicePdfById } = await import("@/lib/fiscal/downloadFiscalInvoicePdf");
+          await downloadFiscalInvoicePdfById(result.invoice_id);
+        } catch { /* não bloqueia */ }
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao converter");
     } finally {
