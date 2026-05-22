@@ -49,11 +49,17 @@ import {
 } from "@/lib/fiscal/invokeEmitFiscalInvoices";
 import { downloadFiscalInvoicePdfById } from "@/lib/fiscal/downloadFiscalInvoicePdf";
 import { invokeCancelFiscalInvoice } from "@/lib/fiscal/invokeCancelFiscalInvoice";
+import { invokeCreditNote } from "@/lib/fiscal/invokeCreditNote";
 import {
   FISCAL_CANCELLATION_REASON_CODES,
   type FiscalCancellationReasonCode,
   resolveCancellationReasonText,
 } from "@/lib/fiscal/cancellationReasons";
+import {
+  CREDIT_NOTE_REASON_CODES,
+  type CreditNoteReasonCode,
+  resolveCreditNoteReasonText,
+} from "@/lib/fiscal/creditNoteReasons";
 import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 import { uploadFileToR2, R2UploadError } from "@/lib/r2/uploadFileToR2";
 import { openFileUrl } from "@/lib/r2/resolveFileUrl";
@@ -538,6 +544,18 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   const [cancelReasonCode, setCancelReasonCode] = useState<FiscalCancellationReasonCode>("data_error_nif");
   const [cancelReasonOther, setCancelReasonOther] = useState("");
   const [cancellingInvoiceId, setCancellingInvoiceId] = useState<string | null>(null);
+
+  // Credit Note dialog states
+  const [creditNoteDialog, setCreditNoteDialog] = useState<{
+    invoiceId: string;
+    documentNumber: string;
+    paymentId: string;
+    grossTotal: number;
+  } | null>(null);
+  const [creditNoteReasonCode, setCreditNoteReasonCode] = useState<CreditNoteReasonCode>("data_error");
+  const [creditNoteReasonOther, setCreditNoteReasonOther] = useState("");
+  const [creditNotePartialAmount, setCreditNotePartialAmount] = useState("");
+  const [emittingCreditNoteId, setEmittingCreditNoteId] = useState<string | null>(null);
 
   // Staff "registar pagamento" dialog (works for both tuition and activity fees)
   const [recordDialog, setRecordDialog] = useState<
@@ -3153,6 +3171,57 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     });
   };
 
+  const confirmEmitCreditNote = async () => {
+    if (!creditNoteDialog) return;
+    let reasonText: string;
+    try {
+      reasonText = resolveCreditNoteReasonText(creditNoteReasonCode, creditNoteReasonOther);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: fiscalT("credit_note_error_title"), description: msg, variant: "destructive" });
+      return;
+    }
+    
+    const partialAmount = creditNotePartialAmount.trim() 
+      ? parseFloat(creditNotePartialAmount.replace(/\./g, "").replace(",", "."))
+      : undefined;
+    
+    if (partialAmount !== undefined && (isNaN(partialAmount) || partialAmount <= 0 || partialAmount > creditNoteDialog.grossTotal)) {
+      toast({ 
+        title: fiscalT("credit_note_error_title"), 
+        description: "Valor parcial inválido. Deve ser maior que zero e menor que o total da fatura.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    setEmittingCreditNoteId(creditNoteDialog.invoiceId);
+    const fx = await invokeCreditNote(creditNoteDialog.invoiceId, reasonText, partialAmount);
+    setEmittingCreditNoteId(null);
+    
+    if (!fx.ok) {
+      toast({
+        title: fiscalT("credit_note_error_title"),
+        description: fx.message ?? fiscalT("credit_note_error_generic"),
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setCreditNoteDialog(null);
+    setCreditNoteReasonOther("");
+    setCreditNoteReasonCode("data_error");
+    setCreditNotePartialAmount("");
+    
+    toast({
+      title: fiscalT("credit_note_success_title"),
+      description: fiscalT("credit_note_success_desc", {
+        document: fx.documentNumber ?? "NC",
+        source: creditNoteDialog.documentNumber,
+      }),
+    });
+  };
+
   /** Menu FT na lista quando a cobrança está paga, o pagamento validado e existir FT. */
   const invoiceActionsForValidatedPayment = (feeMarkedPaid: boolean, pay?: PaymentListRow) => {
     if (!feeMarkedPaid || !pay || pay.status !== "validado" || !pay.id?.trim()) return null;
@@ -3216,9 +3285,24 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                   <Ban className="h-4 w-4" />
                   {fiscalT("action_cancel_invoice")}
                 </DropdownMenuItem>
-                <DropdownMenuItem className="gap-2 opacity-50" disabled>
+                <DropdownMenuItem
+                  className="gap-2"
+                  disabled={isCancelled}
+                  onClick={() => {
+                    if (isCancelled) return;
+                    setCreditNoteReasonCode("data_error");
+                    setCreditNoteReasonOther("");
+                    setCreditNotePartialAmount("");
+                    setCreditNoteDialog({
+                      invoiceId: inv.invoiceId,
+                      documentNumber: inv.documentNumber,
+                      paymentId: pay.id,
+                      grossTotal: pay.amount_paid || 0,
+                    });
+                  }}
+                >
                   <Receipt className="h-4 w-4" />
-                  {fiscalT("action_credit_note_soon")}
+                  {fiscalT("action_credit_note")}
                 </DropdownMenuItem>
               </>
             )}
@@ -6096,6 +6180,94 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 <Ban className="h-4 w-4 mr-2" />
               )}
               {fiscalT("cancel_dialog_confirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CREDIT NOTE DIALOG */}
+      <Dialog
+        open={!!creditNoteDialog}
+        onOpenChange={(o) => {
+          if (!o && !emittingCreditNoteId) {
+            setCreditNoteDialog(null);
+            setCreditNoteReasonOther("");
+            setCreditNoteReasonCode("data_error");
+            setCreditNotePartialAmount("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{fiscalT("credit_note_dialog_title")}</DialogTitle>
+            <DialogDescription>
+              {creditNoteDialog?.documentNumber
+                ? fiscalT("credit_note_dialog_desc", { document: creditNoteDialog.documentNumber })
+                : fiscalT("credit_note_dialog_desc_generic")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label>{fiscalT("credit_note_reason_label")}</Label>
+              <Select
+                value={creditNoteReasonCode}
+                onValueChange={(v) => setCreditNoteReasonCode(v as CreditNoteReasonCode)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CREDIT_NOTE_REASON_CODES.map((code) => (
+                    <SelectItem key={code} value={code}>
+                      {fiscalT(`credit_note_reason_${code}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {creditNoteReasonCode === "other" && (
+              <div className="grid gap-2">
+                <Label htmlFor="credit-note-reason-other">{fiscalT("credit_note_reason_other_label")}</Label>
+                <Textarea
+                  id="credit-note-reason-other"
+                  rows={3}
+                  value={creditNoteReasonOther}
+                  onChange={(e) => setCreditNoteReasonOther(e.target.value)}
+                  placeholder={fiscalT("credit_note_reason_other_placeholder")}
+                />
+              </div>
+            )}
+            <div className="grid gap-2">
+              <Label htmlFor="credit-note-partial">{fiscalT("credit_note_partial_label")}</Label>
+              <Input
+                id="credit-note-partial"
+                type="text"
+                value={creditNotePartialAmount}
+                onChange={(e) => setCreditNotePartialAmount(e.target.value)}
+                placeholder={creditNoteDialog ? fmtAOA(creditNoteDialog.grossTotal) : ""}
+              />
+              <p className="text-xs text-muted-foreground">{fiscalT("credit_note_partial_hint")}</p>
+            </div>
+            <p className="text-xs text-muted-foreground">{fiscalT("credit_note_dialog_hint")}</p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={!!emittingCreditNoteId}
+              onClick={() => setCreditNoteDialog(null)}
+            >
+              {fiscalT("credit_note_dialog_abort")}
+            </Button>
+            <Button
+              disabled={!!emittingCreditNoteId}
+              onClick={() => void confirmEmitCreditNote()}
+            >
+              {emittingCreditNoteId ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Receipt className="h-4 w-4 mr-2" />
+              )}
+              {fiscalT("credit_note_dialog_confirm")}
             </Button>
           </DialogFooter>
         </DialogContent>

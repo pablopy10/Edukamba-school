@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, Download, FileText, Trash2, FileCheck } from "lucide-react";
+import { Loader2, Plus, Download, FileText, FileCheck } from "lucide-react";
 import { toast } from "sonner";
 
 const CONSUMER_FALLBACK_NIF = "999999999";
@@ -332,21 +332,7 @@ const SuperProformaInvoices = () => {
     }
   };
 
-  const deleteProforma = async (id: string, docNumber: string) => {
-    if (!confirm(`Tem a certeza que deseja eliminar ${docNumber}?`)) return;
-
-    try {
-      const { error } = await supabase
-        .from("proforma_invoices")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
-      toast.success("Pro-forma eliminada");
-      reload();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao eliminar");
-    }
-  };
+  // Pró-formas não devem ser removidas — apenas convertidas em FT ou mantidas como histórico
 
   const [convertingId, setConvertingId] = useState<string | null>(null);
 
@@ -697,14 +683,7 @@ const SuperProformaInvoices = () => {
                           ✓ Convertida
                         </span>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => deleteProforma(row.id, row.document_number)}
-                        className="text-red-600 hover:bg-red-50"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      {/* Botão de remover desabilitado — pró-formas não devem ser eliminadas */}
                     </div>
                   </div>
                 </Card>
