@@ -1,5 +1,5 @@
 import type { ElementType } from "react";
-import { GraduationCap, Home, Users, Receipt, BookOpen, Presentation, Contact, PersonStanding, UsersRound, CalendarDays, BookMarked, Table2, CalendarCheck, Smartphone, BookOpenCheck, BarChart3, Clock, UserCircle, Settings, Package, LogOut, ChevronRight, Sparkles, TrendingUp, Bus, FolderOpen, Landmark, Utensils, Shield } from "lucide-react";
+import { GraduationCap, Home, Users, Receipt, BookOpen, Presentation, Contact, PersonStanding, UsersRound, CalendarDays, BookMarked, Table2, CalendarCheck, Smartphone, BookOpenCheck, BarChart3, Clock, UserCircle, Settings, Package, LogOut, ChevronRight, Sparkles, TrendingUp, Bus, FolderOpen, Landmark, Utensils, Shield, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useModules, ModuleKey } from "@/context/ModulesContext";
@@ -42,6 +42,7 @@ const menu: NavItem[] = [
   { icon: BookOpenCheck, labelKey: "nav.materials", to: "/material", moduleKey: "material" },
   { icon: FolderOpen, labelKey: "nav.documents", to: "/documentos", moduleKey: "documentos" },
   { icon: TrendingUp, labelKey: "nav.finance", to: "/financas", moduleKey: "financas" },
+  { icon: FileText, labelKey: "nav.quotes", to: "/orcamentos", moduleKey: "financas" },
   { icon: BarChart3, labelKey: "nav.reports", to: "/relatorios", moduleKey: "relatorios" },
   { icon: Clock, labelKey: "nav.timesheet", to: "/timesheet", moduleKey: "timesheet" },
 ];

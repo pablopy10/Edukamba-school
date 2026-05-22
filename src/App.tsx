@@ -56,6 +56,7 @@ import SuperSchools from "@/pages/super/SuperSchools.tsx";
 import SuperCrm from "@/pages/super/SuperCrm.tsx";
 import SuperProformaInvoices from "@/pages/super/SuperProformaInvoices.tsx";
 import SuperAudit from "@/pages/super/SuperAudit.tsx";
+import Orcamentos from "./pages/Orcamentos.tsx";
 import { ModulesProvider } from "./context/ModulesContext";
 import { AcademicYearProvider } from "./context/AcademicYearContext";
 import { UserRoleProvider, useUserRole } from "./hooks/useUserRole";
@@ -185,6 +186,7 @@ const App = () => (
                         <Route path="/refeicoes" element={<Refeicoes />} />
                         <Route path="/documentos" element={<Documentos />} />
                         <Route path="/documentos/assinar/:requestId" element={<DocumentSign />} />
+                        <Route path="/orcamentos" element={<Orcamentos />} />
                         <Route path="*" element={<NotFound />} />
                       </Route>
                     </Route>
