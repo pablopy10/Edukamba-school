@@ -37,6 +37,23 @@ import { useUserRole } from "@/hooks/useUserRole";
 
 const CONSUMER_FALLBACK_NIF = "999999999";
 
+type ClientType = "encarregado" | "aluno" | "empresa" | "outro";
+
+const IVA_OPTIONS = [
+  { value: "0", label: "Isento (M11)", code: "M11", reason: "Isenção no domínio da educação, Art. 12.º CIVA" },
+  { value: "14", label: "14%", code: "", reason: "" },
+  { value: "5", label: "5%", code: "", reason: "" },
+  { value: "0_M04", label: "Não sujeito (M04)", code: "M04", reason: "Não sujeição nos termos do Art. 4.º CIVA" },
+] as const;
+
+type FormItem = {
+  description: string;
+  quantity: number;
+  unitAmount: string;
+  totalAmount: string;
+  ivaPct: string; // "0", "14", "5", "0_M04"
+};
+
 type ProformaRow = {
   id: string;
   document_number: string;
@@ -46,7 +63,7 @@ type ProformaRow = {
   client_lines: string[];
   client_nif: string | null;
   client_email: string | null;
-  items: Array<{ description: string; quantity: number; unit_amount: string; total_amount: string }>;
+  items: Array<{ description: string; quantity: number; unit_amount: string; total_amount: string; iva_pct?: string }>;
   subtotal: string;
   iva_percentage: number;
   iva_amount: string;
@@ -60,6 +77,8 @@ type ProformaRow = {
   school_id: string | null;
 };
 
+type PersonOption = { id: string; full_name: string; tax_id?: string | null };
+
 const Orcamentos = () => {
   const { user } = useAuth();
   const { role } = useUserRole();
@@ -71,6 +90,12 @@ const Orcamentos = () => {
   const [schoolNif, setSchoolNif] = useState<string | null>(null);
   const [schoolAddress, setSchoolAddress] = useState<string | null>(null);
 
+  // Client type
+  const [clientType, setClientType] = useState<ClientType>("encarregado");
+  const [guardians, setGuardians] = useState<PersonOption[]>([]);
+  const [students, setStudents] = useState<PersonOption[]>([]);
+  const [selectedPersonId, setSelectedPersonId] = useState("");
+
   const [form, setForm] = useState({
     clientName: "",
     clientLines: "",
@@ -78,9 +103,8 @@ const Orcamentos = () => {
     clientEmail: "",
     issueDate: new Date().toISOString().slice(0, 10),
     validityDays: "30",
-    items: [{ description: "", quantity: 1, unitAmount: "", totalAmount: "" }],
+    items: [{ description: "", quantity: 1, unitAmount: "", totalAmount: "", ivaPct: "0" }] as FormItem[],
     currency: "AOA",
-    ivaPct: "0",
     footerNote: "",
   });
 
@@ -106,11 +130,7 @@ const Orcamentos = () => {
       const sid = effectiveSchoolIdFromProfile(profile);
       setSchoolId(sid);
 
-      // Escola obrigatória — sem school_id não mostra nada
-      if (!sid) {
-        setRows([]);
-        return;
-      }
+      if (!sid) { setRows([]); return; }
 
       const { data: sch } = await supabase
         .from("schools")
@@ -123,19 +143,20 @@ const Orcamentos = () => {
         setSchoolAddress(sch.address || null);
       }
 
-      // Tentar filtrar por school_id; se a coluna não existir, mostrar vazio
-      const { data, error } = await supabase
-        .from("proforma_invoices")
+      // Load guardians and students for the school
+      const guardiansRes = await supabase.from("profiles").select("id, full_name, tax_id").eq("school_id", sid).in("role", ["PARENT"]);
+      const studentsRes = await supabase.from("students").select("id, full_name, tax_id").eq("school_id", sid);
+      setGuardians((guardiansRes.data ?? []) as PersonOption[]);
+      setStudents((studentsRes.data ?? []) as PersonOption[]);
+
+      const { data, error } = await (supabase
+        .from("proforma_invoices" as any)
         .select("*")
         .eq("school_id", sid)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }) as any);
 
       if (error) {
-        // Se erro é por coluna inexistente, mostrar lista vazia
-        if (error.message?.includes("school_id") || error.code === "PGRST204") {
-          setRows([]);
-          return;
-        }
+        if (error.message?.includes("school_id")) { setRows([]); return; }
         throw error;
       }
       setRows((data ?? []) as unknown as ProformaRow[]);
@@ -146,30 +167,71 @@ const Orcamentos = () => {
 
   useEffect(() => { void reload(); }, [reload]);
 
+  // When client type or person changes, update name/nif
+  const handleClientTypeChange = (type: ClientType) => {
+    setClientType(type);
+    setSelectedPersonId("");
+    if (type === "empresa" || type === "outro") {
+      setForm((f) => ({ ...f, clientName: "", clientNif: "" }));
+    }
+  };
+
+  const handlePersonSelect = (personId: string) => {
+    setSelectedPersonId(personId);
+    const list = clientType === "encarregado" ? guardians : students;
+    const person = list.find((p) => p.id === personId);
+    if (person) {
+      setForm((f) => ({
+        ...f,
+        clientName: person.full_name || "",
+        clientNif: person.tax_id?.replace(/\D/g, "") || "",
+      }));
+    }
+  };
+
   const currencyLabel = form.currency === "AOA" ? "AKZ" : form.currency;
 
+  // Calculate totals with per-item IVA
   const totalsCalc = useMemo(() => {
     let subtotal = 0;
-    for (const item of form.items) subtotal += parseFloat(item.totalAmount) || 0;
-    const ivaPct = parseFloat(form.ivaPct) || 0;
-    const iva = (subtotal * ivaPct) / 100;
-    const total = subtotal + iva;
+    let totalIva = 0;
+    const taxGroups: Record<string, { base: number; iva: number; pct: number; code: string; reason: string }> = {};
+
+    for (const item of form.items) {
+      const itemTotal = parseFloat(item.totalAmount) || 0;
+      subtotal += itemTotal;
+
+      const ivaOpt = IVA_OPTIONS.find((o) => o.value === item.ivaPct) ?? IVA_OPTIONS[0];
+      const pct = item.ivaPct === "0_M04" ? 0 : (parseFloat(item.ivaPct) || 0);
+      const ivaAmount = (itemTotal * pct) / 100;
+      totalIva += ivaAmount;
+
+      const groupKey = item.ivaPct;
+      if (!taxGroups[groupKey]) {
+        taxGroups[groupKey] = { base: 0, iva: 0, pct, code: ivaOpt.code, reason: ivaOpt.reason };
+      }
+      taxGroups[groupKey].base += itemTotal;
+      taxGroups[groupKey].iva += ivaAmount;
+    }
+
+    const total = subtotal + totalIva;
     const fmt = (n: number) =>
       new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-    return { subtotal: fmt(subtotal), iva: fmt(iva), total: fmt(total) };
-  }, [form.items, form.ivaPct]);
+
+    return { subtotal: fmt(subtotal), iva: fmt(totalIva), total: fmt(total), totalNum: total, taxGroups };
+  }, [form.items]);
 
   const getNextDocNumber = async (): Promise<string> => {
     const year = new Date().getFullYear();
-    const { count } = await supabase
-      .from("proforma_invoices")
+    const { count } = await (supabase
+      .from("proforma_invoices" as any)
       .select("id", { count: "exact", head: true })
-      .like("document_number", `PP ${year}/%`);
+      .like("document_number", `PP ${year}/%`) as any);
     return `PP ${year}/${(count ?? 0) + 1}`;
   };
 
   const handleAddItem = () => {
-    setForm({ ...form, items: [...form.items, { description: "", quantity: 1, unitAmount: "", totalAmount: "" }] });
+    setForm({ ...form, items: [...form.items, { description: "", quantity: 1, unitAmount: "", totalAmount: "", ivaPct: "0" }] });
   };
   const handleRemoveItem = (idx: number) => {
     setForm({ ...form, items: form.items.filter((_, i) => i !== idx) });
@@ -188,12 +250,7 @@ const Orcamentos = () => {
     try {
       const docNumber = await getNextDocNumber();
       const resolvedNif = form.clientNif.trim() || CONSUMER_FALLBACK_NIF;
-
-      let subtotalNum = 0;
-      for (const item of form.items) subtotalNum += parseFloat(item.totalAmount) || 0;
-      const ivaPct = parseFloat(form.ivaPct) || 0;
-      const totalNum = subtotalNum + (subtotalNum * ivaPct) / 100;
-      const totalForSigning = (Math.round((totalNum + Number.EPSILON) * 100) / 100).toFixed(2);
+      const totalForSigning = (Math.round((totalsCalc.totalNum + Number.EPSILON) * 100) / 100).toFixed(2);
 
       let hashExtract: string | null = null;
       try {
@@ -202,6 +259,16 @@ const Orcamentos = () => {
         });
         if (!signError && signData?.hash_control) hashExtract = String(signData.hash_control).slice(0, 4).toUpperCase();
       } catch { /* continua sem hash */ }
+
+      // Calcular IVA global (para compatibilidade com campo iva_percentage existente)
+      let subtotalNum = 0;
+      let totalIvaNum = 0;
+      for (const item of form.items) {
+        const t = parseFloat(item.totalAmount) || 0;
+        subtotalNum += t;
+        const pct = item.ivaPct === "0_M04" ? 0 : (parseFloat(item.ivaPct) || 0);
+        totalIvaNum += (t * pct) / 100;
+      }
 
       const pdfInput: ProformaInvoicePdfInput = {
         documentNumber: docNumber,
@@ -223,15 +290,15 @@ const Orcamentos = () => {
           totalAmountFmt: it.totalAmount,
         })),
         subtotalFmt: totalsCalc.subtotal,
-        ivaPercentage: ivaPct,
+        ivaPercentage: 0, // misto — resumo no footer
         ivaFmt: totalsCalc.iva,
         totalFmt: totalsCalc.total,
         currencyLabel,
         footerNote: form.footerNote.trim() || null,
       };
 
-      const { error: insertError } = await supabase
-        .from("proforma_invoices")
+      const { error: insertError } = await (supabase
+        .from("proforma_invoices" as any)
         .insert({
           document_number: docNumber,
           issue_date: form.issueDate,
@@ -245,9 +312,10 @@ const Orcamentos = () => {
             quantity: parseInt(String(it.quantity)) || 1,
             unit_amount: it.unitAmount,
             total_amount: it.totalAmount,
+            iva_pct: it.ivaPct,
           })),
           subtotal: totalsCalc.subtotal,
-          iva_percentage: ivaPct,
+          iva_percentage: 0,
           iva_amount: totalsCalc.iva,
           total: totalsCalc.total,
           currency: form.currency,
@@ -255,7 +323,7 @@ const Orcamentos = () => {
           hash_control: hashExtract,
           school_id: schoolId,
           created_by_id: user?.id,
-        });
+        }) as any);
 
       if (insertError) throw insertError;
 
@@ -267,9 +335,11 @@ const Orcamentos = () => {
       setForm({
         clientName: "", clientLines: "", clientNif: "", clientEmail: "",
         issueDate: new Date().toISOString().slice(0, 10), validityDays: "30",
-        items: [{ description: "", quantity: 1, unitAmount: "", totalAmount: "" }],
-        currency: "AOA", ivaPct: "0", footerNote: "",
+        items: [{ description: "", quantity: 1, unitAmount: "", totalAmount: "", ivaPct: "0" }],
+        currency: "AOA", footerNote: "",
       });
+      setClientType("encarregado");
+      setSelectedPersonId("");
       reload();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao criar orçamento");
@@ -377,24 +447,60 @@ const Orcamentos = () => {
             <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Novo Orçamento / Fatura Pró-Forma</DialogTitle>
+                <DialogDescription>Crie um orçamento com múltiplas taxas de IVA por item.</DialogDescription>
               </DialogHeader>
+
+              {/* Client Type Selection */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>Nome do Cliente *</Label>
-                  <Input value={form.clientName} onChange={(e) => setForm({ ...form, clientName: e.target.value })} placeholder="Ex: Encarregado / Empresa" />
+                  <Label>Tipo de Cliente</Label>
+                  <Select value={clientType} onValueChange={(v) => handleClientTypeChange(v as ClientType)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="encarregado">Encarregado</SelectItem>
+                      <SelectItem value="aluno">Aluno</SelectItem>
+                      <SelectItem value="empresa">Empresa</SelectItem>
+                      <SelectItem value="outro">Outro</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+
+                {(clientType === "encarregado" || clientType === "aluno") && (
+                  <div>
+                    <Label>{clientType === "encarregado" ? "Encarregado" : "Aluno"}</Label>
+                    <Select value={selectedPersonId} onValueChange={handlePersonSelect}>
+                      <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                      <SelectContent>
+                        {(clientType === "encarregado" ? guardians : students).map((p) => (
+                          <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {(clientType === "empresa" || clientType === "outro") && (
+                  <div>
+                    <Label>Nome *</Label>
+                    <Input value={form.clientName} onChange={(e) => setForm({ ...form, clientName: e.target.value })} placeholder="Nome da empresa ou pessoa" />
+                  </div>
+                )}
+
                 <div>
-                  <Label>NIF do Cliente</Label>
+                  <Label>NIF</Label>
                   <Input value={form.clientNif} onChange={(e) => setForm({ ...form, clientNif: e.target.value })} placeholder="0000000000" maxLength={10} />
                 </div>
-                <div className="md:col-span-2">
-                  <Label>Morada</Label>
-                  <Textarea value={form.clientLines} onChange={(e) => setForm({ ...form, clientLines: e.target.value })} rows={2} placeholder="Linha 1&#10;Linha 2" />
-                </div>
+
                 <div>
                   <Label>Email</Label>
                   <Input type="email" value={form.clientEmail} onChange={(e) => setForm({ ...form, clientEmail: e.target.value })} />
                 </div>
+
+                <div className="md:col-span-2">
+                  <Label>Morada</Label>
+                  <Textarea value={form.clientLines} onChange={(e) => setForm({ ...form, clientLines: e.target.value })} rows={2} placeholder="Morada do cliente" />
+                </div>
+
                 <div>
                   <Label>Data de Emissão</Label>
                   <Input type="date" value={form.issueDate} onChange={(e) => setForm({ ...form, issueDate: e.target.value })} />
@@ -403,17 +509,9 @@ const Orcamentos = () => {
                   <Label>Validade (dias)</Label>
                   <Input type="number" value={form.validityDays} onChange={(e) => setForm({ ...form, validityDays: e.target.value })} min="1" />
                 </div>
-                <div>
-                  <Label>IVA (%)</Label>
-                  <Select value={form.ivaPct} onValueChange={(v) => setForm({ ...form, ivaPct: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0">0% (Isento)</SelectItem>
-                      <SelectItem value="14">14%</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
+
+              {/* Items with per-line IVA */}
               <div className="mt-4">
                 <div className="flex justify-between items-center mb-3">
                   <h3 className="font-semibold">Itens</h3>
@@ -421,12 +519,12 @@ const Orcamentos = () => {
                 </div>
                 <div className="space-y-2">
                   {form.items.map((item, idx) => (
-                    <div key={idx} className="flex gap-2 items-end bg-muted/30 p-2 rounded">
-                      <div className="flex-1">
+                    <div key={idx} className="flex gap-2 items-end bg-muted/30 p-2 rounded flex-wrap">
+                      <div className="flex-1 min-w-[140px]">
                         <Label className="text-xs">Descrição</Label>
                         <Input value={item.description} onChange={(e) => handleItemChange(idx, "description", e.target.value)} placeholder="Serviço" />
                       </div>
-                      <div className="w-16">
+                      <div className="w-14">
                         <Label className="text-xs">Qtd</Label>
                         <Input type="number" value={item.quantity} onChange={(e) => handleItemChange(idx, "quantity", parseInt(e.target.value) || 1)} min="1" />
                       </div>
@@ -438,16 +536,49 @@ const Orcamentos = () => {
                         <Label className="text-xs">Total</Label>
                         <Input value={item.totalAmount} onChange={(e) => handleItemChange(idx, "totalAmount", e.target.value)} placeholder="0,00" />
                       </div>
+                      <div className="w-32">
+                        <Label className="text-xs">IVA</Label>
+                        <Select value={item.ivaPct} onValueChange={(v) => handleItemChange(idx, "ivaPct", v)}>
+                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {IVA_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(idx)} className="text-destructive"><Trash2 className="w-4 h-4" /></Button>
                     </div>
                   ))}
                 </div>
-                <div className="bg-muted/50 p-3 rounded mt-3 text-right text-sm">
-                  <span className="mr-6">Subtotal: {totalsCalc.subtotal} {currencyLabel}</span>
-                  <span className="mr-6">IVA: {totalsCalc.iva} {currencyLabel}</span>
-                  <span className="font-bold">Total: {totalsCalc.total} {currencyLabel}</span>
+
+                {/* Tax Summary */}
+                <div className="bg-muted/50 p-3 rounded mt-3 text-sm space-y-2">
+                  <p className="font-semibold text-xs uppercase text-muted-foreground">Resumo de Impostos</p>
+                  <div className="grid grid-cols-4 gap-2 text-xs font-medium border-b pb-1">
+                    <span>Taxa</span><span className="text-right">Base</span><span className="text-right">IVA</span><span className="text-right">Total</span>
+                  </div>
+                  {Object.entries(totalsCalc.taxGroups).map(([key, g]) => {
+                    const label = IVA_OPTIONS.find((o) => o.value === key)?.label ?? key;
+                    const fmt = (n: number) => new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+                    return (
+                      <div key={key} className="grid grid-cols-4 gap-2 text-xs">
+                        <span>{label}</span>
+                        <span className="text-right">{fmt(g.base)}</span>
+                        <span className="text-right">{fmt(g.iva)}</span>
+                        <span className="text-right">{fmt(g.base + g.iva)}</span>
+                      </div>
+                    );
+                  })}
+                  <div className="grid grid-cols-4 gap-2 text-xs font-bold border-t pt-1">
+                    <span>Total</span>
+                    <span className="text-right">{totalsCalc.subtotal}</span>
+                    <span className="text-right">{totalsCalc.iva}</span>
+                    <span className="text-right">{totalsCalc.total} {currencyLabel}</span>
+                  </div>
                 </div>
               </div>
+
               <div>
                 <Label>Nota adicional (opcional)</Label>
                 <Textarea value={form.footerNote} onChange={(e) => setForm({ ...form, footerNote: e.target.value })} rows={2} />
@@ -464,6 +595,7 @@ const Orcamentos = () => {
         )}
       </div>
 
+      {/* List */}
       {!rows ? (
         <div className="text-center py-12"><Loader2 className="w-6 h-6 animate-spin mx-auto text-muted-foreground" /></div>
       ) : rows.length === 0 ? (
@@ -498,23 +630,10 @@ const Orcamentos = () => {
                     <>
                       <span className="text-xs text-green-600 font-medium self-center">✓ Convertida</span>
                       {canManage && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const totalNum = parseFloat(row.total.replace(/\./g, "").replace(",", ".")) || 0;
-                            setCreditNoteReasonCode("data_error");
-                            setCreditNoteReasonOther("");
-                            setCreditNotePartialAmount("");
-                            setCreditNoteDialog({
-                              invoiceId: row.converted_invoice_id!,
-                              documentNumber: row.document_number,
-                              grossTotal: totalNum,
-                            });
-                          }}
-                          className="gap-1"
-                          title="Emitir Nota de Crédito"
-                        >
+                        <Button variant="outline" size="sm" onClick={() => {
+                          const totalNum = parseFloat(row.total.replace(/\./g, "").replace(",", ".")) || 0;
+                          setCreditNoteDialog({ invoiceId: row.converted_invoice_id!, documentNumber: row.document_number, grossTotal: totalNum });
+                        }} className="gap-1" title="Emitir Nota de Crédito">
                           <Receipt className="w-4 h-4" /> NC
                         </Button>
                       )}
@@ -528,16 +647,11 @@ const Orcamentos = () => {
       )}
 
       {/* Credit Note Dialog */}
-      <Dialog
-        open={!!creditNoteDialog}
-        onOpenChange={(o) => { if (!o && !emittingCreditNote) { setCreditNoteDialog(null); setCreditNoteReasonOther(""); setCreditNoteReasonCode("data_error"); setCreditNotePartialAmount(""); } }}
-      >
+      <Dialog open={!!creditNoteDialog} onOpenChange={(o) => { if (!o && !emittingCreditNote) { setCreditNoteDialog(null); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Emitir Nota de Crédito</DialogTitle>
-            <DialogDescription>
-              A NC retifica a fatura convertida a partir de {creditNoteDialog?.documentNumber ?? "—"} sem apagar o documento original.
-            </DialogDescription>
+            <DialogDescription>A NC retifica a fatura de {creditNoteDialog?.documentNumber ?? "—"} sem apagar o documento original.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2">
@@ -547,13 +661,7 @@ const Orcamentos = () => {
                 <SelectContent>
                   {CREDIT_NOTE_REASON_CODES.map((code) => (
                     <SelectItem key={code} value={code}>
-                      {code === "data_error" ? "Erro de digitação nos dados"
-                        : code === "value_error" ? "Erro no valor cobrado"
-                        : code === "enrollment_cancellation" ? "Desistência de matrícula"
-                        : code === "commercial_discount" ? "Desconto comercial concedido"
-                        : code === "service_not_provided" ? "Serviço não prestado"
-                        : code === "duplicate_charge" ? "Cobrança duplicada"
-                        : "Outro motivo"}
+                      {code === "data_error" ? "Erro de digitação nos dados" : code === "value_error" ? "Erro no valor cobrado" : code === "enrollment_cancellation" ? "Desistência de matrícula" : code === "commercial_discount" ? "Desconto comercial concedido" : code === "service_not_provided" ? "Serviço não prestado" : code === "duplicate_charge" ? "Cobrança duplicada" : "Outro motivo"}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -568,7 +676,6 @@ const Orcamentos = () => {
             <div className="grid gap-2">
               <Label>Valor parcial (opcional)</Label>
               <Input type="text" value={creditNotePartialAmount} onChange={(e) => setCreditNotePartialAmount(e.target.value)} placeholder="Deixe vazio para creditar o total" />
-              <p className="text-xs text-muted-foreground">Deixe vazio para creditar o valor total da fatura</p>
             </div>
           </div>
           <DialogFooter>
