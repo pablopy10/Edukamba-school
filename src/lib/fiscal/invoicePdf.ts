@@ -438,7 +438,7 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   const logoH = pxMm(48);
   addLogoIfPossible(doc, opts.logoDataUrl ?? undefined, margin, hdrTop, logoW, logoH);
 
-  // ── Lado esquerdo: nome + subtítulo + NIF/morada/contactos (alinhado à margem)
+  // ── Lado esquerdo: SEMPRE Edukamba (emitente fixo)
   const textStartX = margin;
   const hasLogo = !!opts.logoDataUrl?.startsWith("data:image");
   let yLeft = hasLogo ? hdrTop + logoH + pxMm(4) : hdrTop;
@@ -449,7 +449,7 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
   yLeft = drawWrappedTexts(
     doc,
-    [opts.schoolName.trim() || "Edukamba"],
+    ["Edukamba"],
     textStartX,
     yLeft,
     leftColW,
@@ -464,21 +464,19 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   });
 
   yLeft += pxMm(5);
-  const detailLines: string[] = [];
-  if (opts.schoolNif?.trim()) detailLines.push(`NIF: ${opts.schoolNif.trim()}`);
-  if (opts.schoolAddress?.trim()) detailLines.push(opts.schoolAddress.trim());
-  if (opts.schoolContactLines?.length)
-    opts.schoolContactLines.forEach((l) => l?.trim() && detailLines.push(l.trim()));
-
-  if (detailLines.length > 0) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(pxToPt(10));
-    doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-    yLeft = drawWrappedTexts(doc, detailLines, textStartX, yLeft, leftColW, {
-      leading: pxMm(13),
-      size: pxToPt(10),
-    });
-  }
+  const edukambaHeaderLines = [
+    "NIF: 5480041924",
+    "Zona Verde, Rua 18, Casa 26, Belas, Luanda",
+    "Email: geral@edukamba.com",
+    "Website: www.edukamba.com",
+  ];
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(pxToPt(10));
+  doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
+  yLeft = drawWrappedTexts(doc, edukambaHeaderLines, textStartX, yLeft, leftColW, {
+    leading: pxMm(13),
+    size: pxToPt(10),
+  });
 
   // ── Lado direito: tipo de documento + número + datas
   let yDoc = hdrTop;
@@ -551,13 +549,14 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   }
   clientBody.push(`NIF: ${opts.clienteNif.trim()}`);
 
-  // Dados do Emitente
-  const issuerBody: string[] = [opts.schoolName.trim() || "Edukamba"];
-  if (opts.schoolAddress?.trim()) issuerBody.push(opts.schoolAddress.trim());
-  if (opts.schoolNif?.trim()) issuerBody.push(`NIF: ${opts.schoolNif.trim()}`);
-  if (opts.schoolContactLines?.length) {
-    opts.schoolContactLines.forEach((l) => l?.trim() && issuerBody.push(l.trim()));
-  }
+  // Dados do Emitente — SEMPRE Edukamba (fixo)
+  const issuerBody: string[] = [
+    "Edukamba",
+    "Zona Verde, Rua 18, Casa 26, Belas, Luanda",
+    "NIF: 5480041924",
+    "Email: geral@edukamba.com",
+    "Website: www.edukamba.com",
+  ];
 
   const innerW = panelW - padInner * 2;
   const hClientInner = measureDetailPanelInnerHeightMm(doc, "Dados do Cliente", clientBody, innerW);
