@@ -696,30 +696,18 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   }
   clientBody.push(`NIF: ${opts.clienteNif.trim()}`);
 
-  // Dados do Emitente — SEMPRE Edukamba (fixo)
-  const issuerBody: string[] = [
-    "Edukamba",
-    "Zona Verde, Rua 18, Casa 26, Belas, Luanda",
-    "NIF: 5480041924",
-    "Email: geral@edukamba.com",
-    "Website: www.edukamba.com",
-  ];
-
   const innerW = panelW - padInner * 2;
   const hClientInner = measureDetailPanelInnerHeightMm(doc, "Dados do Cliente", clientBody, innerW);
-  const hIssuerInner = measureDetailPanelInnerHeightMm(doc, "Dados do Emitente", issuerBody, innerW);
-  const boxH = Math.max(hClientInner, hIssuerInner) + padInner * 2;
+  const boxH = hClientInner + padInner * 2;
 
   const boxTop = y;
 
   doc.setDrawColor(BORDER_EEE[0], BORDER_EEE[1], BORDER_EEE[2]);
   doc.setFillColor(PANEL_FCFCFC[0], PANEL_FCFCFC[1], PANEL_FCFCFC[2]);
   doc.setLineWidth(pxMm(1));
-  doc.roundedRect(bx1, boxTop, panelW, boxH, rBox, rBox, "FD");
-  doc.roundedRect(bx2, boxTop, panelW, boxH, rBox, rBox, "FD");
+  doc.roundedRect(bx1, boxTop, usableW, boxH, rBox, rBox, "FD");
 
-  drawDetailPanelInner(doc, bx1, boxTop, padInner, "Dados do Cliente", clientBody, innerW);
-  drawDetailPanelInner(doc, bx2, boxTop, padInner, "Dados do Emitente", issuerBody, innerW);
+  drawDetailPanelInner(doc, bx1, boxTop, padInner, "Dados do Cliente", clientBody, usableW - padInner * 2);
 
   y = boxTop + boxH + pxMm(18);
 
