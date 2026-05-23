@@ -322,6 +322,17 @@ export function generateSaftXml(input: {
 
       const sourceId = esc("Edukamba".slice(0, 30));
 
+      // DocumentStatus fields
+      const rawStatus = String(inv.invoice_status ?? "N").trim().toUpperCase();
+      const statusCode = rawStatus === "A" ? "A" : "N";
+      const statusDateEsc = esc(toDateTimeUtc(inv.cancelled_at ?? inv.invoice_issued_at, inv.invoice_date));
+      const statusReasonEsc = esc(
+        saftDocumentStatusReasonText(
+          inv.cancellation_reason ?? "",
+          statusCode === "A" ? "Documento anulado" : "Documento normal",
+        ),
+      );
+
       const periodRaw = Number.parseInt(inv.invoice_date.slice(5, 7), 10);
       const periodMonth =
         Number.isFinite(periodRaw) && periodRaw >= 1 && periodRaw <= 12 ? periodRaw : month;
