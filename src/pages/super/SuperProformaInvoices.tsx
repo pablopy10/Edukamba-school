@@ -149,9 +149,18 @@ const SuperProformaInvoices = () => {
     const ivaPct = parseFloat(form.ivaPct) || 0;
     const iva = (subtotal * ivaPct) / 100;
     const total = subtotal + iva;
-    const fmt = (n: number) =>
-      new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + " Kz";
-    return { subtotal: fmt(subtotal), iva: fmt(iva), total: fmt(total) };
+    const fmtRaw = (n: number) =>
+      new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+    const fmtKz = (n: number) => fmtRaw(n) + " Kz";
+    return {
+      subtotal: fmtKz(subtotal),
+      iva: fmtKz(iva),
+      total: fmtKz(total),
+      // Valores sem "Kz" para guardar na BD (parsing seguro na edge function)
+      subtotalRaw: fmtRaw(subtotal),
+      ivaRaw: fmtRaw(iva),
+      totalRaw: fmtRaw(total),
+    };
   }, [form.items, form.ivaPct]);
 
   const getNextDocNumber = async (): Promise<string> => {
@@ -284,10 +293,10 @@ const SuperProformaInvoices = () => {
             total_amount: it.totalAmount,
             iva_pct: form.ivaPct,
           })),
-          subtotal: totalsCalc.subtotal,
+          subtotal: totalsCalc.subtotalRaw,
           iva_percentage: parseFloat(form.ivaPct) || 0,
-          iva_amount: totalsCalc.iva,
-          total: totalsCalc.total,
+          iva_amount: totalsCalc.ivaRaw,
+          total: totalsCalc.totalRaw,
           currency: form.currency,
           footer_note: form.footerNote.trim() || null,
           hash_control: hashExtract,

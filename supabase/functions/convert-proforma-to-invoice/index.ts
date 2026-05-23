@@ -123,7 +123,8 @@ Deno.serve(async (req) => {
     const documentNumberFull = `FT ${series}/${seq}`;
 
     // Calculate total from proforma (pt-AO format: "513.000,00" → 513000.00)
-    const totalRaw = String(pp.total ?? "0").replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
+    // Remove "Kz" suffix if present (valores podem ter sido guardados com símbolo de moeda)
+    const totalRaw = String(pp.total ?? "0").replace(/Kz/gi, "").replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
     const grossTotal = Number(totalRaw) || 0;
     const totalStr = formatTotalForSigning(grossTotal);
 

@@ -263,6 +263,8 @@ const Orcamentos = () => {
 
     const fmt = (n: number) =>
       new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + " Kz";
+    const fmtRaw = (n: number) =>
+      new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
     return {
       subtotalBruto: fmt(subtotalBruto),
@@ -276,6 +278,10 @@ const Orcamentos = () => {
       totalNum: total,
       hasDiscount: totalDesconto > 0,
       taxGroups,
+      // Valores sem "Kz" para guardar na BD (parsing seguro na edge function)
+      subtotalRaw: fmtRaw(baseImponivel),
+      ivaRaw: fmtRaw(totalIva),
+      totalRaw: fmtRaw(total),
     };
   }, [form.items]);
 
@@ -422,10 +428,10 @@ const Orcamentos = () => {
             total_amount: String(Math.round(((parseInt(String(it.quantity)) || 1) * (parseNum(it.unitPrice) || 0) * (1 - (parseFloat(it.discount) || 0) / 100)) * 100) / 100),
             iva_pct: it.ivaPct,
           })),
-          subtotal: totalsCalc.subtotal,
+          subtotal: totalsCalc.subtotalRaw,
           iva_percentage: 0,
-          iva_amount: totalsCalc.iva,
-          total: totalsCalc.total,
+          iva_amount: totalsCalc.ivaRaw,
+          total: totalsCalc.totalRaw,
           currency: form.currency,
           footer_note: form.footerNote.trim() || null,
           hash_control: hashExtract,
