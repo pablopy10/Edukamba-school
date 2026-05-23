@@ -244,11 +244,14 @@ const SuperProformaInvoices = () => {
           const qty = parseInt(String(it.quantity)) || 1;
           const up = parseFloat(it.unitAmount) || 0;
           const total = qty * up;
+          const ivaPct = parseFloat(form.ivaPct) || 0;
+          const taxLabel = ivaPct === 0 ? "Isento (M11)" : `${ivaPct}%`;
           return {
             description: it.description,
             quantity: qty,
             unitPriceFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(up) + " Kz",
             totalAmountFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total) + " Kz",
+            taxLabel,
           };
         }),
         subtotalFmt: totalsCalc.subtotal,
@@ -279,6 +282,7 @@ const SuperProformaInvoices = () => {
             quantity: parseInt(String(it.quantity)) || 1,
             unit_amount: it.unitAmount,
             total_amount: it.totalAmount,
+            iva_pct: form.ivaPct,
           })),
           subtotal: totalsCalc.subtotal,
           iva_percentage: parseFloat(form.ivaPct) || 0,
@@ -330,10 +334,10 @@ const SuperProformaInvoices = () => {
         clientNif: row.client_nif,
         clientEmail: row.client_email,
         lineItems: row.items.map((it) => {
-          const ivaPct = (it as { iva_pct?: string }).iva_pct ?? "0";
+          const ivaPct = (it as { iva_pct?: string }).iva_pct ?? String(row.iva_percentage ?? "0");
           const taxLabel = ivaPct === "0" ? "Isento (M11)" : ivaPct === "0_M04" ? "Não sujeito (M04)" : `${ivaPct}%`;
           const qty = it.quantity || 1;
-          const up = parseFloat((it as { unit_price?: string }).unit_price || it.total_amount || "0") || 0;
+          const up = parseFloat((it as { unit_price?: string }).unit_price || it.unit_amount || it.total_amount || "0") || 0;
           const total = qty * up;
           return {
             description: it.description,
