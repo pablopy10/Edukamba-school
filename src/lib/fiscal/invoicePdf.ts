@@ -57,6 +57,8 @@ export type FiscalInvoicePdfInput = {
   logoDataUrl?: string | null;
   documentNumber: string;
   invoiceDateYYYYMMDD: string;
+  /** Hora de emissão (hh:mm:ss) para exibir no PDF */
+  issuedAtTime?: string;
   clienteNome: string;
   clienteNif: string;
   /** Nome para exibição como encarregado (quando distinto dos dados estritamente fiscais). */
@@ -404,6 +406,13 @@ export async function resolveFiscalInvoicePdfInput(
     logoDataUrl: logoDataUrlFinal,
     documentNumber: invoice.document_number.trim(),
     invoiceDateYYYYMMDD: invoice.invoice_date.slice(0, 10),
+    issuedAtTime: (() => {
+      const iso = (invoice as { invoice_issued_at?: string }).invoice_issued_at;
+      if (!iso) return undefined;
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return undefined;
+      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+    })(),
     clienteNome: invoice.cliente_nif.trim() === "999999999" ? "Consumidor Final" : invoice.cliente_nome.trim(),
     clienteNif: invoice.cliente_nif.trim(),
     encarregadoNome: invoice.cliente_nif.trim() === "999999999" ? "Consumidor Final" : (guardianNameFromProfile ?? invoice.cliente_nome.trim()),
@@ -628,7 +637,8 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   doc.setFontSize(pxToPt(11));
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
   const issueLabel = fmtPtLongDateYYYYMMDD(opts.invoiceDateYYYYMMDD);
-  doc.text(`Emissão: ${issueLabel}`, rhs, yDoc, { align: "right", baseline: "top" });
+  const timeStr = opts.issuedAtTime ? ` ${opts.issuedAtTime}` : "";
+  doc.text(`Emissão: ${issueLabel}${timeStr}`, rhs, yDoc, { align: "right", baseline: "top" });
   yDoc += pxMm(16);
 
   // Período Contabilístico
@@ -852,20 +862,27 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
 
   /* .footer … .fiscal-text */
   let footY = blockY + grandH + pxMm(48);
-  const code = (opts.exemptionCode ?? "M11").trim();
-  const reason =
-    opts.exemptionReason?.trim() ||
-    "nos termos do Artigo 12.º do CIVA - Isenção no domínio da educação.";
-  const exemptText = formatIvaExemptionParagraph(code, reason);
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(pxToPt(11));
-  doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
-  for (const ln of doc.splitTextToSize(exemptText, usableW)) {
-    doc.text(ln, margin, footY);
-    footY += pxMm(16);
+  
+  // Texto de isenção IVA — só renderizar se houver itens com código M11
+  const hasExemptItem = opts.lineItems.some((it) => 
+    it.taxLabel?.includes("M11") || it.taxLabel?.includes("Isento")
+  ) || (opts.exemptionCode?.trim()?.startsWith("M") && opts.taxSummary?.some((ts) => ts.label.includes("M11") || ts.label.includes("Isento")));
+  
+  if (hasExemptItem) {
+    const code = (opts.exemptionCode ?? "M11").trim();
+    const reason =
+      opts.exemptionReason?.trim() ||
+      "nos termos do Artigo 12.º do CIVA - Isenção no domínio da educação.";
+    const exemptText = formatIvaExemptionParagraph(code, reason);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(pxToPt(11));
+    doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
+    for (const ln of doc.splitTextToSize(exemptText, usableW)) {
+      doc.text(ln, margin, footY);
+      footY += pxMm(16);
+    }
+    footY += pxMm(12);
   }
-
-  footY += pxMm(12);
 
   /* Hash control: apenas 4 caracteres extraídos do hash (posições 1,11,21,31) + hífen */
   const fullHash = opts.documentHashFootnote?.trim() || "";

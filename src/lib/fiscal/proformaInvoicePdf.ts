@@ -344,7 +344,9 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
   const issueLabel = fmtPtLongDateYYYYMMDD(opts.issueDateYYYYMMDD);
   const period = accountingPeriod(opts.issueDateYYYYMMDD);
-  doc.text(`Emissão: ${issueLabel}`, rhs, yRight, { align: "right", baseline: "top" });
+  const nowTime = new Date();
+  const timeStr = `${String(nowTime.getHours()).padStart(2, "0")}:${String(nowTime.getMinutes()).padStart(2, "0")}:${String(nowTime.getSeconds()).padStart(2, "0")}`;
+  doc.text(`Emissão: ${issueLabel} ${timeStr}`, rhs, yRight, { align: "right", baseline: "top" });
   yRight += pxMm(12);
   doc.text(`Validade: ${opts.validityDays} dias`, rhs, yRight, { align: "right", baseline: "top" });
   yRight += pxMm(12);
