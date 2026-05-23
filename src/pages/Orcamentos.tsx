@@ -38,6 +38,15 @@ import { useUserRole } from "@/hooks/useUserRole";
 
 const CONSUMER_FALLBACK_NIF = "999999999";
 
+/** Parseia valor numérico aceitando vírgula ou ponto como separador decimal */
+function parseNum(raw: string): number {
+  if (!raw || !raw.trim()) return 0;
+  // Remove espaços (separador de milhares) e converte vírgula para ponto
+  const normalized = raw.trim().replace(/\s/g, "").replace(",", ".");
+  const n = parseFloat(normalized);
+  return Number.isFinite(n) ? n : 0;
+}
+
 type ClientType = "encarregado" | "aluno" | "empresa" | "outro";
 
 const IVA_OPTIONS = [
@@ -209,7 +218,7 @@ const Orcamentos = () => {
 
     for (const item of form.items) {
       const qty = item.quantity || 1;
-      const unitPrice = parseFloat(item.unitPrice) || 0;
+      const unitPrice = parseNum(item.unitPrice) || 0;
       const discountPct = parseFloat(item.discount) || 0;
 
       // Passo 1: Valor bruto da linha
@@ -324,7 +333,7 @@ const Orcamentos = () => {
       let totalIvaNum = 0;
       for (const item of form.items) {
         const qty = item.quantity || 1;
-        const up = parseFloat(item.unitPrice) || 0;
+        const up = parseNum(item.unitPrice) || 0;
         const discPct = parseFloat(item.discount) || 0;
         const bruto = qty * up;
         const base = Math.round((bruto - bruto * discPct / 100) * 100) / 100;
@@ -349,7 +358,7 @@ const Orcamentos = () => {
         lineItems: form.items.map((it) => {
           const ivaOpt = IVA_OPTIONS.find((o) => o.value === it.ivaPct) ?? IVA_OPTIONS[0];
           const qty = parseInt(String(it.quantity)) || 1;
-          const up = parseFloat(it.unitPrice) || 0;
+          const up = parseNum(it.unitPrice) || 0;
           const discPct = parseFloat(it.discount) || 0;
           const bruto = qty * up;
           const base = Math.round((bruto - bruto * discPct / 100) * 100) / 100;
@@ -403,7 +412,7 @@ const Orcamentos = () => {
             quantity: parseInt(String(it.quantity)) || 1,
             unit_price: it.unitPrice,
             discount_pct: it.discount || "0",
-            total_amount: String(Math.round(((parseInt(String(it.quantity)) || 1) * (parseFloat(it.unitPrice) || 0) * (1 - (parseFloat(it.discount) || 0) / 100)) * 100) / 100),
+            total_amount: String(Math.round(((parseInt(String(it.quantity)) || 1) * (parseNum(it.unitPrice) || 0) * (1 - (parseFloat(it.discount) || 0) / 100)) * 100) / 100),
             iva_pct: it.ivaPct,
           })),
           subtotal: totalsCalc.subtotal,
@@ -704,7 +713,7 @@ const Orcamentos = () => {
                         <Label className="text-xs">Total</Label>
                         <Input value={(() => {
                           const qty = item.quantity || 1;
-                          const up = parseFloat(item.unitPrice) || 0;
+                          const up = parseNum(item.unitPrice) || 0;
                           const disc = parseFloat(item.discount) || 0;
                           const bruto = qty * up;
                           return (Math.round((bruto - bruto * disc / 100) * 100) / 100).toFixed(2);
