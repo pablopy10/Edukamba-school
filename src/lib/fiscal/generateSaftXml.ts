@@ -247,9 +247,10 @@ export function generateSaftXml(input: {
   } = input;
   const softwareName = input.softwareName ?? "Edukamba";
   const softwareVer = input.productVersion ?? "1.0.0";
-  // ProductID AGT: "NomeProduto/NomeEmpresaProdutora" — sem caracteres especiais problemáticos
-  const producerName = (input.productProducerName ?? "PJ AB SERVICOS LDA").replace(/[^A-Za-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-  const productIdCombined = `${softwareName}/${producerName}`.slice(0, 255);
+  // ProductID AGT: "NomeProduto/NomeEmpresaProdutora NIF" 
+  const producerName = (input.productProducerName ?? "PJ AB-SERVICOS LDA").trim();
+  const productCompanyNif = (input.productCompanyTaxId?.trim() ?? "5480041924");
+  const productIdCombined = `${softwareName}/${producerName} ${productCompanyNif}`.slice(0, 255);
 
   const periodStart = `${year}-${String(month).padStart(2, "0")}-01`;
   const ld = new Date(year, month, 0).getDate();
