@@ -188,6 +188,13 @@ function educationTaxTableXml(): string {
         <Description>${esc("Isenção no domínio da educação")}</Description>
         <TaxPercentage>0.00</TaxPercentage>
       </TaxTableEntry>
+      <TaxTableEntry>
+        <TaxType>IVA</TaxType>
+        <TaxCountryRegion>AO</TaxCountryRegion>
+        <TaxCode>NOR</TaxCode>
+        <Description>${esc("Taxa normal")}</Description>
+        <TaxPercentage>14.00</TaxPercentage>
+      </TaxTableEntry>
     </TaxTable>`;
 }
 
@@ -235,7 +242,7 @@ export function generateSaftXml(input: {
     school,
     invoices,
     taxAccountingBasis = "F",
-    softwareValidationNumber = "0",
+    softwareValidationNumber = "31/AGT20",
     productVersion,
   } = input;
   const softwareName = input.softwareName ?? "Edukamba";
@@ -285,8 +292,9 @@ export function generateSaftXml(input: {
   const fy = fiscalYearNum(year, fis);
 
   const taxIdSchool = esc(school.taxRegistrationNumber?.trim() ?? "555555555");
+  // ProductCompanyTaxID = NIF do produtor do software (Edukamba), não da escola
   const taxIdProductCompany = esc(
-    (input.productCompanyTaxId?.trim() ?? school.taxRegistrationNumber?.trim() ?? "555555555"),
+    (input.productCompanyTaxId?.trim() ?? "5480041924"),
   );
   const companyName = esc(school.name.trim().slice(0, 200));
 
@@ -359,32 +367,84 @@ export function generateSaftXml(input: {
       </SpecialRegimes>
       <SourceID>${sourceId}</SourceID>
       <SystemEntryDate>${entryDtEsc}</SystemEntryDate>
-      <CustomerID>${customerIdEsc}</CustomerID>
-      <Line>
-        <LineNumber>1</LineNumber>
-        <ProductCode>${EDUC_PRODUCT_CODE}</ProductCode>
-        <ProductDescription>${productDesc}</ProductDescription>
-        <Quantity>1</Quantity>
-        <UnitOfMeasure>UN</UnitOfMeasure>
-        <UnitPrice>${totalStr}</UnitPrice>
-        <TaxBase>${totalStr}</TaxBase>
-        <TaxPointDate>${docDate}</TaxPointDate>
-        <Description>${lineDesc}</Description>
-        <CreditAmount>${totalStr}</CreditAmount>
-        <Tax>
+      <CustomerID>${customerIdEsc}</CustomerID>${(() => {
+        // Parsear itens do line_description para gerar linhas separadas com IVA correcto
+        const lineDescRaw = inv.line_description ?? "Propina / serviços educativos";
+        const itemParts = lineDescRaw.split(";").map((s: string) => s.trim()).filter(Boolean);
+        let lineNum = 0;
+        let totalNetAmount = 0;
+        let totalTaxPayable = 0;
+        const linesXml: string[] = [];
+
+        for (const part of itemParts) {
+          lineNum++;
+          const m3 = /^(.+):(\d[\d\s.,]*):(\d+(?:_M\d+)?)$/.exec(part);
+          let desc = lineDescRaw;
+          let baseAmount = total;
+          let taxPct = 0;
+          let isExempt = true;
+
+          if (m3) {
+            desc = m3[1].trim();
+            baseAmount = parseFloat(m3[2].replace(/\s/g, "").replace(",", ".")) || 0;
+            const ivaPctStr = m3[3].trim();
+            taxPct = ivaPctStr === "0_M04" ? 0 : (parseFloat(ivaPctStr) || 0);
+            isExempt = taxPct === 0;
+          } else if (itemParts.length === 1) {
+            // Item único sem formato especial — usar exemption_code da fatura
+            desc = lineDescRaw;
+            baseAmount = total;
+            isExempt = true;
+          }
+
+          const baseStr = (Math.round(baseAmount * 100) / 100).toFixed(2);
+          const taxAmount = Math.round((baseAmount * taxPct / 100) * 100) / 100;
+          totalNetAmount += baseAmount;
+          totalTaxPayable += taxAmount;
+
+          const taxBlock = isExempt
+            ? `<Tax>
           <TaxType>IVA</TaxType>
           <TaxCountryRegion>AO</TaxCountryRegion>
           <TaxCode>ISE</TaxCode>
           <TaxPercentage>0.00</TaxPercentage>
         </Tax>
         <TaxExemptionReason>${exReason}</TaxExemptionReason>
-        <TaxExemptionCode>${exCode}</TaxExemptionCode>
-      </Line>
+        <TaxExemptionCode>${exCode}</TaxExemptionCode>`
+            : `<Tax>
+          <TaxType>IVA</TaxType>
+          <TaxCountryRegion>AO</TaxCountryRegion>
+          <TaxCode>NOR</TaxCode>
+          <TaxPercentage>${taxPct.toFixed(2)}</TaxPercentage>
+        </Tax>`;
+
+          linesXml.push(`
+      <Line>
+        <LineNumber>${lineNum}</LineNumber>
+        <ProductCode>${EDUC_PRODUCT_CODE}</ProductCode>
+        <ProductDescription>${esc(desc)}</ProductDescription>
+        <Quantity>1</Quantity>
+        <UnitOfMeasure>UN</UnitOfMeasure>
+        <UnitPrice>${baseStr}</UnitPrice>
+        <TaxBase>${baseStr}</TaxBase>
+        <TaxPointDate>${docDate}</TaxPointDate>
+        <Description>${esc(desc)}</Description>
+        <CreditAmount>${baseStr}</CreditAmount>
+        ${taxBlock}
+      </Line>`);
+        }
+
+        const netTotalStr = (Math.round(totalNetAmount * 100) / 100).toFixed(2);
+        const taxPayableStr = (Math.round(totalTaxPayable * 100) / 100).toFixed(2);
+        const grossTotalStr = (Math.round((totalNetAmount + totalTaxPayable) * 100) / 100).toFixed(2);
+
+        return linesXml.join("") + `
       <DocumentTotals>
-        <TaxPayable>0.00</TaxPayable>
-        <NetTotal>${totalStr}</NetTotal>
-        <GrossTotal>${totalStr}</GrossTotal>
-      </DocumentTotals>
+        <TaxPayable>${taxPayableStr}</TaxPayable>
+        <NetTotal>${netTotalStr}</NetTotal>
+        <GrossTotal>${grossTotalStr}</GrossTotal>
+      </DocumentTotals>`;
+      })()}
     </Invoice>`;
     })
     .join("");
