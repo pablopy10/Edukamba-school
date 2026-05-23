@@ -63,6 +63,19 @@ const Educadores = () => {
 
   const load = async () => {
     setLoading(true);
+
+    // Obter school_id do utilizador logado
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    let mySchoolId: string | null = null;
+    if (authUser) {
+      const { data: prof } = await supabase.from("profiles").select("school_id, support_context_school_id, role").eq("id", authUser.id).maybeSingle();
+      if (prof) {
+        mySchoolId = (prof.role === "SUPER_ADMIN" && prof.support_context_school_id)
+          ? prof.support_context_school_id
+          : prof.school_id;
+      }
+    }
+
     let classroomsQuery = supabase.from("classrooms").select("id, name, academic_year_id").order("name");
     if (selectedYearId) classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
     if (isTeacher) {
@@ -75,13 +88,20 @@ const Educadores = () => {
       }
       classroomsQuery = classroomsQuery.in("id", teacherClassroomIds);
     }
-    const [{ data: profs, error: pErr }, { data: stus }, { data: clas }] = await Promise.all([
-      supabase
+
+    let studentsQuery = supabase.from("students").select("id, full_name, classroom_id, parent_id");
+    if (mySchoolId) studentsQuery = studentsQuery.eq("school_id", mySchoolId);
+
+    let profilesQuery = supabase
         .from("profiles")
         .select("id, full_name, phone, email")
         .eq("role", "PARENT")
-        .order("full_name", { ascending: true }),
-      supabase.from("students").select("id, full_name, classroom_id, parent_id"),
+        .order("full_name", { ascending: true });
+    if (mySchoolId) profilesQuery = profilesQuery.eq("school_id", mySchoolId);
+
+    const [{ data: profs, error: pErr }, { data: stus }, { data: clas }] = await Promise.all([
+      profilesQuery,
+      studentsQuery,
       classroomsQuery,
     ]);
     if (pErr) {
