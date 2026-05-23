@@ -452,23 +452,23 @@ const SuperProformaInvoices = () => {
             clientNif: row.client_nif,
             clientEmail: row.client_email,
             lineItems: row.items.map((it) => {
-              const ivaPct = (it as { iva_pct?: string }).iva_pct ?? "0";
+              const ivaPct = (it as { iva_pct?: string }).iva_pct ?? String(row.iva_percentage ?? "0");
               const taxLabel = ivaPct === "0" ? "Isento (M11)" : ivaPct === "0_M04" ? "Não sujeito (M04)" : `${ivaPct}%`;
               const qty = it.quantity || 1;
-              const up = parseFloat((it as { unit_price?: string }).unit_price || it.total_amount || "0") || 0;
+              const up = parseFloat((it as { unit_price?: string }).unit_price || it.unit_amount || it.total_amount || "0") || 0;
               const total = qty * up;
               return {
                 description: it.description,
                 quantity: qty,
-                unitPriceFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(up) + " Kz\ + " Kz\ + " Kz\ + " Kz\,
-                totalAmountFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total) + " Kz\,
+                unitPriceFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(up) + " Kz",
+                totalAmountFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total) + " Kz",
                 taxLabel,
               };
             }),
-            subtotalFmt: row.subtotal,
+            subtotalFmt: ensureKz(row.subtotal),
             ivaPercentage: row.iva_percentage,
-            ivaFmt: row.iva_amount,
-            totalFmt: row.total,
+            ivaFmt: ensureKz(row.iva_amount),
+            totalFmt: ensureKz(row.total),
             currencyLabel: row.currency === "AOA" ? "AKZ" : row.currency,
             footerNote: row.footer_note,
             hashExtract: row.hash_control ?? null,
