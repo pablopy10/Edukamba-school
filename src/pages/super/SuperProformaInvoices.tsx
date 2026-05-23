@@ -35,6 +35,13 @@ import { DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 const CONSUMER_FALLBACK_NIF = "999999999";
 
+/** Garante que o valor formatado termina com " Kz" (valores vindos da BD podem não ter o símbolo). */
+const ensureKz = (val: string | null | undefined): string => {
+  if (!val) return "0,00 Kz";
+  const trimmed = val.trim();
+  return trimmed.endsWith("Kz") ? trimmed : `${trimmed} Kz`;
+};
+
 const EDUKAMBA_ISSUER = {
   schoolName: "Edukamba",
   schoolNif: "5480041924",
@@ -143,7 +150,7 @@ const SuperProformaInvoices = () => {
     const iva = (subtotal * ivaPct) / 100;
     const total = subtotal + iva;
     const fmt = (n: number) =>
-      new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+      new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + " Kz";
     return { subtotal: fmt(subtotal), iva: fmt(iva), total: fmt(total) };
   }, [form.items, form.ivaPct]);
 
@@ -240,8 +247,8 @@ const SuperProformaInvoices = () => {
           return {
             description: it.description,
             quantity: qty,
-            unitPriceFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(up),
-            totalAmountFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total),
+            unitPriceFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(up) + " Kz",
+            totalAmountFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total) + " Kz",
           };
         }),
         subtotalFmt: totalsCalc.subtotal,
@@ -331,15 +338,15 @@ const SuperProformaInvoices = () => {
           return {
             description: it.description,
             quantity: qty,
-            unitPriceFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(up),
-            totalAmountFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total),
+            unitPriceFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(up) + " Kz",
+            totalAmountFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total) + " Kz",
             taxLabel,
           };
         }),
-        subtotalFmt: row.subtotal,
+        subtotalFmt: ensureKz(row.subtotal),
         ivaPercentage: row.iva_percentage,
-        ivaFmt: row.iva_amount,
-        totalFmt: row.total,
+        ivaFmt: ensureKz(row.iva_amount),
+        totalFmt: ensureKz(row.total),
         currencyLabel: row.currency === "AOA" ? "AKZ" : row.currency,
         footerNote: row.footer_note,
         hashExtract: row.hash_control ?? null,
@@ -449,8 +456,8 @@ const SuperProformaInvoices = () => {
               return {
                 description: it.description,
                 quantity: qty,
-                unitPriceFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(up),
-                totalAmountFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total),
+                unitPriceFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(up) + " Kz\ + " Kz\ + " Kz\ + " Kz\,
+                totalAmountFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total) + " Kz\,
                 taxLabel,
               };
             }),

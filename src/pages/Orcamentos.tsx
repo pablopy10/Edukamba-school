@@ -38,6 +38,13 @@ import { useUserRole } from "@/hooks/useUserRole";
 
 const CONSUMER_FALLBACK_NIF = "999999999";
 
+/** Garante que o valor formatado termina com " Kz" (valores vindos da BD podem não ter o símbolo). */
+const ensureKz = (val: string | null | undefined): string => {
+  if (!val) return "0,00 Kz";
+  const trimmed = val.trim();
+  return trimmed.endsWith("Kz") ? trimmed : `${trimmed} Kz`;
+};
+
 /** Parseia valor numérico aceitando vírgula ou ponto como separador decimal */
 function parseNum(raw: string): number {
   if (!raw || !raw.trim()) return 0;
@@ -255,7 +262,7 @@ const Orcamentos = () => {
     const total = Math.round((baseImponivel + totalIva) * 100) / 100;
 
     const fmt = (n: number) =>
-      new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+      new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + " Kz";
 
     return {
       subtotalBruto: fmt(subtotalBruto),
@@ -362,8 +369,8 @@ const Orcamentos = () => {
           const discPct = parseFloat(it.discount) || 0;
           const bruto = qty * up;
           const base = Math.round((bruto - bruto * discPct / 100) * 100) / 100;
-          const fmtNum = (n: number) => new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(n);
-          const fmtTotal = (n: number) => new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+          const fmtNum = (n: number) => new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(n) + " Kz";
+          const fmtTotal = (n: number) => new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + " Kz";
           return {
             description: it.description,
             quantity: qty,
@@ -379,8 +386,8 @@ const Orcamentos = () => {
         totalFmt: totalsCalc.total,
         taxSummary: Object.entries(totalsCalc.taxGroups).map(([key, g]) => {
           const label = IVA_OPTIONS.find((o) => o.value === key)?.label ?? key;
-          const fmt = (n: number) => new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-          return { label, base: `${fmt(g.base)} AOA`, iva: `${fmt(g.iva)} AOA` };
+          const fmt = (n: number) => new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + " Kz";
+          return { label, base: fmt(g.base), iva: fmt(g.iva) };
         }),
         currencyLabel,
         exchangeRate: form.currency !== "AOA" ? (parseFloat(form.exchangeRate) || undefined) : undefined,
@@ -468,8 +475,8 @@ const Orcamentos = () => {
         const qty = it.quantity || 1;
         const unitPrice = parseFloat((it as { unit_price?: string }).unit_price || it.total_amount || "0") || 0;
         const total = qty * unitPrice;
-        const fmtUp = new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(unitPrice);
-        const fmtTotal = new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total);
+        const fmtUp = new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(unitPrice) + " Kz";
+        const fmtTotal = new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total) + " Kz";
         return {
           description: it.description,
           quantity: qty,
@@ -478,10 +485,10 @@ const Orcamentos = () => {
           taxLabel: ivaOpt?.label ?? "Isento (M11)",
         };
       }),
-      subtotalFmt: row.subtotal,
+      subtotalFmt: ensureKz(row.subtotal),
       ivaPercentage: row.iva_percentage,
-      ivaFmt: row.iva_amount,
-      totalFmt: row.total,
+      ivaFmt: ensureKz(row.iva_amount),
+      totalFmt: ensureKz(row.total),
       currencyLabel: row.currency === "AOA" ? "AKZ" : row.currency,
       footerNote: row.footer_note,
       hashExtract: row.hash_control ?? null,
