@@ -308,6 +308,7 @@ const Orcamentos = () => {
     try {
       const docNumber = await getNextDocNumber();
       const resolvedNif = form.clientNif.trim() || CONSUMER_FALLBACK_NIF;
+      const resolvedClientName = resolvedNif === CONSUMER_FALLBACK_NIF ? "Consumidor Final" : form.clientName.trim();
       const totalForSigning = (Math.round((totalsCalc.totalNum + Number.EPSILON) * 100) / 100).toFixed(2);
 
       let hashExtract: string | null = null;
@@ -340,7 +341,7 @@ const Orcamentos = () => {
         schoolNif,
         schoolAddress,
         schoolContactLines: ["Email: geral@edukamba.com", "Website: www.edukamba.com"],
-        clientName: form.clientName.trim(),
+        clientName: resolvedClientName,
         clientLines: form.clientLines.split("\n").map((l) => l.trim()).filter(Boolean),
         clientNif: resolvedNif,
         clientEmail: form.clientEmail.trim() || undefined,
@@ -393,7 +394,7 @@ const Orcamentos = () => {
           document_number: docNumber,
           issue_date: form.issueDate,
           validity_days: parseInt(form.validityDays) || 30,
-          client_name: form.clientName.trim(),
+          client_name: resolvedClientName,
           client_lines: form.clientLines.split("\n").map((l) => l.trim()).filter(Boolean),
           client_nif: resolvedNif,
           client_email: form.clientEmail.trim() || null,
