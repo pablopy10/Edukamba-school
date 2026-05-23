@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, Download, FileText, FileCheck, Trash2, Receipt } from "lucide-react";
+import { Loader2, Plus, Download, FileText, FileCheck, Trash2, Receipt, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { invokeCreditNote } from "@/lib/fiscal/invokeCreditNote";
 import { downloadCreditNotePdfById } from "@/lib/fiscal/downloadCreditNotePdf";
@@ -142,6 +142,7 @@ const Orcamentos = () => {
   const [creditNoteItemSelection, setCreditNoteItemSelection] = useState<string>("all");
   const [creditNotePartialAmount, setCreditNotePartialAmount] = useState("");
   const [emittingCreditNote, setEmittingCreditNote] = useState(false);
+  const [editingRow, setEditingRow] = useState<ProformaRow | null>(null);
 
   const reload = useCallback(async () => {
     if (!user?.id) return;
@@ -322,13 +323,37 @@ const Orcamentos = () => {
     setForm({ ...form, items: newItems });
   };
 
+  const startEdit = (row: ProformaRow) => {
+    setEditingRow(row);
+    setForm({
+      clientName: row.client_name || "",
+      clientLines: (row.client_lines || []).join("\n"),
+      clientNif: row.client_nif || "",
+      clientEmail: row.client_email || "",
+      issueDate: row.issue_date || new Date().toISOString().slice(0, 10),
+      validityDays: String(row.validity_days || 30),
+      items: row.items.map((it) => ({
+        description: it.description || "",
+        quantity: it.quantity || 1,
+        unitPrice: (it as { unit_price?: string }).unit_price || it.unit_amount || it.total_amount || "",
+        discount: (it as { discount_pct?: string }).discount_pct || "0",
+        ivaPct: String((it as { iva_pct?: string | number }).iva_pct ?? "0"),
+      })),
+      currency: row.currency || "AOA",
+      exchangeRate: "",
+      exchangeDate: new Date().toISOString().slice(0, 10),
+      footerNote: row.footer_note || "",
+    });
+    setDialogOpen(true);
+  };
+
   const handleCreateProforma = async () => {
     if (!form.clientName.trim()) { toast.error("Nome do cliente é obrigatório"); return; }
     if (form.items.some((it) => !it.description.trim())) { toast.error("Todos os itens precisam de descrição"); return; }
 
     setBusy(true);
     try {
-      const docNumber = await getNextDocNumber();
+      const docNumber = editingRow ? editingRow.document_number : await getNextDocNumber();
       const resolvedNif = form.clientNif.trim() || CONSUMER_FALLBACK_NIF;
       const resolvedClientName = resolvedNif === CONSUMER_FALLBACK_NIF ? "Consumidor Final" : form.clientName.trim();
       const totalForSigning = (Math.round((totalsCalc.totalNum + Number.EPSILON) * 100) / 100).toFixed(2);
@@ -412,10 +437,7 @@ const Orcamentos = () => {
         footerNote: form.footerNote.trim() || null,
       };
 
-      const { error: insertError } = await (supabase
-        .from("proforma_invoices" as any)
-        .insert({
-          document_number: docNumber,
+      const dbPayload = {
           issue_date: form.issueDate,
           validity_days: parseInt(form.validityDays) || 30,
           client_name: resolvedClientName,
@@ -437,17 +459,34 @@ const Orcamentos = () => {
           currency: form.currency,
           footer_note: form.footerNote.trim() || null,
           hash_control: hashExtract,
-          school_id: schoolId,
-          created_by_id: user?.id,
-        }) as any);
+      };
 
-      if (insertError) throw insertError;
+      if (editingRow) {
+        // Update existing proforma
+        const { error: updateError } = await (supabase
+          .from("proforma_invoices" as any)
+          .update(dbPayload)
+          .eq("id", editingRow.id) as any);
+        if (updateError) throw updateError;
+      } else {
+        // Insert new proforma
+        const { error: insertError } = await (supabase
+          .from("proforma_invoices" as any)
+          .insert({
+            ...dbPayload,
+            document_number: docNumber,
+            school_id: schoolId,
+            created_by_id: user?.id,
+          }) as any);
+        if (insertError) throw insertError;
+      }
 
       const pdf = buildProformaInvoicePdf(pdfInput);
       pdf.save(`${docNumber.replace(/\s+/g, "_")}.pdf`);
 
-      toast.success(`Orçamento ${docNumber} criado!`);
+      toast.success(editingRow ? `Orçamento ${docNumber} actualizado!` : `Orçamento ${docNumber} criado!`);
       setDialogOpen(false);
+      setEditingRow(null);
       setForm({
         clientName: "", clientLines: "", clientNif: "", clientEmail: "",
         issueDate: new Date().toISOString().slice(0, 10), validityDays: "30",
@@ -607,13 +646,13 @@ const Orcamentos = () => {
           <p className="text-muted-foreground text-sm">Faturas pró-forma e orçamentos da escola</p>
         </div>
         {canManage && (
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <Dialog open={dialogOpen} onOpenChange={(v) => { setDialogOpen(v); if (!v) setEditingRow(null); }}>
             <DialogTrigger asChild>
               <Button className="gap-2"><Plus className="w-4 h-4" /> Novo Orçamento</Button>
             </DialogTrigger>
             <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Novo Orçamento / Fatura Pró-Forma</DialogTitle>
+                <DialogTitle>{editingRow ? "Editar Orçamento" : "Novo Orçamento / Fatura Pró-Forma"}</DialogTitle>
                 <DialogDescription>Crie um orçamento com múltiplas taxas de IVA por item.</DialogDescription>
               </DialogHeader>
 
@@ -811,7 +850,7 @@ const Orcamentos = () => {
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
                 <Button onClick={handleCreateProforma} disabled={busy}>
                   {busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Criar Orçamento
+                  {editingRow ? "Guardar Alterações" : "Criar Orçamento"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -847,6 +886,11 @@ const Orcamentos = () => {
                   <Button variant="outline" size="sm" onClick={() => downloadPdf(row)} className="gap-1">
                     <Download className="w-4 h-4" /> PDF
                   </Button>
+                  {canManage && !row.converted_invoice_id && (
+                    <Button variant="outline" size="sm" onClick={() => startEdit(row)} className="gap-1">
+                      <Pencil className="w-4 h-4" /> Editar
+                    </Button>
+                  )}
                   {canManage && !row.converted_invoice_id && (
                     <Button size="sm" onClick={() => convertToInvoice(row)} disabled={convertingId === row.id} className="gap-1">
                       {convertingId === row.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileCheck className="w-4 h-4" />}
