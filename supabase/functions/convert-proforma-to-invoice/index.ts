@@ -123,9 +123,38 @@ Deno.serve(async (req) => {
     const documentNumberFull = `FT ${series}/${seq}`;
 
     // Calculate total from proforma (pt-AO format: "513.000,00" → 513000.00)
-    // Remove "Kz" suffix if present (valores podem ter sido guardados com símbolo de moeda)
-    const totalRaw = String(pp.total ?? "0").replace(/Kz/gi, "").replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
-    const grossTotal = Number(totalRaw) || 0;
+    // Remove currency symbols, letters, and whitespace; keep only digits, dots, commas
+    const totalCleaned = String(pp.total ?? "0").replace(/[^0-9.,]/g, "");
+    // pt-AO uses dot as thousands separator and comma as decimal: "513.000,00" → "513000.00"
+    const totalParsed = totalCleaned.replace(/\./g, "").replace(",", ".");
+    let grossTotal = Number(totalParsed) || 0;
+
+    // Fallback: se total é 0 mas há items, calcular a partir dos items + IVA
+    if (grossTotal === 0) {
+      const ppItems = pp.items as Array<{ total_amount?: string; unit_amount?: string; quantity?: number; iva_pct?: string }> | null;
+      if (ppItems && ppItems.length > 0) {
+        let subtotal = 0;
+        let totalIva = 0;
+        for (const item of ppItems) {
+          const rawAmt = String(item.total_amount ?? item.unit_amount ?? "0").replace(/[^0-9.,]/g, "");
+          const amt = Number(rawAmt.replace(/\./g, "").replace(",", ".")) || 0;
+          const qty = item.quantity || 1;
+          const base = amt * qty;
+          subtotal += base;
+          const pct = item.iva_pct === "0_M04" ? 0 : (Number(String(item.iva_pct ?? "0").replace(/[^0-9]/g, "")) || 0);
+          totalIva += base * pct / 100;
+        }
+        grossTotal = Math.round((subtotal + totalIva) * 100) / 100;
+      }
+      // Último fallback: usar iva_percentage da proforma sobre o subtotal
+      if (grossTotal === 0) {
+        const subtotalCleaned = String(pp.subtotal ?? "0").replace(/[^0-9.,]/g, "");
+        const subtotalNum = Number(subtotalCleaned.replace(/\./g, "").replace(",", ".")) || 0;
+        const ivaPct = Number(pp.iva_percentage) || 0;
+        grossTotal = Math.round((subtotalNum + subtotalNum * ivaPct / 100) * 100) / 100;
+      }
+    }
+
     const totalStr = formatTotalForSigning(grossTotal);
 
     // Get previous document hash for chain
