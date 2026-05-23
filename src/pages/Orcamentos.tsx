@@ -476,10 +476,10 @@ const Orcamentos = () => {
       clientNif: row.client_nif,
       clientEmail: row.client_email,
       lineItems: row.items.map((it) => {
-        const ivaPct = (it as { iva_pct?: string }).iva_pct ?? "0";
+        const ivaPct = String((it as { iva_pct?: string | number }).iva_pct ?? "0");
         const ivaOpt = IVA_OPTIONS.find((o) => o.value === ivaPct);
         const qty = it.quantity || 1;
-        const unitPrice = parseFloat((it as { unit_price?: string }).unit_price || it.total_amount || "0") || 0;
+        const unitPrice = parseFloat((it as { unit_price?: string }).unit_price || it.unit_amount || it.total_amount || "0") || 0;
         const total = qty * unitPrice;
         const fmtUp = new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(unitPrice) + " Kz";
         const fmtTotal = new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total) + " Kz";
@@ -488,7 +488,7 @@ const Orcamentos = () => {
           quantity: qty,
           unitPriceFmt: fmtUp,
           totalAmountFmt: fmtTotal,
-          taxLabel: ivaOpt?.label ?? "Isento (M11)",
+          taxLabel: ivaOpt?.label ?? (ivaPct === "0" ? "Isento (M11)" : `${ivaPct}%`),
         };
       }),
       subtotalFmt: ensureKz(row.subtotal),
