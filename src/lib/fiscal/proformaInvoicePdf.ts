@@ -455,7 +455,7 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
           5: { cellWidth: colTotal, ...moneyStyle, fontStyle: "bold" as const, textColor: [35, 40, 48] as [number, number, number] },
         };
       }
-      const colQty = 12; const colUnit = 26; const colTax = 22; const colTotal = 34;
+      const colQty = 12; const colUnit = 24; const colTax = 20; const colTotal = 38;
       const colDesc = usableW - colQty - colUnit - colTax - colTotal;
       return {
         0: { cellWidth: colDesc, valign: "middle" as const },

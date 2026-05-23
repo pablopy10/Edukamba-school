@@ -411,6 +411,8 @@ export async function resolveFiscalInvoicePdfInput(
     studentClassroom: studentClassroom || null,
     academicYearLabel,
     lineItems: (() => {
+      // Capitalizar primeira letra
+      const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       // Se line_description contém múltiplos itens separados por ";" (conversão PP→FT), criar linhas distintas
       // Formato novo: "Desc:Valor:IvaPct; Desc2:Valor2:IvaPct2"
       // Formato antigo: "Desc:Valor; Desc2:Valor2" ou "Desc; Desc2"
@@ -428,7 +430,7 @@ export async function resolveFiscalInvoicePdfInput(
             const taxLabel = ivaPct === "0" ? "Isento (M11)" : ivaPct === "0_M04" ? "Não sujeito (M04)" : `${ivaPct}%`;
             const fmtVal = Number.isFinite(num) ? formatMoney(num) : totalFmt;
             return {
-              description: desc,
+              description: cap(desc),
               quantity: 1,
               unitPriceFmt: fmtVal,
               totalAmountFmt: fmtVal,
@@ -443,17 +445,17 @@ export async function resolveFiscalInvoicePdfInput(
             const num = parseFloat(val.replace(/\s/g, "").replace(",", "."));
             const fmtVal = Number.isFinite(num) ? formatMoney(num) : totalFmt;
             return {
-              description: desc,
+              description: cap(desc),
               quantity: 1,
               unitPriceFmt: fmtVal,
               totalAmountFmt: fmtVal,
             };
           }
-          return { description: part, quantity: 1, unitPriceFmt: totalFmt, totalAmountFmt: totalFmt };
+          return { description: cap(part), quantity: 1, unitPriceFmt: totalFmt, totalAmountFmt: totalFmt };
         });
       }
       return [{
-        description: lineDescription,
+        description: cap(lineDescription),
         quantity: 1,
         unitPriceFmt: totalFmt,
         totalAmountFmt: totalFmt,
@@ -716,7 +718,7 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
           5: { cellWidth: colTotal, ...moneyStyle, fontStyle: "bold" as const, textColor: [35, 40, 48] as [number, number, number] },
         };
       }
-      const colQty = 12; const colUnit = 26; const colTax = 22; const colTotal = 34;
+      const colQty = 12; const colUnit = 24; const colTax = 20; const colTotal = 38;
       const colDesc = usableW - colQty - colUnit - colTax - colTotal;
       return {
         0: { cellWidth: colDesc, valign: "middle" as const },
