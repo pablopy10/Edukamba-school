@@ -136,11 +136,19 @@ export async function downloadCreditNotePdfById(creditNoteId: string): Promise<v
             creditItems = [matched];
           } else {
             // Fallback: usar descrição do primeiro item da FT com o valor parcial
-            // A AGT exige referência ao serviço original, não texto genérico
             const refItem = allItems[0];
             creditItems = [{ description: refItem.description, amount: ncGrossTotal, ivaPct: refItem.ivaPct, taxLabel: refItem.taxLabel }];
           }
         }
+      } else {
+        // line_description não está no formato Desc:Valor:IvaPct (ex: propinas simples)
+        // Usar a descrição original da FT directamente
+        creditItems = [{
+          description: originalFT.line_description.trim(),
+          amount: ncGrossTotal,
+          ivaPct: 0,
+          taxLabel: "Isento (M11)",
+        }];
       }
     }
   }

@@ -848,75 +848,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       toast({ title: "Pagamento registado mas falha a marcar como pago", description: feeErr.message, variant: "destructive" });
       return;
     }
-    const comprovativoMencao = proofPath ? " Pode consultar o comprovativo no portal." : "";
-    const parentId = isParent ? null : (fee as FeeListRow | ActivityFeeRow | TransportFeeRow | MealFeeRow | EventFeeRow | EnrollmentFeeRow).student?.parent_id;
-    if (parentId) {
-      if (kind === "fee") {
-        const f = fee as FeeListRow;
-        const monthLabel = f.month_index ? monthNamesLong[f.month_index - 1] : "";
-        await supabase.from("notifications").insert({
-          recipient_id: parentId,
-          school_id: schoolId,
-          title: `Pagamento registado — ${monthLabel}`.trim(),
-          description: `A escola registou o pagamento da propina de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
-          category: "pagamento",
-          link: "https://www.edukamba.com/pagamentos",
-        });
-      } else if (kind === "activity") {
-        const f = fee as ActivityFeeRow;
-        await supabase.from("notifications").insert({
-          recipient_id: parentId,
-          school_id: schoolId,
-          title: `Pagamento registado — ${f.activity?.name ?? "atividade"}`,
-          description: `A escola registou o pagamento da atividade ${f.activity?.name ?? ""} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
-          category: "pagamento",
-          link: "https://www.edukamba.com/pagamentos",
-        });
-      } else if (kind === "transport") {
-        const f = fee as TransportFeeRow;
-        const monthLabel = f.month_index ? monthNamesLong[f.month_index - 1] : "";
-        await supabase.from("notifications").insert({
-          recipient_id: parentId,
-          school_id: schoolId,
-          title: `Pagamento de transporte registado — ${monthLabel}`.trim(),
-          description: `A escola registou o pagamento do transporte (${f.route?.name ?? "rota"}) de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
-          category: "pagamento",
-          link: "https://www.edukamba.com/pagamentos",
-        });
-      } else if (kind === "meal") {
-        const f = fee as MealFeeRow;
-        const monthLabel = f.month_index ? monthNamesLong[f.month_index - 1] : "";
-        await supabase.from("notifications").insert({
-          recipient_id: parentId,
-          school_id: schoolId,
-          title: `Pagamento de refeições registado — ${monthLabel}`.trim(),
-          description: `A escola registou o pagamento do plano ${f.meal_program?.name ?? "refeições"} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
-          category: "pagamento",
-          link: "https://www.edukamba.com/pagamentos",
-        });
-      } else if (kind === "event") {
-        const f = fee as EventFeeRow;
-        await supabase.from("notifications").insert({
-          recipient_id: parentId,
-          school_id: schoolId,
-          title: `Pagamento de evento registado`,
-          description: `A escola registou o pagamento do evento «${f.event?.title ?? "evento"}» de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
-          category: "pagamento",
-          link: "https://www.edukamba.com/eventos?tab=pagamentos",
-        });
-      } else {
-        const f = fee as EnrollmentFeeRow;
-        const label = f.fee_type === "RENEWAL" ? "renovação de matrícula" : "matrícula";
-        await supabase.from("notifications").insert({
-          recipient_id: parentId,
-          school_id: schoolId,
-          title: `Pagamento de ${label} registado`,
-          description: `A escola registou o pagamento da ${label} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
-          category: "pagamento",
-          link: "https://www.edukamba.com/pagamentos",
-        });
-      }
-    }
+    // Notificação ao encarregado é feita automaticamente pelo trigger tg_notify_payment_validation
+    // (evita duplicação de push/email)
     setRecordUploading(false);
     setRecordDialog(null);
     toast({ title: isParent ? "Comprovativo enviado para validação" : "Pagamento registado e validado" });

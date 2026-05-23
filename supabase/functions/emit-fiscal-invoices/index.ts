@@ -451,23 +451,9 @@ async function emitOne(
       return { payment_id, status: "error", detail: insErr.message };
     }
 
-    if (inserted?.id && adminSb) {
-      try {
-        const pdfBytes = await buildOfficialFiscalInvoicePdfBytes(
-          adminSb,
-          invoiceRowToPdfPayload(inserted as Record<string, unknown>),
-        );
-        void sendInvoiceIssuedEmailForId(adminSb, String(inserted.id), pdfBytes).catch((e) =>
-          console.error("emit-fiscal-invoices: email encarregado", e),
-        );
-      } catch (e) {
-        console.error("emit-fiscal-invoices: PDF fiscal para email", e);
-      }
-    } else if (inserted?.id && !adminSb) {
-      console.warn(
-        "emit-fiscal-invoices: SUPABASE_SERVICE_ROLE_KEY ausente no ambiente — email automático da fatura não enviado.",
-      );
-    }
+    // Email de fatura desactivado — o trigger tg_notify_payment_validation já envia
+    // notificação (push + email) ao encarregado. Evita duplicação de emails.
+    // O PDF da fatura pode ser descarregado na app pelo encarregado.
 
     return {
       payment_id,
