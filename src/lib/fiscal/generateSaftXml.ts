@@ -246,7 +246,7 @@ export function generateSaftXml(input: {
     productVersion,
   } = input;
   const softwareName = input.softwareName ?? "Edukamba";
-  const productIdCombined = saftAoProductId(softwareName, input.productProducerName ?? "Edukamba Lda");
+  const productIdCombined = `${softwareName}/${input.productProducerName ?? "Edukamba Lda - 5480041924"}`.slice(0, 255);
   const softwareVer = input.productVersion ?? "1.0.0";
 
   const periodStart = `${year}-${String(month).padStart(2, "0")}-01`;
@@ -279,9 +279,19 @@ export function generateSaftXml(input: {
       customerIx += 1;
       const cid = `C_${customerIx}`;
       const nome = esc(c.name.slice(0, 200));
-      // CustomerTaxID deve ter exactamente 10 dígitos (NIF angolano); se inválido usar "9999999990"
+      // CustomerTaxID: NIF angolano tem 10 dígitos. Se < 10, pad com zeros à esquerda. Se inválido usar "9999999990"
       const rawNif = c.nif.replace(/\D/g, "");
-      const nif = esc(rawNif.length >= 9 && rawNif.length <= 14 ? rawNif : "9999999990");
+      let validNif: string;
+      if (rawNif.length === 10) {
+        validNif = rawNif;
+      } else if (rawNif.length === 9) {
+        validNif = "0" + rawNif; // pad to 10
+      } else if (rawNif.length > 10 && rawNif.length <= 14) {
+        validNif = rawNif;
+      } else {
+        validNif = "9999999990";
+      }
+      const nif = esc(validNif);
       const { detail: bd, city } = addressParts(`${c.name} (${c.nif})`);
       return `
     <Customer>
@@ -303,15 +313,14 @@ export function generateSaftXml(input: {
   );
   const companyName = esc(school.name.trim().slice(0, 200));
 
-  /** Totais 4.1 XSD: TotalCredit = soma dos GrossTotal de todas as faturas do período. */
-  const invoiceGrossTotals: number[] = [];
+  /** Totais 4.1 XSD: TotalCredit = soma de todos os CreditAmount das linhas (base tributável, sem IVA). */
+  const allLineCreditAmounts: number[] = [];
 
   const invoiceBlocks = fis
     .map((inv, idx) => {
       const docDate = esc(inv.invoice_date.slice(0, 10));
       const total = Number(inv.gross_total);
       const totalStr = (Math.round((total + Number.EPSILON) * 100) / 100).toFixed(2);
-      invoiceGrossTotals.push(Number(totalStr));
       const cur = (inv.currency ?? "AOA").toUpperCase();
       if (cur !== "AOA") {
         throw new Error(`Moeda não suportada no exportador SAF-T: ${cur} (requer apenas AOA).`);
@@ -406,6 +415,7 @@ export function generateSaftXml(input: {
           const taxAmount = Math.round((baseAmount * taxPct / 100) * 100) / 100;
           totalNetAmount += baseAmount;
           totalTaxPayable += taxAmount;
+          allLineCreditAmounts.push(Math.round(baseAmount * 100) / 100);
 
           const taxBlock = isExempt
             ? `<Tax>
@@ -453,7 +463,7 @@ export function generateSaftXml(input: {
     })
     .join("");
 
-  const totalCredit = sumMoney(invoiceGrossTotals);
+  const totalCredit = sumMoney(allLineCreditAmounts);
 
   const nEntries = fis.length;
   const totalDebit = "0.00";
