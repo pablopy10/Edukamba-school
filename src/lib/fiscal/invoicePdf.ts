@@ -454,6 +454,37 @@ export async function resolveFiscalInvoicePdfInput(
           return { description: cap(part), quantity: 1, unitPriceFmt: totalFmt, totalAmountFmt: totalFmt };
         });
       }
+      // Item único — tentar parsear formato "Desc:Valor:IvaPct"
+      const singleMatch = /^(.+):(\d[\d\s.,]*):(\d+(?:_M\d+)?)$/.exec(lineDescription);
+      if (singleMatch) {
+        const desc = singleMatch[1].trim();
+        const val = singleMatch[2].trim();
+        const ivaPctStr = singleMatch[3].trim();
+        const num = parseFloat(val.replace(/\s/g, "").replace(",", "."));
+        const taxLabel = ivaPctStr === "0" ? "Isento (M11)" : ivaPctStr === "0_M04" ? "Não sujeito (M04)" : `${ivaPctStr}%`;
+        const fmtVal = Number.isFinite(num) ? formatMoney(num) : totalFmt;
+        return [{
+          description: cap(desc),
+          quantity: 1,
+          unitPriceFmt: fmtVal,
+          totalAmountFmt: fmtVal,
+          taxLabel,
+        }];
+      }
+      // Formato antigo "Desc:Valor"
+      const singleMatch2 = /^(.+):(\d[\d\s.,]*)$/.exec(lineDescription);
+      if (singleMatch2) {
+        const desc = singleMatch2[1].trim();
+        const val = singleMatch2[2].trim();
+        const num = parseFloat(val.replace(/\s/g, "").replace(",", "."));
+        const fmtVal = Number.isFinite(num) ? formatMoney(num) : totalFmt;
+        return [{
+          description: cap(desc),
+          quantity: 1,
+          unitPriceFmt: fmtVal,
+          totalAmountFmt: fmtVal,
+        }];
+      }
       return [{
         description: cap(lineDescription),
         quantity: 1,
@@ -498,6 +529,21 @@ export async function resolveFiscalInvoicePdfInput(
             base: fmtNum(g.base),
             iva: fmtNum(g.iva),
           })),
+        };
+      }
+      // Item único com formato "Desc:Valor:IvaPct"
+      const sm = /^(.+):(\d[\d\s.,]*):(\d+(?:_M\d+)?)$/.exec(lineDescription);
+      if (sm) {
+        const val = parseFloat(sm[2].replace(/\s/g, "").replace(",", ".")) || 0;
+        const ivaPctStr = sm[3].trim();
+        const pct = ivaPctStr === "0_M04" ? 0 : (parseFloat(ivaPctStr) || 0);
+        const ivaAmt = Math.round((val * pct / 100) * 100) / 100;
+        const label = ivaPctStr === "0" ? "Isento (M11)" : ivaPctStr === "0_M04" ? "Não sujeito (M04)" : `${ivaPctStr}%`;
+        const fmtNum = (n: number) => formatMoney(Number.isFinite(n) ? n : 0);
+        return {
+          subtotalFmt: fmtNum(val),
+          ivaFmt: fmtNum(ivaAmt),
+          taxSummary: [{ label, base: fmtNum(val), iva: fmtNum(ivaAmt) }],
         };
       }
       return {};
