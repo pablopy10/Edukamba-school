@@ -247,8 +247,9 @@ export function generateSaftXml(input: {
   } = input;
   const softwareName = input.softwareName ?? "Edukamba";
   const softwareVer = input.productVersion ?? "1.0.0";
-  // ProductID AGT: "NomeProduto versão/NIF_Produtor" — formato certificado
-  const productIdCombined = `${softwareName} ${softwareVer}/${input.productProducerName ?? "5480041924"}`.slice(0, 255);
+  // ProductID AGT: "NomeProduto/NomeEmpresaProdutora" — sem caracteres especiais problemáticos
+  const producerName = (input.productProducerName ?? "PJ AB SERVICOS LDA").replace(/[^A-Za-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  const productIdCombined = `${softwareName}/${producerName}`.slice(0, 255);
 
   const periodStart = `${year}-${String(month).padStart(2, "0")}-01`;
   const ld = new Date(year, month, 0).getDate();
@@ -280,16 +281,27 @@ export function generateSaftXml(input: {
       customerIx += 1;
       const cid = `C_${customerIx}`;
       const nome = esc(c.name.slice(0, 200));
-      // CustomerTaxID: passar o NIF tal como registado (alfanumérico para pessoas singulares, numérico para empresas)
-      // O validador AGT aceita o BI completo (ex: "001699891LA037") ou NIF empresa (10 dígitos)
-      const rawNif = c.nif.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
-      const nif = esc(rawNif.length >= 9 && rawNif.length <= 14 ? rawNif : "999999999");
+      // CustomerTaxID AGT: deve ser NIF numérico (10 dígitos para empresas, 9 para consumidor final)
+      // Se o valor guardado é um BI alfanumérico (ex: "001699891LA037"), usar "999999999" (consumidor final)
+      const rawNif = c.nif.trim();
+      const digitsOnly = rawNif.replace(/\D/g, "");
+      let nif: string;
+      if (/^[0-9]{10}$/.test(rawNif)) {
+        // NIF empresa válido (10 dígitos)
+        nif = rawNif;
+      } else if (/^[0-9]{9}$/.test(rawNif)) {
+        // 9 dígitos (consumidor final ou NIF antigo)
+        nif = rawNif;
+      } else {
+        // BI alfanumérico ou formato inválido — usar consumidor final
+        nif = "999999999";
+      }
       const { detail: bd, city } = addressParts(`${c.name} (${c.nif})`);
       return `
     <Customer>
       <CustomerID>${cid}</CustomerID>
       <AccountID>Desconhecido</AccountID>
-      <CustomerTaxID>${nif}</CustomerTaxID>
+      <CustomerTaxID>${esc(nif)}</CustomerTaxID>
       <CompanyName>${nome}</CompanyName>${billingAddressXml(`${bd}`, city)}
       <SelfBillingIndicator>0</SelfBillingIndicator>
     </Customer>`;
