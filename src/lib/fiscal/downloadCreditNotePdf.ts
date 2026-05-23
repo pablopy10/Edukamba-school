@@ -166,9 +166,10 @@ export async function downloadCreditNotePdfById(creditNoteId: string): Promise<v
 
   const grandTotal = subtotal + totalIva;
 
-  // Construir lineItems para o PDF
+  // Construir lineItems para o PDF (capitalizar primeira letra)
+  const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const lineItems: CreditNoteLine[] = creditItems.map((it) => ({
-    description: it.description,
+    description: capitalize(it.description),
     quantity: 1,
     totalAmountFmt: fmtKz(it.amount),
     taxLabel: it.taxLabel,

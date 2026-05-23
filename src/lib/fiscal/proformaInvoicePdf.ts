@@ -444,7 +444,7 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
     columnStyles: (() => {
       const moneyStyle = { fontSize: pxToPt(11), halign: "right" as const, valign: "middle" as const };
       if (hasAnyDiscount) {
-        const colQty = 12; const colUnit = 26; const colDisc = 14; const colTax = 22; const colTotal = 28;
+        const colQty = 12; const colUnit = 24; const colDisc = 14; const colTax = 20; const colTotal = 34;
         const colDesc = usableW - colQty - colUnit - colDisc - colTax - colTotal;
         return {
           0: { cellWidth: colDesc, valign: "middle" as const },
@@ -455,7 +455,7 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
           5: { cellWidth: colTotal, ...moneyStyle, fontStyle: "bold" as const, textColor: [35, 40, 48] as [number, number, number] },
         };
       }
-      const colQty = 14; const colUnit = 28; const colTax = 24; const colTotal = 30;
+      const colQty = 12; const colUnit = 26; const colTax = 22; const colTotal = 34;
       const colDesc = usableW - colQty - colUnit - colTax - colTotal;
       return {
         0: { cellWidth: colDesc, valign: "middle" as const },
