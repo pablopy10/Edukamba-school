@@ -246,8 +246,9 @@ export function generateSaftXml(input: {
     productVersion,
   } = input;
   const softwareName = input.softwareName ?? "Edukamba";
-  const productIdCombined = `${softwareName}/${input.productProducerName ?? "Edukamba Lda"}`.slice(0, 255);
   const softwareVer = input.productVersion ?? "1.0.0";
+  // ProductID AGT: "NomeProduto versão/NIF_Produtor" — formato certificado
+  const productIdCombined = `${softwareName} ${softwareVer}/${input.productProducerName ?? "5480041924"}`.slice(0, 255);
 
   const periodStart = `${year}-${String(month).padStart(2, "0")}-01`;
   const ld = new Date(year, month, 0).getDate();
@@ -279,10 +280,10 @@ export function generateSaftXml(input: {
       customerIx += 1;
       const cid = `C_${customerIx}`;
       const nome = esc(c.name.slice(0, 200));
-      // CustomerTaxID no XSD SAF-T AO aceita apenas dígitos (pattern [0-9]+)
-      // Extrair apenas os dígitos do NIF alfanumérico angolano (ex: "001699891LA037" → "001699891037")
-      const rawNif = c.nif.replace(/[^0-9]/g, "");
-      const nif = esc(rawNif.length >= 9 ? rawNif : "999999999");
+      // CustomerTaxID: passar o NIF tal como registado (alfanumérico para pessoas singulares, numérico para empresas)
+      // O validador AGT aceita o BI completo (ex: "001699891LA037") ou NIF empresa (10 dígitos)
+      const rawNif = c.nif.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+      const nif = esc(rawNif.length >= 9 && rawNif.length <= 14 ? rawNif : "999999999");
       const { detail: bd, city } = addressParts(`${c.name} (${c.nif})`);
       return `
     <Customer>
