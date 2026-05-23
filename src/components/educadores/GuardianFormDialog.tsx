@@ -14,6 +14,7 @@ export type GuardianRow = {
   profile_id: string;
   full_name: string;
   phone: string | null;
+  tax_id: string | null;
   /** Email da conta Auth / perfil (login). */
   email: string | null;
   student_ids: string[];
@@ -49,7 +50,7 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
         setFullName(guardian.full_name ?? "");
         setEmail(guardian.email ?? "");
         setPhone(guardian.phone ?? "");
-        setTaxId("");
+        setTaxId(guardian.tax_id ?? "");
         setStudentIds(guardian.student_ids ?? []);
       } else {
         setFullName(""); setEmail(""); setPhone(""); setTaxId("");

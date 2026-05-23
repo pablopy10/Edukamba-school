@@ -94,7 +94,7 @@ const Educadores = () => {
 
     let profilesQuery = supabase
         .from("profiles")
-        .select("id, full_name, phone, email")
+        .select("id, full_name, phone, email, tax_id")
         .eq("role", "PARENT")
         .order("full_name", { ascending: true });
     if (mySchoolId) profilesQuery = profilesQuery.eq("school_id", mySchoolId);
@@ -113,12 +113,13 @@ const Educadores = () => {
       const allowed = new Set(teacherClassroomIds);
       studentsArr = studentsArr.filter((s) => s.classroom_id && allowed.has(s.classroom_id));
     }
-    let rows: GuardianRow[] = (profs ?? []).map((p: { id: string; full_name: string; phone: string | null; email: string | null }) => {
+    let rows: GuardianRow[] = (profs ?? []).map((p: { id: string; full_name: string; phone: string | null; email: string | null; tax_id?: string | null }) => {
       const linked = studentsArr.filter((st) => st.parent_id === p.id);
       return {
         profile_id: p.id,
         full_name: p.full_name,
         phone: p.phone,
+        tax_id: p.tax_id ?? null,
         email: p.email ?? null,
         student_ids: linked.map((s) => s.id),
         student_names: linked.map((s) => s.full_name),
