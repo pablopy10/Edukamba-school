@@ -116,35 +116,59 @@ export async function downloadCreditNotePdfById(creditNoteId: string): Promise<v
   if (creditItems.length === 0 && sourceInvoiceNumber !== "—") {
     const { data: originalFT } = await supabase
       .from("invoices")
-      .select("line_description, gross_total")
+      .select("line_description, gross_total, payment_id")
       .eq("document_number", sourceInvoiceNumber)
       .maybeSingle();
 
-    if (originalFT?.line_description) {
-      const allItems = parseLineDescription(originalFT.line_description);
+    if (originalFT) {
+      // Tentar resolver descrição dinâmica a partir do pagamento (propinas com mês/ano)
+      let resolvedDesc = originalFT.line_description?.trim() || "Serviços educativos";
+      
+      if (originalFT.payment_id) {
+        const { data: payRow } = await supabase
+          .from("payments")
+          .select("student_fee_id")
+          .eq("id", originalFT.payment_id)
+          .maybeSingle();
+        
+        if (payRow?.student_fee_id) {
+          const { data: sfRow } = await supabase
+            .from("student_fees")
+            .select("month_index, academic_year:academic_years(label)")
+            .eq("id", payRow.student_fee_id)
+            .maybeSingle();
+          
+          if (sfRow) {
+            const PT_MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+            const m = Number((sfRow as { month_index: number | null }).month_index);
+            const month = Number.isFinite(m) && m >= 1 && m <= 12 ? PT_MONTHS[m - 1] : null;
+            const yLabel = ((sfRow as { academic_year: { label: string | null } | null }).academic_year)?.label?.trim() ?? null;
+            if (month && yLabel) resolvedDesc = `Propina - ${month} (${yLabel})`;
+            else if (month) resolvedDesc = `Propina - ${month}`;
+            else if (yLabel) resolvedDesc = `Propina (${yLabel})`;
+          }
+        }
+      }
+
+      const allItems = parseLineDescription(originalFT.line_description ?? "");
       const ftGrossTotal = Number(originalFT.gross_total);
 
       if (allItems.length > 0) {
-        // Verificar se é anulação total (valor NC = valor total da FT)
         if (Math.abs(ncGrossTotal - ftGrossTotal) < 1) {
-          // Anulação total: herdar TODOS os itens
           creditItems = allItems;
         } else {
-          // Anulação parcial: encontrar o item que corresponde ao valor da NC
           const matched = allItems.find((it) => Math.abs(it.amount - ncGrossTotal) < 1);
           if (matched) {
             creditItems = [matched];
           } else {
-            // Fallback: usar descrição do primeiro item da FT com o valor parcial
             const refItem = allItems[0];
             creditItems = [{ description: refItem.description, amount: ncGrossTotal, ivaPct: refItem.ivaPct, taxLabel: refItem.taxLabel }];
           }
         }
       } else {
-        // line_description não está no formato Desc:Valor:IvaPct (ex: propinas simples)
-        // Usar a descrição original da FT directamente
+        // Usar descrição resolvida (propina com mês/ano ou line_description da FT)
         creditItems = [{
-          description: originalFT.line_description.trim(),
+          description: resolvedDesc,
           amount: ncGrossTotal,
           ivaPct: 0,
           taxLabel: "Isento (M11)",
