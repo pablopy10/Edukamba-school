@@ -106,6 +106,9 @@ const Orcamentos = () => {
     validityDays: "30",
     items: [{ description: "", quantity: 1, unitPrice: "", discount: "", ivaPct: "0" }] as FormItem[],
     currency: "AOA",
+    /** Taxa de câmbio para Kz (ex: 850 = 1 USD = 850 Kz). Só usado quando currency ≠ AOA */
+    exchangeRate: "",
+    exchangeDate: new Date().toISOString().slice(0, 10),
     footerNote: "",
   });
 
@@ -249,8 +252,10 @@ const Orcamentos = () => {
       subtotalBruto: fmt(subtotalBruto),
       totalDesconto: fmt(totalDesconto),
       baseImponivel: fmt(baseImponivel),
-      subtotal: fmt(baseImponivel), // para compatibilidade com PDF
+      baseImponivelNum: baseImponivel,
+      subtotal: fmt(baseImponivel),
       iva: fmt(totalIva),
+      ivaNum: totalIva,
       total: fmt(total),
       totalNum: total,
       hasDiscount: totalDesconto > 0,
@@ -368,6 +373,17 @@ const Orcamentos = () => {
           return { label, base: `${fmt(g.base)} AOA`, iva: `${fmt(g.iva)} AOA` };
         }),
         currencyLabel,
+        exchangeRate: form.currency !== "AOA" ? (parseFloat(form.exchangeRate) || undefined) : undefined,
+        exchangeDate: form.currency !== "AOA" ? form.exchangeDate : undefined,
+        subtotalKzFmt: form.currency !== "AOA" && parseFloat(form.exchangeRate) > 0
+          ? new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalsCalc.baseImponivelNum * parseFloat(form.exchangeRate)) + " Kz"
+          : undefined,
+        ivaKzFmt: form.currency !== "AOA" && parseFloat(form.exchangeRate) > 0
+          ? new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalsCalc.ivaNum * parseFloat(form.exchangeRate)) + " Kz"
+          : undefined,
+        totalKzFmt: form.currency !== "AOA" && parseFloat(form.exchangeRate) > 0
+          ? new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalsCalc.totalNum * parseFloat(form.exchangeRate)) + " Kz"
+          : undefined,
         footerNote: form.footerNote.trim() || null,
       };
 
@@ -411,7 +427,7 @@ const Orcamentos = () => {
         clientName: "", clientLines: "", clientNif: "", clientEmail: "",
         issueDate: new Date().toISOString().slice(0, 10), validityDays: "30",
         items: [{ description: "", quantity: 1, unitPrice: "", discount: "", ivaPct: "0" }],
-        currency: "AOA", footerNote: "",
+        currency: "AOA", exchangeRate: "", exchangeDate: new Date().toISOString().slice(0, 10), footerNote: "",
       });
       setClientType("encarregado");
       setSelectedPersonId("");
@@ -633,6 +649,29 @@ const Orcamentos = () => {
                   <Label>Validade (dias)</Label>
                   <Input type="number" value={form.validityDays} onChange={(e) => setForm({ ...form, validityDays: e.target.value })} min="1" />
                 </div>
+                <div>
+                  <Label>Moeda</Label>
+                  <Select value={form.currency} onValueChange={(v) => setForm({ ...form, currency: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="AOA">AOA (Kz)</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                      <SelectItem value="EUR">EUR</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {form.currency !== "AOA" && (
+                  <>
+                    <div>
+                      <Label>Taxa de Câmbio (1 {form.currency} = ? Kz)</Label>
+                      <Input type="text" value={form.exchangeRate} onChange={(e) => setForm({ ...form, exchangeRate: e.target.value })} placeholder="Ex: 850" />
+                    </div>
+                    <div>
+                      <Label>Data do Câmbio (BNA)</Label>
+                      <Input type="date" value={form.exchangeDate} onChange={(e) => setForm({ ...form, exchangeDate: e.target.value })} />
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Items with per-line IVA */}
@@ -717,6 +756,23 @@ const Orcamentos = () => {
                     <span className="text-right">{totalsCalc.iva}</span>
                     <span className="text-right">{totalsCalc.total} {currencyLabel}</span>
                   </div>
+                  {form.currency !== "AOA" && parseFloat(form.exchangeRate) > 0 && (
+                    <div className="border-t pt-2 mt-2 text-xs text-muted-foreground space-y-1">
+                      <p className="font-medium">Equivalente em Kz (câmbio: {form.exchangeRate} Kz/{form.currency})</p>
+                      <div className="flex justify-between">
+                        <span>Subtotal:</span>
+                        <span>{new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalsCalc.baseImponivelNum * parseFloat(form.exchangeRate))} Kz</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>IVA:</span>
+                        <span>{new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalsCalc.ivaNum * parseFloat(form.exchangeRate))} Kz</span>
+                      </div>
+                      <div className="flex justify-between font-bold">
+                        <span>Total:</span>
+                        <span>{new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalsCalc.totalNum * parseFloat(form.exchangeRate))} Kz</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -76,6 +76,13 @@ export type ProformaInvoicePdfInput = {
   // Currency
   currencyLabel: string; // "AKZ" or "AOA"
 
+  /** Moeda estrangeira: taxa de câmbio, data e totais em Kz */
+  exchangeRate?: number;
+  exchangeDate?: string;
+  subtotalKzFmt?: string;
+  ivaKzFmt?: string;
+  totalKzFmt?: string;
+
   // AGT compliance fields
   /** 4-char hash extract, ex: "XyZ1" — shown as "XyZ1-" per AGT spec */
   hashExtract?: string | null;
@@ -508,20 +515,34 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
     blockY = (d2.lastAutoTable?.finalY ?? blockY) + pxMm(10);
   }
 
+  // Exchange rate info (moeda estrangeira)
+  if (opts.exchangeRate && opts.exchangeRate > 0 && opts.currencyLabel !== "AKZ") {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(pxToPt(10));
+    doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+    const exDateFmt = opts.exchangeDate || "—";
+    doc.text(`Moeda: ${opts.currencyLabel} | Taxa de Câmbio: ${new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2 }).format(opts.exchangeRate)} Kz | Data: ${exDateFmt} (BNA)`, margin, blockY);
+    blockY += pxMm(16);
+    doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
+  }
+
   // Totals section
   const totalsW = usableW * 0.55;
   const totalsX = rhs - totalsW;
+  const isForeign = opts.exchangeRate && opts.exchangeRate > 0 && opts.currencyLabel !== "AKZ";
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(pxToPt(12));
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
   doc.text("Subtotal", totalsX, blockY + pxMm(4));
-  doc.text(opts.subtotalFmt, totalsX + totalsW, blockY + pxMm(4), { align: "right" });
+  const subtotalDisplay = isForeign ? `${opts.subtotalFmt} ${opts.currencyLabel} | ${opts.subtotalKzFmt}` : opts.subtotalFmt;
+  doc.text(subtotalDisplay, totalsX + totalsW, blockY + pxMm(4), { align: "right" });
 
   blockY += pxMm(10) + pxMm(10);
 
   doc.text("IVA", totalsX, blockY + pxMm(4));
-  doc.text(opts.ivaFmt, totalsX + totalsW, blockY + pxMm(4), { align: "right" });
+  const ivaDisplay = isForeign ? `${opts.ivaFmt} ${opts.currencyLabel} | ${opts.ivaKzFmt}` : opts.ivaFmt;
+  doc.text(ivaDisplay, totalsX + totalsW, blockY + pxMm(4), { align: "right" });
 
   blockY += pxMm(10) + pxMm(10);
 
@@ -533,8 +554,9 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   doc.setFontSize(pxToPt(11));
   doc.setTextColor(255, 255, 255);
   doc.text("TOTAL", totalsX + pxMm(10), blockY + grandH * 0.35, { baseline: "middle" });
-  doc.setFontSize(pxToPt(16));
-  doc.text(opts.totalFmt, totalsX + pxMm(10), blockY + grandH * 0.7, { baseline: "middle" });
+  doc.setFontSize(pxToPt(14));
+  const totalDisplay = isForeign ? `${opts.totalFmt} ${opts.currencyLabel} | ${opts.totalKzFmt}` : opts.totalFmt;
+  doc.text(totalDisplay, totalsX + pxMm(10), blockY + grandH * 0.7, { baseline: "middle" });
 
   // Hash extract box removida — hash aparece no rodapé junto à linha AGT
   const hashExtract = opts.hashExtract?.trim() ? opts.hashExtract.trim().slice(0, 4) : null;
