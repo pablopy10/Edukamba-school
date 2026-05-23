@@ -410,6 +410,8 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
 
   // Items table — include DESC. column if any item has discount
   const hasAnyDiscount = opts.lineItems.some((it) => it.discountPct);
+  /** Substitui espaço antes de "Kz" por non-breaking space para evitar quebra de linha */
+  const nbspKz = (s: string) => s.replace(/ Kz/g, "\u00a0Kz");
   const head = hasAnyDiscount
     ? [["DESCRIÇÃO DO SERVIÇO", "QTD", "P. UNITÁRIO", "DESC.", "TAXA", "TOTAL"]]
     : [["DESCRIÇÃO DO SERVIÇO", "QTD", "P. UNITÁRIO", "TAXA", "TOTAL"]];
@@ -417,11 +419,11 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
     const row = [
       it.description.replace(/\u00a0/g, " "),
       String(it.quantity),
-      it.unitPriceFmt,
+      nbspKz(it.unitPriceFmt),
     ];
     if (hasAnyDiscount) row.push(it.discountPct || "—");
     row.push(it.taxLabel || "Isento");
-    row.push(it.totalAmountFmt);
+    row.push(nbspKz(it.totalAmountFmt));
     return row;
   });
 
@@ -451,9 +453,9 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
       cellPadding: { top: pxMm(10), right: pxMm(10), bottom: pxMm(10), left: pxMm(10) },
     },
     columnStyles: (() => {
-      const moneyStyle = { fontSize: pxToPt(11), halign: "right" as const, valign: "middle" as const };
+      const moneyStyle = { fontSize: pxToPt(11), halign: "right" as const, valign: "middle" as const, overflow: "visible" as const };
       if (hasAnyDiscount) {
-        const colQty = 12; const colUnit = 24; const colDisc = 14; const colTax = 20; const colTotal = 34;
+        const colQty = 11; const colUnit = 28; const colDisc = 12; const colTax = 18; const colTotal = 34;
         const colDesc = usableW - colQty - colUnit - colDisc - colTax - colTotal;
         return {
           0: { cellWidth: colDesc, valign: "middle" as const },
@@ -464,7 +466,7 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
           5: { cellWidth: colTotal, ...moneyStyle, fontStyle: "bold" as const, textColor: [35, 40, 48] as [number, number, number] },
         };
       }
-      const colQty = 12; const colUnit = 24; const colTax = 20; const colTotal = 38;
+      const colQty = 11; const colUnit = 30; const colTax = 18; const colTotal = 38;
       const colDesc = usableW - colQty - colUnit - colTax - colTotal;
       return {
         0: { cellWidth: colDesc, valign: "middle" as const },
@@ -484,7 +486,7 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   
   if (opts.taxSummary && opts.taxSummary.length > 0) {
     const taxHead = [["TAXA / ISENÇÃO", "BASE TRIBUTÁVEL", "IVA"]];
-    const taxBody = opts.taxSummary.map((ts) => [ts.label, ts.base, ts.iva]);
+    const taxBody = opts.taxSummary.map((ts) => [ts.label, nbspKz(ts.base), nbspKz(ts.iva)]);
     
     autoTable(doc, {
       startY: blockY,
