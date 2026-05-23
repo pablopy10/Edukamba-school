@@ -279,19 +279,10 @@ export function generateSaftXml(input: {
       customerIx += 1;
       const cid = `C_${customerIx}`;
       const nome = esc(c.name.slice(0, 200));
-      // CustomerTaxID: NIF angolano tem 10 dígitos. Se < 10, pad com zeros à esquerda. Se inválido usar "9999999990"
-      const rawNif = c.nif.replace(/\D/g, "");
-      let validNif: string;
-      if (rawNif.length === 10) {
-        validNif = rawNif;
-      } else if (rawNif.length === 9) {
-        validNif = "0" + rawNif; // pad to 10
-      } else if (rawNif.length > 10 && rawNif.length <= 14) {
-        validNif = rawNif;
-      } else {
-        validNif = "9999999990";
-      }
-      const nif = esc(validNif);
+      // CustomerTaxID: NIF angolano é alfanumérico (ex: "001699891LA037", até 14 chars)
+      // Remover apenas espaços e caracteres especiais, manter letras e dígitos
+      const rawNif = c.nif.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+      const nif = esc(rawNif.length >= 9 && rawNif.length <= 14 ? rawNif : "999999999");
       const { detail: bd, city } = addressParts(`${c.name} (${c.nif})`);
       return `
     <Customer>

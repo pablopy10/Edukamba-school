@@ -89,7 +89,7 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
         const { error: pErr } = await supabase.from("profiles").update({
           full_name: fullName.trim(),
           phone: phone || null,
-          tax_id: taxId.replace(/\D/g, "").trim() || null,
+          tax_id: taxId.trim().toUpperCase() || null,
         }).eq("id", guardian.profile_id);
         if (pErr) throw pErr;
 
@@ -120,7 +120,7 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
             full_name: fullName.trim(),
             email: email.trim(),
             phone: phone || null,
-            tax_id: taxId.replace(/\D/g, "").trim() || null,
+            tax_id: taxId.trim().toUpperCase() || null,
             student_ids: studentIds,
             password,
           },
@@ -179,7 +179,7 @@ export const GuardianFormDialog = ({ open, onOpenChange, students, guardian, onS
           </div>
           <div>
             <Label htmlFor="gnif">NIF</Label>
-            <Input id="gnif" value={taxId} onChange={(e) => setTaxId(e.target.value)} placeholder="0000000000" maxLength={10} />
+            <Input id="gnif" value={taxId} onChange={(e) => setTaxId(e.target.value)} placeholder="001699891LA037" maxLength={14} />
           </div>
           <div className="sm:col-span-2">
             <Label>{t("students_label", { count: studentIds.length })}</Label>

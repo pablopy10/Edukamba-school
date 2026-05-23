@@ -694,7 +694,7 @@ const Orcamentos = () => {
 
                 <div>
                   <Label>NIF</Label>
-                  <Input value={form.clientNif} onChange={(e) => setForm({ ...form, clientNif: e.target.value })} placeholder="0000000000" maxLength={10} />
+                  <Input value={form.clientNif} onChange={(e) => setForm({ ...form, clientNif: e.target.value })} placeholder="001699891LA037" maxLength={14} />
                 </div>
 
                 <div>

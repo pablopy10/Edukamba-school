@@ -108,7 +108,7 @@ export const StudentFormDialog = ({ open, onOpenChange, classrooms, student, onS
           full_name: fullName.trim(),
           email: email || null,
           phone: phone || null,
-          tax_id: taxId.replace(/\D/g, "").trim() || null,
+          tax_id: taxId.trim().toUpperCase() || null,
           birth_date: birthDate || null,
           gender: gender || null,
           enrollment_number: enrollmentNumber || null,
@@ -129,7 +129,7 @@ export const StudentFormDialog = ({ open, onOpenChange, classrooms, student, onS
           full_name: fullName.trim(),
           email: email || null,
           phone: phone || null,
-          tax_id: taxId.replace(/\D/g, "").trim() || null,
+          tax_id: taxId.trim().toUpperCase() || null,
           birth_date: birthDate || null,
           gender: gender || null,
           enrollment_number: enrollmentNumber || null,
@@ -182,7 +182,7 @@ export const StudentFormDialog = ({ open, onOpenChange, classrooms, student, onS
           </div>
           <div>
             <Label htmlFor="nif">NIF</Label>
-            <Input id="nif" value={taxId} onChange={(e) => setTaxId(e.target.value)} placeholder="0000000000" maxLength={10} />
+            <Input id="nif" value={taxId} onChange={(e) => setTaxId(e.target.value)} placeholder="001699891LA037" maxLength={14} />
           </div>
           <div>
             <Label htmlFor="en">{t("alunos.form.enrollment_number")}</Label>

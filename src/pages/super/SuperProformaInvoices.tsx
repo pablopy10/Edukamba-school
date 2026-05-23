@@ -551,8 +551,8 @@ const SuperProformaInvoices = () => {
                   <Input
                     value={form.clientNif}
                     onChange={(e) => setForm({ ...form, clientNif: e.target.value })}
-                    placeholder="0000000000"
-                    maxLength={10}
+                    placeholder="001699891LA037"
+                    maxLength={14}
                   />
                   {form.clientNif === CONSUMER_FALLBACK_NIF && (
                     <p className="text-xs text-muted-foreground mt-1">NIF padrão consumidor final (AGT)</p>
