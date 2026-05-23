@@ -203,6 +203,7 @@ export async function downloadCreditNotePdfById(creditNoteId: string): Promise<v
   const lineItems: CreditNoteLine[] = creditItems.map((it) => ({
     description: capitalize(it.description),
     quantity: 1,
+    unitPriceFmt: fmtKz(it.amount),
     totalAmountFmt: fmtKz(it.amount),
     taxLabel: it.taxLabel,
   }));
@@ -216,9 +217,9 @@ export async function downloadCreditNotePdfById(creditNoteId: string): Promise<v
     invoiceDateYYYYMMDD: ((nc as Record<string, unknown>).invoice_date as string)?.slice(0, 10) || new Date().toISOString().slice(0, 10),
     sourceInvoiceNumber,
     reason,
-    clienteNome: ((nc as Record<string, unknown>).cliente_nif as string) === "999999999" ? "Consumidor Final" : ((nc as Record<string, unknown>).cliente_nome as string) || "Consumidor Final",
+    clienteNome: ((nc as Record<string, unknown>).cliente_nome as string) || "Consumidor Final",
     clienteNif: ((nc as Record<string, unknown>).cliente_nif as string) || "999999999",
-    encarregadoNome: ((nc as Record<string, unknown>).cliente_nif as string) === "999999999" ? "Consumidor Final" : encarregadoNome,
+    encarregadoNome: encarregadoNome || ((nc as Record<string, unknown>).cliente_nome as string) || null,
     studentName,
     studentClassroom,
     lineItems,

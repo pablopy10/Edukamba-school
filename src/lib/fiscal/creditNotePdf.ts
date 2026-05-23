@@ -28,6 +28,7 @@ const PT_MONTH_NAMES = [
 export type CreditNoteLine = {
   description: string;
   quantity: number;
+  unitPriceFmt?: string;
   totalAmountFmt: string;
   taxLabel?: string;
 };
@@ -362,10 +363,11 @@ export function buildCreditNotePdf(opts: CreditNotePdfInput): jsPDF {
   y += pxMm(8);
 
   // Tabela de itens
-  const head = [["DESCRIÇÃO DO SERVIÇO", "QTD", "TAXA", "TOTAL"]];
+  const head = [["DESCRIÇÃO DO SERVIÇO", "QTD", "P. UNITÁRIO", "TAXA", "TOTAL"]];
   const body = opts.lineItems.map((it) => [
     it.description.replace(/\u00a0/g, " "),
     String(it.quantity),
+    it.unitPriceFmt || it.totalAmountFmt,
     it.taxLabel || "Isento (M11)",
     it.totalAmountFmt,
   ]);
@@ -396,15 +398,18 @@ export function buildCreditNotePdf(opts: CreditNotePdfInput): jsPDF {
       cellPadding: { top: pxMm(10), right: pxMm(10), bottom: pxMm(10), left: pxMm(10) },
     },
     columnStyles: (() => {
-      const colQty = 16;
-      const colMoney = 32;
-      const colDesc = usableW - colQty - colMoney * 2;
-      const moneyStyle = { fontSize: pxToPt(11), halign: "right" as const, valign: "middle" as const };
+      const moneyStyle = { fontSize: pxToPt(11), halign: "right" as const, valign: "middle" as const, overflow: "visible" as const };
+      const colQty = 11;
+      const colUnit = 30;
+      const colTax = 18;
+      const colTotal = 34;
+      const colDesc = usableW - colQty - colUnit - colTax - colTotal;
       return {
         0: { cellWidth: colDesc, valign: "middle" as const },
         1: { cellWidth: colQty, halign: "center" as const, valign: "middle" as const },
-        2: { cellWidth: colMoney, ...moneyStyle },
-        3: { cellWidth: colMoney, ...moneyStyle, fontStyle: "bold" as const, textColor: [35, 40, 48] as [number, number, number] },
+        2: { cellWidth: colUnit, ...moneyStyle },
+        3: { cellWidth: colTax, halign: "center" as const, valign: "middle" as const },
+        4: { cellWidth: colTotal, ...moneyStyle, fontStyle: "bold" as const, textColor: [35, 40, 48] as [number, number, number] },
       };
     })(),
   });
@@ -488,20 +493,29 @@ export function buildCreditNotePdf(opts: CreditNotePdfInput): jsPDF {
 
   // Rodapé
   let footY = blockY + grandH + pxMm(48);
-  const code = (opts.exemptionCode ?? "M11").trim();
-  const reason =
-    opts.exemptionReason?.trim() ||
-    "nos termos do Artigo 12.º do CIVA - Isenção no domínio da educação.";
-  const exemptText = `Isenção de IVA (${code}), ${reason}`;
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(pxToPt(11));
-  doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
-  for (const ln of doc.splitTextToSize(exemptText, usableW)) {
-    doc.text(ln, margin, footY);
-    footY += pxMm(16);
-  }
 
-  footY += pxMm(12);
+  // Texto de isenção — só renderizar se a taxa aplicada for 0% (isenção real)
+  // Se há IVA cobrado (taxa > 0%), NÃO mostrar texto de isenção (regra AGT)
+  const hasActualIva = opts.lineItems.some((it) => {
+    const label = (it.taxLabel || "").trim();
+    return label !== "" && !label.startsWith("Isento") && !label.startsWith("Não sujeito") && label !== "0%";
+  });
+
+  if (!hasActualIva && opts.exemptionCode?.trim()) {
+    const code = (opts.exemptionCode ?? "M11").trim();
+    const reason =
+      opts.exemptionReason?.trim() ||
+      "nos termos do Artigo 12.º do CIVA - Isenção no domínio da educação.";
+    const exemptText = `Isenção de IVA (${code}), ${reason}`;
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(pxToPt(11));
+    doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
+    for (const ln of doc.splitTextToSize(exemptText, usableW)) {
+      doc.text(ln, margin, footY);
+      footY += pxMm(16);
+    }
+    footY += pxMm(12);
+  }
 
   // Hash control
   const fullHash = opts.documentHashFootnote?.trim() || "";

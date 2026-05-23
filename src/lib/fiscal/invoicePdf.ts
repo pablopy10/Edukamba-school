@@ -413,9 +413,9 @@ export async function resolveFiscalInvoicePdfInput(
       if (isNaN(d.getTime())) return undefined;
       return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
     })(),
-    clienteNome: invoice.cliente_nif.trim() === "999999999" ? "Consumidor Final" : invoice.cliente_nome.trim(),
+    clienteNome: invoice.cliente_nome.trim() || (invoice.cliente_nif.trim() === "999999999" ? "Consumidor Final" : "Cliente"),
     clienteNif: invoice.cliente_nif.trim(),
-    encarregadoNome: invoice.cliente_nif.trim() === "999999999" ? "Consumidor Final" : (guardianNameFromProfile ?? invoice.cliente_nome.trim()),
+    encarregadoNome: guardianNameFromProfile ?? invoice.cliente_nome.trim() || null,
     studentName: studentFullName || "—",
     studentClassroom: studentClassroom || null,
     academicYearLabel,
