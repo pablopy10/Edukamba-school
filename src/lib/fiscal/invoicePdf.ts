@@ -436,13 +436,15 @@ export async function resolveFiscalInvoicePdfInput(
             const val = match3[2].trim();
             const ivaPct = match3[3].trim();
             const num = parseFloat(val.replace(/\s/g, "").replace(",", "."));
+            const pct = ivaPct === "0_M04" ? 0 : (parseFloat(ivaPct) || 0);
+            const lineTotal = Number.isFinite(num) ? Math.round((num + num * pct / 100) * 100) / 100 : 0;
             const taxLabel = ivaPct === "0" ? "Isento (M11)" : ivaPct === "0_M04" ? "Não sujeito (M04)" : `${ivaPct}%`;
             const fmtVal = Number.isFinite(num) ? formatMoney(num) : totalFmt;
             return {
               description: cap(desc),
               quantity: 1,
               unitPriceFmt: fmtVal,
-              totalAmountFmt: fmtVal,
+              totalAmountFmt: Number.isFinite(lineTotal) ? formatMoney(lineTotal) : fmtVal,
               taxLabel,
             };
           }
@@ -470,13 +472,15 @@ export async function resolveFiscalInvoicePdfInput(
         const val = singleMatch[2].trim();
         const ivaPctStr = singleMatch[3].trim();
         const num = parseFloat(val.replace(/\s/g, "").replace(",", "."));
+        const pct = ivaPctStr === "0_M04" ? 0 : (parseFloat(ivaPctStr) || 0);
+        const lineTotal = Number.isFinite(num) ? Math.round((num + num * pct / 100) * 100) / 100 : 0;
         const taxLabel = ivaPctStr === "0" ? "Isento (M11)" : ivaPctStr === "0_M04" ? "Não sujeito (M04)" : `${ivaPctStr}%`;
         const fmtVal = Number.isFinite(num) ? formatMoney(num) : totalFmt;
         return [{
           description: cap(desc),
           quantity: 1,
           unitPriceFmt: fmtVal,
-          totalAmountFmt: fmtVal,
+          totalAmountFmt: Number.isFinite(lineTotal) ? formatMoney(lineTotal) : fmtVal,
           taxLabel,
         }];
       }
