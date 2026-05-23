@@ -209,7 +209,7 @@ const Orcamentos = () => {
       setForm((f) => ({
         ...f,
         clientName: person.full_name || "",
-        clientNif: person.tax_id?.replace(/\D/g, "") || "",
+        clientNif: person.tax_id?.trim() || "",
       }));
     }
   };
