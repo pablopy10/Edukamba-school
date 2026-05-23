@@ -252,14 +252,15 @@ const SuperProformaInvoices = () => {
         lineItems: form.items.map((it) => {
           const qty = parseInt(String(it.quantity)) || 1;
           const up = parseFloat(it.unitAmount) || 0;
-          const total = qty * up;
+          const base = qty * up;
           const ivaPct = parseFloat(form.ivaPct) || 0;
+          const lineTotal = Math.round((base + base * ivaPct / 100) * 100) / 100;
           const taxLabel = ivaPct === 0 ? "Isento (M11)" : `${ivaPct}%`;
           return {
             description: it.description,
             quantity: qty,
             unitPriceFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(up) + " Kz",
-            totalAmountFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total) + " Kz",
+            totalAmountFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(lineTotal) + " Kz",
             taxLabel,
           };
         }),
@@ -347,12 +348,14 @@ const SuperProformaInvoices = () => {
           const taxLabel = ivaPct === "0" ? "Isento (M11)" : ivaPct === "0_M04" ? "Não sujeito (M04)" : `${ivaPct}%`;
           const qty = it.quantity || 1;
           const up = parseFloat((it as { unit_price?: string }).unit_price || it.unit_amount || it.total_amount || "0") || 0;
-          const total = qty * up;
+          const base = qty * up;
+          const pct = ivaPct === "0_M04" ? 0 : (parseFloat(ivaPct) || 0);
+          const lineTotal = Math.round((base + base * pct / 100) * 100) / 100;
           return {
             description: it.description,
             quantity: qty,
             unitPriceFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(up) + " Kz",
-            totalAmountFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total) + " Kz",
+            totalAmountFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(lineTotal) + " Kz",
             taxLabel,
           };
         }),
@@ -465,12 +468,14 @@ const SuperProformaInvoices = () => {
               const taxLabel = ivaPct === "0" ? "Isento (M11)" : ivaPct === "0_M04" ? "Não sujeito (M04)" : `${ivaPct}%`;
               const qty = it.quantity || 1;
               const up = parseFloat((it as { unit_price?: string }).unit_price || it.unit_amount || it.total_amount || "0") || 0;
-              const total = qty * up;
+              const base = qty * up;
+              const pct = ivaPct === "0_M04" ? 0 : (parseFloat(ivaPct) || 0);
+              const lineTotal = Math.round((base + base * pct / 100) * 100) / 100;
               return {
                 description: it.description,
                 quantity: qty,
                 unitPriceFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(up) + " Kz",
-                totalAmountFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total) + " Kz",
+                totalAmountFmt: new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(lineTotal) + " Kz",
                 taxLabel,
               };
             }),

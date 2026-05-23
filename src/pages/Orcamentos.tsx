@@ -375,6 +375,8 @@ const Orcamentos = () => {
           const discPct = parseFloat(it.discount) || 0;
           const bruto = qty * up;
           const base = Math.round((bruto - bruto * discPct / 100) * 100) / 100;
+          const pct = it.ivaPct === "0_M04" ? 0 : (parseFloat(it.ivaPct) || 0);
+          const lineTotal = Math.round((base + base * pct / 100) * 100) / 100;
           const fmtNum = (n: number) => new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(n) + " Kz";
           const fmtTotal = (n: number) => new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + " Kz";
           return {
@@ -382,7 +384,7 @@ const Orcamentos = () => {
             quantity: qty,
             unitPriceFmt: fmtNum(up),
             discountPct: discPct > 0 ? `${discPct}%` : undefined,
-            totalAmountFmt: fmtTotal(base),
+            totalAmountFmt: fmtTotal(lineTotal),
             taxLabel: ivaOpt.label,
           };
         }),
@@ -480,9 +482,11 @@ const Orcamentos = () => {
         const ivaOpt = IVA_OPTIONS.find((o) => o.value === ivaPct);
         const qty = it.quantity || 1;
         const unitPrice = parseFloat((it as { unit_price?: string }).unit_price || it.unit_amount || it.total_amount || "0") || 0;
-        const total = qty * unitPrice;
+        const base = qty * unitPrice;
+        const pct = ivaPct === "0_M04" ? 0 : (parseFloat(ivaPct) || 0);
+        const lineTotal = Math.round((base + base * pct / 100) * 100) / 100;
         const fmtUp = new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(unitPrice) + " Kz";
-        const fmtTotal = new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total) + " Kz";
+        const fmtTotal = new Intl.NumberFormat("pt-AO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(lineTotal) + " Kz";
         return {
           description: it.description,
           quantity: qty,
