@@ -93,7 +93,7 @@ function sumMoney(arr: readonly number[]): string {
   return (Math.round((s + Number.EPSILON) * 100) / 100).toFixed(2);
 }
 
-/** ProductID XSD: formato «NomeApp/NomeProdutor», sem barras dentro de cada parte. */
+/** ProductID XSD: formato «NomeSoftware versão/NomeProdutor NIF», conforme SAF-T AO. */
 function saftAoProductId(appNameRaw: string, producerRaw: string): string {
   const app = appNameRaw.replace(/\//g, " ").trim() || "Edukamba";
   const producer = producerRaw.replace(/\//g, " ").trim() || app;
@@ -264,6 +264,9 @@ export function generateSaftXml(input: {
 
   const dateCreatedIso = input.dateCreated?.trim()?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
 
+  // EndDate não pode ser maior que DateCreated (regra AGT)
+  const effectiveEndDate = periodEnd > dateCreatedIso ? dateCreatedIso : periodEnd;
+
   const uniqueCustomers = new Map<string, { name: string; nif: string }>();
   for (const inv of fis) {
     const key = inv.customer_nif.trim();
@@ -276,12 +279,14 @@ export function generateSaftXml(input: {
       customerIx += 1;
       const cid = `C_${customerIx}`;
       const nome = esc(c.name.slice(0, 200));
-      const nif = esc(c.nif);
+      // CustomerTaxID deve ter exactamente 9 dígitos; se inválido usar "999999999"
+      const rawNif = c.nif.replace(/\D/g, "");
+      const nif = esc(rawNif.length === 9 ? rawNif : "999999999");
       const { detail: bd, city } = addressParts(`${c.name} (${c.nif})`);
       return `
     <Customer>
       <CustomerID>${cid}</CustomerID>
-      <AccountID>CLIENTE_${customerIx}</AccountID>
+      <AccountID>Desconhecido</AccountID>
       <CustomerTaxID>${nif}</CustomerTaxID>
       <CompanyName>${nome}</CompanyName>${billingAddressXml(`${bd}`, city)}
       <SelfBillingIndicator>0</SelfBillingIndicator>
@@ -298,16 +303,14 @@ export function generateSaftXml(input: {
   );
   const companyName = esc(school.name.trim().slice(0, 200));
 
-  /** Totais 4.1 XSD: só CreditAmount por linha → TotalCredit soma montantes; TotalDebit 0. */
-  let totalCredit = "0.00";
-  const creditTotals: number[] = [];
+  /** Totais 4.1 XSD: TotalCredit = soma de todos os CreditAmount (= NetTotal por fatura). */
+  const allLineCreditAmounts: number[] = [];
 
   const invoiceBlocks = fis
     .map((inv, idx) => {
       const docDate = esc(inv.invoice_date.slice(0, 10));
       const total = Number(inv.gross_total);
       const totalStr = (Math.round((total + Number.EPSILON) * 100) / 100).toFixed(2);
-      creditTotals.push(Number(totalStr));
       const cur = (inv.currency ?? "AOA").toUpperCase();
       if (cur !== "AOA") {
         throw new Error(`Moeda não suportada no exportador SAF-T: ${cur} (requer apenas AOA).`);
@@ -391,16 +394,18 @@ export function generateSaftXml(input: {
             taxPct = ivaPctStr === "0_M04" ? 0 : (parseFloat(ivaPctStr) || 0);
             isExempt = taxPct === 0;
           } else if (itemParts.length === 1) {
-            // Item único sem formato especial — usar exemption_code da fatura
             desc = lineDescRaw;
             baseAmount = total;
             isExempt = true;
           }
 
+          // UnitPrice e CreditAmount não podem ser 0 (validação AGT)
+          if (baseAmount <= 0) baseAmount = 0.01;
           const baseStr = (Math.round(baseAmount * 100) / 100).toFixed(2);
           const taxAmount = Math.round((baseAmount * taxPct / 100) * 100) / 100;
           totalNetAmount += baseAmount;
           totalTaxPayable += taxAmount;
+          allLineCreditAmounts.push(Math.round(baseAmount * 100) / 100);
 
           const taxBlock = isExempt
             ? `<Tax>
@@ -449,7 +454,7 @@ export function generateSaftXml(input: {
     })
     .join("");
 
-  totalCredit = sumMoney(creditTotals);
+  const totalCredit = sumMoney(allLineCreditAmounts);
 
   const nEntries = fis.length;
   const totalDebit = "0.00";
@@ -462,7 +467,7 @@ export function generateSaftXml(input: {
     <CompanyName>${companyName}</CompanyName>${companyAoXml(school)}
     <FiscalYear>${fy}</FiscalYear>
     <StartDate>${periodStart}</StartDate>
-    <EndDate>${periodEnd}</EndDate>
+    <EndDate>${effectiveEndDate}</EndDate>
     <CurrencyCode>AOA</CurrencyCode>
     <DateCreated>${dateCreatedIso}</DateCreated>
     <TaxEntity>Global</TaxEntity>
