@@ -415,7 +415,7 @@ export async function resolveFiscalInvoicePdfInput(
     })(),
     clienteNome: invoice.cliente_nome.trim() || (invoice.cliente_nif.trim() === "999999999" ? "Consumidor Final" : "Cliente"),
     clienteNif: invoice.cliente_nif.trim(),
-    encarregadoNome: guardianNameFromProfile ?? invoice.cliente_nome.trim() || null,
+    encarregadoNome: guardianNameFromProfile ?? (invoice.cliente_nome.trim() || null),
     studentName: studentFullName || "—",
     studentClassroom: studentClassroom || null,
     academicYearLabel,
