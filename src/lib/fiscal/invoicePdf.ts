@@ -266,8 +266,8 @@ async function tuitionDetailFromFee(studentFeeId: string): Promise<{
   const month = Number.isFinite(m) && m >= 1 && m <= 12 ? PT_MONTH_NAMES[m - 1] : null;
   const yLabel = row?.academic_year?.label?.trim() ?? null;
   let serviceDescription = "Propina / serviços educativos";
-  if (month && yLabel) serviceDescription = `Propina — ${month} (${yLabel})`;
-  else if (month) serviceDescription = `Propina — ${month}`;
+  if (month && yLabel) serviceDescription = `Propina - ${month} (${yLabel})`;
+  else if (month) serviceDescription = `Propina - ${month}`;
   else if (yLabel) serviceDescription = `Propina (${yLabel})`;
   return { serviceDescription, academicYearLabel: yLabel };
 }
