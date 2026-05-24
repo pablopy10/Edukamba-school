@@ -250,7 +250,7 @@ export function generateSaftXml(input: {
   // ProductID AGT certificado: "NomeProduto versão/NomeEmpresaProdutora"
   // Deve corresponder exactamente ao registado na certificação AGT
   const producerName = (input.productProducerName ?? "PJ AB- SERVICOS LDA").trim();
-  const productIdCombined = softwareName;
+  const productIdCombined = `${softwareName.toUpperCase()}/${softwareVer}`;
 
   const periodStart = `${year}-${String(month).padStart(2, "0")}-01`;
   const ld = new Date(year, month, 0).getDate();
