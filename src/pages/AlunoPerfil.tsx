@@ -15,6 +15,8 @@ import { CreateStudentAccessDialog, ELIGIBLE_GRADES } from "@/components/alunos/
 import { KeyRound, ShieldCheck } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { uploadFileToR2, R2UploadError } from "@/lib/r2/uploadFileToR2";
+import { downloadFiscalInvoicePdfFromInvoice } from "@/lib/fiscal/downloadFiscalInvoicePdf";
+import type { Tables } from "@/integrations/supabase/types";
 
 type AvatarColor = "lilac" | "blue" | "yellow" | "green" | "pink";
 
@@ -195,6 +197,8 @@ const AlunoPerfil = () => {
   const [proofUploading, setProofUploading] = useState(false);
   const [enrollmentHistory, setEnrollmentHistory] = useState<EnrollmentHistoryRow[]>([]);
   const [accessDialogOpen, setAccessDialogOpen] = useState(false);
+  const [invoices, setInvoices] = useState<Tables<"invoices">[]>([]);
+  const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -384,6 +388,35 @@ const AlunoPerfil = () => {
         if (!cancelled) setTransportPayments((trPayRows ?? []) as PaymentRow[]);
       } else if (!cancelled) {
         setTransportPayments([]);
+      }
+
+      // Faturas do aluno e do encarregado
+      const invoiceFilters = [
+        supabase.from("invoices")
+          .select("*")
+          .eq("student_id", id)
+          .order("invoice_date", { ascending: false }),
+      ];
+      if (studentRow?.parent_id) {
+        invoiceFilters.push(
+          supabase.from("invoices")
+            .select("*")
+            .eq("parent_profile_id", studentRow.parent_id)
+            .order("invoice_date", { ascending: false }),
+        );
+      }
+      const invoiceResults = await Promise.all(invoiceFilters);
+      if (!cancelled) {
+        const allInvoices = invoiceResults.flatMap(r => r.data ?? []);
+        // Deduplicate by id
+        const seen = new Set<string>();
+        const unique = allInvoices.filter(inv => {
+          if (seen.has(inv.id)) return false;
+          seen.add(inv.id);
+          return true;
+        });
+        unique.sort((a, b) => (b.invoice_date ?? "").localeCompare(a.invoice_date ?? ""));
+        setInvoices(unique as Tables<"invoices">[]);
       }
 
       if (!cancelled) {
@@ -825,6 +858,7 @@ const AlunoPerfil = () => {
                 <TabsTrigger value="propinas">Propinas</TabsTrigger>
                 <TabsTrigger value="extracurriculares">Extracurriculares</TabsTrigger>
                 <TabsTrigger value="transporte">Transporte</TabsTrigger>
+                <TabsTrigger value="faturas">Faturas</TabsTrigger>
               </TabsList>
             </div>
 
@@ -1024,6 +1058,69 @@ const AlunoPerfil = () => {
                   <div className="px-5 py-3 text-right">
                     <Link to="/transportes" className="text-xs font-medium text-pastel-blue-foreground hover:underline">Gerir transporte →</Link>
                   </div>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="faturas" className="mt-0">
+              {invoices.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">Sem faturas emitidas.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-muted/50 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                        <th className="py-3 pl-5 pr-4 font-semibold">Documento</th>
+                        <th className="py-3 pr-4 font-semibold">Data</th>
+                        <th className="py-3 pr-4 font-semibold">Descrição</th>
+                        <th className="py-3 pr-4 font-semibold text-right">Total</th>
+                        <th className="py-3 pr-4 font-semibold">Estado</th>
+                        <th className="py-3 pr-5 font-semibold"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {invoices.map((inv) => {
+                        const isCancelled = inv.invoice_status === "A";
+                        const isDownloading = downloadingInvoiceId === inv.id;
+                        return (
+                          <tr key={inv.id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                            <td className="py-3 pl-5 pr-4 font-medium text-foreground">{inv.document_number}</td>
+                            <td className="py-3 pr-4 text-muted-foreground">{inv.invoice_date?.slice(0, 10)}</td>
+                            <td className="py-3 pr-4 text-muted-foreground max-w-[200px] truncate">{inv.line_description?.split(";")[0] ?? "—"}</td>
+                            <td className="py-3 pr-4 text-right font-semibold text-foreground">{fmtAOA(Number(inv.gross_total))}</td>
+                            <td className="py-3 pr-4">
+                              {isCancelled ? (
+                                <span className="rounded-full bg-pastel-pink px-3 py-1 text-xs font-semibold text-pastel-pink-foreground">Anulada</span>
+                              ) : (
+                                <span className="rounded-full bg-pastel-green px-3 py-1 text-xs font-semibold text-pastel-green-foreground">Normal</span>
+                              )}
+                            </td>
+                            <td className="py-3 pr-5">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 gap-1.5 text-xs text-pastel-blue-foreground"
+                                disabled={isDownloading}
+                                onClick={async () => {
+                                  setDownloadingInvoiceId(inv.id);
+                                  try {
+                                    await downloadFiscalInvoicePdfFromInvoice(inv);
+                                  } catch (e) {
+                                    toast({ title: "Erro ao gerar PDF", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+                                  } finally {
+                                    setDownloadingInvoiceId(null);
+                                  }
+                                }}
+                              >
+                                {isDownloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+                                PDF
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </TabsContent>
