@@ -249,9 +249,9 @@ export function generateSaftXml(input: {
   } = input;
   const softwareName = input.softwareName ?? "Edukamba";
   const softwareVer = input.productVersion ?? "1.0";
-  // ProductID AGT: apenas a designação comercial do software registada no portal
+  // ProductID AGT: "NomeSoftware/RazãoSocialProdutora" exactamente como registado no portal
   const producerName = (input.productProducerName ?? "PJ AB- SERVICOS LDA").trim();
-  const productIdCombined = "Edukamba";
+  const productIdCombined = "Edukamba/PJ AB- SERVICOS LDA";
 
   const periodStart = `${year}-${String(month).padStart(2, "0")}-01`;
   const ld = new Date(year, month, 0).getDate();
