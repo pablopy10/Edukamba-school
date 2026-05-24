@@ -26,12 +26,14 @@ export function buildAgtSigningPlaintext(input: {
   documentNumberFull: string;
   /** Total monetário como string decimal (pt: vírgula evitada; usar ponto) */
   totalAmountString: string;
-  /** Hex ou base64 do hash anterior conforme política da escola; vazio na 1ª fatura. */
+  /** Assinatura Base64 do documento anterior; vazio na 1ª fatura. */
   previousDocumentHash: string;
 }): string {
   const { invoiceDateYYYYMMDD, issuedAtISO, documentNumberFull, totalAmountString, previousDocumentHash } = input;
   const prev = (previousDocumentHash ?? "").trim();
-  return `${invoiceDateYYYYMMDD};${issuedAtISO};${documentNumberFull};${totalAmountString};${prev}`;
+  // Formato AGT: YYYY-MM-DDTHH:MM:SS (sem milissegundos, sem Z)
+  const issuedAtClean = issuedAtISO.replace(/\.\d{3}Z$/, "").replace(/Z$/, "");
+  return `${invoiceDateYYYYMMDD};${issuedAtClean};${documentNumberFull};${totalAmountString};${prev}`;
 }
 
 /** SHA-1 (hex minúsculo) — para campo document_hash na cadeia. */

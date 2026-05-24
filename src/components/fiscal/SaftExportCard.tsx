@@ -82,6 +82,7 @@ export function SaftExportCard({ schoolId }: Props) {
         month,
         school: {
           name: school?.name ?? t("default_school_name"),
+          fiscalName: "PJ AB- SERVICOS LDA",
           taxRegistrationNumber: school?.nif ?? null,
           address: school?.address ?? null,
         },

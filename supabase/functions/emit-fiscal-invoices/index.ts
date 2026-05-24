@@ -86,7 +86,9 @@ function buildAgtSigningPlaintext(input: {
 }): string {
   const { invoiceDateYYYYMMDD, issuedAtISO, documentNumberFull, totalAmountString, previousDocumentHash } = input;
   const prev = (previousDocumentHash ?? "").trim();
-  return `${invoiceDateYYYYMMDD};${issuedAtISO};${documentNumberFull};${totalAmountString};${prev}`;
+  // Formato AGT: YYYY-MM-DDTHH:MM:SS (sem milissegundos, sem Z)
+  const issuedAtClean = issuedAtISO.replace(/\.\d{3}Z$/, "").replace(/Z$/, "");
+  return `${invoiceDateYYYYMMDD};${issuedAtClean};${documentNumberFull};${totalAmountString};${prev}`;
 }
 
 async function sha1HexUtf8(text: string): Promise<string> {
@@ -348,18 +350,23 @@ async function emitOne(
     if (seq > 1) {
       const { data: prev, error: prevErr } = await sb
         .from("invoices")
-        .select("id, document_hash, agt_signing_plaintext, document_number, doc_number")
+        .select("id, document_hash, digital_signature_sha1_b64, agt_signing_plaintext, document_number, doc_number")
         .eq("school_id", payment.school_id)
         .eq("series", series)
         .eq("doc_number", seq - 1)
         .maybeSingle();
       if (prevErr) return { payment_id, status: "error", detail: prevErr.message };
 
-      let h = prev?.document_hash?.trim() ?? "";
-      if (!h && prev?.agt_signing_plaintext?.trim()) {
-        h = await sha1HexUtf8(prev.agt_signing_plaintext.trim());
-        if (prev?.id) {
-          await sb.from("invoices").update({ document_hash: h }).eq("id", prev.id);
+      // AGT: o encadeamento usa a assinatura Base64 do documento anterior (não o SHA-1 hex)
+      let h = prev?.digital_signature_sha1_b64?.trim() ?? "";
+      if (!h) {
+        // Fallback: se não tem assinatura, tentar document_hash (compatibilidade)
+        h = prev?.document_hash?.trim() ?? "";
+        if (!h && prev?.agt_signing_plaintext?.trim()) {
+          h = await sha1HexUtf8(prev.agt_signing_plaintext.trim());
+          if (prev?.id) {
+            await sb.from("invoices").update({ document_hash: h }).eq("id", prev.id);
+          }
         }
       }
 
@@ -388,7 +395,7 @@ async function emitOne(
           payment_id,
           status: "error",
           detail:
-            `${prevLabel} existe mas não tem hash AGT (dados incompletos). ` +
+            `${prevLabel} existe mas não tem hash/assinatura AGT (dados incompletos). ` +
             `Contacte suporte para reparar a cadeia fiscal.`,
         };
       }

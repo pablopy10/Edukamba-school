@@ -52,6 +52,21 @@ function formatTotalForSigning(amount: number): string {
   return (Math.round((amount + Number.EPSILON) * 100) / 100).toFixed(2);
 }
 
+/**
+ * Formata data/hora para a string de assinatura AGT: YYYY-MM-DDTHH:MM:SS
+ * Sem milissegundos, sem sufixo Z.
+ */
+function formatIssuedAtForSigning(isoOrTimestamp: string, dateFallback: string): string {
+  if (isoOrTimestamp?.trim()) {
+    const d = new Date(isoOrTimestamp.trim());
+    if (!Number.isNaN(d.getTime())) {
+      const pad = (n: number) => String(n).padStart(2, "0");
+      return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+    }
+  }
+  return `${dateFallback.slice(0, 10)}T12:00:00`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return corsJson({ error: "Method not allowed" }, 405);
@@ -88,7 +103,7 @@ Deno.serve(async (req) => {
     // Load all invoices for this school, ordered by series + doc_number
     let query = admin
       .from("invoices")
-      .select("id, series, doc_number, document_number, invoice_date, invoice_issued_at, gross_total, document_hash, agt_signing_plaintext, digital_signature_sha1_b64")
+      .select("id, series, doc_number, document_number, invoice_date, invoice_issued_at, gross_total, document_hash, agt_signing_plaintext, digital_signature_sha1_b64, previous_document_hash")
       .eq("school_id", schoolId)
       .order("doc_number", { ascending: true });
 
@@ -115,18 +130,18 @@ Deno.serve(async (req) => {
       // Sort by doc_number ascending
       seriesInvoices.sort((a, b) => (a.doc_number || 0) - (b.doc_number || 0));
 
-      let previousDocumentHash = "";
+      let previousSignatureBase64 = "";
 
       for (const inv of seriesInvoices) {
         try {
           const invoiceDateYYYYMMDD = String(inv.invoice_date ?? "").slice(0, 10);
-          const issuedAtISO = inv.invoice_issued_at
-            ? new Date(inv.invoice_issued_at).toISOString()
-            : `${invoiceDateYYYYMMDD}T12:00:00.000Z`;
+          const issuedAtISO = formatIssuedAtForSigning(inv.invoice_issued_at, invoiceDateYYYYMMDD);
           const documentNumberFull = inv.document_number?.trim() || `FT ${series}/${inv.doc_number}`;
           const totalAmountString = formatTotalForSigning(Number(inv.gross_total) || 0);
 
-          const plaintext = `${invoiceDateYYYYMMDD};${issuedAtISO};${documentNumberFull};${totalAmountString};${previousDocumentHash}`;
+          // AGT: o último campo da string de assinatura é a assinatura Base64 do documento anterior
+          // (vazio para o primeiro documento da série)
+          const plaintext = `${invoiceDateYYYYMMDD};${issuedAtISO};${documentNumberFull};${totalAmountString};${previousSignatureBase64}`;
           const document_hash = await sha1HexUtf8(plaintext);
           const signatureBase64 = signPlaintextRSA_SHA1(plaintext, pem);
 
@@ -137,6 +152,7 @@ Deno.serve(async (req) => {
               agt_signing_plaintext: plaintext,
               document_hash,
               digital_signature_sha1_b64: signatureBase64,
+              previous_document_hash: previousSignatureBase64 || null,
             })
             .eq("id", inv.id);
 
@@ -146,13 +162,13 @@ Deno.serve(async (req) => {
             totalUpdated++;
           }
 
-          // Chain: next invoice uses this hash
-          previousDocumentHash = document_hash;
+          // Chain: next invoice uses THIS document's Base64 signature
+          previousSignatureBase64 = signatureBase64;
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           errors.push(`${inv.document_number}: ${msg}`);
-          // Still chain with whatever hash we have
-          previousDocumentHash = inv.document_hash || previousDocumentHash;
+          // If we fail, try to use existing signature for chaining continuity
+          previousSignatureBase64 = inv.digital_signature_sha1_b64 || previousSignatureBase64;
         }
       }
     }

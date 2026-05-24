@@ -10,6 +10,8 @@ export type SaftSchoolInfo = {
   /** NIF da escola (emitente) — CompanyID pode coincidir onde não há RC distinto */
   taxRegistrationNumber?: string | null;
   address?: string | null;
+  /** Razão social fiscal (CompanyName no SAF-T). Se omitido usa `name`. */
+  fiscalName?: string | null;
 };
 
 export type SaftInvoiceRow = {
@@ -247,10 +249,9 @@ export function generateSaftXml(input: {
   } = input;
   const softwareName = input.softwareName ?? "Edukamba";
   const softwareVer = input.productVersion ?? "1.0";
-  // ProductID AGT certificado: "NomeProduto versão/NomeEmpresaProdutora"
-  // Deve corresponder exactamente ao registado na certificação AGT
+  // ProductID AGT: apenas a designação comercial do software registada no portal
   const producerName = (input.productProducerName ?? "PJ AB- SERVICOS LDA").trim();
-  const productIdCombined = "Edukamba/PJ AB SERVICOS LDA";
+  const productIdCombined = "Edukamba";
 
   const periodStart = `${year}-${String(month).padStart(2, "0")}-01`;
   const ld = new Date(year, month, 0).getDate();
@@ -316,7 +317,7 @@ export function generateSaftXml(input: {
   const taxIdProductCompany = esc(
     (input.productCompanyTaxId?.trim() ?? "5480041924"),
   );
-  const companyName = esc(school.name.trim().slice(0, 200));
+  const companyName = esc((school.fiscalName?.trim() || school.name.trim()).slice(0, 200));
 
   /** Totais 4.1 XSD: TotalCredit = soma de todos os CreditAmount das linhas (base tributável, sem IVA). */
   const allLineCreditAmounts: number[] = [];
