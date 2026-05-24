@@ -159,11 +159,15 @@ const Alunos = () => {
     if (isTeacher) return;
     setLoading(true);
 
-    // Obter school_id do perfil para filtro explícito
+    // Obter school_id do perfil — obrigatório para filtrar alunos
+    const { data: authData } = await supabase.auth.getUser();
+    const userId = authData?.user?.id;
+    if (!userId) { setLoading(false); return; }
+
     const { data: myProfile } = await supabase
       .from("profiles")
       .select("school_id, support_context_school_id")
-      .eq("id", user?.id ?? "")
+      .eq("id", userId)
       .maybeSingle();
     const schoolId = effectiveSchoolIdFromProfile(myProfile);
 
@@ -177,7 +181,16 @@ const Alunos = () => {
         "id, full_name, email, phone, birth_date, gender, enrollment_number, classroom_id, avatar_color, school_id, user_id, classrooms(id, name, homeroom_teacher:profiles!classrooms_homeroom_teacher_id_fkey(full_name))",
       )
       .order("created_at", { ascending: false });
-    if (schoolId) studentsQuery = studentsQuery.eq("school_id", schoolId);
+    // Filtro obrigatório por escola — nunca mostrar alunos de todas as escolas
+    if (schoolId) {
+      studentsQuery = studentsQuery.eq("school_id", schoolId);
+    } else if (!isParent) {
+      // Sem escola definida e não é encarregado — não mostrar nada
+      setStudents([]);
+      setClassrooms([]);
+      setLoading(false);
+      return;
+    }
     if (isParent) {
       if (childIds.length === 0) {
         setStudents([]);
