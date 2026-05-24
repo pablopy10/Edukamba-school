@@ -283,19 +283,19 @@ export function generateSaftXml(input: {
       customerIx += 1;
       const cid = `C_${customerIx}`;
       const nome = esc(c.name.slice(0, 200));
-      // CustomerTaxID AGT: deve ser NIF numérico (10 dígitos para empresas, 9 para consumidor final)
-      // Se o valor guardado é um BI alfanumérico (ex: "001699891LA037"), usar "999999999" (consumidor final)
+      // CustomerTaxID AGT: NIF angolano pode ser numérico (10 dígitos) ou alfanumérico (BI ex: "001699891LA037")
+      // Apenas usar "999999999" se estiver vazio ou for claramente inválido
       const rawNif = c.nif.trim();
-      const digitsOnly = rawNif.replace(/\D/g, "");
       let nif: string;
-      if (/^[0-9]{10}$/.test(rawNif)) {
-        // NIF empresa válido (10 dígitos)
+      if (!rawNif || rawNif === "999999999") {
+        nif = "999999999";
+      } else if (/^[0-9]{9,10}$/.test(rawNif)) {
+        // NIF numérico válido (9 ou 10 dígitos)
         nif = rawNif;
-      } else if (/^[0-9]{9}$/.test(rawNif)) {
-        // 9 dígitos (consumidor final ou NIF antigo)
-        nif = rawNif;
+      } else if (/^[0-9A-Za-z]{6,14}$/.test(rawNif)) {
+        // BI alfanumérico angolano (ex: 001699891LA037) — válido como CustomerTaxID
+        nif = rawNif.toUpperCase();
       } else {
-        // BI alfanumérico ou formato inválido — usar consumidor final
         nif = "999999999";
       }
       const { detail: bd, city } = addressParts(`${c.name} (${c.nif})`);
