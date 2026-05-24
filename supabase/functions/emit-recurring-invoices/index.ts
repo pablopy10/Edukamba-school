@@ -101,15 +101,13 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const admin = createClient(supabaseUrl, serviceRoleKey);
 
-    let body: { school_id?: string; month?: number; year?: number } = {};
+    let body: { school_id?: string; month?: number; year?: number; due_date?: string } = {};
     try { body = await req.json(); } catch { /* empty ok */ }
 
     const now = new Date();
-    const targetMonth = body.month ?? (now.getUTCMonth() + 1);
-    const targetYear = body.year ?? now.getUTCFullYear();
-    const invoiceDateYYYYMMDD = `${targetYear}-${String(targetMonth).padStart(2, "0")}-01`;
+    const today = now.toISOString().slice(0, 10);
 
-    // Buscar propinas pendentes do mês alvo que ainda não têm fatura
+    // Buscar propinas pendentes cujo due_date <= hoje (ou data específica se fornecida)
     let feesQuery = admin
       .from("student_fees")
       .select(`
@@ -117,8 +115,8 @@ Deno.serve(async (req) => {
         student:students!inner(full_name, tax_id, parent_id, school_id)
       `)
       .eq("is_paid", false)
-      .eq("month_index", targetMonth)
-      .gt("amount_due", 0);
+      .gt("amount_due", 0)
+      .lte("due_date", body.due_date ?? today);
 
     if (body.school_id?.trim()) {
       feesQuery = feesQuery.eq("student:students.school_id", body.school_id.trim());
@@ -143,16 +141,20 @@ Deno.serve(async (req) => {
     const errors: string[] = [];
 
     for (const [schoolId, schoolFees] of bySchool) {
-      // Verificar se já existem faturas recorrentes para este mês (evitar duplicados)
+      // Verificar se já existem faturas para estas propinas (evitar duplicados)
+      const feeIds = schoolFees.map(f => f.id);
+      // Usamos student_id + month como chave de deduplicação
       const existingCheck = await admin
         .from("invoices")
-        .select("student_id")
+        .select("student_id, invoice_date")
         .eq("school_id", schoolId)
         .eq("doc_type", "FT")
-        .eq("invoice_date", invoiceDateYYYYMMDD)
+        .eq("invoice_status", "N")
         .in("student_id", schoolFees.map(f => f.student_id));
 
-      const alreadyInvoiced = new Set((existingCheck.data ?? []).map(r => r.student_id));
+      const alreadyInvoiced = new Set(
+        (existingCheck.data ?? []).map(r => `${r.student_id}_${r.invoice_date}`)
+      );
 
       // Buscar último hash da série para encadeamento
       const { data: lastInv } = await admin
@@ -177,7 +179,9 @@ Deno.serve(async (req) => {
 
       // Emitir FTs em lote (sequencialmente para manter cadeia)
       for (const fee of schoolFees) {
-        if (alreadyInvoiced.has(fee.student_id)) continue;
+        const invoiceDateYYYYMMDD = fee.due_date?.slice(0, 10) ?? today;
+        const dedupeKey = `${fee.student_id}_${invoiceDateYYYYMMDD}`;
+        if (alreadyInvoiced.has(dedupeKey)) continue;
 
         try {
           // Reservar número
@@ -196,6 +200,10 @@ Deno.serve(async (req) => {
           const issuedAtStr = formatIssuedAt(issuedAt);
           const grossTotal = fee.amount_due;
           const totalStr = formatTotalForSigning(grossTotal);
+          // Mês/ano derivados da due_date da propina
+          const feeMonth = invoiceDateYYYYMMDD.slice(5, 7);
+          const feeYear = invoiceDateYYYYMMDD.slice(0, 4);
+          const periodLabel = `${feeMonth}/${feeYear}`;
 
           const parentTaxId = fee.student?.parent_id ? (parentTaxMap.get(fee.student.parent_id) ?? null) : null;
           const clienteNif = resolveNif(fee.student?.tax_id ?? null, parentTaxId);
@@ -220,7 +228,7 @@ Deno.serve(async (req) => {
             gross_total: grossTotal,
             net_total: grossTotal,
             tax_payable: 0,
-            line_description: `Propina - ${String(targetMonth).padStart(2, "0")}/${targetYear}`,
+            line_description: `Propina - ${periodLabel}`,
             agt_signing_plaintext: plaintext,
             digital_signature_sha1_b64: signatureBase64,
             document_hash: documentHash,
@@ -237,7 +245,7 @@ Deno.serve(async (req) => {
             invoice_id: inv!.id,
             line_number: 1,
             product_code: "SERV-EDUC-01",
-            product_description: `Propina - ${String(targetMonth).padStart(2, "0")}/${targetYear}`,
+            product_description: `Propina - ${periodLabel}`,
             quantity: 1,
             unit_price: grossTotal,
             credit_amount: grossTotal,
@@ -265,7 +273,7 @@ Deno.serve(async (req) => {
             student_id: fee.student_id,
             invoice_id: inv!.id,
             movement_type: "FT",
-            description: `Propina ${String(targetMonth).padStart(2, "0")}/${targetYear} - ${documentNumber}`,
+            description: `Propina ${periodLabel} - ${documentNumber}`,
             debit_amount: grossTotal,
             credit_amount: 0,
             balance_after: prevBalance + grossTotal,

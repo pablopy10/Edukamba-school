@@ -264,12 +264,12 @@ CREATE TRIGGER prevent_invoice_mutation_trigger
 BEFORE UPDATE OR DELETE ON public.invoices
 FOR EACH ROW EXECUTE FUNCTION public.prevent_invoice_mutation();
 
--- ─── 8. CRON: Faturação recorrente mensal ────────────────────────────────────
--- Agenda no dia 1 de cada mês às 06:00 UTC — chama edge function via pg_net
--- (A edge function faz o bulk de FTs com assinatura RSA)
+-- ─── 8. CRON: Faturação recorrente DIÁRIA ────────────────────────────────────
+-- Corre todos os dias às 06:00 UTC — gera FTs para propinas cujo due_date = hoje
+-- (Cada escola configura o due_day no fee_rules; o cron captura todas)
 SELECT cron.schedule(
-  'monthly_recurring_invoices',
-  '0 6 1 * *',
+  'daily_recurring_invoices',
+  '0 6 * * *',
   $$
   SELECT net.http_post(
     url := current_setting('app.settings.supabase_url') || '/functions/v1/emit-recurring-invoices',
@@ -281,3 +281,7 @@ SELECT cron.schedule(
   );
   $$
 );
+
+-- Remover cron mensal antigo se existir
+SELECT cron.unschedule('monthly_recurring_invoices')
+WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'monthly_recurring_invoices');
