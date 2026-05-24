@@ -89,6 +89,14 @@ export const useDashboardData = () => {
         const { data: authData } = await supabase.auth.getUser();
         const currentUserId = authData.user?.id ?? null;
 
+        // Obter school_id do perfil para filtro explícito (defense in depth — RLS já filtra)
+        const { data: myProfile } = await supabase
+          .from("profiles")
+          .select("school_id, support_context_school_id")
+          .eq("id", currentUserId ?? "")
+          .maybeSingle();
+        const schoolId = myProfile?.support_context_school_id ?? myProfile?.school_id ?? null;
+
         let classroomsQuery = supabase.from("classrooms").select("id", { count: "exact", head: true });
         let schedulesQuery = supabase
           .from("schedules")
@@ -100,6 +108,22 @@ export const useDashboardData = () => {
         if (selectedYearId) {
           classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
           schedulesQuery = schedulesQuery.eq("academic_year_id", selectedYearId);
+        }
+        if (schoolId) {
+          classroomsQuery = classroomsQuery.eq("school_id", schoolId);
+          schedulesQuery = schedulesQuery.eq("school_id", schoolId);
+        }
+
+        let studentsCountQuery = supabase.from("students").select("id", { count: "exact", head: true });
+        let studentsGenderQuery = supabase.from("students").select("id, gender");
+        let teachersQuery = supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "TEACHER");
+        let staffQuery = supabase.from("profiles").select("id", { count: "exact", head: true }).in("role", DASHBOARD_STAFF_ROLE_FILTER);
+
+        if (schoolId) {
+          studentsCountQuery = studentsCountQuery.eq("school_id", schoolId);
+          studentsGenderQuery = studentsGenderQuery.eq("school_id", schoolId);
+          teachersQuery = teachersQuery.eq("school_id", schoolId);
+          staffQuery = staffQuery.eq("school_id", schoolId);
         }
 
         const [
@@ -113,20 +137,14 @@ export const useDashboardData = () => {
           schedulesTodayRes,
           messagesRes,
         ] = await Promise.all([
-          supabase.from("students").select("id", { count: "exact", head: true }),
+          studentsCountQuery,
           selectedYearId
             ? supabase.from("enrollments").select("student_id").eq("academic_year_id", selectedYearId)
             : Promise.resolve({ data: null }),
-          supabase
-            .from("profiles")
-            .select("id", { count: "exact", head: true })
-            .eq("role", "TEACHER"),
-          supabase
-            .from("profiles")
-            .select("id", { count: "exact", head: true })
-            .in("role", DASHBOARD_STAFF_ROLE_FILTER),
+          teachersQuery,
+          staffQuery,
           classroomsQuery,
-          supabase.from("students").select("id, gender"),
+          studentsGenderQuery,
           supabase
             .from("attendance")
             .select("date, notes")

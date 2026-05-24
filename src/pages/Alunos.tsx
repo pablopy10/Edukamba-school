@@ -158,14 +158,26 @@ const Alunos = () => {
   const load = async () => {
     if (isTeacher) return;
     setLoading(true);
+
+    // Obter school_id do perfil para filtro explícito
+    const { data: myProfile } = await supabase
+      .from("profiles")
+      .select("school_id, support_context_school_id")
+      .eq("id", user?.id ?? "")
+      .maybeSingle();
+    const schoolId = effectiveSchoolIdFromProfile(myProfile);
+
     let classroomsQuery = supabase.from("classrooms").select("id, name, academic_year_id").order("name");
     if (selectedYearId) classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
+    if (schoolId) classroomsQuery = classroomsQuery.eq("school_id", schoolId);
+
     let studentsQuery = supabase
       .from("students")
       .select(
         "id, full_name, email, phone, birth_date, gender, enrollment_number, classroom_id, avatar_color, school_id, user_id, classrooms(id, name, homeroom_teacher:profiles!classrooms_homeroom_teacher_id_fkey(full_name))",
       )
       .order("created_at", { ascending: false });
+    if (schoolId) studentsQuery = studentsQuery.eq("school_id", schoolId);
     if (isParent) {
       if (childIds.length === 0) {
         setStudents([]);
