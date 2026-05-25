@@ -33,6 +33,7 @@ export const PERMISSION_ROUTE_ORDER: readonly AppRouteModuleKey[] = [
   "material",
   "documentos",
   "financas",
+  "orcamentos",
   "relatorios",
   "timesheet",
 ] as const;

@@ -22,6 +22,7 @@ export type ModuleKey =
   | "material"
   | "propinas"
   | "financas"
+  | "orcamentos"
   | "relatorios"
   | "timesheet"
   | "transportes"
@@ -46,6 +47,7 @@ export const moduleMeta: Record<ModuleKey, { label: string; description: string;
   material: { label: "Material", description: "Stock e pedidos de material escolar.", path: "/material" },
   propinas: { label: "Propinas", description: "Regras de cobrança, lista de propinas, validação e lembretes.", path: "/propinas" },
   financas: { label: "Finanças", description: "Despesas, receitas e gráficos de lucro.", path: "/financas" },
+  orcamentos: { label: "Orçamentos", description: "Criação e gestão de orçamentos e propostas comerciais.", path: "/orcamentos" },
   relatorios: { label: "Relatórios", description: "Exportações e análises da escola.", path: "/relatorios" },
   timesheet: { label: "Timesheet", description: "Controlo de horas dos funcionários.", path: "/timesheet" },
   transportes: { label: "Transporte", description: "Giros escolares, paragens, inscrições e mensalidade do transporte.", path: "/transportes" },
@@ -70,6 +72,7 @@ export const modulePlan: Record<ModuleKey, PlanType> = {
   eventos: "Essencial",
   propinas: "Essencial",
   financas: "Essencial",
+  orcamentos: "Pro",
   relatorios: "Essencial",
   extracurriculares: "Pro",
   pedidos: "Pro",

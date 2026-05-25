@@ -1306,39 +1306,6 @@ const Definicoes = () => {
                   />
                 </Field>
               </div>
-
-              {/* Faturação externa */}
-              <div className="md:col-span-2 mt-4 rounded-xl border border-border bg-muted/20 p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">Faturação externa</p>
-                    <p className="text-xs text-muted-foreground">Activar se a escola usa software de faturação de terceiros (não gera FT/FR fiscais)</p>
-                  </div>
-                  <label className="relative inline-flex cursor-pointer items-center">
-                    <input
-                      type="checkbox"
-                      className="peer sr-only"
-                      checked={school.usa_faturacao_externa}
-                      disabled={!settingsAdmin}
-                      onChange={(e) => setSchool({ ...school, usa_faturacao_externa: e.target.checked })}
-                    />
-                    <div className="peer h-6 w-11 rounded-full bg-muted after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-pastel-blue peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none" />
-                  </label>
-                </div>
-                {school.usa_faturacao_externa && (
-                  <div className="mt-3">
-                    <label className="text-xs font-medium text-muted-foreground">URL do Webhook (sistema externo)</label>
-                    <input
-                      className={inputCls(false)}
-                      value={school.webhook_billing_url ?? ""}
-                      placeholder="https://api.exemplo.com/webhook/pagamentos"
-                      disabled={!settingsAdmin}
-                      onChange={(e) => setSchool({ ...school, webhook_billing_url: e.target.value })}
-                    />
-                    <p className="mt-1 text-xs text-muted-foreground">Quando um pagamento é validado, o sistema envia um POST com os dados para este URL.</p>
-                  </div>
-                )}
-              </div>
             </div>
             <SaveBar onClick={handleSaveSchool} saving={saving} canSave={settingsAdmin} />
           </SectionCard>
@@ -2076,6 +2043,42 @@ const Definicoes = () => {
         {/* FATURAÇÃO */}
         {activeTab === "faturacao" && (
           <div className="flex flex-col gap-6">
+            {/* Faturação externa */}
+            <SectionCard title="Faturação externa" desc="Configure se a escola usa software de faturação de terceiros.">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Usar faturação externa</p>
+                    <p className="text-xs text-muted-foreground">Quando activo, o sistema não gera FT/FR fiscais — apenas comprovativos internos e notifica o sistema externo.</p>
+                  </div>
+                  <label className="relative inline-flex cursor-pointer items-center">
+                    <input
+                      type="checkbox"
+                      className="peer sr-only"
+                      checked={school.usa_faturacao_externa}
+                      disabled={!settingsAdmin}
+                      onChange={(e) => setSchool({ ...school, usa_faturacao_externa: e.target.checked })}
+                    />
+                    <div className="peer h-6 w-11 rounded-full bg-muted after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-pastel-blue peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none" />
+                  </label>
+                </div>
+                {school.usa_faturacao_externa && (
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">URL do Webhook (sistema externo)</label>
+                    <input
+                      className={inputCls(false)}
+                      value={school.webhook_billing_url ?? ""}
+                      placeholder="https://api.exemplo.com/webhook/pagamentos"
+                      disabled={!settingsAdmin}
+                      onChange={(e) => setSchool({ ...school, webhook_billing_url: e.target.value })}
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">Quando um pagamento é validado, o sistema envia um POST com os dados para este URL.</p>
+                  </div>
+                )}
+              </div>
+              <SaveBar onClick={handleSaveSchool} saving={saving} canSave={settingsAdmin} />
+            </SectionCard>
+
             <SectionCard
               title={tr("faturacao.billing_discounts.section_title")}
               desc={tr("faturacao.billing_discounts.section_desc")}
