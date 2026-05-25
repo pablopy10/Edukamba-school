@@ -30,6 +30,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Pencil, Plus, Trash2, Users } from "lucide-react";
 import { canValidateSchoolPaymentProofs } from "@/lib/schoolStaffRoles";
+import { sendNotificationWithPush } from "@/lib/notifications/sendNotificationWithPush";
 
 type ChargeTargetScope = "all_enrolled" | "classrooms" | "students";
 
@@ -212,6 +213,78 @@ export function EnrollmentChargeRulesPanel({ schoolId, role }: Props) {
 
     toast({ title: editingRule ? "Regra actualizada" : "Regra criada" });
     setRuleDialog(false);
+
+    // Gerar cobranças de matrícula automaticamente para os alunos abrangidos
+    let targetStudentIds: string[] = [];
+    if (ruleForm.target_scope === "students" && ruleForm.student_ids.length > 0) {
+      targetStudentIds = ruleForm.student_ids;
+    } else if (ruleForm.target_scope === "classrooms" && ruleForm.classroom_ids.length > 0) {
+      const { data: classStudents } = await supabase
+        .from("students")
+        .select("id")
+        .in("classroom_id", ruleForm.classroom_ids);
+      targetStudentIds = (classStudents ?? []).map(s => s.id);
+    } else if (ruleForm.target_scope === "all_enrolled") {
+      const { data: allStudents } = await supabase
+        .from("students")
+        .select("id")
+        .eq("school_id", schoolId);
+      targetStudentIds = (allStudents ?? []).map(s => s.id);
+    }
+
+    if (targetStudentIds.length > 0) {
+      const amount = Number(base.amount_new) || 0;
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + (base.due_offset_days || 15));
+      const dueDateStr = dueDate.toISOString().slice(0, 10);
+      let generated = 0;
+
+      for (const studentId of targetStudentIds) {
+        // Verificar se já existe cobrança para este aluno/ano
+        const { count } = await supabase
+          .from("enrollment_fees")
+          .select("id", { count: "exact", head: true })
+          .eq("student_id", studentId)
+          .eq("school_id", schoolId)
+          .eq("academic_year_id", activeYearId ?? "");
+        if ((count ?? 0) > 0) continue;
+
+        // Criar cobrança
+        const { error: feeErr } = await supabase.from("enrollment_fees").insert({
+          student_id: studentId,
+          school_id: schoolId,
+          academic_year_id: activeYearId,
+          fee_type: "NEW",
+          amount_due: amount,
+          due_date: dueDateStr,
+          is_paid: false,
+        });
+        if (feeErr) continue;
+        generated++;
+
+        // Notificar encarregado
+        const { data: student } = await supabase
+          .from("students")
+          .select("full_name, parent_id")
+          .eq("id", studentId)
+          .maybeSingle();
+        if (student?.parent_id) {
+          await sendNotificationWithPush({
+            recipient_id: student.parent_id,
+            school_id: schoolId,
+            title: "Nova cobrança de matrícula",
+            description: `Foi gerada uma cobrança de matrícula para ${student.full_name ?? "o aluno"} no valor de ${amount.toLocaleString("pt-AO")} Kz (vencimento: ${new Date(dueDateStr).toLocaleDateString("pt-PT")}).`,
+            category: "pagamento",
+            link: "https://www.edukamba.com/pagamentos",
+          });
+        }
+      }
+
+      if (generated > 0) {
+        toast({ title: "Cobranças geradas", description: `${generated} cobrança(s) de matrícula criada(s) e encarregados notificados.` });
+      }
+    }
+
     await load();
   };
 
