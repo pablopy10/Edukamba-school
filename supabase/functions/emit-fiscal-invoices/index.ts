@@ -456,9 +456,17 @@ async function emitOne(
       return { payment_id, status: "error", detail: insErr.message };
     }
 
-    // Email de fatura desactivado — o trigger tg_notify_payment_validation já envia
-    // notificação (push + email) ao encarregado. Evita duplicação de emails.
-    // O PDF da fatura pode ser descarregado na app pelo encarregado.
+    // Enviar email com PDF da fatura em anexo ao encarregado
+    if (inserted?.id) {
+      try {
+        const emailClient = adminSb ?? sb;
+        const pdfBytes = await buildOfficialFiscalInvoicePdfBytes(emailClient, invoiceRowToPdfPayload(inserted));
+        await sendInvoiceIssuedEmailForId(emailClient, String(inserted.id), pdfBytes);
+      } catch (emailErr) {
+        // Falha no email não deve bloquear a emissão da fatura
+        console.warn("Email da fatura falhou (não-bloqueante):", emailErr instanceof Error ? emailErr.message : emailErr);
+      }
+    }
 
     return {
       payment_id,
