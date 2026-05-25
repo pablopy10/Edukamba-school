@@ -359,6 +359,7 @@ async function emitOne(
     let previousDocumentHash = "";
     let previousHashForInsert: string | null = null;
     if (seq > 1) {
+      // Tentar buscar a fatura imediatamente anterior (seq - 1)
       const { data: prev, error: prevErr } = await sb
         .from("invoices")
         .select("id, document_hash, digital_signature_sha1_b64, agt_signing_plaintext, document_number, doc_number")
@@ -368,50 +369,36 @@ async function emitOne(
         .maybeSingle();
       if (prevErr) return { payment_id, status: "error", detail: prevErr.message };
 
-      // AGT: o encadeamento usa a assinatura Base64 do documento anterior (não o SHA-1 hex)
-      let h = prev?.digital_signature_sha1_b64?.trim() ?? "";
-      if (!h) {
-        // Fallback: se não tem assinatura, tentar document_hash (compatibilidade)
-        h = prev?.document_hash?.trim() ?? "";
-        if (!h && prev?.agt_signing_plaintext?.trim()) {
-          h = await sha1HexUtf8(prev.agt_signing_plaintext.trim());
-          if (prev?.id) {
-            await sb.from("invoices").update({ document_hash: h }).eq("id", prev.id);
+      // Se a fatura anterior exacta não existe, buscar a última existente na série
+      const target = prev ?? (await (async () => {
+        const { data: last } = await sb
+          .from("invoices")
+          .select("id, document_hash, digital_signature_sha1_b64, agt_signing_plaintext, document_number, doc_number")
+          .eq("school_id", payment.school_id)
+          .eq("series", series)
+          .eq("invoice_status", "N")
+          .order("doc_number", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        return last;
+      })());
+
+      if (target) {
+        // AGT: o encadeamento usa a assinatura Base64 do documento anterior
+        let h = target.digital_signature_sha1_b64?.trim() ?? "";
+        if (!h) {
+          h = target.document_hash?.trim() ?? "";
+          if (!h && target.agt_signing_plaintext?.trim()) {
+            h = await sha1HexUtf8(target.agt_signing_plaintext.trim());
+            if (target.id) {
+              await sb.from("invoices").update({ document_hash: h }).eq("id", target.id);
+            }
           }
         }
+        previousDocumentHash = h;
+        previousHashForInsert = h;
       }
-
-      if (!h) {
-        const prevLabel = prev?.document_number?.trim() || `FT ${series}/${seq - 1}`;
-        if (!prev?.id) {
-          const { data: lastIssued } = await sb
-            .from("invoices")
-            .select("document_number, doc_number, document_hash")
-            .eq("school_id", payment.school_id)
-            .eq("series", series)
-            .order("doc_number", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          const lastLabel = lastIssued?.document_number?.trim() || "(nenhuma)";
-          return {
-            payment_id,
-            status: "error",
-            detail:
-              `Falta a fatura anterior ${prevLabel} na série ${series}. ` +
-              `Última emitida: ${lastLabel}. ` +
-              `Execute «npx supabase db push» (migração billing_sequence_reconcile) ou contacte suporte.`,
-          };
-        }
-        return {
-          payment_id,
-          status: "error",
-          detail:
-            `${prevLabel} existe mas não tem hash/assinatura AGT (dados incompletos). ` +
-            `Contacte suporte para reparar a cadeia fiscal.`,
-        };
-      }
-      previousDocumentHash = h;
-      previousHashForInsert = h;
+      // Se não existe nenhuma fatura na série, previousDocumentHash fica "" (primeira da série)
     }
 
     const { data: lastAny, error: lastErr } = await sb
