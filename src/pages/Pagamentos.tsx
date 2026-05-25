@@ -47,6 +47,7 @@ import {
   invokeEmitFiscalInvoices,
   type EmitFiscalInvoicesResult,
 } from "@/lib/fiscal/invokeEmitFiscalInvoices";
+import { invokeEmitPaymentReceipt } from "@/lib/fiscal/invokeEmitPaymentReceipt";
 import { downloadFiscalInvoicePdfById } from "@/lib/fiscal/downloadFiscalInvoicePdf";
 import { invokeCancelFiscalInvoice } from "@/lib/fiscal/invokeCancelFiscalInvoice";
 import { invokeCreditNote } from "@/lib/fiscal/invokeCreditNote";
@@ -411,6 +412,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             ? "enrollment"
             : null;
   const [schoolId, setSchoolId] = useState<string | null>(null);
+  const [usaFaturacaoExterna, setUsaFaturacaoExterna] = useState(false);
   const { role } = useUserRole();
   const { user } = useAuth();
   const teacherUserId = user?.id ?? null;
@@ -982,6 +984,14 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     const sId = effectiveSchoolIdFromProfile(profile);
     setSchoolId(sId);
     if (!sId) { setLoading(false); return; }
+
+    // Carregar flag de faturação externa
+    const { data: schoolRow } = await supabase
+      .from("schools")
+      .select("usa_faturacao_externa")
+      .eq("id", sId)
+      .maybeSingle();
+    setUsaFaturacaoExterna(schoolRow?.usa_faturacao_externa ?? false);
 
     const yRes = await supabase.from("academic_years").select("id, label, is_active, start_date").eq("school_id", sId).order("start_date", { ascending: true });
 
@@ -1742,12 +1752,30 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       .filter((x) => x.payment && x.payment.status === "pendente") as Array<{ fee: FeeListRow; payment: PaymentListRow }>;
   }, [allFees, latestPaymentByFee]);
 
-  /** Gera FT (AGT) após validação; falhas não revertem o pagamento. Devolve resultado da Edge (invoice_id novo quando emitido). */
+  /** Gera FT (AGT) ou comprovativo interno após validação; falhas não revertem o pagamento. */
   const emitFtAfterValidation = async (
     paymentIds: string[],
   ): Promise<{ ok: boolean; results?: EmitFiscalInvoicesResult[]; message?: string }> => {
     const ids = [...new Set(paymentIds.filter(Boolean))];
     if (!ids.length) return { ok: true, results: [] };
+
+    // Escola com faturação externa: gerar comprovativo interno + webhook
+    if (usaFaturacaoExterna) {
+      const rx = await invokeEmitPaymentReceipt(ids);
+      const created = rx.results?.filter((r) => r.status === "created") ?? [];
+      if (created.length > 0) {
+        toast({
+          title: created.length > 1 ? "Comprovativos gerados" : "Comprovativo gerado",
+          description: `${created.length} comprovativo(s) de recebimento criado(s). Sistema externo notificado.`,
+        });
+      }
+      if (!rx.ok && rx.message) {
+        toast({ title: "Erro no comprovativo", description: rx.message, variant: "destructive" });
+      }
+      return { ok: rx.ok, results: [], message: rx.message };
+    }
+
+    // Fluxo normal: emitir FT fiscal (AGT)
     const fx = await invokeEmitFiscalInvoices(ids);
     const emitted = fx.results?.filter((r) => r.status === "emitted" && r.invoice_id?.trim()) ?? [];
     const skipped = fx.results?.filter((r) => r.status === "skipped") ?? [];
