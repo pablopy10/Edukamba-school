@@ -768,14 +768,25 @@ export default function Documentos() {
                           {/* ── Non-privileged: sign / status button ── */}
                           {!isPrivileged && doc.status === "active" && !expired && isDocForMe(doc) && (
                             myReqStatus && myReqStatus !== "pending" ? (
-                              // Already responded
-                              <span className={cn(
-                                "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold",
-                                myReqMeta?.color,
-                              )}>
-                                {MyReqIcon && <MyReqIcon className="h-3.5 w-3.5" />}
-                                {myReqMeta?.label}
-                              </span>
+                              // Already responded — show status + view icon
+                              <div className="flex items-center gap-1.5">
+                                {(myReq?.signed_pdf_url || myReq?.signature_data) && (
+                                  <button
+                                    onClick={() => setViewerRequest(myReq as DocumentRequest)}
+                                    className="flex h-8 w-8 items-center justify-center rounded-full text-pastel-blue-foreground transition-colors hover:bg-pastel-blue/20"
+                                    title={t("actions.view_signed_doc")}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </button>
+                                )}
+                                <span className={cn(
+                                  "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold",
+                                  myReqMeta?.color,
+                                )}>
+                                  {MyReqIcon && <MyReqIcon className="h-3.5 w-3.5" />}
+                                  {myReqMeta?.label}
+                                </span>
+                              </div>
                             ) : (
                               // Pending or no request yet
                               <button
