@@ -427,15 +427,33 @@ async function resolveFiscalInvoicePdfInput(
     studentName: studentFullName || "—",
     studentClassroom: studentClassroom || null,
     academicYearLabel,
-    lineItems: [
-      {
+    lineItems: (() => {
+      // Parsear formato "Desc:Valor:IvaPct" ou "Desc:Valor:0_M11"
+      const match = /^(.+):(\d[\d.,]*):(\d+(?:_M\d+)?)$/.exec(lineDescription);
+      if (match) {
+        const desc = match[1].trim();
+        const val = parseFloat(match[2].replace(",", ".")) || 0;
+        const ivaPctStr = match[3].trim();
+        const pct = ivaPctStr.startsWith("0") ? 0 : (parseFloat(ivaPctStr) || 0);
+        const taxLabel = pct === 0 ? "Isento (M11)" : `${pct}%`;
+        const baseStr = formatMoney(val, invoice.currency ?? "AOA");
+        const lineTotal = Math.round((val + val * pct / 100) * 100) / 100;
+        return [{
+          description: desc,
+          quantity: 1,
+          unitAmountFmt: baseStr,
+          totalAmountFmt: formatMoney(lineTotal, invoice.currency ?? "AOA"),
+          taxLabel,
+        }];
+      }
+      return [{
         description: lineDescription,
         quantity: 1,
         unitAmountFmt: totalFmt,
         totalAmountFmt: totalFmt,
         taxLabel: "Isento (M11)",
-      },
-    ],
+      }];
+    })(),
     grossTotalFmt: totalFmt,
     exemptionCode: invoice.exemption_code ?? null,
     exemptionReason: invoice.exemption_reason ?? null,

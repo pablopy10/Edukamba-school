@@ -181,6 +181,10 @@ type FiscalContext = {
   student_tax_id: string | null;
   parent_tax_id: string | null;
   line_description: string;
+  /** Percentagem de IVA: 0 para isento (propinas/matrículas), 14 para extracurriculares/transportes/refeições */
+  tax_percentage: number;
+  tax_code: string;
+  tax_exemption_code: string | null;
 };
 
 async function resolveFiscalContext(
@@ -262,6 +266,12 @@ async function resolveFiscalContext(
 
   if (!studentId) throw new Error("Não foi possível resolver o aluno deste pagamento.");
 
+  // Determinar IVA: propinas e matrículas são isentas; extracurriculares, transportes, refeições e eventos têm IVA 14%
+  const isExempt = !!(payment.student_fee_id || payment.enrollment_fee_id);
+  const taxPercentage = isExempt ? 0 : 14;
+  const taxCode = isExempt ? "ISE" : "NOR";
+  const taxExemptionCode = isExempt ? "M11" : null;
+
   const { data: st, error: stErr } = await sb
     .from("students")
     .select("id, full_name, tax_id, parent_id")
@@ -284,6 +294,9 @@ async function resolveFiscalContext(
     student_tax_id: st.tax_id ?? null,
     parent_tax_id: parentTax,
     line_description: lineDescription,
+    tax_percentage: taxPercentage,
+    tax_code: taxCode,
+    tax_exemption_code: taxExemptionCode,
   };
 }
 
@@ -335,10 +348,18 @@ async function emitOne(
     }
 
     const ctx = await resolveFiscalContext(sb, payment);
-    const gross = Number(payment.amount_paid);
-    if (!Number.isFinite(gross) || gross <= 0) {
+    const baseAmount = Number(payment.amount_paid);
+    if (!Number.isFinite(baseAmount) || baseAmount <= 0) {
       return { payment_id, status: "error", detail: "Valor do pagamento inválido." };
     }
+
+    // Calcular IVA e total bruto
+    const ivaAmount = Math.round(baseAmount * ctx.tax_percentage / 100 * 100) / 100;
+    const gross = Math.round((baseAmount + ivaAmount) * 100) / 100;
+
+    // Codificar line_description com IVA para o PDF: "Desc:Valor:IvaPct"
+    const taxSuffix = ctx.tax_percentage === 0 ? "0_M11" : String(ctx.tax_percentage);
+    const lineDescriptionEncoded = `${ctx.line_description}:${formatTotalForSigning(baseAmount)}:${taxSuffix}`;
 
     const timeBasis = payment.validated_at ?? payment.payment_date ?? new Date().toISOString();
     const issuedAt = new Date(timeBasis);
@@ -439,7 +460,11 @@ async function emitOne(
       invoice_date: invoiceDateYYYYMMDD,
       invoice_issued_at: issuedAtISO,
       gross_total: gross,
-      line_description: ctx.line_description,
+      net_total: baseAmount,
+      tax_payable: ivaAmount,
+      line_description: lineDescriptionEncoded,
+      exemption_code: ctx.tax_exemption_code ?? "M11",
+      exemption_reason: ctx.tax_percentage === 0 ? "Isenção no domínio da educação" : null,
       agt_signing_plaintext: plaintext,
       digital_signature_sha1_b64: signatureBase64,
       document_hash,
