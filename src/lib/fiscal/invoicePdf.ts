@@ -502,6 +502,7 @@ export async function resolveFiscalInvoicePdfInput(
           quantity: 1,
           unitPriceFmt: fmtVal,
           totalAmountFmt: fmtVal,
+          taxLabel: "Isento (M11)",
         }];
       }
       return [{
@@ -509,6 +510,7 @@ export async function resolveFiscalInvoicePdfInput(
         quantity: 1,
         unitPriceFmt: totalFmt,
         totalAmountFmt: totalFmt,
+        taxLabel: "Isento (M11)",
       }];
     })(),
     ...(() => {

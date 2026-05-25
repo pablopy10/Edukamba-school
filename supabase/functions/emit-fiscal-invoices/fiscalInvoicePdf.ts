@@ -37,6 +37,7 @@ export type FiscalInvoiceLine = {
   quantity: number;
   unitAmountFmt: string;
   totalAmountFmt: string;
+  taxLabel?: string;
 };
 
 export type FiscalInvoicePdfInput = {
@@ -432,6 +433,7 @@ async function resolveFiscalInvoicePdfInput(
         quantity: 1,
         unitAmountFmt: totalFmt,
         totalAmountFmt: totalFmt,
+        taxLabel: "Isento (M11)",
       },
     ],
     grossTotalFmt: totalFmt,
@@ -625,11 +627,12 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
 
   y = boxTop + boxH + pxMm(18);
 
-  const head = [["DESCRIÇÃO DO SERVIÇO", "QTD", "P. UNITÁRIO", "TOTAL"]];
+  const head = [["DESCRIÇÃO DO SERVIÇO", "QTD", "P. UNITÁRIO", "IVA", "TOTAL"]];
   const body = opts.lineItems.map((it) => [
     it.description.replace(/\u00a0/g, " "),
     String(it.quantity),
     it.unitAmountFmt,
+    it.taxLabel || "Isento (M11)",
     it.totalAmountFmt,
   ]);
 
