@@ -8,4 +8,5 @@
 
 -- Remover trigger que pode causar erro 500 se supabase_functions não existe
 DROP TRIGGER IF EXISTS trg_notifications_push_webhook ON public.notifications;
-DROP FUNCTION IF EXISTS public.tg_dispatch_notification_push();
+DROP TRIGGER IF EXISTS trg_dispatch_notification_push ON public.notifications;
+DROP FUNCTION IF EXISTS public.tg_dispatch_notification_push() CASCADE;
