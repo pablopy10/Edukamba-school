@@ -1,6 +1,14 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
+function addLogoIfPossible(doc: jsPDF, logoDataUrl: string | undefined, x: number, y: number, maxW: number, maxH: number) {
+  if (!logoDataUrl?.startsWith("data:image")) return;
+  try {
+    const fmt = logoDataUrl.includes("image/png") ? "PNG" : "JPEG";
+    doc.addImage(logoDataUrl, fmt, x, y, maxW, maxH, undefined, "FAST");
+  } catch { /* ignore */ }
+}
+
 /**
  * PDF NOTA DE CRÉDITO (NC) — Layout alinhado com FT mas com especificidades AGT:
  * - Tipo de documento: NOTA DE CRÉDITO (bem visível)
@@ -213,13 +221,18 @@ export function buildCreditNotePdf(opts: CreditNotePdfInput): jsPDF {
   const textStartX = margin;
   let yLeft = hdrTop;
 
+  if (opts.logoDataUrl) {
+    addLogoIfPossible(doc, opts.logoDataUrl, textStartX, yLeft, 25, 25);
+    yLeft += pxMm(70);
+  }
+
   const schoolNameSize = pxToPt(18);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(schoolNameSize);
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
   yLeft = drawWrappedTexts(
     doc,
-    ["Edukamba"],
+    [opts.schoolName || "Escola"],
     textStartX,
     yLeft,
     leftColW,
@@ -234,16 +247,16 @@ export function buildCreditNotePdf(opts: CreditNotePdfInput): jsPDF {
   });
 
   yLeft += pxMm(5);
-  const edukambaHeaderLines = [
-    "NIF: 5480041924",
-    "Zona Verde, Rua 18, Casa 26, Belas, Luanda",
-    "Email: geral@edukamba.com",
-    "Website: www.edukamba.com",
-  ];
+  const ncHeaderLines: string[] = [];
+  if (opts.schoolNif) ncHeaderLines.push(`NIF: ${opts.schoolNif}`);
+  if (opts.schoolAddress) ncHeaderLines.push(opts.schoolAddress);
+  if (opts.schoolContactLines?.length) {
+    opts.schoolContactLines.forEach((l) => l?.trim() && ncHeaderLines.push(l.trim()));
+  }
   doc.setFont("helvetica", "normal");
   doc.setFontSize(pxToPt(10));
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-  yLeft = drawWrappedTexts(doc, edukambaHeaderLines, textStartX, yLeft, leftColW, {
+  yLeft = drawWrappedTexts(doc, ncHeaderLines, textStartX, yLeft, leftColW, {
     leading: pxMm(13),
     size: pxToPt(10),
   });
@@ -321,12 +334,11 @@ export function buildCreditNotePdf(opts: CreditNotePdfInput): jsPDF {
   clientBody.push(`NIF: ${opts.clienteNif.trim()}`);
 
   const issuerBody: string[] = [
-    "Edukamba",
-    "Zona Verde, Rua 18, Casa 26, Belas, Luanda",
-    "NIF: 5480041924",
-    "Email: geral@edukamba.com",
-    "Website: www.edukamba.com",
-  ];
+    opts.schoolName || "Escola",
+    opts.schoolAddress || "",
+    opts.schoolNif ? `NIF: ${opts.schoolNif}` : "",
+    ...(opts.schoolContactLines ?? []),
+  ].filter(Boolean);
 
   const innerW = panelW - padInner * 2;
   const hClientInner = measureDetailPanelInnerHeightMm(doc, "Dados do Cliente", clientBody, innerW);
@@ -530,7 +542,7 @@ export function buildCreditNotePdf(opts: CreditNotePdfInput): jsPDF {
   doc.setFontSize(pxToPt(10));
   doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
   doc.text(`Hash: ${hashControl4} | Processado por programa válido nº31.1/AGT20`, margin, wmY);
-  doc.text("edukamba.com", rhs, wmY, { align: "right" });
+  doc.text(opts.schoolName || "", rhs, wmY, { align: "right" });
 
   doc.setTextColor(0);
   doc.setDrawColor(0);

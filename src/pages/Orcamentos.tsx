@@ -103,9 +103,10 @@ const Orcamentos = () => {
   const [busy, setBusy] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [schoolId, setSchoolId] = useState<string | null>(null);
-  const [schoolName, setSchoolName] = useState("Edukamba");
+  const [schoolName, setSchoolName] = useState("Escola");
   const [schoolNif, setSchoolNif] = useState<string | null>(null);
   const [schoolAddress, setSchoolAddress] = useState<string | null>(null);
+  const [schoolContactLines, setSchoolContactLines] = useState<string[]>([]);
 
   // Client type
   const [clientType, setClientType] = useState<ClientType>("encarregado");
@@ -159,13 +160,17 @@ const Orcamentos = () => {
 
       const { data: sch } = await supabase
         .from("schools")
-        .select("name, nif, address")
+        .select("name, nif, address, phone, email")
         .eq("id", sid)
         .maybeSingle();
       if (sch) {
-        setSchoolName(sch.name || "Edukamba");
+        setSchoolName(sch.name || "Escola");
         setSchoolNif(sch.nif || null);
         setSchoolAddress(sch.address || null);
+        const lines: string[] = [];
+        if ((sch as Record<string, unknown>).phone) lines.push(`Tel: ${(sch as Record<string, unknown>).phone}`);
+        if ((sch as Record<string, unknown>).email) lines.push(`Email: ${(sch as Record<string, unknown>).email}`);
+        setSchoolContactLines(lines);
       }
 
       // Load guardians and students for the school
@@ -387,7 +392,7 @@ const Orcamentos = () => {
         schoolName,
         schoolNif,
         schoolAddress,
-        schoolContactLines: ["Email: geral@edukamba.com", "Website: www.edukamba.com"],
+        schoolContactLines,
         clientName: resolvedClientName,
         clientLines: form.clientLines.split("\n").map((l) => l.trim()).filter(Boolean),
         clientNif: resolvedNif,
@@ -511,7 +516,7 @@ const Orcamentos = () => {
       schoolName,
       schoolNif,
       schoolAddress,
-      schoolContactLines: ["Email: geral@edukamba.com", "Website: www.edukamba.com"],
+      schoolContactLines,
       clientName: row.client_name,
       clientLines: row.client_lines,
       clientNif: row.client_nif,

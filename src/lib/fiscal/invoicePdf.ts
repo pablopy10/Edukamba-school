@@ -342,10 +342,16 @@ export async function resolveFiscalInvoicePdfInput(
 ): Promise<FiscalInvoicePdfInput> {
   const { data: school } = await supabase
     .from("schools")
-    .select("name,nif,address,logo_url")
+    .select("name,nif,address,logo_url,phone,email")
     .eq("id", invoice.school_id)
     .maybeSingle();
   const logoDataUrlFinal = await fetchLogoAsDataUrl(school?.logo_url ?? null);
+
+  // Contactos dinâmicos da escola
+  const contactLines: string[] = [];
+  if ((school as Record<string, unknown>)?.phone) contactLines.push(`Tel: ${(school as Record<string, unknown>).phone}`);
+  if ((school as Record<string, unknown>)?.email) contactLines.push(`Email: ${(school as Record<string, unknown>).email}`);
+  if (contactLines.length === 0 && school?.name) contactLines.push(""); // escola sem contactos — não mostrar fallback Edukamba
 
   let studentFullName = "";
   let studentClassroom: string | null = null;
@@ -399,10 +405,10 @@ export async function resolveFiscalInvoicePdfInput(
   const totalFmt = formatMoney(Number.isFinite(gross) ? gross : 0);
 
   return {
-    schoolName: school?.name?.trim() || "Edukamba",
-    schoolNif: school?.nif?.trim() || "5480041924",
-    schoolAddress: school?.address?.trim() || "Zona Verde, Rua 18, Casa 26, Belas, Luanda",
-    schoolContactLines: ["Email: geral@edukamba.com", "Website: www.edukamba.com"],
+    schoolName: school?.name?.trim() || "Escola",
+    schoolNif: school?.nif?.trim() || null,
+    schoolAddress: school?.address?.trim() || null,
+    schoolContactLines: contactLines,
     logoDataUrl: logoDataUrlFinal,
     documentNumber: invoice.document_number.trim(),
     invoiceDateYYYYMMDD: invoice.invoice_date.slice(0, 10),
@@ -585,9 +591,14 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   const hdrTop = margin;
   const leftColW = usableW * 0.52;
 
-  // Logo removido — header começa directamente com texto
+  // Logo da escola (se disponível)
   const textStartX = margin;
   let yLeft = hdrTop;
+
+  if (opts.logoDataUrl) {
+    addLogoIfPossible(doc, opts.logoDataUrl, textStartX, yLeft, 25, 25);
+    yLeft += pxMm(70);
+  }
 
   const schoolNameSize = pxToPt(18);
   doc.setFont("helvetica", "bold");
@@ -595,7 +606,7 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
   yLeft = drawWrappedTexts(
     doc,
-    ["Edukamba"],
+    [opts.schoolName || "Escola"],
     textStartX,
     yLeft,
     leftColW,
@@ -610,16 +621,16 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   });
 
   yLeft += pxMm(5);
-  const edukambaHeaderLines = [
-    "NIF: 5480041924",
-    "Zona Verde, Rua 18, Casa 26, Belas, Luanda",
-    "Email: geral@edukamba.com",
-    "Website: www.edukamba.com",
-  ];
+  const issuerHeaderLines: string[] = [];
+  if (opts.schoolNif) issuerHeaderLines.push(`NIF: ${opts.schoolNif}`);
+  if (opts.schoolAddress) issuerHeaderLines.push(opts.schoolAddress);
+  if (opts.schoolContactLines?.length) {
+    opts.schoolContactLines.forEach((l) => l?.trim() && issuerHeaderLines.push(l.trim()));
+  }
   doc.setFont("helvetica", "normal");
   doc.setFontSize(pxToPt(10));
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-  yLeft = drawWrappedTexts(doc, edukambaHeaderLines, textStartX, yLeft, leftColW, {
+  yLeft = drawWrappedTexts(doc, issuerHeaderLines, textStartX, yLeft, leftColW, {
     leading: pxMm(13),
     size: pxToPt(10),
   });
@@ -890,7 +901,7 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   doc.setFontSize(pxToPt(10));
   doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
   doc.text(`Hash: ${hashControl4} | Processado por programa válido nº31.1/AGT20`, margin, wmY);
-  doc.text("edukamba.com", rhs, wmY, { align: "right" });
+  doc.text(opts.schoolName || "", rhs, wmY, { align: "right" });
 
   if (opts.isCancelled) {
     drawCancelledInvoiceOverlay(doc, pageW, pageH, opts.cancellationReason);

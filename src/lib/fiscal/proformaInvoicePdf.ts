@@ -289,7 +289,7 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   // Se tiver logo, começa abaixo dele; senão começa no topo
   const hasLogo = !!opts.logoDataUrl?.trim();
   let yLeft = hasLogo ? hdrTop + logoH + pxMm(4) : hdrTop;
-  yLeft = drawWrappedTexts(doc, [opts.schoolName.trim() || "Edukamba"], textStartX, yLeft, leftColW, {
+  yLeft = drawWrappedTexts(doc, [opts.schoolName.trim() || "Escola"], textStartX, yLeft, leftColW, {
     leading: pxMm(22),
     size: schoolNameSize,
     style: "bold",
@@ -386,8 +386,7 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
   if (opts.schoolContactLines?.length) {
     opts.schoolContactLines.forEach((l) => l?.trim() && issuerBody.push(l.trim()));
   } else {
-    issuerBody.push("Email: geral@edukamba.com");
-    issuerBody.push("Website: www.edukamba.com");
+    // Sem contactos configurados — não mostrar fallback
   }
 
   const innerW = panelW - padInner * 2;
@@ -610,7 +609,7 @@ export function buildProformaInvoicePdf(opts: ProformaInvoicePdfInput): jsPDF {
     margin,
     pageH - margin,
   );
-  doc.text("edukamba.com", rhs, pageH - margin, { align: "right" });
+  doc.text(opts.schoolName || "", rhs, pageH - margin, { align: "right" });
 
   doc.setTextColor(0);
   doc.setDrawColor(0);
