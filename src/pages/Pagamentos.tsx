@@ -48,6 +48,7 @@ import {
   type EmitFiscalInvoicesResult,
 } from "@/lib/fiscal/invokeEmitFiscalInvoices";
 import { invokeEmitPaymentReceipt } from "@/lib/fiscal/invokeEmitPaymentReceipt";
+import { sendNotificationWithPush } from "@/lib/notifications/sendNotificationWithPush";
 import { downloadFiscalInvoicePdfById } from "@/lib/fiscal/downloadFiscalInvoicePdf";
 import { invokeCancelFiscalInvoice } from "@/lib/fiscal/invokeCancelFiscalInvoice";
 import { invokeCreditNote } from "@/lib/fiscal/invokeCreditNote";
@@ -903,73 +904,50 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 : await supabase.from("enrollment_fees").update({ is_paid: true }).eq("id", fee.id);
     if (feeErr) return { error: feeErr.message };
     const parentId = fee.student?.parent_id ?? null;
-    const comprovativoMencao = "";
     if (parentId) {
+      let title = "Pagamento registado";
+      let description = "";
+      let link = "https://www.edukamba.com/pagamentos";
+
       if (kind === "fee") {
         const f = fee as FeeListRow;
         const monthLabel = f.month_index ? monthNamesLong[f.month_index - 1] : "";
-        await supabase.from("notifications").insert({
-          recipient_id: parentId,
-          school_id: schoolId,
-          title: `Pagamento registado — ${monthLabel}`.trim(),
-          description: `A escola registou o pagamento da propina de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
-          category: "pagamento",
-          link: "https://www.edukamba.com/pagamentos",
-        });
+        title = `Pagamento registado — ${monthLabel}`.trim();
+        description = `A escola registou o pagamento da propina de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).`;
       } else if (kind === "activity") {
         const f = fee as ActivityFeeRow;
-        await supabase.from("notifications").insert({
-          recipient_id: parentId,
-          school_id: schoolId,
-          title: `Pagamento registado — ${f.activity?.name ?? "atividade"}`,
-          description: `A escola registou o pagamento da atividade ${f.activity?.name ?? ""} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
-          category: "pagamento",
-          link: "https://www.edukamba.com/pagamentos",
-        });
+        title = `Pagamento registado — ${f.activity?.name ?? "atividade"}`;
+        description = `A escola registou o pagamento da atividade ${f.activity?.name ?? ""} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).`;
       } else if (kind === "transport") {
         const f = fee as TransportFeeRow;
         const monthLabel = f.month_index ? monthNamesLong[f.month_index - 1] : "";
-        await supabase.from("notifications").insert({
-          recipient_id: parentId,
-          school_id: schoolId,
-          title: `Pagamento de transporte registado — ${monthLabel}`.trim(),
-          description: `A escola registou o pagamento do transporte (${f.route?.name ?? "rota"}) de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
-          category: "pagamento",
-          link: "https://www.edukamba.com/pagamentos",
-        });
+        title = `Pagamento de transporte registado — ${monthLabel}`.trim();
+        description = `A escola registou o pagamento do transporte (${f.route?.name ?? "rota"}) de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).`;
       } else if (kind === "meal") {
         const f = fee as MealFeeRow;
         const monthLabel = f.month_index ? monthNamesLong[f.month_index - 1] : "";
-        await supabase.from("notifications").insert({
-          recipient_id: parentId,
-          school_id: schoolId,
-          title: `Pagamento de refeições registado — ${monthLabel}`.trim(),
-          description: `A escola registou o pagamento do plano ${f.meal_program?.name ?? "refeições"} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
-          category: "pagamento",
-          link: "https://www.edukamba.com/pagamentos",
-        });
+        title = `Pagamento de refeições registado — ${monthLabel}`.trim();
+        description = `A escola registou o pagamento do plano ${f.meal_program?.name ?? "refeições"} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).`;
       } else if (kind === "event") {
         const f = fee as EventFeeRow;
-        await supabase.from("notifications").insert({
-          recipient_id: parentId,
-          school_id: schoolId,
-          title: `Pagamento de evento registado`,
-          description: `A escola registou o pagamento do evento «${f.event?.title ?? "evento"}» de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
-          category: "pagamento",
-          link: "https://www.edukamba.com/eventos?tab=pagamentos",
-        });
+        title = `Pagamento de evento registado`;
+        description = `A escola registou o pagamento do evento «${f.event?.title ?? "evento"}» de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).`;
+        link = "https://www.edukamba.com/eventos?tab=pagamentos";
       } else {
         const f = fee as EnrollmentFeeRow;
         const label = f.fee_type === "RENEWAL" ? "renovação de matrícula" : "matrícula";
-        await supabase.from("notifications").insert({
-          recipient_id: parentId,
-          school_id: schoolId,
-          title: `Pagamento de ${label} registado`,
-          description: `A escola registou o pagamento da ${label} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).${comprovativoMencao}`,
-          category: "pagamento",
-          link: "https://www.edukamba.com/pagamentos",
-        });
+        title = `Pagamento de ${label} registado`;
+        description = `A escola registou o pagamento da ${label} de ${f.student?.full_name ?? "o aluno"} (${fmtAOA(amount)}).`;
       }
+
+      await sendNotificationWithPush({
+        recipient_id: parentId,
+        school_id: schoolId,
+        title,
+        description,
+        category: "pagamento",
+        link,
+      });
     }
     return { error: null, paymentId: payRow.id };
   };
