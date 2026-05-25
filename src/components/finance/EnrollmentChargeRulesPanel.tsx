@@ -28,7 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Pencil, Plus, Trash2, Users } from "lucide-react";
+import { Loader2, Pencil, Plus, Trash2, Users, Eye } from "lucide-react";
 import { canValidateSchoolPaymentProofs } from "@/lib/schoolStaffRoles";
 import { sendNotificationWithPush } from "@/lib/notifications/sendNotificationWithPush";
 
@@ -84,6 +84,9 @@ export function EnrollmentChargeRulesPanel({ schoolId, role }: Props) {
     notes: "",
   });
   const [deleteRule, setDeleteRule] = useState<string | null>(null);
+  const [feesDetailRule, setFeesDetailRule] = useState<EnrollmentRuleRow | null>(null);
+  const [feesDetailData, setFeesDetailData] = useState<Array<{ id: string; student_name: string; amount_due: number; due_date: string; is_paid: boolean }>>([]);
+  const [feesDetailLoading, setFeesDetailLoading] = useState(false);
 
   const load = useCallback(async () => {
     if (!schoolId) return;
@@ -297,6 +300,44 @@ export function EnrollmentChargeRulesPanel({ schoolId, role }: Props) {
     await load();
   };
 
+  const openFeesDetail = async (rule: EnrollmentRuleRow) => {
+    setFeesDetailRule(rule);
+    setFeesDetailLoading(true);
+    setFeesDetailData([]);
+
+    // Determinar alunos abrangidos pela regra
+    let studentIds: string[] = [];
+    if (rule.target_scope === "students" && rule.enrollment_charge_rule_students?.length) {
+      studentIds = rule.enrollment_charge_rule_students.map(s => s.student_id);
+    } else if (rule.target_scope === "classrooms" && rule.enrollment_charge_rule_classrooms?.length) {
+      const cids = rule.enrollment_charge_rule_classrooms.map(c => c.classroom_id);
+      const { data } = await supabase.from("students").select("id").in("classroom_id", cids);
+      studentIds = (data ?? []).map(s => s.id);
+    } else {
+      const { data } = await supabase.from("students").select("id").eq("school_id", schoolId);
+      studentIds = (data ?? []).map(s => s.id);
+    }
+
+    if (studentIds.length > 0) {
+      const { data: fees } = await supabase
+        .from("enrollment_fees")
+        .select("id, amount_due, due_date, is_paid, student:students(full_name)")
+        .eq("school_id", schoolId)
+        .eq("academic_year_id", rule.academic_year_id ?? "")
+        .in("student_id", studentIds)
+        .order("due_date", { ascending: true });
+
+      setFeesDetailData((fees ?? []).map(f => ({
+        id: f.id,
+        student_name: (f.student as unknown as { full_name: string })?.full_name ?? "—",
+        amount_due: Number(f.amount_due),
+        due_date: f.due_date,
+        is_paid: f.is_paid,
+      })));
+    }
+    setFeesDetailLoading(false);
+  };
+
   return (
     <div className="space-y-4">
       <Card>
@@ -369,6 +410,9 @@ export function EnrollmentChargeRulesPanel({ schoolId, role }: Props) {
                           <td className="p-3 text-muted-foreground">{yr ?? "—"}</td>
                           {canManage && (
                             <td className="p-3 text-right">
+                              <Button type="button" size="sm" variant="ghost" className="gap-1" onClick={() => openFeesDetail(r)} title="Ver cobranças">
+                                <Eye className="h-4 w-4" />
+                              </Button>
                               <Button type="button" size="sm" variant="ghost" className="gap-1" onClick={() => openEdit(r)}>
                                 <Pencil className="h-4 w-4" />
                               </Button>
@@ -530,6 +574,57 @@ export function EnrollmentChargeRulesPanel({ schoolId, role }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog: cobranças geradas para esta regra */}
+      <Dialog open={!!feesDetailRule} onOpenChange={(o) => !o && setFeesDetailRule(null)}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Cobranças de matrícula</DialogTitle>
+            <DialogDescription>
+              Regra: {feesDetailRule ? formatTarget(feesDetailRule) : ""} — {feesDetailData.length} cobrança(s)
+            </DialogDescription>
+          </DialogHeader>
+          {feesDetailLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : feesDetailData.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">Nenhuma cobrança gerada ainda para esta regra.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-md border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/40 text-muted-foreground">
+                  <tr className="text-left">
+                    <th className="p-2.5">Aluno</th>
+                    <th className="p-2.5">Valor</th>
+                    <th className="p-2.5">Vencimento</th>
+                    <th className="p-2.5">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {feesDetailData.map((f) => (
+                    <tr key={f.id} className="border-t border-border">
+                      <td className="p-2.5 font-medium">{f.student_name}</td>
+                      <td className="p-2.5">{f.amount_due.toLocaleString("pt-PT")} Kz</td>
+                      <td className="p-2.5 text-muted-foreground">{new Date(f.due_date).toLocaleDateString("pt-PT")}</td>
+                      <td className="p-2.5">
+                        {f.is_paid ? (
+                          <Badge className="bg-green-100 text-green-700">Pago</Badge>
+                        ) : (
+                          <Badge variant="secondary">Pendente</Badge>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFeesDetailRule(null)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
