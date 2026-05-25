@@ -114,6 +114,10 @@ const Matriculas = () => {
   }, [searchParams]);
 
   const load = async () => {
+    if (!schoolId && !isParent) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     if (enrollmentReadOnly && homeroomLoading) {
       setLoading(false);
@@ -125,6 +129,10 @@ const Matriculas = () => {
       .order("enrolled_at", { ascending: false });
     let classroomsQuery = supabase.from("classrooms").select("id, name").order("name");
     let studentsQuery = supabase.from("students").select("id, full_name").order("full_name");
+    if (schoolId) {
+      classroomsQuery = classroomsQuery.eq("school_id", schoolId);
+      studentsQuery = studentsQuery.eq("school_id", schoolId);
+    }
     if (selectedYearId) {
       enrollmentsQuery = enrollmentsQuery.eq("academic_year_id", selectedYearId);
       classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
@@ -183,6 +191,7 @@ const Matriculas = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     selectedYearId,
+    schoolId,
     parentLoading,
     roleLoading,
     enrollmentReadOnly,

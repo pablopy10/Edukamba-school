@@ -337,7 +337,7 @@ export function ModuleAuthorizationsPanel({
     try {
       const { data: tData, error: tErr } = await supabase
         .from("module_authorization_templates")
-        .selectr("*")
+        .select("*")
         .eq("school_id", schoolId)
         .eq("module", module)
         .order("created_at", { ascending: false });
@@ -368,15 +368,15 @@ export function ModuleAuthorizationsPanel({
         canManageTemplates && selectedYearId
           ? supabase
               .from("classrooms")
-              .selectr("id, name")
+              .select("id, name")
               .eq("school_id", schoolId)
               .eq("academic_year_id", selectedYearId)
               .order("name")
           : Promise.resolve({ data: [], error: null }),
         userId
-          ? supabase.from("module_authorization_named_recipients").selectr("template_id, student_id").eq("assignee_profile_id", userId)
+          ? supabase.from("module_authorization_named_recipients").select("template_id, student_id").eq("assignee_profile_id", userId)
           : Promise.resolve({ data: [], error: null }),
-        supabase.from("schools").selectr("name").eq("id", schoolId).maybeSingle(),
+        supabase.from("schools").select("name").eq("id", schoolId).maybeSingle(),
       ]);
 
       const schoolNameRaw = schoolRes?.data?.name;
@@ -543,7 +543,7 @@ export function ModuleAuthorizationsPanel({
     void (async () => {
       const { data: namedRows, error: namedErr } = await supabase
         .from("module_authorization_named_recipients")
-        .selectr("student_id, assignee_profile_id")
+        .select("student_id, assignee_profile_id")
         .eq("template_id", t.id);
       if (namedErr?.message?.includes("does not exist") || !namedRows?.length) {
         setTplNamedDrafts([{ rowKey: nanoid(), student_id: "", assignee_pick: "__" }]);
@@ -718,7 +718,7 @@ export function ModuleAuthorizationsPanel({
             created_by: userId ?? null,
             ...recipientPayload,
           } as never)
-          .selectr("id")
+          .select("id")
           .single();
 
         if (error) toast.error(error.message);
