@@ -1527,29 +1527,23 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     setGenerating(true);
     const { data: studs } = await supabase
       .from("students")
-      .select("id, classroom_id, classroom:classrooms(grade_level)")
+      .select("id")
       .eq("school_id", schoolId);
     if (!studs) { setGenerating(false); return; }
 
     let total = 0;
-    let skipped = 0;
-    for (const st of studs as Array<{ id: string; classroom: { grade_level: string | null } | null }>) {
-      // Skip if already has fees for the year
-      const { count } = await supabase
-        .from("student_fees")
-        .select("id", { count: "exact", head: true })
-        .eq("student_id", st.id)
-        .eq("academic_year_id", generateYearId);
-      if ((count ?? 0) > 0) { skipped++; continue; }
+    for (const st of studs) {
+      // A RPC gera TODAS as propinas do ano (_force_all = true), sem filtro de data
       const { data: created } = await supabase.rpc("generate_student_fees_for_year", {
         _student_id: st.id,
         _academic_year_id: generateYearId,
+        _force_all: true,
       });
       total += (created as number | null) ?? 0;
     }
     setGenerating(false);
     setGenerateOpen(false);
-    toast({ title: "Geração concluída", description: `${total} cobrança(s) criada(s). ${skipped} aluno(s) ignorados (sem regra aplicável ou já gerado).` });
+    toast({ title: "Geração concluída", description: `${total} cobrança(s) criada(s) para ${studs.length} aluno(s).` });
     await fetchAll();
   };
 
