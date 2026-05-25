@@ -297,6 +297,8 @@ const Definicoes = () => {
     logo_url: "" as string | null | "",
     primary_color: "#A78BFA",
     secondary_color: "#7DD3FC",
+    usa_faturacao_externa: false,
+    webhook_billing_url: "" as string | null | "",
   });
   const [schoolErrors, setSchoolErrors] = useState<Record<string, string>>({});
   const [logoUploading, setLogoUploading] = useState(false);
@@ -460,6 +462,8 @@ const Definicoes = () => {
           logo_url: schoolRes.data.logo_url ?? "",
           primary_color: schoolRes.data.primary_color ?? "#A78BFA",
           secondary_color: schoolRes.data.secondary_color ?? "#7DD3FC",
+          usa_faturacao_externa: schoolRes.data.usa_faturacao_externa ?? false,
+          webhook_billing_url: schoolRes.data.webhook_billing_url ?? "",
         });
         const s = (schoolRes.data.settings ?? {}) as {
           honor_roll_min_average?: number;
@@ -685,6 +689,8 @@ const Definicoes = () => {
         name: school.name,
         nif: school.nif || null,
         address: school.address || null,
+        usa_faturacao_externa: school.usa_faturacao_externa,
+        webhook_billing_url: school.webhook_billing_url || null,
       })
       .eq("id", schoolId);
     setSaving(false);
@@ -1299,6 +1305,39 @@ const Definicoes = () => {
                     onChange={(e) => setSchool({ ...school, address: e.target.value })}
                   />
                 </Field>
+              </div>
+
+              {/* Faturação externa */}
+              <div className="md:col-span-2 mt-4 rounded-xl border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Faturação externa</p>
+                    <p className="text-xs text-muted-foreground">Activar se a escola usa software de faturação de terceiros (não gera FT/FR fiscais)</p>
+                  </div>
+                  <label className="relative inline-flex cursor-pointer items-center">
+                    <input
+                      type="checkbox"
+                      className="peer sr-only"
+                      checked={school.usa_faturacao_externa}
+                      disabled={!settingsAdmin}
+                      onChange={(e) => setSchool({ ...school, usa_faturacao_externa: e.target.checked })}
+                    />
+                    <div className="peer h-6 w-11 rounded-full bg-muted after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-pastel-blue peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none" />
+                  </label>
+                </div>
+                {school.usa_faturacao_externa && (
+                  <div className="mt-3">
+                    <label className="text-xs font-medium text-muted-foreground">URL do Webhook (sistema externo)</label>
+                    <input
+                      className={inputCls(false)}
+                      value={school.webhook_billing_url ?? ""}
+                      placeholder="https://api.exemplo.com/webhook/pagamentos"
+                      disabled={!settingsAdmin}
+                      onChange={(e) => setSchool({ ...school, webhook_billing_url: e.target.value })}
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">Quando um pagamento é validado, o sistema envia um POST com os dados para este URL.</p>
+                  </div>
+                )}
               </div>
             </div>
             <SaveBar onClick={handleSaveSchool} saving={saving} canSave={settingsAdmin} />
