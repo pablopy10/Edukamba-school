@@ -226,7 +226,7 @@ function parseFields(raw: unknown): AuthorizationFieldDef[] {
 
 /** Opções tal como aparecem no editor (uma por linha); mantém entradas vazias para o Enter criar nova linha. */
 function optionsFromMultiline(raw: string): string[] {
-  return raw.splitr("\n").map((line) => line.trim());
+  return raw.split("\n").map((line) => line.trim());
 }
 
 function nonEmptyOptions(f: AuthorizationFieldDef): string[] {
