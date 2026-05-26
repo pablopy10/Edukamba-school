@@ -1506,6 +1506,10 @@
       "documentos": {
         "label": "Documents",
         "description": "Documents scolaires, demandes de signature et formulaires."
+      },
+      "orcamentos": {
+        "label": "Budgets",
+        "description": "Création et gestion de budgets et propositions commerciales."
       }
     }
   },

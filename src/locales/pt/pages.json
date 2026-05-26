@@ -1529,6 +1529,10 @@
       "documentos": {
         "label": "Documentos",
         "description": "Documentos escolares, pedidos de assinatura e formulários."
+      },
+      "orcamentos": {
+        "label": "Orçamentos",
+        "description": "Criação e gestão de orçamentos e propostas comerciais."
       }
     }
   },
