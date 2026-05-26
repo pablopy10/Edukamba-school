@@ -543,6 +543,8 @@
       "loading": "A carregar...",
       "empty_students": "Nenhum aluno encontrado.",
       "generate_one": "Gerar",
+      "enroll_btn": "Inscrever",
+      "enrolled_btn": "Inscrito",
       "close": "Fechar"
     }
   },

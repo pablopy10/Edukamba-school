@@ -1113,6 +1113,36 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
                         ))}
                       </SelectContent>
                     </Select>
+                    <Button
+                      size="sm"
+                      className="mt-1"
+                      disabled={!ruleDetailYearId || ruleDetailFeesLoading || !!ruleDetailGeneratingKey}
+                      onClick={async () => {
+                        if (!ruleDetailRule || !ruleDetailYearId) return;
+                        const pending = ruleDetailRows.filter((r) => !r.fee);
+                        if (pending.length === 0) {
+                          toast({ title: "Todas as cobranças já foram geradas." });
+                          return;
+                        }
+                        setRuleDetailGeneratingKey("__all__");
+                        let total = 0;
+                        const rpc = domainChargeRpcName(variant);
+                        for (const row of pending) {
+                          const { data } = await supabase.rpc(rpc as "generate_activity_fee_for_rule_period", {
+                            _student_id: row.studentId,
+                            _academic_year_id: ruleDetailYearId,
+                            _charge_rule_id: ruleDetailRule.id,
+                            _period_index: row.periodIndex,
+                          });
+                          total += typeof data === "number" ? data : 0;
+                        }
+                        setRuleDetailGeneratingKey(null);
+                        toast({ title: `${total} cobrança(s) gerada(s)` });
+                        void loadRuleDetailData(ruleDetailRule, ruleDetailYearId);
+                      }}
+                    >
+                      {ruleDetailGeneratingKey === "__all__" ? "A gerar..." : "Gerar todas"}
+                    </Button>
                   </div>
                 </div>
                 {ruleDetailFeesLoading ? (

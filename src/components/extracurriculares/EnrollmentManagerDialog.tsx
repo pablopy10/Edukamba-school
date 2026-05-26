@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Search, Users, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -247,28 +246,37 @@ export function EnrollmentManagerDialog({
                       isEnrolled && "bg-accent/40",
                     )}
                   >
-                    <label className="flex items-center gap-3 flex-1 cursor-pointer">
-                      <Checkbox
-                        checked={isEnrolled}
-                        disabled={(!canEdit && !isParent) || working}
-                        onCheckedChange={(c) => void toggleEnrollment(s.id, !!c)}
-                      />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-foreground">{s.full_name}</p>
-                        {s.classroom?.name && <p className="text-xs text-muted-foreground">{s.classroom.name}</p>}
-                      </div>
-                    </label>
-                    {isEnrolled && enrollment && canEdit && activity?.enrollment_fee && activity.enrollment_fee > 0 && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void generateForOne(enrollment.id)}
-                        disabled={generatingId === enrollment.id}
-                      >
-                        <Sparkles className="h-3.5 w-3.5 mr-1" />
-                        {generatingId === enrollment.id ? "..." : t("enrollment_dialog.generate_one")}
-                      </Button>
-                    )}
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-foreground">{s.full_name}</p>
+                      {s.classroom?.name && <p className="text-xs text-muted-foreground">{s.classroom.name}</p>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {isEnrolled && enrollment && canEdit && activity?.enrollment_fee && activity.enrollment_fee > 0 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void generateForOne(enrollment.id)}
+                          disabled={generatingId === enrollment.id}
+                        >
+                          <Sparkles className="h-3.5 w-3.5 mr-1" />
+                          {generatingId === enrollment.id ? "..." : t("enrollment_dialog.generate_one")}
+                        </Button>
+                      )}
+                      {(canEdit || isParent) && (
+                        <Button
+                          size="sm"
+                          variant={isEnrolled ? "secondary" : "default"}
+                          disabled={working}
+                          onClick={() => void toggleEnrollment(s.id, !isEnrolled)}
+                          className={cn(
+                            "min-w-[90px]",
+                            isEnrolled && "bg-green-100 text-green-700 hover:bg-green-200",
+                          )}
+                        >
+                          {isEnrolled ? t("enrollment_dialog.enrolled_btn") : t("enrollment_dialog.enroll_btn")}
+                        </Button>
+                      )}
+                    </div>
                   </li>
                 );
               })}
