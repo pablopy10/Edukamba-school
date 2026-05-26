@@ -1799,7 +1799,19 @@ export function ModuleAuthorizationsPanel({
                         </a>
                       ) : f.type === "checkbox_group" && Array.isArray(resp[f.id]) ? (
                         (resp[f.id] as string[]).join(", ")
-                      ) : resp[f.id] !== undefined && resp[f.id] !== null ? (
+                      ) : (f.type === "radio" || f.type === "select") && f.options?.length ? (
+                        <div className="flex flex-col gap-1 mt-1">
+                          {(f.options ?? []).filter(o => String(o).trim()).map((opt) => {
+                            const isSelected = String(resp[f.id] ?? "") === String(opt);
+                            return (
+                              <span key={String(opt)} className={`flex items-center gap-2 text-sm ${isSelected ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
+                                <span className={`inline-block h-3 w-3 rounded-full border ${isSelected ? "bg-primary border-primary" : "border-muted-foreground"}`} />
+                                {String(opt)}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      ) : resp[f.id] !== undefined && resp[f.id] !== null && String(resp[f.id]).trim() !== "" ? (
                         String(resp[f.id])
                       ) : (
                         "—"

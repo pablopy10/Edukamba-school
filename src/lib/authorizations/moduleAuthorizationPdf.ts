@@ -555,8 +555,37 @@ export function generateModuleAuthorizationPdf(
           doc.setFont("helvetica", "normal");
         }
       } else {
-        const out = formatResponseValue(f, responses) || "—";
-        y = drawParagraph(doc, out, MARGIN_MM, y + 3, maxW, BODY_SIZE, BODY_LINE_MM);
+        // Para radio/select: mostrar opções com a seleccionada marcada
+        if ((f.type === "radio" || f.type === "select") && opts.length > 0) {
+          const selected = responses[f.id] != null ? String(responses[f.id]).trim() : "";
+          y += 3;
+          for (const opt of opts) {
+            const isSelected = opt === selected;
+            doc.setTextColor(30, 30, 30);
+            if (isSelected) {
+              doc.setFillColor(30, 30, 30);
+              doc.circle(MARGIN_MM + 2, y + 2, 1.8, "F");
+              doc.setFont("helvetica", "bold");
+            } else {
+              doc.setDrawColor(180, 180, 180);
+              doc.circle(MARGIN_MM + 2, y + 2, 1.8, "S");
+              doc.setFont("helvetica", "normal");
+            }
+            doc.setFontSize(BODY_SIZE);
+            doc.text(opt, MARGIN_MM + 7, y + 3);
+            doc.setFont("helvetica", "normal");
+            y += BODY_LINE_MM + 1;
+          }
+          if (!selected) {
+            doc.setTextColor(150, 150, 150);
+            y = drawParagraph(doc, "(nenhuma opção seleccionada)", MARGIN_MM, y + 1, maxW, BODY_SIZE - 1, BODY_LINE_MM);
+            doc.setTextColor(30, 30, 30);
+          }
+          y += 2;
+        } else {
+          const out = formatResponseValue(f, responses) || "—";
+          y = drawParagraph(doc, out, MARGIN_MM, y + 3, maxW, BODY_SIZE, BODY_LINE_MM);
+        }
       }
     } else {
       switch (f.type) {
