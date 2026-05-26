@@ -489,6 +489,19 @@ export function ModuleAuthorizationsPanel({
       }
       const tmplTitle = tmplRow?.title ?? s.template?.title ?? tr("authorization_fallback");
       const tmplDesc = tmplRow?.description ?? s.template?.description ?? null;
+
+      // Resolver nomes do aluno e encarregado (fallback se a relação não carregou)
+      let studentName = s.student?.full_name ?? undefined;
+      let submitterName = s.submitter?.full_name ?? undefined;
+      if (!studentName && s.student_id) {
+        const { data: st } = await supabase.from("students").select("full_name").eq("id", s.student_id).maybeSingle();
+        studentName = st?.full_name ?? undefined;
+      }
+      if (!submitterName && s.submitted_by) {
+        const { data: prof } = await supabase.from("profiles").select("full_name").eq("id", s.submitted_by).maybeSingle();
+        submitterName = prof?.full_name ?? undefined;
+      }
+
       try {
         const resp =
           typeof s.responses === "object" && s.responses !== null && !Array.isArray(s.responses)
@@ -502,8 +515,8 @@ export function ModuleAuthorizationsPanel({
             templateTitle: tmplTitle,
             templateDescription: tmplDesc,
             fields: fieldsDefs,
-            studentName: s.student?.full_name ?? undefined,
-            submittedByLabel: s.submitter?.full_name ?? undefined,
+            studentName,
+            submittedByLabel: submitterName,
             submittedAtIso: s.created_at,
             responses: resp,
             legacySignatureDataUrl: s.signature_data,

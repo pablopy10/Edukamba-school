@@ -461,7 +461,6 @@ export function generateModuleAuthorizationPdf(
   y = drawParagraph(doc, meta, MARGIN_MM, y + 2, maxW, BODY_SIZE, BODY_LINE_MM);
 
   if (
-    input.mode === "response" &&
     (input.studentName?.trim() || input.submittedByLabel?.trim() || input.submittedAtIso)
   ) {
     doc.setFontSize(BODY_SIZE);
