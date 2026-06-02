@@ -137,10 +137,10 @@ const Material = () => {
     const isBuyerRole = profile.role === "PARENT" || profile.role === "STUDENT";
 
     if (isBuyerRole) {
-      // Buyers only need the shop items
+      // Buyers only get fields needed for the shop — purchase_price and location are excluded
       const { data: mData, error: mErr } = await supabase
         .from("materials")
-        .select("*")
+        .select("id, school_id, name, category, description, unit, for_sale, sale_price")
         .eq("school_id", sid)
         .eq("for_sale", true)
         .order("name");
