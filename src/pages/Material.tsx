@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { dateLocaleTag } from "@/lib/i18nDateLocale";
 import {
   Plus, Search, Boxes, ClipboardList, Check, AlertTriangle, Pencil, Trash2, ListChecks,
-  BookOpen, Beaker, Palette, Dumbbell, Laptop, Package,
+  BookOpen, Beaker, Palette, Dumbbell, Laptop, Package, ShoppingBag, ShoppingCart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -16,6 +16,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from "@/components/ui/button";
 import { MaterialFormDialog, type MaterialRow } from "@/components/material/MaterialFormDialog";
 import { MaterialRequestFormDialog, type RequestRow } from "@/components/material/MaterialRequestFormDialog";
+import { MaterialShop } from "@/components/material/MaterialShop";
+import { MaterialOrders, type MaterialOrder, type MaterialOrderItem } from "@/components/material/MaterialOrders";
+import { MyOrders } from "@/components/material/MyOrders";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { useTeacherClassrooms } from "@/hooks/useTeacherClassrooms";
 import { useStudentSelf } from "@/hooks/useStudentSelf";
@@ -46,7 +49,7 @@ type DeliveryRow = {
 
 type DeliveryFilter = "all" | "pendente" | "completo";
 
-type Tab = "stock" | "pedidos";
+type Tab = "stock" | "pedidos" | "encomendas" | "loja" | "minhas_encomendas";
 
 const Material = () => {
   const { t } = useTranslation("pages", { keyPrefix: "material" });
@@ -61,6 +64,7 @@ const Material = () => {
   const [tab, setTab] = useState<Tab>("stock");
   const [loading, setLoading] = useState(true);
   const [schoolId, setSchoolId] = useState<string | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>("");
 
@@ -71,12 +75,22 @@ const Material = () => {
   const [students, setStudents] = useState<{ id: string; full_name: string; classroom_id: string | null }[]>([]);
   const [teachers, setTeachers] = useState<{ id: string; name: string }[]>([]);
 
+  // Orders state (school management view)
+  const [orders, setOrders] = useState<MaterialOrder[]>([]);
+  const [ordersError, setOrdersError] = useState(false);
+
+  // My orders state (buyer view)
+  const [myOrders, setMyOrders] = useState<MaterialOrder[]>([]);
+  const [myOrdersError, setMyOrdersError] = useState(false);
+
+  // Shop load error
+  const [shopError, setShopError] = useState(false);
+
   // Filters
   const [search, setSearch] = useState("");
   const [stockCategoryFilter, setStockCategoryFilter] = useState<string>("all");
   const [stockLowOnly, setStockLowOnly] = useState(false);
   const [stockLocation, setStockLocation] = useState<string>("all");
-
   const [reqDeliveryFilter, setReqDeliveryFilter] = useState<DeliveryFilter>("all");
   const [reqTeacherFilter, setReqTeacherFilter] = useState<string>("all");
 
@@ -90,27 +104,24 @@ const Material = () => {
   const isAdmin = isSchoolManagementRole(userRole);
   const canMarkDeliveries = isSchoolManagementOrTeacher(userRole) && !isStudent;
   const canRequest = isSchoolManagementOrTeacher(userRole) && !isStudent;
+  const isBuyer = isParent || isStudent;
 
-  // Parents never see stock; force them onto the requests tab.
+  // Force buyers to the shop tab
   useEffect(() => {
-    if (isParent && tab !== "pedidos") setTab("pedidos");
-  }, [isParent, tab]);
+    if (isBuyer && tab !== "loja" && tab !== "minhas_encomendas") setTab("loja");
+  }, [isBuyer]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Teachers also never see stock; force them onto the requests tab.
+  // Teachers stay on pedidos
   useEffect(() => {
     if (isTeacher && tab !== "pedidos") setTab("pedidos");
   }, [isTeacher, tab]);
 
-  // Students never see stock either.
-  useEffect(() => {
-    if (isStudent && tab !== "pedidos") setTab("pedidos");
-  }, [isStudent, tab]);
 
   const loadAll = async () => {
     if (!user) return;
     const { data: profile } = await supabase
       .from("profiles")
-      .select("school_id, support_context_school_id, role, full_name")
+      .select("id, school_id, support_context_school_id, role, full_name")
       .eq("id", user.id)
       .maybeSingle();
     const sid = effectiveSchoolIdFromProfile(profile);
@@ -119,8 +130,25 @@ const Material = () => {
       return;
     }
     setSchoolId(sid);
+    setProfileId(profile.id);
     setUserRole(profile.role);
     setUserName(profile.full_name ?? "");
+
+    const isBuyerRole = profile.role === "PARENT" || profile.role === "STUDENT";
+
+    if (isBuyerRole) {
+      // Buyers only need the shop items
+      const { data: mData, error: mErr } = await supabase
+        .from("materials")
+        .select("*")
+        .eq("school_id", sid)
+        .eq("for_sale", true)
+        .order("name");
+      if (mErr) setShopError(true);
+      else setStock((mData as MaterialRow[]) ?? []);
+      setLoading(false);
+      return;
+    }
 
     let classroomsQuery = supabase.from("classrooms").select("id, name").eq("school_id", sid);
     if (selectedYearId) classroomsQuery = classroomsQuery.eq("academic_year_id", selectedYearId);
@@ -141,9 +169,80 @@ const Material = () => {
     setLoading(false);
   };
 
+  const loadOrders = async () => {
+    if (!schoolId) return;
+    setOrdersError(false);
+    // Fetch orders + items + buyer names
+    const { data, error } = await supabase
+      .from("material_orders")
+      .select("*, material_order_items(*, materials(name))")
+      .eq("school_id", schoolId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setOrdersError(true);
+      return;
+    }
+
+    // Fetch buyer names
+    const profileIds = [...new Set((data ?? []).map((o: any) => o.buyer_profile_id))];
+    let profileNames: Record<string, string> = {};
+    if (profileIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", profileIds);
+      (profiles ?? []).forEach((p: any) => { profileNames[p.id] = p.full_name ?? p.id; });
+    }
+
+    const mapped: MaterialOrder[] = (data ?? []).map((o: any) => ({
+      ...o,
+      buyer_name: profileNames[o.buyer_profile_id] ?? o.buyer_profile_id,
+      items: (o.material_order_items ?? []).map((i: any) => ({
+        ...i,
+        material_name: i.materials?.name ?? i.material_id,
+      })) as MaterialOrderItem[],
+    }));
+    setOrders(mapped);
+  };
+
+  const loadMyOrders = async () => {
+    if (!profileId || !schoolId) return;
+    setMyOrdersError(false);
+    const { data, error } = await supabase
+      .from("material_orders")
+      .select("*, material_order_items(*, materials(name))")
+      .eq("school_id", schoolId)
+      .eq("buyer_profile_id", profileId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setMyOrdersError(true);
+      return;
+    }
+    const mapped: MaterialOrder[] = (data ?? []).map((o: any) => ({
+      ...o,
+      items: (o.material_order_items ?? []).map((i: any) => ({
+        ...i,
+        material_name: i.materials?.name ?? i.material_id,
+      })) as MaterialOrderItem[],
+    }));
+    setMyOrders(mapped);
+  };
+
   useEffect(() => { loadAll(); /* eslint-disable-next-line */ }, [user?.id, selectedYearId]);
 
-  // For teachers, restrict the classroom list and student list to the classes they teach.
+  // Load orders when switching to orders tab (admin)
+  useEffect(() => {
+    if (tab === "encomendas" && schoolId) loadOrders();
+  }, [tab, schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load my orders when switching to my orders tab (buyer)
+  useEffect(() => {
+    if (tab === "minhas_encomendas" && profileId && schoolId) loadMyOrders();
+  }, [tab, profileId, schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+
   const visibleClassrooms = useMemo(() => {
     if (!isTeacher) return classrooms;
     return classrooms.filter((c) => teacherClassroomIds.includes(c.id));
@@ -153,7 +252,6 @@ const Material = () => {
     return students.filter((s) => s.classroom_id && teacherClassroomIds.includes(s.classroom_id));
   }, [students, isTeacher, teacherClassroomIds]);
 
-  // Derive teacher list from existing requests
   useEffect(() => {
     const map = new Map<string, string>();
     requests.forEach((r) => {
@@ -168,7 +266,6 @@ const Material = () => {
     return Array.from(set).sort();
   }, [stock]);
 
-  // For parent stats we count only requests scoped to their selected child.
   const parentScopedRequests = useMemo(() => {
     if (!isParent) return requests;
     const childSet = new Set(childIds);
@@ -208,7 +305,6 @@ const Material = () => {
     };
   }, [stock, requests, deliveries, isParent, parentScopedRequests, childIds, isTeacher, user?.id, isStudent, studentId, studentClassroomId]);
 
-  // Compute target students for a request and delivery progress.
   const targetStudentsFor = (r: RequestRow) => {
     if (r.student_id) return students.filter((s) => s.id === r.student_id);
     if (r.classroom_id) return students.filter((s) => s.classroom_id === r.classroom_id);
@@ -238,7 +334,6 @@ const Material = () => {
   const filteredRequests = useMemo(() => {
     const q = search.trim().toLowerCase();
     return requests.filter((r) => {
-      // Parents only see requests targeting their selected child or its classroom.
       if (isParent) {
         const childSet = new Set(childIds);
         const classSet = new Set(classroomIds);
@@ -246,9 +341,7 @@ const Material = () => {
         const targetsClass = !r.student_id && r.classroom_id ? classSet.has(r.classroom_id) : false;
         if (!targetsChild && !targetsClass) return false;
       }
-      // Teachers only see their own requests.
       if (isTeacher && r.requester_id !== user?.id) return false;
-      // Students see requests targeting them or their classroom.
       if (isStudent) {
         const targetsSelf = r.student_id ? r.student_id === studentId : false;
         const targetsClass = !r.student_id && r.classroom_id ? r.classroom_id === studentClassroomId : false;
@@ -298,6 +391,7 @@ const Material = () => {
     native &&
     ((tab === "stock" && isAdmin) || (tab === "pedidos" && canRequest));
 
+
   return (
     <>
       <div className={cn("flex flex-col gap-6", showCreateFab && "relative pb-28")}>
@@ -308,16 +402,35 @@ const Material = () => {
             <p className="text-sm text-muted-foreground">{subtitle}</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {!isParent && !isTeacher && !isStudent && (
-            <div className="inline-flex h-11 items-center rounded-full border border-border bg-card p-1 shadow-soft">
-              <button onClick={() => setTab("stock")} className={cn("flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors", tab === "stock" ? "bg-pastel-blue text-pastel-blue-foreground" : "text-muted-foreground hover:text-foreground")}>
-                <Boxes className="h-4 w-4" strokeWidth={1.75} /> {t("tab_stock")}
-              </button>
-              <button onClick={() => setTab("pedidos")} className={cn("flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors", tab === "pedidos" ? "bg-pastel-blue text-pastel-blue-foreground" : "text-muted-foreground hover:text-foreground")}>
-                <ClipboardList className="h-4 w-4" strokeWidth={1.75} /> {t("tab_requests")}
-              </button>
-            </div>
+            {/* Tabs for buyers (PARENT / STUDENT) */}
+            {isBuyer && (
+              <div className="inline-flex h-11 items-center rounded-full border border-border bg-card p-1 shadow-soft">
+                <button onClick={() => setTab("loja")} className={cn("flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors", tab === "loja" ? "bg-pastel-blue text-pastel-blue-foreground" : "text-muted-foreground hover:text-foreground")}>
+                  <ShoppingBag className="h-4 w-4" strokeWidth={1.75} /> {t("tab_shop")}
+                </button>
+                <button onClick={() => setTab("minhas_encomendas")} className={cn("flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors", tab === "minhas_encomendas" ? "bg-pastel-blue text-pastel-blue-foreground" : "text-muted-foreground hover:text-foreground")}>
+                  <ShoppingCart className="h-4 w-4" strokeWidth={1.75} /> {t("my_orders_title")}
+                </button>
+              </div>
             )}
+
+            {/* Tabs for management */}
+            {!isBuyer && !isTeacher && (
+              <div className="inline-flex h-11 items-center rounded-full border border-border bg-card p-1 shadow-soft">
+                <button onClick={() => setTab("stock")} className={cn("flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors", tab === "stock" ? "bg-pastel-blue text-pastel-blue-foreground" : "text-muted-foreground hover:text-foreground")}>
+                  <Boxes className="h-4 w-4" strokeWidth={1.75} /> {t("tab_stock")}
+                </button>
+                <button onClick={() => setTab("pedidos")} className={cn("flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors", tab === "pedidos" ? "bg-pastel-blue text-pastel-blue-foreground" : "text-muted-foreground hover:text-foreground")}>
+                  <ClipboardList className="h-4 w-4" strokeWidth={1.75} /> {t("tab_requests")}
+                </button>
+                {isAdmin && (
+                  <button onClick={() => setTab("encomendas")} className={cn("flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors", tab === "encomendas" ? "bg-pastel-blue text-pastel-blue-foreground" : "text-muted-foreground hover:text-foreground")}>
+                    <ShoppingCart className="h-4 w-4" strokeWidth={1.75} /> {t("tab_orders")}
+                  </button>
+                )}
+              </div>
+            )}
+
             {tab === "stock" && isAdmin && !native && (
               <button onClick={() => { setEditingMaterial(null); setShowMaterialDialog(true); }} className="flex h-11 items-center gap-2 rounded-full bg-pastel-blue px-5 text-sm font-semibold text-pastel-blue-foreground shadow-soft transition-[var(--transition-smooth)] hover:opacity-90">
                 <Plus className="h-4 w-4" strokeWidth={2.25} /> {t("new_material")}
@@ -331,94 +444,115 @@ const Material = () => {
           </div>
         </div>
 
-        {/* Stats */}
-        {showPageKpiCards() && (
-        <div className={cn("grid gap-4", (isParent || isTeacher || isStudent) ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-4")}>
-          {((isParent || isTeacher || isStudent)
-            ? [
-                { label: t("kpi_active_requests"), value: stats.pedidosAtivos, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-                { label: t("kpi_delivered"), value: stats.entregasMarcadas, color: "bg-pastel-green text-pastel-green-foreground" },
-              ]
-            : [
-                { label: t("kpi_stock_items"), value: stats.totalItens, color: "bg-pastel-blue text-pastel-blue-foreground" },
-                { label: t("kpi_low_stock"), value: stats.baixoStock, color: "bg-pastel-pink text-pastel-pink-foreground" },
-                { label: t("kpi_active_requests"), value: stats.pedidosAtivos, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
-                { label: t("kpi_delivered"), value: stats.entregasMarcadas, color: "bg-pastel-green text-pastel-green-foreground" },
-              ]
-          ).map((s) => (
-            <div key={s.label} className="rounded-2xl bg-card p-5 shadow-card">
-              <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", s.color)}>{s.label}</span>
-              <p className="mt-3 text-3xl font-bold text-foreground">{s.value}</p>
-            </div>
-          ))}
-        </div>
+        {/* Stats — only for management */}
+        {showPageKpiCards() && !isBuyer && (
+          <div className={cn("grid gap-4", isTeacher ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-4")}>
+            {(isTeacher
+              ? [
+                  { label: t("kpi_active_requests"), value: stats.pedidosAtivos, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+                  { label: t("kpi_delivered"), value: stats.entregasMarcadas, color: "bg-pastel-green text-pastel-green-foreground" },
+                ]
+              : [
+                  { label: t("kpi_stock_items"), value: stats.totalItens, color: "bg-pastel-blue text-pastel-blue-foreground" },
+                  { label: t("kpi_low_stock"), value: stats.baixoStock, color: "bg-pastel-pink text-pastel-pink-foreground" },
+                  { label: t("kpi_active_requests"), value: stats.pedidosAtivos, color: "bg-pastel-yellow text-pastel-yellow-foreground" },
+                  { label: t("kpi_delivered"), value: stats.entregasMarcadas, color: "bg-pastel-green text-pastel-green-foreground" },
+                ]
+            ).map((s) => (
+              <div key={s.label} className="rounded-2xl bg-card p-5 shadow-card">
+                <span className={cn("inline-block rounded-full px-3 py-1 text-xs font-medium", s.color)}>{s.label}</span>
+                <p className="mt-3 text-3xl font-bold text-foreground">{s.value}</p>
+              </div>
+            ))}
+          </div>
         )}
 
-        {/* Filters */}
-        <div className="flex flex-col gap-3 rounded-2xl bg-card p-4 shadow-card">
-          <div className={cn("flex flex-col gap-3", !native && "sm:flex-row sm:items-center")}>
-            <div className="relative w-full sm:max-w-sm">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={1.75} />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={tab === "stock" ? t("search_stock") : t("search_requests")}
-                className="h-10 w-full rounded-full border border-border bg-background pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-pastel-blue/40"
-              />
-            </div>
 
-            {tab === "stock" ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <Select value={stockCategoryFilter} onValueChange={setStockCategoryFilter}>
-                  <SelectTrigger className="h-10 w-44 rounded-full"><SelectValue placeholder={t("filter_category")} /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t("all_categories")}</SelectItem>
-                    {Object.keys(categoryMeta).map((c) => <SelectItem key={c} value={c}>{categoryLabel(c)}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={stockLocation} onValueChange={setStockLocation}>
-                  <SelectTrigger className="h-10 w-48 rounded-full"><SelectValue placeholder={t("filter_location")} /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t("all_locations")}</SelectItem>
-                    {locations.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <button
-                  onClick={() => setStockLowOnly((v) => !v)}
-                  className={cn(
-                    "inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors",
-                    stockLowOnly
-                      ? "border-transparent bg-pastel-pink text-pastel-pink-foreground"
-                      : "border-border bg-background text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  <AlertTriangle className="h-4 w-4" strokeWidth={1.75} /> {t("low_stock_toggle")}
-                </button>
+        {/* Filters for stock/pedidos tabs */}
+        {(tab === "stock" || tab === "pedidos") && !isBuyer && (
+          <div className="flex flex-col gap-3 rounded-2xl bg-card p-4 shadow-card">
+            <div className={cn("flex flex-col gap-3", !native && "sm:flex-row sm:items-center")}>
+              <div className="relative w-full sm:max-w-sm">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={1.75} />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={tab === "stock" ? t("search_stock") : t("search_requests")}
+                  className="h-10 w-full rounded-full border border-border bg-background pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-pastel-blue/40"
+                />
               </div>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2">
-                <Select value={reqDeliveryFilter} onValueChange={(v) => setReqDeliveryFilter(v as DeliveryFilter)}>
-                  <SelectTrigger className="h-10 w-44 rounded-full"><SelectValue placeholder={t("filter_deliveries")} /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t("all_deliveries")}</SelectItem>
-                    <SelectItem value="pendente">{t("delivery_pending")}</SelectItem>
-                    <SelectItem value="completo">{t("delivery_complete")}</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={reqTeacherFilter} onValueChange={setReqTeacherFilter}>
-                  <SelectTrigger className="h-10 w-56 rounded-full"><SelectValue placeholder={t("filter_teacher")} /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t("all_teachers")}</SelectItem>
-                    {teachers.map((teacher) => <SelectItem key={teacher.id} value={teacher.id}>{teacher.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+              {tab === "stock" ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Select value={stockCategoryFilter} onValueChange={setStockCategoryFilter}>
+                    <SelectTrigger className="h-10 w-44 rounded-full"><SelectValue placeholder={t("filter_category")} /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("all_categories")}</SelectItem>
+                      {Object.keys(categoryMeta).map((c) => <SelectItem key={c} value={c}>{categoryLabel(c)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={stockLocation} onValueChange={setStockLocation}>
+                    <SelectTrigger className="h-10 w-48 rounded-full"><SelectValue placeholder={t("filter_location")} /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("all_locations")}</SelectItem>
+                      {locations.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <button
+                    onClick={() => setStockLowOnly((v) => !v)}
+                    className={cn("inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors", stockLowOnly ? "border-transparent bg-pastel-pink text-pastel-pink-foreground" : "border-border bg-background text-muted-foreground hover:text-foreground")}
+                  >
+                    <AlertTriangle className="h-4 w-4" strokeWidth={1.75} /> {t("low_stock_toggle")}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Select value={reqDeliveryFilter} onValueChange={(v) => setReqDeliveryFilter(v as DeliveryFilter)}>
+                    <SelectTrigger className="h-10 w-44 rounded-full"><SelectValue placeholder={t("filter_deliveries")} /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("all_deliveries")}</SelectItem>
+                      <SelectItem value="pendente">{t("delivery_pending")}</SelectItem>
+                      <SelectItem value="completo">{t("delivery_complete")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={reqTeacherFilter} onValueChange={setReqTeacherFilter}>
+                    <SelectTrigger className="h-10 w-56 rounded-full"><SelectValue placeholder={t("filter_teacher")} /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("all_teachers")}</SelectItem>
+                      {teachers.map((teacher) => <SelectItem key={teacher.id} value={teacher.id}>{teacher.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {loading ? (
           <div className="rounded-2xl bg-card p-10 text-center text-muted-foreground shadow-card">{t("loading")}</div>
+        ) : tab === "loja" && isBuyer ? (
+          <MaterialShop
+            items={stock}
+            schoolId={schoolId}
+            buyerProfileId={profileId}
+            buyerRole={isParent ? "PARENT" : "STUDENT"}
+            native={native}
+            loadError={shopError}
+            onRetry={() => { setShopError(false); loadAll(); }}
+            onOrderPlaced={loadAll}
+          />
+        ) : tab === "minhas_encomendas" && isBuyer ? (
+          <MyOrders
+            orders={myOrders}
+            loadError={myOrdersError}
+            onRetry={() => { setMyOrdersError(false); loadMyOrders(); }}
+          />
+        ) : tab === "encomendas" && isAdmin ? (
+          <MaterialOrders
+            orders={orders}
+            loadError={ordersError}
+            onRetry={() => { setOrdersError(false); loadOrders(); }}
+            onOrderUpdated={loadOrders}
+          />
         ) : tab === "stock" ? (
           <StockTable
             native={native}
@@ -448,26 +582,14 @@ const Material = () => {
 
       {native && tab === "stock" && isAdmin && (
         <NativeMobileFabPortal>
-          <Button
-            type="button"
-            size="icon"
-            className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-            aria-label={t("fab_new_material")}
-            onClick={() => { setEditingMaterial(null); setShowMaterialDialog(true); }}
-          >
+          <Button type="button" size="icon" className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME} aria-label={t("fab_new_material")} onClick={() => { setEditingMaterial(null); setShowMaterialDialog(true); }}>
             <Plus className="h-6 w-6" />
           </Button>
         </NativeMobileFabPortal>
       )}
       {native && tab === "pedidos" && canRequest && (
         <NativeMobileFabPortal>
-          <Button
-            type="button"
-            size="icon"
-            className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME}
-            aria-label={t("fab_new_request")}
-            onClick={() => { setEditingRequest(null); setShowRequestDialog(true); }}
-          >
+          <Button type="button" size="icon" className={NATIVE_MOBILE_FAB_BUTTON_CLASSNAME} aria-label={t("fab_new_request")} onClick={() => { setEditingRequest(null); setShowRequestDialog(true); }}>
             <Plus className="h-6 w-6" />
           </Button>
         </NativeMobileFabPortal>
@@ -487,7 +609,7 @@ const Material = () => {
         userId={user?.id ?? null}
         userName={userName}
         request={editingRequest}
-        classrooms={classrooms}
+        classrooms={visibleClassrooms}
         students={visibleStudents}
         onSaved={loadAll}
       />
@@ -505,6 +627,9 @@ const Material = () => {
 };
 
 /* ====================== Stock Table ====================== */
+const formatPrice = (v: number | null) =>
+  v == null ? "—" : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 const StockTable = ({
   items, isAdmin, hideActionsColumn = false, onEdit, onRemove, native = false,
 }: {
@@ -539,7 +664,12 @@ const StockTable = ({
                     <Icon className="h-5 w-5" strokeWidth={2} />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-foreground">{s.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-foreground">{s.name}</p>
+                      {s.for_sale && (
+                        <span className="rounded-full bg-pastel-green px-2 py-0.5 text-[10px] font-semibold text-pastel-green-foreground">{t("for_sale_badge")}</span>
+                      )}
+                    </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", m.color)}>{categoryLabel(s.category)}</span>
                       <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-xs font-medium text-foreground">{t("sku_prefix")} {s.sku ?? t("em_dash")}</span>
@@ -547,6 +677,11 @@ const StockTable = ({
                         {t("qty_label")} {s.quantity} {s.unit} · {t("min_label")} {s.min_quantity}
                       </span>
                       <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">{t("loc_label")} {s.location ?? t("em_dash")}</span>
+                      {s.for_sale && (
+                        <span className="rounded-full bg-pastel-blue px-2.5 py-1 text-xs font-medium text-pastel-blue-foreground">
+                          {t("col_purchase_price")}: {formatPrice(s.purchase_price)} · {t("col_sale_price")}: {formatPrice(s.sale_price)}
+                        </span>
+                      )}
                       {low ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-pastel-pink px-2.5 py-1 text-xs font-semibold text-pastel-pink-foreground">
                           <AlertTriangle className="h-3 w-3" strokeWidth={2} /> {t("low_badge")}
@@ -571,13 +706,15 @@ const StockTable = ({
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px]">
+          <table className="w-full min-w-[1050px]">
             <thead>
               <tr className="border-b border-border bg-muted/30 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 <th className="px-6 py-3">{t("col_material")}</th>
                 <th className="px-6 py-3">{t("col_category")}</th>
                 <th className="px-6 py-3">{t("col_sku")}</th>
                 <th className="px-6 py-3 text-right">{t("col_quantity")}</th>
+                <th className="px-6 py-3 text-right">{t("col_purchase_price")}</th>
+                <th className="px-6 py-3 text-right">{t("col_sale_price")}</th>
                 <th className="px-6 py-3">{t("col_location")}</th>
                 {!hideActionsColumn && <th className="px-6 py-3 text-right">{t("col_actions")}</th>}
               </tr>
@@ -595,7 +732,12 @@ const StockTable = ({
                           <Icon className="h-4 w-4" strokeWidth={2} />
                         </span>
                         <div>
-                          <p className="font-semibold text-foreground">{s.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-foreground">{s.name}</p>
+                            {s.for_sale && (
+                              <span className="rounded-full bg-pastel-green px-2 py-0.5 text-[10px] font-semibold text-pastel-green-foreground">{t("for_sale_badge")}</span>
+                            )}
+                          </div>
                           <p className="text-xs text-muted-foreground">{t("min_label")} {s.min_quantity} {s.unit}</p>
                         </div>
                       </div>
@@ -615,6 +757,8 @@ const StockTable = ({
                         <span className="text-xs text-muted-foreground">{s.unit}</span>
                       </div>
                     </td>
+                    <td className="px-6 py-4 text-right text-sm text-muted-foreground">{formatPrice(s.purchase_price)}</td>
+                    <td className="px-6 py-4 text-right text-sm font-medium text-foreground">{formatPrice(s.sale_price)}</td>
                     <td className="px-6 py-4 text-muted-foreground">{s.location ?? t("em_dash")}</td>
                     {!hideActionsColumn && (
                       <td className="px-6 py-4">
@@ -704,25 +848,12 @@ const RequestsTable = ({
                       <div className="mt-3 flex flex-wrap gap-2">
                         <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", m.color)}>{categoryLabel(r.category)}</span>
                         <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">{t("qty_label")} {r.quantity}</span>
-                        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
-                          {t("teacher_prefix")} {r.teacher_name ?? t("em_dash")}
-                        </span>
+                        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">{t("teacher_prefix")} {r.teacher_name ?? t("em_dash")}</span>
                         <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
                           {sName ? `${t("student_prefix")} ${sName}` : `${t("class_prefix")} ${classroomName(r.classroom_id)}`}
                         </span>
-                        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
-                          {t("date_prefix")} {formatDateShort(r.needed_date)}
-                        </span>
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
-                            complete
-                              ? "bg-pastel-green text-pastel-green-foreground"
-                              : brought > 0
-                                ? "bg-pastel-yellow text-pastel-yellow-foreground"
-                                : "bg-muted text-foreground",
-                          )}
-                        >
+                        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">{t("date_prefix")} {formatDateShort(r.needed_date)}</span>
+                        <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold", complete ? "bg-pastel-green text-pastel-green-foreground" : brought > 0 ? "bg-pastel-yellow text-pastel-yellow-foreground" : "bg-muted text-foreground")}>
                           {complete && <Check className="h-3 w-3" strokeWidth={2.25} />}
                           {t("deliveries_label")} {brought} / {total}
                         </span>
@@ -730,27 +861,19 @@ const RequestsTable = ({
                     </div>
                   </div>
                   {!hideActionsColumn && (
-                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:flex-col sm:items-end">
-                    {canMarkDeliveries && total > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => onMarkDeliveries(r)}
-                        className="inline-flex h-9 items-center gap-1.5 rounded-full bg-pastel-blue px-3 text-xs font-semibold text-pastel-blue-foreground transition-colors hover:opacity-90"
-                      >
-                        <ListChecks className="h-3.5 w-3.5" strokeWidth={2} /> {t("mark_deliveries")}
-                      </button>
-                    )}
-                    {canEdit ? (
-                      <>
-                        <button type="button" onClick={() => onEdit(r)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title={t("edit")}>
-                          <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:flex-col sm:items-end">
+                      {canMarkDeliveries && total > 0 && (
+                        <button type="button" onClick={() => onMarkDeliveries(r)} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-pastel-blue px-3 text-xs font-semibold text-pastel-blue-foreground transition-colors hover:opacity-90">
+                          <ListChecks className="h-3.5 w-3.5" strokeWidth={2} /> {t("mark_deliveries")}
                         </button>
-                        <button type="button" onClick={() => onRemove(r.id)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title={t("remove")}>
-                          <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                        </button>
-                      </>
-                    ) : null}
-                  </div>
+                      )}
+                      {canEdit ? (
+                        <>
+                          <button type="button" onClick={() => onEdit(r)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title={t("edit")}><Pencil className="h-4 w-4" strokeWidth={1.75} /></button>
+                          <button type="button" onClick={() => onRemove(r.id)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title={t("remove")}><Trash2 className="h-4 w-4" strokeWidth={1.75} /></button>
+                        </>
+                      ) : null}
+                    </div>
                   )}
                 </div>
               </div>
@@ -782,47 +905,27 @@ const RequestsTable = ({
                   <tr key={r.id} className="border-b border-border/60 text-sm transition-colors hover:bg-muted/30 align-top">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <span className={cn("flex h-9 w-9 items-center justify-center rounded-full", m.color)}>
-                          <Icon className="h-4 w-4" strokeWidth={2} />
-                        </span>
+                        <span className={cn("flex h-9 w-9 items-center justify-center rounded-full", m.color)}><Icon className="h-4 w-4" strokeWidth={2} /></span>
                         <div>
                           <p className="font-semibold text-foreground">{r.item_name}</p>
                           <p className="text-xs text-muted-foreground">{t("qty_label")} {r.quantity}</p>
-                          {r.description && (
-                            <p className="mt-1 max-w-xs text-xs text-muted-foreground line-clamp-2">{r.description}</p>
-                          )}
+                          {r.description && <p className="mt-1 max-w-xs text-xs text-muted-foreground line-clamp-2">{r.description}</p>}
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-foreground">{r.teacher_name ?? t("em_dash")}</td>
                     <td className="px-6 py-4">
                       {sName ? (
-                        <div>
-                          <p className="text-foreground">{sName}</p>
-                          <p className="text-xs text-muted-foreground">{t("student_line", { class: classroomName(r.classroom_id) })}</p>
-                        </div>
+                        <div><p className="text-foreground">{sName}</p><p className="text-xs text-muted-foreground">{t("student_line", { class: classroomName(r.classroom_id) })}</p></div>
                       ) : (
-                        <div>
-                          <p className="text-foreground">{classroomName(r.classroom_id)}</p>
-                          <p className="text-xs text-muted-foreground">{t("whole_class")}</p>
-                        </div>
+                        <div><p className="text-foreground">{classroomName(r.classroom_id)}</p><p className="text-xs text-muted-foreground">{t("whole_class")}</p></div>
                       )}
                     </td>
                     <td className="px-6 py-4 text-foreground">{formatDateShort(r.needed_date)}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold",
-                            complete
-                              ? "bg-pastel-green text-pastel-green-foreground"
-                              : brought > 0
-                                ? "bg-pastel-yellow text-pastel-yellow-foreground"
-                                : "bg-muted text-foreground",
-                          )}
-                        >
-                          {complete && <Check className="h-3 w-3" strokeWidth={2.25} />}
-                          {brought} / {total}
+                        <span className={cn("inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold", complete ? "bg-pastel-green text-pastel-green-foreground" : brought > 0 ? "bg-pastel-yellow text-pastel-yellow-foreground" : "bg-muted text-foreground")}>
+                          {complete && <Check className="h-3 w-3" strokeWidth={2.25} />}{brought} / {total}
                         </span>
                         <span className="text-xs text-muted-foreground">{t("brought_word")}</span>
                       </div>
@@ -831,24 +934,12 @@ const RequestsTable = ({
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-1">
                           {canMarkDeliveries && total > 0 && (
-                            <button
-                              onClick={() => onMarkDeliveries(r)}
-                              className="inline-flex h-8 items-center gap-1.5 rounded-full bg-pastel-blue px-3 text-xs font-semibold text-pastel-blue-foreground transition-colors hover:opacity-90"
-                              title={t("mark_deliveries_title")}
-                            >
+                            <button onClick={() => onMarkDeliveries(r)} className="inline-flex h-8 items-center gap-1.5 rounded-full bg-pastel-blue px-3 text-xs font-semibold text-pastel-blue-foreground transition-colors hover:opacity-90" title={t("mark_deliveries_title")}>
                               <ListChecks className="h-3.5 w-3.5" strokeWidth={2} /> {t("mark_deliveries")}
                             </button>
                           )}
-                          {canEdit && (
-                            <button onClick={() => onEdit(r)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title={t("edit")}>
-                              <Pencil className="h-4 w-4" strokeWidth={1.75} />
-                            </button>
-                          )}
-                          {canEdit && (
-                            <button onClick={() => onRemove(r.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title={t("remove")}>
-                              <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                            </button>
-                          )}
+                          {canEdit && <button onClick={() => onEdit(r)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title={t("edit")}><Pencil className="h-4 w-4" strokeWidth={1.75} /></button>}
+                          {canEdit && <button onClick={() => onRemove(r.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-pastel-pink hover:text-pastel-pink-foreground" title={t("remove")}><Trash2 className="h-4 w-4" strokeWidth={1.75} /></button>}
                         </div>
                       </td>
                     )}
@@ -937,21 +1028,13 @@ const DeliveryDialog = ({
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("title", { item: request.item_name })}</DialogTitle>
-          <DialogDescription>
-            {t("description", { marked: broughtCount, total: targetStudents.length })}
-          </DialogDescription>
+          <DialogDescription>{t("description", { marked: broughtCount, total: targetStudents.length })}</DialogDescription>
         </DialogHeader>
-
         <div className="flex items-center gap-2">
-          <Input
-            placeholder={t("search_placeholder")}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <Input placeholder={t("search_placeholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
           <Button type="button" variant="outline" size="sm" onClick={() => toggleAll(true)}>{t("all")}</Button>
           <Button type="button" variant="outline" size="sm" onClick={() => toggleAll(false)}>{t("none")}</Button>
         </div>
-
         <div className="mt-2 max-h-72 overflow-y-auto rounded-md border border-border">
           {filtered.length === 0 ? (
             <p className="p-4 text-center text-sm text-muted-foreground">{t("no_students")}</p>
@@ -959,26 +1042,19 @@ const DeliveryDialog = ({
             filtered.map((s) => {
               const checked = !!marks[s.id];
               return (
-                <label
-                  key={s.id}
-                  className="flex cursor-pointer items-center justify-between gap-3 border-b border-border px-3 py-2 last:border-0 hover:bg-muted/50"
-                >
+                <label key={s.id} className="flex cursor-pointer items-center justify-between gap-3 border-b border-border px-3 py-2 last:border-0 hover:bg-muted/50">
                   <span className="text-sm text-foreground">{s.full_name}</span>
                   <div className="flex items-center gap-2">
                     <span className={cn("text-xs", checked ? "text-pastel-green-foreground" : "text-muted-foreground")}>
                       {checked ? t("brought") : t("not_brought")}
                     </span>
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={(v) => setMarks((m) => ({ ...m, [s.id]: !!v }))}
-                    />
+                    <Checkbox checked={checked} onCheckedChange={(v) => setMarks((m) => ({ ...m, [s.id]: !!v }))} />
                   </div>
                 </label>
               );
             })
           )}
         </div>
-
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>{t("cancel")}</Button>
           <Button onClick={save} disabled={saving}>{saving ? t("saving") : t("save")}</Button>
