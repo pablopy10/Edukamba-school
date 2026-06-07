@@ -1731,14 +1731,17 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     const ids = [...new Set(paymentIds.filter(Boolean))];
     if (!ids.length) return { ok: true, results: [] };
 
-    // Escola com faturação externa: gerar comprovativo interno + webhook
+    // Escola com faturação externa: comprovativo interno + Vendus (se configurado) ou webhook
     if (usaFaturacaoExterna) {
       const rx = await invokeEmitPaymentReceipt(ids);
       const created = rx.results?.filter((r) => r.status === "created") ?? [];
+      const withVendus = created.filter((r) => r.vendus_document_number?.trim());
       if (created.length > 0) {
         toast({
           title: created.length > 1 ? "Comprovativos gerados" : "Comprovativo gerado",
-          description: `${created.length} comprovativo(s) de recebimento criado(s). Sistema externo notificado.`,
+          description: withVendus.length > 0
+            ? `${withVendus.length} fatura(s) FR emitida(s) no Vendus.`
+            : `${created.length} comprovativo(s) criado(s). Sistema externo notificado.`,
         });
       }
       if (!rx.ok && rx.message) {

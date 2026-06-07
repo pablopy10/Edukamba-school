@@ -1,10 +1,14 @@
 /**
  * Emite Comprovativo de Recebimento interno (não fiscal) para escolas com faturação externa.
- * Regista na conta corrente e dispara webhook para o sistema externo.
+ * Com vendus_api_key configurada: emite FR no Vendus e regista metadados fiscais.
+ * Sem Vendus: dispara webhook genérico para sistema externo.
  *
  * Body: { payment_ids: string[] }
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { emitVendusInvoiceForPayment } from "../_shared/vendusPaymentFlow.ts";
+import { logVendusFailure } from "../_shared/vendusAuth.ts";
+import { VendusApiError } from "../_shared/vendusService.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,6 +27,9 @@ type ReceiptResult = {
   status: "created" | "skipped" | "error";
   receipt_id?: string;
   receipt_number?: string;
+  vendus_document_id?: string;
+  vendus_document_number?: string;
+  vendus_pdf_url?: string;
   detail?: string;
 };
 
@@ -53,21 +60,30 @@ Deno.serve(async (req) => {
 
     for (const paymentId of paymentIds) {
       try {
-        // Check if receipt already exists
         const { data: existing } = await admin
           .from("payment_receipts")
-          .select("id, receipt_number")
+          .select("id, receipt_number, vendus_document_id, vendus_document_number, vendus_pdf_url")
           .eq("payment_id", paymentId)
           .maybeSingle();
         if (existing) {
-          results.push({ payment_id: paymentId, status: "skipped", receipt_id: existing.id, receipt_number: existing.receipt_number, detail: "Comprovativo já existe." });
+          results.push({
+            payment_id: paymentId,
+            status: "skipped",
+            receipt_id: existing.id,
+            receipt_number: existing.receipt_number,
+            vendus_document_id: existing.vendus_document_id ?? undefined,
+            vendus_document_number: existing.vendus_document_number ?? undefined,
+            vendus_pdf_url: existing.vendus_pdf_url ?? undefined,
+            detail: "Comprovativo já existe.",
+          });
           continue;
         }
 
-        // Load payment with student info
         const { data: payment, error: payErr } = await admin
           .from("payments")
-          .select("id, school_id, student_id, amount_paid, method, payment_date, student_fee_id, activity_fee_id, transport_fee_id")
+          .select(
+            "id, school_id, student_id, amount_paid, method, payment_date, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, meal_fee_id, event_fee_id",
+          )
           .eq("id", paymentId)
           .single();
         if (payErr || !payment) {
@@ -75,14 +91,12 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Get student info
         const { data: student } = await admin
           .from("students")
           .select("full_name, tax_id, parent_id")
           .eq("id", payment.student_id ?? "")
           .maybeSingle();
 
-        // Get parent tax_id
         let parentTaxId: string | null = null;
         if (student?.parent_id) {
           const { data: parent } = await admin
@@ -93,10 +107,14 @@ Deno.serve(async (req) => {
           parentTaxId = parent?.tax_id ?? null;
         }
 
-        // Reserve receipt number
         const { error: seqErr } = await admin
           .from("billing_config")
           .upsert({ school_id: payment.school_id, series: "EDK", last_sequence: 0 }, { onConflict: "school_id", ignoreDuplicates: true });
+
+        if (seqErr) {
+          results.push({ payment_id: paymentId, status: "error", detail: seqErr.message });
+          continue;
+        }
 
         const { data: config } = await admin
           .from("billing_config")
@@ -114,12 +132,53 @@ Deno.serve(async (req) => {
         const clienteNome = student?.full_name ?? "Cliente";
         const clienteNif = student?.tax_id?.trim() || parentTaxId?.trim() || null;
 
-        // Build description
         let description = "Pagamento de propina";
         if (payment.activity_fee_id) description = "Pagamento de atividade extracurricular";
         if (payment.transport_fee_id) description = "Pagamento de transporte";
+        if (payment.enrollment_fee_id) description = "Pagamento de matrícula";
+        if (payment.meal_fee_id) description = "Pagamento de refeições";
+        if (payment.event_fee_id) description = "Pagamento de evento";
 
-        // Insert receipt
+        const { data: school } = await admin
+          .from("schools")
+          .select("webhook_billing_url, webhook_billing_secret, vendus_api_key, usa_faturacao_externa")
+          .eq("id", payment.school_id)
+          .single();
+
+        const vendusApiKey = school?.vendus_api_key?.trim() ?? "";
+        let vendusMeta: {
+          vendusDocumentId?: string;
+          vendusDocumentNumber?: string;
+          vendusPdfUrl?: string;
+        } = {};
+
+        if (vendusApiKey) {
+          try {
+            const vendusResult = await emitVendusInvoiceForPayment(admin, vendusApiKey, payment);
+            vendusMeta = {
+              vendusDocumentId: vendusResult.vendusDocumentId,
+              vendusDocumentNumber: vendusResult.vendusDocumentNumber,
+              vendusPdfUrl: vendusResult.vendusPdfUrl,
+            };
+            if (vendusResult.vendusDocumentNumber) {
+              description = `${description} · ${vendusResult.vendusDocumentNumber}`;
+            }
+          } catch (vendusErr) {
+            const msg = vendusErr instanceof Error ? vendusErr.message : String(vendusErr);
+            await logVendusFailure(admin, {
+              schoolId: payment.school_id,
+              operation: "emit_payment_receipt_vendus",
+              paymentId: payment.id,
+              profileId: student?.parent_id ?? null,
+              errorMessage: msg,
+              httpStatus: vendusErr instanceof VendusApiError ? vendusErr.status ?? null : null,
+              responsePayload: vendusErr instanceof VendusApiError ? vendusErr.vendusPayload : undefined,
+            });
+            results.push({ payment_id: paymentId, status: "error", detail: `Vendus: ${msg}` });
+            continue;
+          }
+        }
+
         const { data: receipt, error: insErr } = await admin.from("payment_receipts").insert({
           school_id: payment.school_id,
           payment_id: paymentId,
@@ -131,6 +190,9 @@ Deno.serve(async (req) => {
           description,
           cliente_nome: clienteNome,
           cliente_nif: clienteNif,
+          vendus_document_id: vendusMeta.vendusDocumentId ?? null,
+          vendus_document_number: vendusMeta.vendusDocumentNumber ?? null,
+          vendus_pdf_url: vendusMeta.vendusPdfUrl ?? null,
         }).select("id, receipt_number").single();
 
         if (insErr) {
@@ -138,7 +200,6 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Register in account_statements (if student exists)
         if (payment.student_id) {
           const { data: lastStmt } = await admin
             .from("account_statements")
@@ -162,14 +223,8 @@ Deno.serve(async (req) => {
           });
         }
 
-        // Fire webhook to external billing system
-        const { data: school } = await admin
-          .from("schools")
-          .select("webhook_billing_url, webhook_billing_secret")
-          .eq("id", payment.school_id)
-          .single();
-
-        if (school?.webhook_billing_url?.trim()) {
+        // Webhook genérico apenas quando Vendus NÃO está configurado
+        if (!vendusApiKey && school?.webhook_billing_url?.trim()) {
           try {
             const webhookPayload = {
               event: "payment.validated",
@@ -187,12 +242,11 @@ Deno.serve(async (req) => {
             if (school.webhook_billing_secret?.trim()) {
               headers["X-Webhook-Secret"] = school.webhook_billing_secret.trim();
             }
-            // Fire and forget — don't block on webhook response
             fetch(school.webhook_billing_url.trim(), {
               method: "POST",
               headers,
               body: JSON.stringify(webhookPayload),
-            }).catch(() => { /* ignore webhook failures */ });
+            }).catch(() => { /* ignore */ });
           } catch { /* ignore */ }
         }
 
@@ -201,6 +255,9 @@ Deno.serve(async (req) => {
           status: "created",
           receipt_id: receipt!.id,
           receipt_number: receipt!.receipt_number,
+          vendus_document_id: vendusMeta.vendusDocumentId,
+          vendus_document_number: vendusMeta.vendusDocumentNumber,
+          vendus_pdf_url: vendusMeta.vendusPdfUrl,
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);

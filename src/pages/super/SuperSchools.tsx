@@ -33,9 +33,11 @@ type SchoolRow = {
   monthly_recurring_amount: number;
   usage_brevo_emails_sent_mt: number;
   usage_proof_storage_bytes_estimate: number;
+  usa_faturacao_externa: boolean;
+  vendus_configured: boolean;
 };
 
-type SheetTab = "profile" | "locks";
+type SheetTab = "profile" | "locks" | "vendus";
 
 const moduleKeys = Object.keys(moduleMeta) as ModuleKey[];
 
@@ -66,6 +68,13 @@ const SuperSchools = () => {
     mrr: "",
     emailsMt: "",
     storageBytes: "",
+  });
+  const [vendusDraft, setVendusDraft] = useState({
+    usaFaturacaoExterna: false,
+    vendusConfigured: false,
+    vendusApiKeyMasked: "" as string | null,
+    vendusApiKeyInput: "",
+    clearKey: false,
   });
 
   const loadSchools = useCallback(() => {
@@ -131,6 +140,27 @@ const SuperSchools = () => {
         setLocked(lk);
       })();
     }
+    if (tab === "vendus") {
+      void loadVendusConfig(row.school_id);
+    }
+  };
+
+  const loadVendusConfig = async (schoolId: string) => {
+    const { data, error } = await supabase.rpc("platform_super_get_school_vendus_config", {
+      _school_id: schoolId,
+    });
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    setVendusDraft({
+      usaFaturacaoExterna: !!row?.usa_faturacao_externa,
+      vendusConfigured: !!row?.vendus_configured,
+      vendusApiKeyMasked: row?.vendus_api_key_masked ?? null,
+      vendusApiKeyInput: "",
+      clearKey: false,
+    });
   };
 
   const persistProfile = async () => {
@@ -175,6 +205,35 @@ const SuperSchools = () => {
       loadSchools();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao gravar");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const persistVendus = async () => {
+    if (!sheetSchool) return;
+    setBusy(true);
+    try {
+      const patch: Record<string, unknown> = {
+        usa_faturacao_externa: vendusDraft.usaFaturacaoExterna,
+      };
+      if (vendusDraft.clearKey) {
+        patch.vendus_api_key = "";
+      } else if (vendusDraft.vendusApiKeyInput.trim()) {
+        patch.vendus_api_key = vendusDraft.vendusApiKeyInput.trim();
+      }
+
+      const { error } = await supabase.rpc("platform_super_set_school_vendus_config", {
+        _school_id: sheetSchool.school_id,
+        _patch: patch,
+      });
+      if (error) throw error;
+
+      toast.success("Integração Vendus actualizada.");
+      await loadVendusConfig(sheetSchool.school_id);
+      loadSchools();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao gravar Vendus");
     } finally {
       setBusy(false);
     }
@@ -263,6 +322,7 @@ const SuperSchools = () => {
               <tr>
                 <th className="px-4 py-3 font-semibold">Escola</th>
                 <th className="px-4 py-3 font-semibold">Estado SaaS</th>
+                <th className="px-4 py-3 font-semibold">Vendus</th>
                 <th className="px-4 py-3 font-semibold text-right tabular-nums">Alunos</th>
                 <th className="px-4 py-3 font-semibold text-right tabular-nums">Staff</th>
                 <th className="px-4 py-3 font-semibold text-right tabular-nums">MRR</th>
@@ -277,6 +337,19 @@ const SuperSchools = () => {
                     <div className="text-[11px] text-muted-foreground">{r.nif ? `NIF ${r.nif}` : "NIF pendente"}</div>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{r.subscription_status || "—"}</td>
+                  <td className="px-4 py-3">
+                    {r.vendus_configured ? (
+                      <span className="rounded-full bg-pastel-green/50 px-2.5 py-0.5 text-[11px] font-semibold text-pastel-green-foreground">
+                        Activo
+                      </span>
+                    ) : r.usa_faturacao_externa ? (
+                      <span className="rounded-full bg-pastel-yellow/50 px-2.5 py-0.5 text-[11px] font-semibold text-pastel-yellow-foreground">
+                        Externa
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-right tabular-nums">{r.student_count}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{r.staff_count}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatKz(Number(r.monthly_recurring_amount) || 0)} Kz</td>
@@ -291,6 +364,16 @@ const SuperSchools = () => {
                         onClick={() => openSheet(r, "profile")}
                       >
                         Perfil SaaS
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-full"
+                        disabled={busy}
+                        onClick={() => openSheet(r, "vendus")}
+                      >
+                        Vendus
                       </Button>
                       <Button
                         type="button"
@@ -318,7 +401,7 @@ const SuperSchools = () => {
               ))}
               {table.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
                     Sem escolas.
                   </td>
                 </tr>
@@ -343,7 +426,9 @@ const SuperSchools = () => {
             <SheetDescription>
               {sheetTab === "profile"
                 ? "Dados fiscal/cobrança/plano — actualizados via RPC seguradas para SUPER_ADMIN."
-                : "Painel de feature flags: bloquear módulos que a instituição activou internamente até regularizar SaaS."}
+                : sheetTab === "vendus"
+                  ? "API Key Vendus da sub-conta (marca branca). Nunca visível à escola — apenas mascarada aqui."
+                  : "Painel de feature flags: bloquear módulos que a instituição activou internamente até regularizar SaaS."}
             </SheetDescription>
           </SheetHeader>
 
@@ -357,6 +442,16 @@ const SuperSchools = () => {
               }`}
             >
               Perfil & consumo
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => sheetSchool && openSheet(sheetSchool, "vendus")}
+              className={`flex-1 rounded-full px-3 py-1.5 transition ${
+                sheetTab === "vendus" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+              }`}
+            >
+              Vendus
             </button>
             <button
               type="button"
@@ -448,6 +543,68 @@ const SuperSchools = () => {
                   </div>
                 </div>
               </>
+            ) : sheetTab === "vendus" && sheetSchool ? (
+              <div className="space-y-4 pb-6">
+                <div className="rounded-2xl border border-border px-4 py-3 text-sm">
+                  <p className="font-medium text-foreground">Integração multi-conta</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Cada escola tem a sua sub-conta Vendus. Ao validar pagamentos com faturação externa activa, o
+                    sistema emite FR automaticamente via API.
+                  </p>
+                  {vendusDraft.vendusConfigured && vendusDraft.vendusApiKeyMasked ? (
+                    <p className="mt-3 font-mono text-xs text-muted-foreground">
+                      Chave actual: {vendusDraft.vendusApiKeyMasked}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-border px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Faturação externa</p>
+                    <p className="text-[11px] text-muted-foreground">Desactiva FT/FR internas AGT nesta escola.</p>
+                  </div>
+                  <Switch
+                    checked={vendusDraft.usaFaturacaoExterna}
+                    disabled={busy}
+                    onCheckedChange={(v) => setVendusDraft((d) => ({ ...d, usaFaturacaoExterna: v }))}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="vendus-key">Nova API Key Vendus</Label>
+                  <Input
+                    id="vendus-key"
+                    type="password"
+                    autoComplete="off"
+                    disabled={busy}
+                    value={vendusDraft.vendusApiKeyInput}
+                    placeholder={vendusDraft.vendusConfigured ? "Deixar vazio para manter a chave actual" : "Colar API Key da sub-conta"}
+                    onChange={(e) =>
+                      setVendusDraft((d) => ({ ...d, vendusApiKeyInput: e.target.value, clearKey: false }))
+                    }
+                  />
+                </div>
+
+                {vendusDraft.vendusConfigured ? (
+                  <div className="flex items-center justify-between gap-4 rounded-xl border border-destructive/30 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-destructive">Remover integração</p>
+                      <p className="text-[11px] text-muted-foreground">Apaga a API Key desta escola.</p>
+                    </div>
+                    <Switch
+                      checked={vendusDraft.clearKey}
+                      disabled={busy}
+                      onCheckedChange={(v) =>
+                        setVendusDraft((d) => ({
+                          ...d,
+                          clearKey: v,
+                          vendusApiKeyInput: v ? "" : d.vendusApiKeyInput,
+                        }))
+                      }
+                    />
+                  </div>
+                ) : null}
+              </div>
             ) : sheetTab === "locks" ? (
               <div className="space-y-3 pb-10">
                 {moduleKeys.map((k) => (
@@ -470,6 +627,10 @@ const SuperSchools = () => {
             {sheetTab === "profile" && sheetSchool ? (
               <Button type="button" className="rounded-full" disabled={busy} onClick={() => void persistProfile()}>
                 Gravar SaaS / consumo / MRR
+              </Button>
+            ) : sheetTab === "vendus" && sheetSchool ? (
+              <Button type="button" className="rounded-full" disabled={busy} onClick={() => void persistVendus()}>
+                Gravar Vendus
               </Button>
             ) : null}
           </SheetFooter>

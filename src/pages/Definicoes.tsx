@@ -434,7 +434,7 @@ const Definicoes = () => {
             .limit(1)
             .maybeSingle();
       const [schoolRes, yearRes, usersRes, subRes, invRes] = await Promise.all([
-        supabase.from("schools").select("*").eq("id", effectiveSid).maybeSingle(),
+        supabase.from("schools").select("id, name, nif, address, logo_url, primary_color, secondary_color, settings, usa_faturacao_externa, webhook_billing_url, webhook_billing_secret").eq("id", effectiveSid).maybeSingle(),
         yearQuery,
         supabase
           .from("profiles")
@@ -2043,13 +2043,17 @@ const Definicoes = () => {
         {/* FATURAÇÃO */}
         {activeTab === "faturacao" && (
           <div className="flex flex-col gap-6">
-            {/* Faturação externa */}
-            <SectionCard title="Faturação externa" desc="Configure se a escola usa software de faturação de terceiros.">
+            {/* Faturação externa / Vendus */}
+            <SectionCard title="Faturação externa (Vendus)" desc="Configure se a escola usa software de faturação de terceiros. Com integração Vendus activa, as FR são emitidas automaticamente na validação de pagamentos.">
               <div className="flex flex-col gap-4">
+                <div className="rounded-xl bg-pastel-blue/20 p-4 text-xs text-muted-foreground">
+                  A API Key Vendus da sub-conta da escola é gerida pela plataforma Edukamba em background (multi-conta / marca branca).
+                  Contacte o suporte para activar ou alterar a integração.
+                </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold text-foreground">Usar faturação externa</p>
-                    <p className="text-xs text-muted-foreground">Quando activo, o sistema não gera FT/FR fiscais — apenas comprovativos internos e notifica o sistema externo.</p>
+                    <p className="text-xs text-muted-foreground">Quando activo, o sistema não gera FT/FR fiscais internas — usa Vendus (se configurado) ou webhook genérico.</p>
                   </div>
                   <label className="relative inline-flex cursor-pointer items-center">
                     <input
@@ -2064,7 +2068,7 @@ const Definicoes = () => {
                 </div>
                 {school.usa_faturacao_externa && (
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground">URL do Webhook (sistema externo)</label>
+                    <label className="text-xs font-medium text-muted-foreground">URL do Webhook (fallback sem Vendus)</label>
                     <input
                       className={inputCls(false)}
                       value={school.webhook_billing_url ?? ""}
@@ -2072,7 +2076,7 @@ const Definicoes = () => {
                       disabled={!settingsAdmin}
                       onChange={(e) => setSchool({ ...school, webhook_billing_url: e.target.value })}
                     />
-                    <p className="mt-1 text-xs text-muted-foreground">Quando um pagamento é validado, o sistema envia um POST com os dados para este URL.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Usado apenas quando a integração Vendus não está activa. Com Vendus, a FR é emitida automaticamente via API.</p>
                   </div>
                 )}
               </div>

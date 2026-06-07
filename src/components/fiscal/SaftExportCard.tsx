@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation, Trans } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import { generateSaftXml, downloadSaftXmlInBrowser, type SaftInvoiceRow } from "@/lib/fiscal/generateSaftXml";
+import { downloadSaftXmlInBrowser as downloadVendusSaft, invokeVendusDescarregarSaft } from "@/lib/vendus/invokeVendusBilling";
 
 type Props = { schoolId: string };
 
@@ -29,15 +30,47 @@ export function SaftExportCard({ schoolId }: Props) {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [busy, setBusy] = useState(false);
+  const [usaFaturacaoExterna, setUsaFaturacaoExterna] = useState(false);
 
   const years = useMemo(() => {
     const y = now.getFullYear();
     return [y - 1, y, y + 1];
   }, [now]);
 
+  useEffect(() => {
+    if (!schoolId) return;
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from("schools")
+        .select("usa_faturacao_externa")
+        .eq("id", schoolId)
+        .maybeSingle();
+      if (!cancelled) setUsaFaturacaoExterna(!!data?.usa_faturacao_externa);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [schoolId]);
+
   const runExport = async () => {
     setBusy(true);
     try {
+      const fn = `SAFT_${schoolId.slice(0, 8)}_${year}-${String(month).padStart(2, "0")}.xml`;
+
+      if (usaFaturacaoExterna) {
+        const vendusRes = await invokeVendusDescarregarSaft(month, year);
+        if (!vendusRes.ok || !vendusRes.result?.xml) {
+          throw new Error(vendusRes.message ?? "Não foi possível exportar SAF-T do Vendus.");
+        }
+        downloadVendusSaft(fn, vendusRes.result.xml);
+        toast({
+          title: "SAFT Vendus exportado",
+          description: `Ficheiro ${fn} descarregado a partir do Vendus.`,
+        });
+        return;
+      }
+
       const { data: school, error: sErr } = await supabase
         .from("schools")
         .select("name, nif, address")
@@ -90,7 +123,6 @@ export function SaftExportCard({ schoolId }: Props) {
         invoices: inv,
       });
 
-      const fn = `SAFT_${schoolId.slice(0, 8)}_${year}-${String(month).padStart(2, "0")}.xml`;
       downloadSaftXmlInBrowser(fn, xml);
       toast({
         title: t("toast_generated_title"),
@@ -109,14 +141,21 @@ export function SaftExportCard({ schoolId }: Props) {
       <CardHeader>
         <CardTitle className="text-base">{t("title")}</CardTitle>
         <p className="text-sm text-muted-foreground">
-          <Trans
-            t={t}
-            i18nKey="description"
-            components={{
-              1: <code className="text-xs font-mono" />,
-              2: <code className="text-xs font-mono" />,
-            }}
-          />
+          {usaFaturacaoExterna ? (
+            <>
+              Esta escola usa faturação externa via <strong>Vendus</strong>. O SAF-T é exportado directamente da
+              sub-conta Vendus da escola.
+            </>
+          ) : (
+            <Trans
+              t={t}
+              i18nKey="description"
+              components={{
+                1: <code className="text-xs font-mono" />,
+                2: <code className="text-xs font-mono" />,
+              }}
+            />
+          )}
         </p>
       </CardHeader>
       <CardContent className="flex flex-wrap items-end gap-3">
@@ -148,7 +187,7 @@ export function SaftExportCard({ schoolId }: Props) {
         </div>
         <Button type="button" onClick={runExport} disabled={busy} className="gap-2">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          {t("download_button")}
+          {usaFaturacaoExterna ? "Descarregar SAF-T (Vendus)" : t("download_button")}
         </Button>
       </CardContent>
     </Card>

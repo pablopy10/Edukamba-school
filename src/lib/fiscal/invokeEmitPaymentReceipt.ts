@@ -5,6 +5,9 @@ export type EmitPaymentReceiptResult = {
   status: "created" | "skipped" | "error";
   receipt_id?: string;
   receipt_number?: string;
+  vendus_document_id?: string;
+  vendus_document_number?: string;
+  vendus_pdf_url?: string;
   detail?: string;
 };
 
