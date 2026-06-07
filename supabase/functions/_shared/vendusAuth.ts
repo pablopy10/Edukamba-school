@@ -72,7 +72,7 @@ export async function resolveSchoolVendusKey(
   const allowedRoles = ["ADMIN", "SUPER_ADMIN", "DIRECTOR", "TREASURER", "SECRETARY"];
   const role = String(profile.role ?? "");
   if (!allowedRoles.includes(role)) {
-    return { ok: false, response: vendusCorsJson({ error: "Sem permissão para operações Vendus." }, 403) };
+    return { ok: false, response: vendusCorsJson({ error: "Sem permissão para operações de faturação externa." }, 403) };
   }
 
   const { data: school, error: schoolErr } = await admin
@@ -90,7 +90,7 @@ export async function resolveSchoolVendusKey(
     return {
       ok: false,
       response: vendusCorsJson({
-        error: "Integração Vendus não configurada para esta escola (vendus_api_key ausente).",
+        error: "Integração de faturação externa não configurada para esta escola.",
       }, 422),
     };
   }
@@ -118,7 +118,7 @@ export async function resolveVendusKeyForSchool(
   if (!vendusApiKey) {
     return {
       ok: false,
-      response: vendusCorsJson({ error: "Integração Vendus não configurada para esta escola." }, 422),
+      response: vendusCorsJson({ error: "Integração de faturação externa não configurada para esta escola." }, 422),
     };
   }
   return { ok: true, vendusApiKey };
@@ -152,7 +152,7 @@ export async function authorizeVendusDocumentDownload(
 
   const { data: receipt, error: recErr } = await receiptQuery.maybeSingle();
   if (recErr || !receipt?.payment_id || !receipt.school_id) {
-    return { ok: false, response: vendusCorsJson({ error: "Documento Vendus não encontrado." }, 404) };
+    return { ok: false, response: vendusCorsJson({ error: "Documento fiscal não encontrado." }, 404) };
   }
 
   const { data: profile, error: profErr } = await admin
@@ -208,7 +208,7 @@ export async function authorizeVendusDocumentDownload(
     };
   }
 
-  return { ok: false, response: vendusCorsJson({ error: "Sem permissão para operações Vendus." }, 403) };
+  return { ok: false, response: vendusCorsJson({ error: "Sem permissão para operações de faturação externa." }, 403) };
 }
 
 export async function logVendusFailure(

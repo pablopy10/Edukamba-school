@@ -21,6 +21,7 @@ import {
   vendusCorsHeaders,
   vendusCorsJson,
 } from "../_shared/vendusAuth.ts";
+import { externalBillingUserMessage } from "../_shared/externalBillingUserMessage.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: vendusCorsHeaders });
@@ -59,7 +60,7 @@ Deno.serve(async (req) => {
       if (!pdfRes.ok) {
         const errText = await pdfRes.text().catch(() => "");
         throw new VendusApiError(
-          `Falha ao obter PDF Vendus (${pdfRes.status}).`,
+          `Falha ao obter PDF (${pdfRes.status}).`,
           pdfRes.status,
           errText.slice(0, 500),
         );
@@ -175,6 +176,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    return vendusCorsJson({ error: msg, operation }, status >= 400 && status < 600 ? status : 500);
+    return vendusCorsJson({ error: externalBillingUserMessage(msg), operation }, status >= 400 && status < 600 ? status : 500);
   }
 });

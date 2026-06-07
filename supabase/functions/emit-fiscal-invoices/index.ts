@@ -334,6 +334,23 @@ async function emitOne(
       return { payment_id, status: "skipped", detail: `Estado não é validado (${payment.status}).` };
     }
 
+    const billingClient = adminSb ?? sb;
+    const { data: schoolBilling } = await billingClient
+      .from("schools")
+      .select("usa_faturacao_externa, vendus_api_key")
+      .eq("id", payment.school_id)
+      .maybeSingle();
+    if (
+      schoolBilling?.usa_faturacao_externa === true ||
+      (schoolBilling?.vendus_api_key?.trim() ?? "") !== ""
+    ) {
+      return {
+        payment_id,
+        status: "skipped",
+        detail: "Escola com faturação externa. O comprovativo é emitido via emit-payment-receipt.",
+      };
+    }
+
     const { data: existing, error: exErr } = await sb.from("invoices").select("id, document_number").eq("payment_id", payment_id)
       .maybeSingle();
     if (exErr) return { payment_id, status: "error", detail: exErr.message };

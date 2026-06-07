@@ -971,12 +971,23 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     if (!sId) { setLoading(false); return; }
 
     // Carregar flag de faturação externa
-    const { data: schoolRow } = await supabase
-      .from("schools")
-      .select("usa_faturacao_externa")
-      .eq("id", sId)
-      .maybeSingle();
-    setUsaFaturacaoExterna(schoolRow?.usa_faturacao_externa ?? false);
+    const { data: billingFlags } = await supabase.rpc("get_school_billing_flags", { _school_id: sId });
+    const flagsRow = (Array.isArray(billingFlags) ? billingFlags[0] : billingFlags) as
+      | { usa_faturacao_externa?: boolean; vendus_configured?: boolean }
+      | null
+      | undefined;
+    if (flagsRow) {
+      setUsaFaturacaoExterna(
+        !!(flagsRow.usa_faturacao_externa || flagsRow.vendus_configured),
+      );
+    } else {
+      const { data: schoolRow } = await supabase
+        .from("schools")
+        .select("usa_faturacao_externa")
+        .eq("id", sId)
+        .maybeSingle();
+      setUsaFaturacaoExterna(schoolRow?.usa_faturacao_externa ?? false);
+    }
 
     const yRes = await supabase.from("academic_years").select("id, label, is_active, start_date").eq("school_id", sId).order("start_date", { ascending: true });
 
@@ -1704,7 +1715,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           if (error) {
             if (!cancelled)
               toast({
-                title: "Erro ao carregar faturas Vendus",
+                title: "Erro ao carregar faturas",
                 description: error.message,
                 variant: "destructive",
               });
@@ -1781,8 +1792,25 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     const ids = [...new Set(paymentIds.filter(Boolean))];
     if (!ids.length) return { ok: true, results: [] };
 
+    let useExternalBilling = usaFaturacaoExterna;
+    if (schoolId) {
+      const { data: billingFlags, error: flagsErr } = await supabase.rpc("get_school_billing_flags", {
+        _school_id: schoolId,
+      });
+      if (!flagsErr && billingFlags) {
+        const row = (Array.isArray(billingFlags) ? billingFlags[0] : billingFlags) as
+          | { usa_faturacao_externa?: boolean; vendus_configured?: boolean }
+          | null
+          | undefined;
+        useExternalBilling = !!(row?.usa_faturacao_externa || row?.vendus_configured);
+        if (useExternalBilling !== usaFaturacaoExterna) {
+          setUsaFaturacaoExterna(useExternalBilling);
+        }
+      }
+    }
+
     // Escola com faturação externa: comprovativo interno + Vendus (se configurado) ou webhook
-    if (usaFaturacaoExterna) {
+    if (useExternalBilling) {
       const rx = await invokeEmitPaymentReceipt(ids);
       const created = rx.results?.filter((r) => r.status === "created") ?? [];
       const errored = rx.results?.filter((r) => r.status === "error") ?? [];
@@ -1791,13 +1819,13 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         toast({
           title: created.length > 1 ? "Comprovativos gerados" : "Comprovativo gerado",
           description: withVendus.length > 0
-            ? `${withVendus.length} fatura(s) FR emitida(s) no Vendus.`
+            ? `${withVendus.length} fatura(s) FR emitida(s).`
             : `${created.length} comprovativo(s) criado(s). Sistema externo notificado.`,
         });
       }
       if (errored.length > 0) {
         toast({
-          title: "Erro ao emitir fatura Vendus",
+          title: "Erro ao emitir fatura",
           description: errored.map((r) => r.detail ?? r.payment_id).filter(Boolean).join(" · "),
           variant: "destructive",
         });
@@ -3188,14 +3216,14 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         filenameHint: vendus.documentNumber || undefined,
       });
       toast({
-        title: "Fatura Vendus transferida",
+        title: "Fatura transferida",
         description: vendus.documentNumber
           ? `Documento ${vendus.documentNumber} descarregado.`
-          : "PDF da fatura Vendus descarregado.",
+          : "PDF da fatura descarregado.",
       });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      toast({ title: "Erro ao descarregar fatura Vendus", description: msg, variant: "destructive" });
+      toast({ title: "Erro ao descarregar fatura", description: msg, variant: "destructive" });
     } finally {
       setDownloadingVendusDocId(null);
     }
@@ -3309,7 +3337,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     }
   };
 
-  /** Menu FT / FR Vendus na lista quando a cobrança está paga e o pagamento validado. */
+  /** Menu FR na lista quando a cobrança está paga e o pagamento validado. */
   const invoiceActionsForValidatedPayment = (feeMarkedPaid: boolean, pay?: PaymentListRow) => {
     if (!feeMarkedPaid || !pay || pay.status !== "validado" || !pay.id?.trim()) return null;
 
@@ -3324,18 +3352,18 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             variant="outline"
             className="h-8 text-xs shrink-0"
             disabled={busy}
-            title="Emitir fatura FR no Vendus"
+            title="Emitir fatura FR"
             onClick={() => void retryEmitVendusForPayment(pay.id)}
           >
             {busy ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <FileDown className="h-3 w-3 mr-1" />}
-            Vendus
+            Emitir FR
           </Button>
         );
       }
       const busy = downloadingVendusDocId === vendus.documentId;
       const menuTitle = vendus.documentNumber
-        ? `Fatura Vendus ${vendus.documentNumber}`
-        : "Fatura Vendus";
+        ? `Fatura ${vendus.documentNumber}`
+        : "Fatura";
 
       return (
         <div className="flex flex-col items-center gap-0.5">

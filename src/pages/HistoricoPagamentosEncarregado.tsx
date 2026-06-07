@@ -233,8 +233,8 @@ const HistoricoPagamentosEncarregado = () => {
         toast({
           title: "PDF transferido",
           description: vendus.documentNumber
-            ? `Fatura Vendus ${vendus.documentNumber} guardada.`
-            : "Fatura Vendus descarregada.",
+            ? `Fatura ${vendus.documentNumber} guardada.`
+            : "Fatura descarregada.",
         });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -297,7 +297,7 @@ const HistoricoPagamentosEncarregado = () => {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Histórico de pagamentos</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Pagamentos validados pela escola. Pode descarregar a fatura em PDF quando existir documento Vendus ou fiscal (FT).
+          Pagamentos validados pela escola. Pode descarregar a fatura em PDF quando existir documento fiscal emitido.
         </p>
       </div>
 
@@ -345,7 +345,7 @@ const HistoricoPagamentosEncarregado = () => {
                             title={
                               hasDoc
                                 ? vendusByPayment.has(p.id)
-                                  ? "Transferir PDF da fatura Vendus"
+                                  ? "Transferir PDF da fatura"
                                   : "Transferir PDF da factura‑recibo (AGT)"
                                 : "Ainda não existe documento fiscal para este pagamento."
                             }

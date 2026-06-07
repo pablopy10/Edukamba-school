@@ -64,8 +64,8 @@ export function SaftExportCard({ schoolId }: Props) {
       if (usaFaturacaoExterna) {
         await downloadVendusSaftFile(month, year);
         toast({
-          title: "SAFT Vendus exportado",
-          description: `Ficheiro SAF-T de ${periodLabel} descarregado a partir do Vendus.`,
+          title: "SAFT exportado",
+          description: `Ficheiro SAF-T de ${periodLabel} descarregado.`,
         });
         return;
       }
@@ -144,7 +144,7 @@ export function SaftExportCard({ schoolId }: Props) {
         <p className="text-sm text-muted-foreground">
           {usaFaturacaoExterna ? (
             <>
-              Esta escola usa faturação externa via <strong>Vendus</strong>. O SAF-T é exportado da sub-conta Vendus
+              Esta escola usa faturação externa. O SAF-T é exportado do software de faturação
               para o período seleccionado (<strong>{periodLabel}</strong>).
             </>
           ) : (

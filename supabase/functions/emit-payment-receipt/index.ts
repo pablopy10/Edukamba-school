@@ -8,6 +8,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { emitVendusInvoiceForPayment } from "../_shared/vendusPaymentFlow.ts";
 import { logVendusFailure } from "../_shared/vendusAuth.ts";
+import { externalBillingUserMessage } from "../_shared/externalBillingUserMessage.ts";
 import { VendusApiError } from "../_shared/vendusService.ts";
 
 const corsHeaders = {
@@ -128,7 +129,7 @@ Deno.serve(async (req) => {
                 vendus_document_id: vendusResult.vendusDocumentId,
                 vendus_document_number: vendusResult.vendusDocumentNumber,
                 vendus_pdf_url: vendusResult.vendusPdfUrl,
-                detail: "Fatura Vendus emitida (comprovativo já existia).",
+                detail: "Fatura emitida (comprovativo já existia).",
               });
             } catch (vendusErr) {
               const msg = vendusErr instanceof Error ? vendusErr.message : String(vendusErr);
@@ -140,7 +141,11 @@ Deno.serve(async (req) => {
                 httpStatus: vendusErr instanceof VendusApiError ? vendusErr.status ?? null : null,
                 responsePayload: vendusErr instanceof VendusApiError ? vendusErr.vendusPayload : undefined,
               });
-              results.push({ payment_id: paymentId, status: "error", detail: `Vendus: ${msg}` });
+              results.push({
+                payment_id: paymentId,
+                status: "error",
+                detail: externalBillingUserMessage(msg),
+              });
             }
             continue;
           }
@@ -150,7 +155,7 @@ Deno.serve(async (req) => {
             status: "skipped",
             receipt_id: existing.id,
             receipt_number: existing.receipt_number,
-            detail: "Comprovativo já existe (Vendus não configurado).",
+            detail: "Comprovativo já existe (integração fiscal não configurada).",
           });
           continue;
         }
@@ -231,7 +236,11 @@ Deno.serve(async (req) => {
               httpStatus: vendusErr instanceof VendusApiError ? vendusErr.status ?? null : null,
               responsePayload: vendusErr instanceof VendusApiError ? vendusErr.vendusPayload : undefined,
             });
-            results.push({ payment_id: paymentId, status: "error", detail: `Vendus: ${msg}` });
+            results.push({
+              payment_id: paymentId,
+              status: "error",
+              detail: externalBillingUserMessage(msg),
+            });
             continue;
           }
         }

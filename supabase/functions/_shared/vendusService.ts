@@ -137,6 +137,12 @@ function unwrapVendusList<T>(data: T[] | { data?: T[] } | null | undefined): T[]
   return [];
 }
 
+function vendusOfficialPaymentType(raw: string): string {
+  const t = raw.trim().toUpperCase();
+  const dash = t.indexOf(" - ");
+  return dash > 0 ? t.slice(0, dash).trim() : t;
+}
+
 export class VendusService {
   private readonly client: AxiosInstance;
   private readonly baseUrl: string;
@@ -187,8 +193,8 @@ export class VendusService {
     const methods = await this.listPaymentMethods();
     const active = methods.filter((m) => String(m.status ?? "on").toLowerCase() !== "off");
     const match =
-      active.find((m) => String(m.type ?? "").trim().toUpperCase() === type) ??
-      active.find((m) => String(m.type ?? "").trim().toUpperCase() === "NU") ??
+      active.find((m) => vendusOfficialPaymentType(String(m.type ?? "")) === type) ??
+      active.find((m) => vendusOfficialPaymentType(String(m.type ?? "")) === "NU") ??
       active[0];
 
     const id = match?.id != null ? String(match.id).trim() : "";

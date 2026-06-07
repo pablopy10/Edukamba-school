@@ -105,7 +105,7 @@ export async function emitVendusInvoiceForPayment(
     .maybeSingle();
 
   if (!student?.parent_id) {
-    throw new VendusApiError("Aluno sem encarregado associado — impossível emitir fatura Vendus.");
+    throw new VendusApiError("Aluno sem encarregado associado — impossível emitir fatura.");
   }
 
   const { data: parent } = await admin

@@ -229,11 +229,11 @@ const SuperSchools = () => {
       });
       if (error) throw error;
 
-      toast.success("Integração Vendus actualizada.");
+      toast.success("Integração de faturação actualizada.");
       await loadVendusConfig(sheetSchool.school_id);
       loadSchools();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao gravar Vendus");
+      toast.error(e instanceof Error ? e.message : "Erro ao gravar integração de faturação");
     } finally {
       setBusy(false);
     }
@@ -322,7 +322,7 @@ const SuperSchools = () => {
               <tr>
                 <th className="px-4 py-3 font-semibold">Escola</th>
                 <th className="px-4 py-3 font-semibold">Estado SaaS</th>
-                <th className="px-4 py-3 font-semibold">Vendus</th>
+                <th className="px-4 py-3 font-semibold">Faturação ext.</th>
                 <th className="px-4 py-3 font-semibold text-right tabular-nums">Alunos</th>
                 <th className="px-4 py-3 font-semibold text-right tabular-nums">Staff</th>
                 <th className="px-4 py-3 font-semibold text-right tabular-nums">MRR</th>
@@ -373,7 +373,7 @@ const SuperSchools = () => {
                         disabled={busy}
                         onClick={() => openSheet(r, "vendus")}
                       >
-                        Vendus
+                        Faturação
                       </Button>
                       <Button
                         type="button"
@@ -427,7 +427,7 @@ const SuperSchools = () => {
               {sheetTab === "profile"
                 ? "Dados fiscal/cobrança/plano — actualizados via RPC seguradas para SUPER_ADMIN."
                 : sheetTab === "vendus"
-                  ? "API Key Vendus da sub-conta (marca branca). Nunca visível à escola — apenas mascarada aqui."
+                  ? "Integração de faturação externa por escola (marca branca). A chave API nunca é visível à instituição."
                   : "Painel de feature flags: bloquear módulos que a instituição activou internamente até regularizar SaaS."}
             </SheetDescription>
           </SheetHeader>
@@ -451,7 +451,7 @@ const SuperSchools = () => {
                 sheetTab === "vendus" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
               }`}
             >
-              Vendus
+              Faturação
             </button>
             <button
               type="button"
@@ -548,8 +548,8 @@ const SuperSchools = () => {
                 <div className="rounded-2xl border border-border px-4 py-3 text-sm">
                   <p className="font-medium text-foreground">Integração multi-conta</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Cada escola tem a sua sub-conta Vendus. Ao validar pagamentos com faturação externa activa, o
-                    sistema emite FR automaticamente via API.
+                    Cada escola tem a sua sub-conta de faturação. Ao validar pagamentos com faturação externa activa, o
+                    sistema emite FR automaticamente.
                   </p>
                   {vendusDraft.vendusConfigured && vendusDraft.vendusApiKeyMasked ? (
                     <p className="mt-3 font-mono text-xs text-muted-foreground">
@@ -571,7 +571,7 @@ const SuperSchools = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="vendus-key">Nova API Key Vendus</Label>
+                  <Label htmlFor="vendus-key">Nova chave API (integração fiscal)</Label>
                   <Input
                     id="vendus-key"
                     type="password"
@@ -630,7 +630,7 @@ const SuperSchools = () => {
               </Button>
             ) : sheetTab === "vendus" && sheetSchool ? (
               <Button type="button" className="rounded-full" disabled={busy} onClick={() => void persistVendus()}>
-                Gravar Vendus
+                Gravar integração
               </Button>
             ) : null}
           </SheetFooter>
