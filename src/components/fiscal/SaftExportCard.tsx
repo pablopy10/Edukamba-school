@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import { generateSaftXml, downloadSaftXmlInBrowser, type SaftInvoiceRow } from "@/lib/fiscal/generateSaftXml";
-import { downloadSaftXmlInBrowser as downloadVendusSaft, invokeVendusDescarregarSaft } from "@/lib/vendus/invokeVendusBilling";
+import { downloadVendusSaftFile } from "@/lib/vendus/invokeVendusBilling";
 
 type Props = { schoolId: string };
 
@@ -37,6 +37,11 @@ export function SaftExportCard({ schoolId }: Props) {
     return [y - 1, y, y + 1];
   }, [now]);
 
+  const periodLabel = useMemo(() => {
+    const monthName = monthOpts.find((m) => m.v === String(month))?.l ?? String(month);
+    return `${monthName} ${year}`;
+  }, [month, monthOpts, year]);
+
   useEffect(() => {
     if (!schoolId) return;
     let cancelled = false;
@@ -56,20 +61,16 @@ export function SaftExportCard({ schoolId }: Props) {
   const runExport = async () => {
     setBusy(true);
     try {
-      const fn = `SAFT_${schoolId.slice(0, 8)}_${year}-${String(month).padStart(2, "0")}.xml`;
-
       if (usaFaturacaoExterna) {
-        const vendusRes = await invokeVendusDescarregarSaft(month, year);
-        if (!vendusRes.ok || !vendusRes.result?.xml) {
-          throw new Error(vendusRes.message ?? "Não foi possível exportar SAF-T do Vendus.");
-        }
-        downloadVendusSaft(fn, vendusRes.result.xml);
+        await downloadVendusSaftFile(month, year);
         toast({
           title: "SAFT Vendus exportado",
-          description: `Ficheiro ${fn} descarregado a partir do Vendus.`,
+          description: `Ficheiro SAF-T de ${periodLabel} descarregado a partir do Vendus.`,
         });
         return;
       }
+
+      const fn = `SAFT_${schoolId.slice(0, 8)}_${year}-${String(month).padStart(2, "0")}.xml`;
 
       const { data: school, error: sErr } = await supabase
         .from("schools")
@@ -143,8 +144,8 @@ export function SaftExportCard({ schoolId }: Props) {
         <p className="text-sm text-muted-foreground">
           {usaFaturacaoExterna ? (
             <>
-              Esta escola usa faturação externa via <strong>Vendus</strong>. O SAF-T é exportado directamente da
-              sub-conta Vendus da escola.
+              Esta escola usa faturação externa via <strong>Vendus</strong>. O SAF-T é exportado da sub-conta Vendus
+              para o período seleccionado (<strong>{periodLabel}</strong>).
             </>
           ) : (
             <Trans
@@ -187,7 +188,7 @@ export function SaftExportCard({ schoolId }: Props) {
         </div>
         <Button type="button" onClick={runExport} disabled={busy} className="gap-2">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          {usaFaturacaoExterna ? "Descarregar SAF-T (Vendus)" : t("download_button")}
+          {usaFaturacaoExterna ? `Descarregar SAF-T — ${periodLabel}` : t("download_button")}
         </Button>
       </CardContent>
     </Card>

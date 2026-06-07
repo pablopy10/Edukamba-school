@@ -8,6 +8,7 @@ import { useParentChildren } from "@/hooks/useParentChildren";
 import { ArrowLeft, FileDown, Loader2 } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 import { downloadFiscalInvoicePdfFromInvoice } from "@/lib/fiscal/downloadFiscalInvoicePdf";
+import { downloadVendusDocumentPdf } from "@/lib/vendus/invokeVendusBilling";
 
 type PaymentRow = Pick<
   Tables<"payments">,
@@ -144,6 +145,9 @@ const HistoricoPagamentosEncarregado = () => {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<EnrichedPayment[]>([]);
   const [invoiceByPayment, setInvoiceByPayment] = useState<Map<string, Tables<"invoices">>>(new Map());
+  const [vendusByPayment, setVendusByPayment] = useState<
+    Map<string, { documentId: string; documentNumber: string }>
+  >(new Map());
   const [pdfLoadingPaymentId, setPdfLoadingPaymentId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -178,20 +182,36 @@ const HistoricoPagamentosEncarregado = () => {
     setRows(enriched);
 
     const pids = enriched.map((p) => p.id);
-    const schoolId =
-      pays && pays[0] && typeof (pays[0] as { school_id?: string }).school_id === "string"
-        ? (pays[0] as { school_id: string }).school_id
-        : null;
 
     if (pids.length > 0) {
-      const { data: invs } = await supabase.from("invoices").select("*").in("payment_id", pids);
+      const [{ data: invs }, { data: receipts }] = await Promise.all([
+        supabase.from("invoices").select("*").in("payment_id", pids),
+        supabase
+          .from("payment_receipts")
+          .select("payment_id, vendus_document_id, vendus_document_number")
+          .in("payment_id", pids),
+      ]);
       const map = new Map<string, Tables<"invoices">>();
       ((invs ?? []) as Tables<"invoices">[]).forEach((inv) => {
         if (inv.payment_id) map.set(inv.payment_id, inv);
       });
       setInvoiceByPayment(map);
-      if ((!invs || invs.length === 0) && schoolId) void schoolId;
-    } else setInvoiceByPayment(new Map());
+
+      const vendusMap = new Map<string, { documentId: string; documentNumber: string }>();
+      for (const row of receipts ?? []) {
+        const payId = row.payment_id as string | null;
+        const docId = String(row.vendus_document_id ?? "").trim();
+        if (!payId?.trim() || !docId) continue;
+        vendusMap.set(payId, {
+          documentId: docId,
+          documentNumber: String(row.vendus_document_number ?? "").trim(),
+        });
+      }
+      setVendusByPayment(vendusMap);
+    } else {
+      setInvoiceByPayment(new Map());
+      setVendusByPayment(new Map());
+    }
 
     setLoading(false);
   }, []);
@@ -201,6 +221,30 @@ const HistoricoPagamentosEncarregado = () => {
   }, [parentLoading, isParent, load]);
 
   const handlePdf = async (p: EnrichedPayment) => {
+    const vendus = vendusByPayment.get(p.id);
+    if (vendus?.documentId) {
+      setPdfLoadingPaymentId(p.id);
+      try {
+        await downloadVendusDocumentPdf({
+          documentId: vendus.documentId,
+          paymentId: p.id,
+          filenameHint: vendus.documentNumber || undefined,
+        });
+        toast({
+          title: "PDF transferido",
+          description: vendus.documentNumber
+            ? `Fatura Vendus ${vendus.documentNumber} guardada.`
+            : "Fatura Vendus descarregada.",
+        });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        toast({ title: "Erro ao gerar PDF", description: msg, variant: "destructive" });
+      } finally {
+        setPdfLoadingPaymentId(null);
+      }
+      return;
+    }
+
     const inv = invoiceByPayment.get(p.id);
     if (!inv) {
       toast({
@@ -253,7 +297,7 @@ const HistoricoPagamentosEncarregado = () => {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Histórico de pagamentos</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Pagamentos validados pela escola que submeteu. Pode gerar PDF com os dados registados quando existir documento oficial (FT).
+          Pagamentos validados pela escola. Pode descarregar a fatura em PDF quando existir documento Vendus ou fiscal (FT).
         </p>
       </div>
 
@@ -280,7 +324,7 @@ const HistoricoPagamentosEncarregado = () => {
                 </thead>
                 <tbody>
                   {rows.map((p) => {
-                    const hasInv = invoiceByPayment.has(p.id);
+                    const hasDoc = invoiceByPayment.has(p.id) || vendusByPayment.has(p.id);
                     const pdfBusy = pdfLoadingPaymentId === p.id;
                     return (
                       <tr key={p.id} className="border-b border-border/70">
@@ -297,10 +341,12 @@ const HistoricoPagamentosEncarregado = () => {
                             size="sm"
                             className="gap-1"
                             onClick={() => void handlePdf(p)}
-                            disabled={!hasInv || pdfBusy}
+                            disabled={!hasDoc || pdfBusy}
                             title={
-                              hasInv
-                                ? "Transferir PDF da factura‑recibo (AGT)"
+                              hasDoc
+                                ? vendusByPayment.has(p.id)
+                                  ? "Transferir PDF da fatura Vendus"
+                                  : "Transferir PDF da factura‑recibo (AGT)"
                                 : "Ainda não existe documento fiscal para este pagamento."
                             }
                           >

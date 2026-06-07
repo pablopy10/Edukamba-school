@@ -8,6 +8,19 @@ import type {
 
 type EdgeErrorBody = { ok?: boolean; error?: string; operation?: string };
 
+function getVendusFunctionUrl(): string {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+  if (!supabaseUrl) throw new Error("VITE_SUPABASE_URL não configurado.");
+  return `${supabaseUrl}/functions/v1/vendus-billing`;
+}
+
+async function getAccessToken(): Promise<string> {
+  const { data: session } = await supabase.auth.getSession();
+  const token = session.session?.access_token;
+  if (!token) throw new Error("Sessão expirada.");
+  return token;
+}
+
 async function invokeVendusBilling<T extends Record<string, unknown>>(
   body: Record<string, unknown>,
 ): Promise<{ ok: boolean; data?: T; message?: string }> {
@@ -18,6 +31,49 @@ async function invokeVendusBilling<T extends Record<string, unknown>>(
     return { ok: false, message: payload.error.trim() };
   }
   return { ok: payload.ok === true, data: payload };
+}
+
+/** Pedido binário (PDF / XML) via fetch directo — evita limites do invoke JSON. */
+async function fetchVendusBillingFile(
+  body: Record<string, unknown>,
+): Promise<{ ok: true; blob: Blob; filename: string } | { ok: false; message: string }> {
+  try {
+    const token = await getAccessToken();
+    const res = await fetch(getVendusFunctionUrl(), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      return {
+        ok: false,
+        message: (errBody as { error?: string }).error ?? `Erro HTTP ${res.status}`,
+      };
+    }
+
+    const disposition = res.headers.get("Content-Disposition") ?? "";
+    const match = /filename="?([^";\n]+)"?/i.exec(disposition);
+    const filename = match?.[1]?.trim() || "download";
+    const blob = await res.blob();
+    return { ok: true, blob, filename };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+function triggerBrowserDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 /** Sincroniza encarregado como cliente Vendus (cria se necessário). */
@@ -67,7 +123,7 @@ export async function invokeVendusEmitirFaturaPropinas(
   };
 }
 
-/** Descarrega SAF-T XML do Vendus para o período indicado. */
+/** Descarrega SAF-T XML do Vendus para o período indicado (JSON — uso interno). */
 export async function invokeVendusDescarregarSaft(
   mes: number,
   ano: number,
@@ -84,45 +140,39 @@ export async function invokeVendusDescarregarSaft(
   };
 }
 
-/** Abre PDF Vendus via proxy autenticado (Edge Function). */
-export async function downloadVendusDocumentPdf(documentId: string): Promise<void> {
-  const { data: session } = await supabase.auth.getSession();
-  const token = session.session?.access_token;
-  if (!token) throw new Error("Sessão expirada.");
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
-  if (!supabaseUrl) throw new Error("VITE_SUPABASE_URL não configurado.");
-
-  const res = await fetch(`${supabaseUrl}/functions/v1/vendus-billing`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ action: "download_pdf", document_id: documentId }),
+/** Descarrega ficheiro SAF-T do Vendus conforme mês/ano seleccionados. */
+export async function downloadVendusSaftFile(mes: number, ano: number): Promise<void> {
+  const res = await fetchVendusBillingFile({
+    action: "download_saft",
+    mes,
+    ano,
   });
+  if (!res.ok) throw new Error(res.message);
+  triggerBrowserDownload(res.blob, res.filename);
+}
 
-  if (!res.ok) {
-    const errBody = await res.json().catch(() => ({}));
-    throw new Error((errBody as { error?: string }).error ?? `Erro HTTP ${res.status}`);
-  }
-
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `vendus-${documentId}.pdf`;
-  a.click();
-  URL.revokeObjectURL(url);
+/** Descarrega PDF de fatura Vendus (staff ou encarregado autorizado). */
+export async function downloadVendusDocumentPdf(input: {
+  documentId: string;
+  paymentId?: string;
+  filenameHint?: string;
+}): Promise<void> {
+  const res = await fetchVendusBillingFile({
+    action: "download_pdf",
+    document_id: input.documentId,
+    payment_id: input.paymentId,
+  });
+  if (!res.ok) throw new Error(res.message);
+  const filename = input.filenameHint?.trim() || res.filename;
+  triggerBrowserDownload(res.blob, filename.endsWith(".pdf") ? filename : `${filename}.pdf`);
 }
 
 export function downloadSaftXmlInBrowser(filename: string, xml: string): void {
   const blob = new Blob([xml], { type: "application/xml;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  triggerBrowserDownload(blob, filename);
+}
+
+/** @deprecated Use downloadVendusDocumentPdf */
+export async function downloadVendusDocumentPdfLegacy(documentId: string): Promise<void> {
+  await downloadVendusDocumentPdf({ documentId });
 }

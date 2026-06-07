@@ -66,4 +66,5 @@ export type VendusBillingAction =
   | "criar_ou_procurar_cliente"
   | "emitir_fatura_propinas"
   | "descarregar_saft"
+  | "download_saft"
   | "download_pdf";

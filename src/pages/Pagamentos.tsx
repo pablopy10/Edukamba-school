@@ -48,6 +48,7 @@ import {
   type EmitFiscalInvoicesResult,
 } from "@/lib/fiscal/invokeEmitFiscalInvoices";
 import { invokeEmitPaymentReceipt } from "@/lib/fiscal/invokeEmitPaymentReceipt";
+import { downloadVendusDocumentPdf } from "@/lib/vendus/invokeVendusBilling";
 import { sendNotificationWithPush } from "@/lib/notifications/sendNotificationWithPush";
 import { downloadFiscalInvoicePdfById } from "@/lib/fiscal/downloadFiscalInvoicePdf";
 import { invokeCancelFiscalInvoice } from "@/lib/fiscal/invokeCancelFiscalInvoice";
@@ -539,7 +540,12 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   const [invoiceByPaymentId, setInvoiceByPaymentId] = useState<
     Record<string, { invoiceId: string; documentNumber: string; invoiceStatus: "N" | "A" }>
   >({});
+  /** Fatura Vendus (FR) por id de pagamento — faturação externa. */
+  const [vendusByPaymentId, setVendusByPaymentId] = useState<
+    Record<string, { documentId: string; documentNumber: string }>
+  >({});
   const [downloadingInvoicePdfId, setDownloadingInvoicePdfId] = useState<string | null>(null);
+  const [downloadingVendusDocId, setDownloadingVendusDocId] = useState<string | null>(null);
   const [cancelInvoiceDialog, setCancelInvoiceDialog] = useState<{
     invoiceId: string;
     documentNumber: string;
@@ -1671,16 +1677,56 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
 
     async function loadInvoicesForPayments() {
       if (!schoolId) {
-        if (!cancelled) setInvoiceByPaymentId({});
+        if (!cancelled) {
+          setInvoiceByPaymentId({});
+          setVendusByPaymentId({});
+        }
         return;
       }
       const pidList = validatedPaymentIdsForInvoiceFetch;
       if (pidList.length === 0) {
-        if (!cancelled) setInvoiceByPaymentId({});
+        if (!cancelled) {
+          setInvoiceByPaymentId({});
+          setVendusByPaymentId({});
+        }
         return;
       }
 
-      const next: Record<string, { invoiceId: string; documentNumber: string }> = {};
+      if (usaFaturacaoExterna) {
+        const vendusNext: Record<string, { documentId: string; documentNumber: string }> = {};
+        for (const slice of chunkBySize(pidList, 200)) {
+          const { data, error } = await supabase
+            .from("payment_receipts")
+            .select("payment_id, vendus_document_id, vendus_document_number")
+            .eq("school_id", schoolId)
+            .in("payment_id", slice);
+          if (error) {
+            if (!cancelled)
+              toast({
+                title: "Erro ao carregar faturas Vendus",
+                description: error.message,
+                variant: "destructive",
+              });
+            return;
+          }
+          for (const row of data ?? []) {
+            const payId = row.payment_id as string | null;
+            const docId = String(row.vendus_document_id ?? "").trim();
+            if (!payId?.trim() || !docId) continue;
+            vendusNext[payId] = {
+              documentId: docId,
+              documentNumber: String(row.vendus_document_number ?? "").trim(),
+            };
+          }
+        }
+        if (!cancelled) {
+          setVendusByPaymentId(vendusNext);
+          setInvoiceByPaymentId({});
+        }
+        return;
+      }
+
+      const next: Record<string, { invoiceId: string; documentNumber: string; invoiceStatus: "N" | "A" }> = {};
       for (const slice of chunkBySize(pidList, 200)) {
         const { data, error } = await supabase
           .from("invoices")
@@ -1709,14 +1755,17 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         }
       }
 
-      if (!cancelled) setInvoiceByPaymentId(next);
+      if (!cancelled) {
+        setInvoiceByPaymentId(next);
+        setVendusByPaymentId({});
+      }
     }
 
     void loadInvoicesForPayments();
     return () => {
       cancelled = true;
     };
-  }, [schoolId, validatedPaymentIdsForInvoiceFetch]);
+  }, [schoolId, validatedPaymentIdsForInvoiceFetch, usaFaturacaoExterna]);
 
   const pendingValidations = useMemo(() => {
     return allFees
@@ -1746,6 +1795,20 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       }
       if (!rx.ok && rx.message) {
         toast({ title: "Erro no comprovativo", description: rx.message, variant: "destructive" });
+      }
+      if (created.length > 0 || (rx.results ?? []).some((r) => r.vendus_document_id?.trim())) {
+        setVendusByPaymentId((prev) => {
+          const next = { ...prev };
+          for (const r of rx.results ?? []) {
+            const docId = r.vendus_document_id?.trim();
+            if (!docId || !r.payment_id) continue;
+            next[r.payment_id] = {
+              documentId: docId,
+              documentNumber: r.vendus_document_number?.trim() ?? "",
+            };
+          }
+          return next;
+        });
       }
       return { ok: rx.ok, results: [], message: rx.message };
     }
@@ -3105,6 +3168,31 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     }
   };
 
+  const downloadVendusPdf = async (
+    vendus: { documentId: string; documentNumber: string },
+    paymentId: string,
+  ) => {
+    setDownloadingVendusDocId(vendus.documentId);
+    try {
+      await downloadVendusDocumentPdf({
+        documentId: vendus.documentId,
+        paymentId,
+        filenameHint: vendus.documentNumber || undefined,
+      });
+      toast({
+        title: "Fatura Vendus transferida",
+        description: vendus.documentNumber
+          ? `Documento ${vendus.documentNumber} descarregado.`
+          : "PDF da fatura Vendus descarregado.",
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: "Erro ao descarregar fatura Vendus", description: msg, variant: "destructive" });
+    } finally {
+      setDownloadingVendusDocId(null);
+    }
+  };
+
   const confirmCancelInvoice = async () => {
     if (!cancelInvoiceDialog) return;
     let reasonText: string;
@@ -3203,9 +3291,52 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     }
   };
 
-  /** Menu FT na lista quando a cobrança está paga, o pagamento validado e existir FT. */
+  /** Menu FT / FR Vendus na lista quando a cobrança está paga e o pagamento validado. */
   const invoiceActionsForValidatedPayment = (feeMarkedPaid: boolean, pay?: PaymentListRow) => {
     if (!feeMarkedPaid || !pay || pay.status !== "validado" || !pay.id?.trim()) return null;
+
+    if (usaFaturacaoExterna) {
+      const vendus = vendusByPaymentId[pay.id];
+      if (!vendus?.documentId) return null;
+      const busy = downloadingVendusDocId === vendus.documentId;
+      const menuTitle = vendus.documentNumber
+        ? `Fatura Vendus ${vendus.documentNumber}`
+        : "Fatura Vendus";
+
+      return (
+        <div className="flex flex-col items-center gap-0.5">
+          {vendus.documentNumber ? (
+            <Badge variant="outline" className="border-primary/40 text-primary text-[10px] px-1 py-0">
+              {vendus.documentNumber}
+            </Badge>
+          ) : null}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 shrink-0 text-primary"
+                disabled={busy}
+                title={menuTitle}
+              >
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem
+                className="gap-2"
+                onClick={() => void downloadVendusPdf(vendus, pay.id)}
+              >
+                <FileDown className="h-4 w-4" />
+                Descarregar fatura (PDF)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      );
+    }
+
     const inv = invoiceByPaymentId[pay.id];
     if (!inv?.invoiceId) return null;
     const busy = downloadingInvoicePdfId === inv.invoiceId;

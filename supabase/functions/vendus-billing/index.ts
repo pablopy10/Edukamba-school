@@ -2,7 +2,7 @@
  * Rotas API Vendus (proxy seguro com API Key da escola em background).
  *
  * Body JSON:
- * - action: "criar_ou_procurar_cliente" | "emitir_fatura_propinas" | "descarregar_saft" | "download_pdf"
+ * - action: "criar_ou_procurar_cliente" | "emitir_fatura_propinas" | "descarregar_saft" | "download_saft" | "download_pdf"
  * - ... parâmetros específicos por acção
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -14,8 +14,10 @@ import {
 } from "../_shared/vendusService.ts";
 import {
   authenticateStaffRequest,
+  authorizeVendusDocumentDownload,
   logVendusFailure,
   resolveSchoolVendusKey,
+  resolveVendusKeyForSchool,
   vendusCorsHeaders,
   vendusCorsJson,
 } from "../_shared/vendusAuth.ts";
@@ -36,6 +38,46 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     operation = String(body.action ?? "").trim();
     if (!operation) return vendusCorsJson({ error: "Campo 'action' é obrigatório." }, 400);
+
+    if (operation === "download_pdf") {
+      const documentId = String(body.document_id ?? "").trim();
+      const paymentId = body.payment_id != null ? String(body.payment_id) : undefined;
+      if (!documentId) return vendusCorsJson({ error: "document_id é obrigatório." }, 400);
+
+      const access = await authorizeVendusDocumentDownload(admin, auth.userId, documentId, paymentId);
+      if (!access.ok) return access.response;
+      schoolId = access.schoolId;
+
+      const keyCtx = await resolveVendusKeyForSchool(admin, access.schoolId);
+      if (!keyCtx.ok) return keyCtx.response;
+
+      const vendusDoc = new VendusService(keyCtx.vendusApiKey);
+      const pdfUrl = vendusDoc.getPdfUrl(documentId);
+      const pdfRes = await fetch(pdfUrl, {
+        headers: { Authorization: "Basic " + btoa(`${keyCtx.vendusApiKey}:`) },
+      });
+      if (!pdfRes.ok) {
+        const errText = await pdfRes.text().catch(() => "");
+        throw new VendusApiError(
+          `Falha ao obter PDF Vendus (${pdfRes.status}).`,
+          pdfRes.status,
+          errText.slice(0, 500),
+        );
+      }
+      const safeName = (access.documentNumber ?? `vendus-${documentId}`)
+        .replace(/[^\w\s./-]+/g, "")
+        .replace(/\s+/g, "_")
+        .trim() || `vendus-${documentId}`;
+      const pdfBytes = new Uint8Array(await pdfRes.arrayBuffer());
+      return new Response(pdfBytes, {
+        status: 200,
+        headers: {
+          ...vendusCorsHeaders,
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${safeName}.pdf"`,
+        },
+      });
+    }
 
     const schoolCtx = await resolveSchoolVendusKey(admin, auth.userId, body.school_id);
     if (!schoolCtx.ok) return schoolCtx.response;
@@ -99,31 +141,17 @@ Deno.serve(async (req) => {
         return vendusCorsJson({ ok: true, ...result });
       }
 
-      case "download_pdf": {
-        const documentId = String(body.document_id ?? "").trim();
-        if (!documentId) return vendusCorsJson({ error: "document_id é obrigatório." }, 400);
-
-        const pdfUrl = vendus.getPdfUrl(documentId);
-        const pdfRes = await fetch(pdfUrl, {
-          headers: {
-            Authorization: "Basic " + btoa(`${schoolCtx.vendusApiKey}:`),
-          },
-        });
-        if (!pdfRes.ok) {
-          const errText = await pdfRes.text().catch(() => "");
-          throw new VendusApiError(
-            `Falha ao obter PDF Vendus (${pdfRes.status}).`,
-            pdfRes.status,
-            errText.slice(0, 500),
-          );
-        }
-        const pdfBytes = new Uint8Array(await pdfRes.arrayBuffer());
-        return new Response(pdfBytes, {
+      case "download_saft": {
+        const mes = Number(body.mes ?? body.month);
+        const ano = Number(body.ano ?? body.year);
+        const result = await vendus.descarregarSaft(mes, ano);
+        const fn = `SAFT_Vendus_${ano}-${String(mes).padStart(2, "0")}.xml`;
+        return new Response(result.xml, {
           status: 200,
           headers: {
             ...vendusCorsHeaders,
-            "Content-Type": "application/pdf",
-            "Content-Disposition": `attachment; filename="vendus-${documentId}.pdf"`,
+            "Content-Type": "application/xml; charset=utf-8",
+            "Content-Disposition": `attachment; filename="${fn}"`,
           },
         });
       }
