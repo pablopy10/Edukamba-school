@@ -116,9 +116,32 @@ function extractVendusErrorMessage(payload: unknown, fallback: string): string {
   return fallback;
 }
 
+type VendusPaymentMethodRow = {
+  id?: string | number;
+  title?: string;
+  type?: string;
+  status?: string;
+};
+
+type VendusRegisterRow = {
+  id?: string | number;
+  status?: string;
+  isActive?: string;
+};
+
+function unwrapVendusList<T>(data: T[] | { data?: T[] } | null | undefined): T[] {
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === "object" && Array.isArray((data as { data?: T[] }).data)) {
+    return (data as { data: T[] }).data;
+  }
+  return [];
+}
+
 export class VendusService {
   private readonly client: AxiosInstance;
   private readonly baseUrl: string;
+  private paymentMethodsCache: VendusPaymentMethodRow[] | null = null;
+  private defaultRegisterIdCache: string | null = null;
 
   constructor(vendusApiKey: string, options?: { baseUrl?: string }) {
     const key = vendusApiKey?.trim();
@@ -140,6 +163,61 @@ export class VendusService {
 
   getPdfUrl(documentId: string | number): string {
     return `${this.baseUrl}/documents/${documentId}.pdf`;
+  }
+
+  /** Lista métodos de pagamento configurados na conta Vendus. */
+  async listPaymentMethods(): Promise<VendusPaymentMethodRow[]> {
+    if (this.paymentMethodsCache) return this.paymentMethodsCache;
+    const data = await this.request<VendusPaymentMethodRow[] | { data?: VendusPaymentMethodRow[] }>(
+      "GET",
+      "/documents/paymentmethods/",
+    );
+    this.paymentMethodsCache = unwrapVendusList(data);
+    return this.paymentMethodsCache;
+  }
+
+  /**
+   * Converte tipo oficial (NU, TB, CC…) para o ID numérico exigido em payments[].id.
+   * A API Vendus não aceita o código do tipo directamente.
+   */
+  async resolvePaymentMethodId(officialType: string): Promise<string> {
+    const type = officialType.trim().toUpperCase();
+    if (!type) throw new VendusApiError("Tipo de pagamento Vendus inválido.");
+
+    const methods = await this.listPaymentMethods();
+    const active = methods.filter((m) => String(m.status ?? "on").toLowerCase() !== "off");
+    const match =
+      active.find((m) => String(m.type ?? "").trim().toUpperCase() === type) ??
+      active.find((m) => String(m.type ?? "").trim().toUpperCase() === "NU") ??
+      active[0];
+
+    const id = match?.id != null ? String(match.id).trim() : "";
+    if (!id) {
+      throw new VendusApiError(
+        `Método de pagamento Vendus "${type}" não encontrado. Configure métodos em APPS > API no Vendus.`,
+      );
+    }
+    return id;
+  }
+
+  /** Primeira caixa/POS activa — necessária para emissão de FR/FT. */
+  async resolveDefaultRegisterId(): Promise<string | undefined> {
+    if (this.defaultRegisterIdCache) return this.defaultRegisterIdCache;
+
+    const data = await this.request<VendusRegisterRow[] | { data?: VendusRegisterRow[] }>(
+      "GET",
+      "/registers/",
+      undefined,
+      { isActive: "yes" },
+    );
+    const registers = unwrapVendusList(data);
+    const reg =
+      registers.find((r) => String(r.status ?? "").toLowerCase() !== "off") ??
+      registers[0];
+
+    const id = reg?.id != null ? String(reg.id).trim() : "";
+    if (id) this.defaultRegisterIdCache = id;
+    return id || undefined;
   }
 
   private async request<T>(
@@ -263,7 +341,11 @@ export class VendusService {
       return_qrcode: "1",
     };
 
-    if (dadosFatura.registerId != null) payload.register_id = dadosFatura.registerId;
+    const registerId = dadosFatura.registerId != null
+      ? String(dadosFatura.registerId).trim()
+      : await this.resolveDefaultRegisterId();
+    if (registerId) payload.register_id = registerId;
+
     if (dadosFatura.notas?.trim()) payload.notes = dadosFatura.notas.trim();
     if (dadosFatura.referenciaExterna?.trim()) {
       payload.external_reference = dadosFatura.referenciaExterna.trim();
@@ -275,13 +357,15 @@ export class VendusService {
       payload.discount_percentage = formatMoney(dadosFatura.descontoPercentagem);
     }
 
-    // FR/FT com pagamento imediato — incluir método de pagamento quando fornecido
+    // FR/FT com pagamento imediato — payments[].id é o ID Vendus, não o código NU/TB/CC
     if (dadosFatura.pagamentos?.length) {
-      payload.payments = dadosFatura.pagamentos.map((p) => ({
-        id: p.id,
-        amount: formatMoney(p.valor),
-        ...(p.dataVencimento ? { date_due: p.dataVencimento } : {}),
-      }));
+      payload.payments = await Promise.all(
+        dadosFatura.pagamentos.map(async (p) => ({
+          id: await this.resolvePaymentMethodId(p.id),
+          amount: formatMoney(p.valor),
+          ...(p.dataVencimento ? { date_due: p.dataVencimento } : {}),
+        })),
+      );
     }
 
     const doc = await this.request<{

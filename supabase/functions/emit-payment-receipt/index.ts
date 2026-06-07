@@ -43,7 +43,9 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const anonKey =
+      Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    if (!anonKey) return corsJson({ error: "Variáveis Supabase em falta" }, 500);
 
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -60,25 +62,6 @@ Deno.serve(async (req) => {
 
     for (const paymentId of paymentIds) {
       try {
-        const { data: existing } = await admin
-          .from("payment_receipts")
-          .select("id, receipt_number, vendus_document_id, vendus_document_number, vendus_pdf_url")
-          .eq("payment_id", paymentId)
-          .maybeSingle();
-        if (existing) {
-          results.push({
-            payment_id: paymentId,
-            status: "skipped",
-            receipt_id: existing.id,
-            receipt_number: existing.receipt_number,
-            vendus_document_id: existing.vendus_document_id ?? undefined,
-            vendus_document_number: existing.vendus_document_number ?? undefined,
-            vendus_pdf_url: existing.vendus_pdf_url ?? undefined,
-            detail: "Comprovativo já existe.",
-          });
-          continue;
-        }
-
         const { data: payment, error: payErr } = await admin
           .from("payments")
           .select(
@@ -88,6 +71,87 @@ Deno.serve(async (req) => {
           .single();
         if (payErr || !payment) {
           results.push({ payment_id: paymentId, status: "error", detail: payErr?.message ?? "Pagamento não encontrado." });
+          continue;
+        }
+
+        const { data: school } = await admin
+          .from("schools")
+          .select("webhook_billing_url, webhook_billing_secret, vendus_api_key, usa_faturacao_externa")
+          .eq("id", payment.school_id)
+          .single();
+
+        const vendusApiKey = school?.vendus_api_key?.trim() ?? "";
+
+        const { data: existing } = await admin
+          .from("payment_receipts")
+          .select("id, receipt_number, description, vendus_document_id, vendus_document_number, vendus_pdf_url")
+          .eq("payment_id", paymentId)
+          .maybeSingle();
+
+        if (existing) {
+          if (existing.vendus_document_id?.trim()) {
+            results.push({
+              payment_id: paymentId,
+              status: "skipped",
+              receipt_id: existing.id,
+              receipt_number: existing.receipt_number,
+              vendus_document_id: existing.vendus_document_id ?? undefined,
+              vendus_document_number: existing.vendus_document_number ?? undefined,
+              vendus_pdf_url: existing.vendus_pdf_url ?? undefined,
+              detail: "Comprovativo já existe.",
+            });
+            continue;
+          }
+
+          if (vendusApiKey) {
+            try {
+              const vendusResult = await emitVendusInvoiceForPayment(admin, vendusApiKey, payment);
+              const descBase = String(existing.description ?? "Pagamento").trim();
+              const descWithDoc = vendusResult.vendusDocumentNumber
+                ? `${descBase} · ${vendusResult.vendusDocumentNumber}`
+                : descBase;
+              await admin
+                .from("payment_receipts")
+                .update({
+                  description: descWithDoc,
+                  vendus_document_id: vendusResult.vendusDocumentId,
+                  vendus_document_number: vendusResult.vendusDocumentNumber,
+                  vendus_pdf_url: vendusResult.vendusPdfUrl,
+                })
+                .eq("id", existing.id);
+
+              results.push({
+                payment_id: paymentId,
+                status: "created",
+                receipt_id: existing.id,
+                receipt_number: existing.receipt_number,
+                vendus_document_id: vendusResult.vendusDocumentId,
+                vendus_document_number: vendusResult.vendusDocumentNumber,
+                vendus_pdf_url: vendusResult.vendusPdfUrl,
+                detail: "Fatura Vendus emitida (comprovativo já existia).",
+              });
+            } catch (vendusErr) {
+              const msg = vendusErr instanceof Error ? vendusErr.message : String(vendusErr);
+              await logVendusFailure(admin, {
+                schoolId: payment.school_id,
+                operation: "emit_payment_receipt_vendus_retry",
+                paymentId: payment.id,
+                errorMessage: msg,
+                httpStatus: vendusErr instanceof VendusApiError ? vendusErr.status ?? null : null,
+                responsePayload: vendusErr instanceof VendusApiError ? vendusErr.vendusPayload : undefined,
+              });
+              results.push({ payment_id: paymentId, status: "error", detail: `Vendus: ${msg}` });
+            }
+            continue;
+          }
+
+          results.push({
+            payment_id: paymentId,
+            status: "skipped",
+            receipt_id: existing.id,
+            receipt_number: existing.receipt_number,
+            detail: "Comprovativo já existe (Vendus não configurado).",
+          });
           continue;
         }
 
@@ -139,13 +203,6 @@ Deno.serve(async (req) => {
         if (payment.meal_fee_id) description = "Pagamento de refeições";
         if (payment.event_fee_id) description = "Pagamento de evento";
 
-        const { data: school } = await admin
-          .from("schools")
-          .select("webhook_billing_url, webhook_billing_secret, vendus_api_key, usa_faturacao_externa")
-          .eq("id", payment.school_id)
-          .single();
-
-        const vendusApiKey = school?.vendus_api_key?.trim() ?? "";
         let vendusMeta: {
           vendusDocumentId?: string;
           vendusDocumentNumber?: string;

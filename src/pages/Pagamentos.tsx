@@ -546,6 +546,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   >({});
   const [downloadingInvoicePdfId, setDownloadingInvoicePdfId] = useState<string | null>(null);
   const [downloadingVendusDocId, setDownloadingVendusDocId] = useState<string | null>(null);
+  const [emittingVendusPaymentId, setEmittingVendusPaymentId] = useState<string | null>(null);
   const [cancelInvoiceDialog, setCancelInvoiceDialog] = useState<{
     invoiceId: string;
     documentNumber: string;
@@ -1784,7 +1785,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     if (usaFaturacaoExterna) {
       const rx = await invokeEmitPaymentReceipt(ids);
       const created = rx.results?.filter((r) => r.status === "created") ?? [];
-      const withVendus = created.filter((r) => r.vendus_document_number?.trim());
+      const errored = rx.results?.filter((r) => r.status === "error") ?? [];
+      const withVendus = (rx.results ?? []).filter((r) => r.vendus_document_id?.trim());
       if (created.length > 0) {
         toast({
           title: created.length > 1 ? "Comprovativos gerados" : "Comprovativo gerado",
@@ -1793,10 +1795,16 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
             : `${created.length} comprovativo(s) criado(s). Sistema externo notificado.`,
         });
       }
-      if (!rx.ok && rx.message) {
+      if (errored.length > 0) {
+        toast({
+          title: "Erro ao emitir fatura Vendus",
+          description: errored.map((r) => r.detail ?? r.payment_id).filter(Boolean).join(" · "),
+          variant: "destructive",
+        });
+      } else if (!rx.ok && rx.message) {
         toast({ title: "Erro no comprovativo", description: rx.message, variant: "destructive" });
       }
-      if (created.length > 0 || (rx.results ?? []).some((r) => r.vendus_document_id?.trim())) {
+      if (withVendus.length > 0) {
         setVendusByPaymentId((prev) => {
           const next = { ...prev };
           for (const r of rx.results ?? []) {
@@ -3291,13 +3299,39 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     }
   };
 
+  const retryEmitVendusForPayment = async (paymentId: string) => {
+    if (!paymentId.trim()) return;
+    setEmittingVendusPaymentId(paymentId);
+    try {
+      await emitFtAfterValidation([paymentId]);
+    } finally {
+      setEmittingVendusPaymentId(null);
+    }
+  };
+
   /** Menu FT / FR Vendus na lista quando a cobrança está paga e o pagamento validado. */
   const invoiceActionsForValidatedPayment = (feeMarkedPaid: boolean, pay?: PaymentListRow) => {
     if (!feeMarkedPaid || !pay || pay.status !== "validado" || !pay.id?.trim()) return null;
 
     if (usaFaturacaoExterna) {
       const vendus = vendusByPaymentId[pay.id];
-      if (!vendus?.documentId) return null;
+      if (!vendus?.documentId) {
+        const busy = emittingVendusPaymentId === pay.id;
+        return (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs shrink-0"
+            disabled={busy}
+            title="Emitir fatura FR no Vendus"
+            onClick={() => void retryEmitVendusForPayment(pay.id)}
+          >
+            {busy ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <FileDown className="h-3 w-3 mr-1" />}
+            Vendus
+          </Button>
+        );
+      }
       const busy = downloadingVendusDocId === vendus.documentId;
       const menuTitle = vendus.documentNumber
         ? `Fatura Vendus ${vendus.documentNumber}`
