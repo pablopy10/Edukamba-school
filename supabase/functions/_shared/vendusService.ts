@@ -7,9 +7,8 @@
  */
 import axios, { AxiosError, type AxiosInstance } from "https://esm.sh/axios@1.7.9";
 
-/** URL oficial documentada; api.vendus.ao/v1 pode ser configurada via env. */
+/** URL oficial documentada (faturação + SAF-T /taxauthority/saft/). */
 const DEFAULT_VENDUS_BASE_URL = "https://www.vendus.co.ao/ws/v1.1";
-const DEFAULT_VENDUS_SAFT_EXPORT_URL = "https://api.vendus.ao/v1/exports/saft";
 
 export type VendusDocumentType = "FT" | "FR";
 
@@ -551,9 +550,47 @@ export class VendusService {
     }
   }
 
+  private async fetchSaftFromExportUrl(
+    exportUrl: string,
+    mes: number,
+    ano: number,
+  ): Promise<ResultadoSaftVendus | null> {
+    const base = exportUrl.replace(/\/+$/, "");
+    const params = new URLSearchParams({ year: String(ano), month: String(mes) });
+    const authHeader = "Basic " + btoa(`${this.apiKey}:`);
+
+    const exportRes = await fetch(`${base}?${params}`, {
+      method: "GET",
+      headers: {
+        Authorization: authHeader,
+        Accept: "application/xml, application/json, text/xml, */*",
+      },
+    });
+
+    if (!exportRes.ok) {
+      const detail = await exportRes.text().catch(() => "");
+      console.warn(`Vendus export SAF-T HTTP ${exportRes.status}: ${detail.slice(0, 300)}`);
+      return null;
+    }
+
+    const contentType = exportRes.headers.get("content-type") ?? "";
+    if (contentType.includes("xml")) {
+      const xml = (await exportRes.text()).trim();
+      if (xml) return { ano, mes, xml };
+    }
+
+    const payload = await exportRes.json().catch(() => null);
+    const rawXmlField =
+      payload && typeof payload === "object"
+        ? String((payload as { xml?: string }).xml ?? "").trim()
+        : "";
+    if (!rawXmlField) return null;
+    return { ano, mes, xml: this.decodeSaftXmlPayload(rawXmlField) };
+  }
+
   /**
-   * Exporta SAF-T via GET https://api.vendus.ao/v1/exports/saft?year=&month=
-   * Com fallback para /taxauthority/saft/ na API clássica.
+   * Exporta SAF-T via GET /taxauthority/saft/ (API documentada vendus.co.ao).
+   * URL alternativa só se VENDUS_SAFT_EXPORT_URL estiver definida explicitamente.
    */
   async descarregarSaft(mes: number, ano: number): Promise<ResultadoSaftVendus> {
     if (!Number.isInteger(ano) || ano < 2000 || ano > 2100) {
@@ -563,68 +600,32 @@ export class VendusService {
       throw new VendusApiError("Mês inválido para exportação SAF-T (1-12).");
     }
 
-    const exportUrl = (Deno.env.get("VENDUS_SAFT_EXPORT_URL")?.trim() || DEFAULT_VENDUS_SAFT_EXPORT_URL)
-      .replace(/\/+$/, "");
-    const params = new URLSearchParams({ year: String(ano), month: String(mes) });
-    const authHeader = "Basic " + btoa(`${this.apiKey}:`);
-
-    const exportRes = await fetch(`${exportUrl}?${params}`, {
-      method: "GET",
-      headers: {
-        Authorization: authHeader,
-        Accept: "application/xml, application/json, text/xml, */*",
-      },
-    });
-
-    if (exportRes.ok) {
-      const contentType = exportRes.headers.get("content-type") ?? "";
-      if (contentType.includes("xml")) {
-        const xml = (await exportRes.text()).trim();
-        if (xml) return { ano, mes, xml };
-      }
-
-      const payload = await exportRes.json().catch(() => null);
-      const rawXmlField =
-        payload && typeof payload === "object"
-          ? String((payload as { xml?: string }).xml ?? "").trim()
-          : "";
-      if (rawXmlField) {
+    try {
+      const data = await this.request<{ year?: number | string; month?: number | string; xml?: string }>(
+        "GET",
+        "/taxauthority/saft/",
+        undefined,
+        { year: ano, month: mes },
+      );
+      const rawXmlField = data?.xml;
+      if (rawXmlField?.trim()) {
         return { ano, mes, xml: this.decodeSaftXmlPayload(rawXmlField) };
       }
+    } catch (e) {
+      if (!(e instanceof VendusApiError) || (e.status !== 404 && e.status !== 400)) {
+        throw e;
+      }
     }
 
-    const exportDetail = await exportRes.text().catch(() => "");
-    if (exportRes.status !== 404) {
-      console.warn(
-        `Vendus exports/saft HTTP ${exportRes.status}; fallback taxauthority/saft. Detalhe: ${exportDetail.slice(0, 300)}`,
-      );
+    const customExportUrl = Deno.env.get("VENDUS_SAFT_EXPORT_URL")?.trim();
+    if (customExportUrl) {
+      const fromExport = await this.fetchSaftFromExportUrl(customExportUrl, mes, ano);
+      if (fromExport) return fromExport;
     }
 
-    const data = await this.request<{ year?: number | string; month?: number | string; xml?: string }>(
-      "GET",
-      "/taxauthority/saft/",
-      undefined,
-      { year: ano, month: mes },
+    throw new VendusApiError(
+      "Vendus não devolveu conteúdo SAF-T para o período indicado.",
+      404,
     );
-
-    const rawXmlField = data?.xml;
-    if (!rawXmlField?.trim()) {
-      throw new VendusApiError(
-        exportRes.ok
-          ? "Vendus não devolveu conteúdo SAF-T para o período indicado."
-          : extractVendusErrorMessage(
-              exportDetail,
-              `Vendus SAF-T indisponível (HTTP ${exportRes.status}).`,
-            ),
-        exportRes.ok ? 404 : exportRes.status,
-        exportRes.ok ? data : exportDetail,
-      );
-    }
-
-    return {
-      ano,
-      mes,
-      xml: this.decodeSaftXmlPayload(rawXmlField),
-    };
   }
 }

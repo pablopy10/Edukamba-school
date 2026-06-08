@@ -1,3 +1,11 @@
+/** Evita substituir o nome do fornecedor dentro de URLs (ex.: api.vendus.ao). */
+function maskVendorBrand(text: string): string {
+  return text.replace(/\bVendus\b/gi, (match, offset, full) => {
+    if (offset > 0 && full[offset - 1] === ".") return match;
+    return "faturação externa";
+  });
+}
+
 /** Remove referências ao fornecedor interno de faturação externa nas mensagens visíveis ao utilizador. */
 export function externalBillingUserMessage(raw: string): string {
   const trimmed = raw.trim();
@@ -11,13 +19,12 @@ export function externalBillingUserMessage(raw: string): string {
     return "Não existe caixa do tipo API activa. No Vendus: Configuração > Definições > Lojas e Caixas — crie uma caixa com tipo «API (Integração Programática)».";
   }
   if (/Não existe caixa do tipo API/i.test(trimmed)) {
-    return trimmed.replace(/\bVendus\b/gi, "faturação externa");
+    return maskVendorBrand(trimmed);
   }
 
-  return trimmed
+  return maskVendorBrand(trimmed
     .replace(/^Vendus:\s*/gi, "")
-    .replace(/\bVendus\b/gi, "faturação externa")
     .replace(/\bvendus_api_key\b/gi, "integração fiscal")
-    .replace(/\{"code":"[^"]+","message":"([^"]+)"\}/g, "$1")
+    .replace(/\{"code":"[^"]+","message":"([^"]+)"\}/g, "$1"))
     .trim();
 }
