@@ -48,7 +48,7 @@
   "program_active": "Active plan",
   "enrollment_dialog_edit": "Edit enrolment",
   "enrollment_dialog_new": "New enrolment",
-  "enrollment_dialog_desc": "Active enrolment on the selected plan; charges are generated automatically.",
+  "enrollment_dialog_desc": "Links the student to a meal plan. Charges are created in billing rules.",
   "enrollment_student": "Student",
   "select_placeholder": "Select…",
   "enrollment_plan": "Plan",

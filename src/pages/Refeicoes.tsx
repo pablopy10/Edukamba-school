@@ -28,7 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Utensils, Plus, Pencil, Trash2, Users, Wallet, FileSignature } from "lucide-react";
+import { Utensils, Plus, Pencil, Trash2, Users, FileSignature } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { NativeMobileFabPortal } from "@/components/dashboard/NativeMobileFabPortal";
@@ -96,9 +96,6 @@ const Refeicoes = () => {
   const [enrollForm, setEnrollForm] = useState({
     student_id: "",
     meal_program_id: "",
-    start_date: new Date().toISOString().slice(0, 10),
-    end_date: "",
-    monthly_fee_override: "",
     notes: "",
     status: "ACTIVE",
   });
@@ -241,9 +238,6 @@ const Refeicoes = () => {
     setEnrollForm({
       student_id: "",
       meal_program_id: programs[0]?.id ?? "",
-      start_date: new Date().toISOString().slice(0, 10),
-      end_date: "",
-      monthly_fee_override: "",
       notes: "",
       status: "ACTIVE",
     });
@@ -255,9 +249,6 @@ const Refeicoes = () => {
     setEnrollForm({
       student_id: e.student_id,
       meal_program_id: e.meal_program_id,
-      start_date: (e.start_date ?? "").slice(0, 10),
-      end_date: e.end_date ? e.end_date.slice(0, 10) : "",
-      monthly_fee_override: e.monthly_fee_override != null ? String(e.monthly_fee_override) : "",
       notes: e.notes ?? "",
       status: e.status || "ACTIVE",
     });
@@ -273,9 +264,9 @@ const Refeicoes = () => {
       school_id: schoolId,
       student_id: enrollForm.student_id,
       meal_program_id: enrollForm.meal_program_id,
-      start_date: enrollForm.start_date,
-      end_date: enrollForm.end_date.trim() ? enrollForm.end_date : null,
-      monthly_fee_override: enrollForm.monthly_fee_override.trim() ? Number(enrollForm.monthly_fee_override) : null,
+      start_date: editEnroll?.start_date ?? new Date().toISOString().slice(0, 10),
+      end_date: null,
+      monthly_fee_override: null,
       notes: enrollForm.notes.trim() || null,
       status: enrollForm.status,
     };
@@ -298,13 +289,6 @@ const Refeicoes = () => {
     if (error) toast.error(error.message);
     else toast.success(t("toast_enrollment_removed"));
     setDeleteEnrollId(null);
-    loadAll();
-  };
-
-  const handleRegenerateFees = async (enrollmentId: string) => {
-    const { error, data } = await supabase.rpc("generate_meal_fees", { _enrollment_id: enrollmentId });
-    if (error) toast.error(error.message);
-    else toast.success(t("toast_fees_generated", { data }));
     loadAll();
   };
 
@@ -411,13 +395,8 @@ const Refeicoes = () => {
                 {t("teacher_homeroom_hint")}
               </p>
             )}
-            <div className="mb-4 flex items-center justify-between gap-2">
+            <div className="mb-4">
               <h2 className="text-lg font-semibold">{t("enrollments_title")}</h2>
-              {canEnroll && !native && (isParent ? programs.length > 0 : true) && (
-                <Button onClick={openNewEnroll} disabled={programs.length === 0}>
-                  <Plus className="mr-2 h-4 w-4" /> {t("new_enrollment")}
-                </Button>
-              )}
             </div>
             {loading ? (
               <p className="text-muted-foreground">{t("loading")}</p>
@@ -453,10 +432,7 @@ const Refeicoes = () => {
                           </TableCell>
                           {(canManageMealFinance || role === "TEACHER") && (
                             <TableCell className="text-right">
-                              <Button size="sm" variant="outline" title={t("regenerate_fees_title")} onClick={() => void handleRegenerateFees(e.id)}>
-                                <Wallet className="h-4 w-4" />
-                              </Button>
-                              <Button size="sm" variant="outline" className="ml-1" onClick={() => openEditEnroll(e)}>
+                              <Button size="sm" variant="outline" onClick={() => openEditEnroll(e)}>
                                 <Pencil className="h-4 w-4" />
                               </Button>
                               {canDeleteEnrollment && (
@@ -585,26 +561,6 @@ const Refeicoes = () => {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="grid gap-2">
-                <Label>{t("enrollment_start")}</Label>
-                <Input type="date" value={enrollForm.start_date} onChange={(e) => setEnrollForm({ ...enrollForm, start_date: e.target.value })} />
-              </div>
-              <div className="grid gap-2">
-                <Label>{t("enrollment_end_optional")}</Label>
-                <Input type="date" value={enrollForm.end_date} onChange={(e) => setEnrollForm({ ...enrollForm, end_date: e.target.value })} />
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label>{t("enrollment_fee_override")}</Label>
-              <Input
-                type="number"
-                min={0}
-                placeholder={t("enrollment_fee_placeholder")}
-                value={enrollForm.monthly_fee_override}
-                onChange={(e) => setEnrollForm({ ...enrollForm, monthly_fee_override: e.target.value })}
-              />
             </div>
             <div className="grid gap-2">
               <Label>{t("enrollment_notes")}</Label>

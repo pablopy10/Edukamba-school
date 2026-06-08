@@ -48,7 +48,7 @@
   "program_active": "Plano activo",
   "enrollment_dialog_edit": "Editar inscrição",
   "enrollment_dialog_new": "Nova inscrição",
-  "enrollment_dialog_desc": "Inscrição activa no plano seleccionado; as cobranças são geradas automaticamente.",
+  "enrollment_dialog_desc": "Associa o aluno ao plano de refeição. As cobranças são geradas nas regras de cobrança.",
   "enrollment_student": "Aluno",
   "select_placeholder": "Seleccionar",
   "enrollment_plan": "Plano",

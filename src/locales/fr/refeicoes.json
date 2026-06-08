@@ -48,7 +48,7 @@
   "program_active": "Formule active",
   "enrollment_dialog_edit": "Modifier l'inscription",
   "enrollment_dialog_new": "Nouvelle inscription",
-  "enrollment_dialog_desc": "Inscription active sur la formule sélectionnée ; les facturations sont générées automatiquement.",
+  "enrollment_dialog_desc": "Associe l'élève à la formule repas. Les facturations sont créées dans les règles de facturation.",
   "enrollment_student": "Élève",
   "select_placeholder": "Sélectionner…",
   "enrollment_plan": "Formule",
