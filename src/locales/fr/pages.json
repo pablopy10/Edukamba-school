@@ -1040,7 +1040,9 @@
     "empty_lessons": "Pas encore de résumés pour les classes sélectionnées.",
     "empty_materials": "Pas encore de matériel défini pour les classes sélectionnées.",
     "lessons_hint": "Seul l'enseignant qui dispense cette matière dans la classe peut enregistrer les résumés de cours.",
+    "lessons_hint_family": "Résumés de cours de cette matière dans la ou les classes de l'élève.",
     "materials_hint": "Liste du matériel que les élèves doivent avoir pendant l'année scolaire, par classe. Seul l'enseignant assigné peut gérer.",
+    "materials_hint_family": "Matériel scolaire de cette matière dans la ou les classes de l'élève.",
     "filter_classroom": "Filtrer la classe",
     "all_classrooms": "Toutes les classes",
     "add_lesson": "Nouveau résumé",
@@ -1405,7 +1407,8 @@
       "teste": "Contrôle",
       "exame": "Examen",
       "trabalho": "Travail de groupe",
-      "oral": "Oral"
+      "oral": "Oral",
+      "continua": "Évaluation continue"
     },
     "form": {
       "title_edit": "Modifier l’évaluation",

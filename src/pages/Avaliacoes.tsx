@@ -12,6 +12,7 @@ import {
   GraduationCap,
   Users,
   PencilLine,
+  ClipboardList,
   Clock,
   MapPin,
   Pencil,
@@ -59,7 +60,7 @@ import { showPageKpiCards, isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
 
-type EvalType = "teste" | "exame" | "trabalho" | "oral";
+type EvalType = "teste" | "exame" | "trabalho" | "oral" | "continua";
 
 type Assessment = TeacherAssessmentRow;
 
@@ -82,6 +83,7 @@ const TYPE_VISUAL: Record<
   exame: { color: "bg-pastel-pink text-pastel-pink-foreground", icon: GraduationCap },
   trabalho: { color: "bg-pastel-green text-pastel-green-foreground", icon: Users },
   oral: { color: "bg-pastel-yellow text-pastel-yellow-foreground", icon: FileText },
+  continua: { color: "bg-pastel-lilac text-pastel-lilac-foreground", icon: ClipboardList },
 };
 
 /** Monday → Sunday weekday headers matching calendar grid. */

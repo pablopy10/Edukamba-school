@@ -31,7 +31,7 @@ export type AssessmentRecord = {
 type Option = { id: string; name: string };
 type TeacherOption = { id: string; name: string; subject_id?: string | null };
 
-const TYPE_VALUES = ["teste", "exame", "trabalho", "oral"] as const;
+const TYPE_VALUES = ["teste", "exame", "trabalho", "oral", "continua"] as const;
 
 const trimTime = (t: string) => (t ? t.slice(0, 5) : "");
 

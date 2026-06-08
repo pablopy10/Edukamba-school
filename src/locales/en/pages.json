@@ -1040,7 +1040,9 @@
     "empty_lessons": "No lesson summaries yet for the selected classes.",
     "empty_materials": "No materials defined yet for the selected classes.",
     "lessons_hint": "Only the teacher who teaches this subject in the class can record lesson summaries.",
+    "lessons_hint_family": "Lesson summaries for this subject in your child's class(es).",
     "materials_hint": "List of materials students should have during the school year, per class. Only the assigned teacher can manage.",
+    "materials_hint_family": "School materials for this subject in your child's class(es).",
     "filter_classroom": "Filter class",
     "all_classrooms": "All classes",
     "add_lesson": "New summary",
@@ -1405,7 +1407,8 @@
       "teste": "Test",
       "exame": "Exam",
       "trabalho": "Group work",
-      "oral": "Oral"
+      "oral": "Oral",
+      "continua": "Continuous assessment"
     },
     "form": {
       "title_edit": "Edit assessment",

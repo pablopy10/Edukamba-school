@@ -16,6 +16,8 @@ import { isNativeMobileApp, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME } from "@/lib/nat
 import { Button } from "@/components/ui/button";
 import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 import { useTranslation } from "react-i18next";
+import { useUserRole } from "@/hooks/useUserRole";
+import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
 
 const colorPalette = ["lilac", "blue", "yellow", "green", "pink"] as const;
 const colorStyles: Record<typeof colorPalette[number], string> = {
@@ -30,6 +32,8 @@ const Disciplinas = () => {
   const native = isNativeMobileApp();
   const { t } = useTranslation("pages", { keyPrefix: "disciplinas" });
   const { t: navT } = useTranslation("common", { keyPrefix: "nav" });
+  const { role } = useUserRole();
+  const canManageSubjects = isSchoolManagementRole(role);
   const [subjects, setSubjects] = useState<SubjectRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string[]>([]);
@@ -232,7 +236,7 @@ const Disciplinas = () => {
                 ))}
               </SelectContent>
             </Select>
-            {!native && (
+            {!native && canManageSubjects && (
             <>
             <button
               onClick={handleNew}
@@ -375,7 +379,7 @@ const Disciplinas = () => {
         </div>
       </div>
 
-      {native && (
+      {native && canManageSubjects && (
         <NativeMobileFabPortal>
           <Button
             type="button"
@@ -396,7 +400,7 @@ const Disciplinas = () => {
         onSaved={fetchSubjects}
       />
 
-      {!native && (
+      {!native && canManageSubjects && (
       <ExcelImportDialog
         open={importOpen}
         onOpenChange={setImportOpen}

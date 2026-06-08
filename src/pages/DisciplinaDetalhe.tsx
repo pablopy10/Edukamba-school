@@ -121,6 +121,14 @@ const DisciplinaDetalhe = () => {
   const parentIdsKey = useMemo(() => [...parentClassroomIds].sort().join(","), [parentClassroomIds]);
   const studentSubjectIdsKey = useMemo(() => [...studentSubjectIds].sort().join(","), [studentSubjectIds]);
 
+  const isFamilyViewer = isParent || isStudent;
+
+  const familyClassroomIds = useMemo(() => {
+    if (isStudent && studentClassroomId) return [studentClassroomId];
+    if (isParent) return parentClassroomIds;
+    return [];
+  }, [isParent, isStudent, studentClassroomId, parentClassroomIds]);
+
   const exitRoute = useMemo(() => {
     if (isParent || isStudent) return "/dashboard";
     return "/disciplinas";
@@ -152,13 +160,16 @@ const DisciplinaDetalhe = () => {
       .order("lesson_date", { ascending: false })
       .limit(80);
     if (selectedYearId) q = q.eq("academic_year_id", selectedYearId);
+    if (isFamilyViewer && familyClassroomIds.length > 0) {
+      q = q.in("classroom_id", familyClassroomIds);
+    }
     const { data, error } = await q;
     if (error) {
       toast({ title: t("toast_logs_error"), description: error.message, variant: "destructive" });
       return;
     }
     setLessonLogs((data ?? []) as LessonLogRow[]);
-  }, [id, selectedYearId, t]);
+  }, [id, selectedYearId, t, isFamilyViewer, familyClassroomIds]);
 
   const loadClassroomMaterials = useCallback(async () => {
     if (!id) return;
@@ -169,13 +180,16 @@ const DisciplinaDetalhe = () => {
       .order("sort_order")
       .order("title");
     if (selectedYearId) q = q.eq("academic_year_id", selectedYearId);
+    if (isFamilyViewer && familyClassroomIds.length > 0) {
+      q = q.in("classroom_id", familyClassroomIds);
+    }
     const { data, error } = await q;
     if (error) {
       setClassroomMaterials([]);
       return;
     }
     setClassroomMaterials((data ?? []) as SubjectClassroomMaterialRow[]);
-  }, [id, selectedYearId]);
+  }, [id, selectedYearId, isFamilyViewer, familyClassroomIds]);
 
   useEffect(() => {
     if (!hooksReady || !id) return;
@@ -217,6 +231,11 @@ const DisciplinaDetalhe = () => {
 
         const rows = (schedRows ?? []) as Array<ScheduleRow & { classrooms: ClassroomBrief | null; profiles: TeacherBrief | null }>;
 
+        const scopedRows =
+          isFamilyViewer && familyClassroomIds.length > 0
+            ? rows.filter((r) => familyClassroomIds.includes(r.classroom_id))
+            : rows;
+
         const teacherMap = new Map<string, TeacherBrief>();
         const classroomMap = new Map<string, ClassroomBrief>();
         const myTeacherClassrooms = new Set<string>();
@@ -225,7 +244,7 @@ const DisciplinaDetalhe = () => {
         const uid = auth.user?.id;
         if (!cancelled) setCurrentUserId(uid ?? null);
 
-        rows.forEach((r) => {
+        scopedRows.forEach((r) => {
           if (r.teacher_id && r.profiles?.full_name) {
             teacherMap.set(r.teacher_id, { id: r.teacher_id, full_name: r.profiles.full_name });
           }
@@ -262,7 +281,7 @@ const DisciplinaDetalhe = () => {
         setClassrooms(classroomList);
         setTeacherSubjectClassroomIds([...myTeacherClassrooms]);
         setSchedules(
-          rows.map((r) => ({
+          scopedRows.map((r) => ({
             ...r,
             start_time: trim5(String(r.start_time ?? "")),
             end_time: trim5(String(r.end_time ?? "")),
@@ -294,6 +313,7 @@ const DisciplinaDetalhe = () => {
     isStudent,
     parentIdsKey,
     studentSubjectIdsKey,
+    studentClassroomId,
     selectedYearId,
   ]);
 
@@ -402,15 +422,19 @@ const DisciplinaDetalhe = () => {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-border bg-card p-4 shadow-soft">
-          <p className="text-xs text-muted-foreground">{t("stat_teachers")}</p>
-          <p className="mt-1 text-2xl font-bold">{teachers.length}</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4 shadow-soft">
-          <p className="text-xs text-muted-foreground">{t("stat_classrooms")}</p>
-          <p className="mt-1 text-2xl font-bold">{classrooms.length}</p>
-        </div>
+      <div className={cn("grid gap-3", isFamilyViewer ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-4")}>
+        {!isFamilyViewer ? (
+          <>
+            <div className="rounded-xl border border-border bg-card p-4 shadow-soft">
+              <p className="text-xs text-muted-foreground">{t("stat_teachers")}</p>
+              <p className="mt-1 text-2xl font-bold">{teachers.length}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-4 shadow-soft">
+              <p className="text-xs text-muted-foreground">{t("stat_classrooms")}</p>
+              <p className="mt-1 text-2xl font-bold">{classrooms.length}</p>
+            </div>
+          </>
+        ) : null}
         <div className="rounded-xl border border-border bg-card p-4 shadow-soft">
           <p className="text-xs text-muted-foreground">{t("stat_lessons")}</p>
           <p className="mt-1 text-2xl font-bold">{filteredLogs.length}</p>
@@ -423,13 +447,19 @@ const DisciplinaDetalhe = () => {
 
       <Tabs defaultValue="sumarios" className="w-full">
         <TabsList className="flex h-auto w-full flex-wrap gap-1">
-          <TabsTrigger value="professores">{t("tab_teachers")}</TabsTrigger>
-          <TabsTrigger value="turmas">{t("tab_classrooms")}</TabsTrigger>
-          <TabsTrigger value="horario">{t("tab_schedule")}</TabsTrigger>
+          {!isFamilyViewer ? (
+            <>
+              <TabsTrigger value="professores">{t("tab_teachers")}</TabsTrigger>
+              <TabsTrigger value="turmas">{t("tab_classrooms")}</TabsTrigger>
+              <TabsTrigger value="horario">{t("tab_schedule")}</TabsTrigger>
+            </>
+          ) : null}
           <TabsTrigger value="sumarios">{t("tab_lessons")}</TabsTrigger>
           <TabsTrigger value="materiais">{t("tab_materials")}</TabsTrigger>
         </TabsList>
 
+        {!isFamilyViewer ? (
+          <>
         <TabsContent value="professores" className="mt-4">
           {teachers.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("empty_teachers")}</p>
@@ -510,12 +540,16 @@ const DisciplinaDetalhe = () => {
             </div>
           )}
         </TabsContent>
+          </>
+        ) : null}
 
         <TabsContent value="sumarios" className="mt-4 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">{t("lessons_hint")}</p>
+            <p className="text-sm text-muted-foreground">
+              {isFamilyViewer ? t("lessons_hint_family") : t("lessons_hint")}
+            </p>
             <div className="flex flex-wrap items-center gap-2">
-              {visibleClassroomsForLogs.length > 1 && (
+              {visibleClassroomsForLogs.length > 1 && !isFamilyViewer && (
                 <Select value={logsClassroomFilter} onValueChange={setLogsClassroomFilter}>
                   <SelectTrigger className="w-[200px] bg-card">
                     <SelectValue placeholder={t("filter_classroom")} />
@@ -598,9 +632,11 @@ const DisciplinaDetalhe = () => {
 
         <TabsContent value="materiais" className="mt-4 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">{t("materials_hint")}</p>
+            <p className="text-sm text-muted-foreground">
+              {isFamilyViewer ? t("materials_hint_family") : t("materials_hint")}
+            </p>
             <div className="flex flex-wrap items-center gap-2">
-              {visibleClassroomsForLogs.length > 1 && (
+              {visibleClassroomsForLogs.length > 1 && !isFamilyViewer && (
                 <Select value={materialsClassroomFilter} onValueChange={setMaterialsClassroomFilter}>
                   <SelectTrigger className="w-[200px] bg-card">
                     <SelectValue placeholder={t("filter_classroom")} />

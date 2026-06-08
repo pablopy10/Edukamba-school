@@ -1068,7 +1068,9 @@
     "empty_lessons": "Ainda não há sumários registados para as turmas seleccionadas.",
     "empty_materials": "Ainda não há materiais definidos para as turmas seleccionadas.",
     "lessons_hint": "Apenas o professor que lecciona a disciplina na turma pode registar o sumário de cada data de aula.",
+    "lessons_hint_family": "Sumários da disciplina nas turmas do educando.",
     "materials_hint": "Lista de materiais que os alunos devem ter durante o ano letivo, por turma. Apenas o professor que lecciona pode gerir.",
+    "materials_hint_family": "Materiais escolares da disciplina nas turmas do educando.",
     "filter_classroom": "Filtrar turma",
     "all_classrooms": "Todas as turmas",
     "add_lesson": "Novo sumário",
@@ -1433,7 +1435,8 @@
       "teste": "Teste",
       "exame": "Exame",
       "trabalho": "Trabalho",
-      "oral": "Oral"
+      "oral": "Oral",
+      "continua": "Avaliação contínua"
     },
     "form": {
       "title_edit": "Editar avaliação",
