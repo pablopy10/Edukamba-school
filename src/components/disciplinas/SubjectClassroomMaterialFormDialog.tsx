@@ -22,15 +22,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export type LessonLogRow = {
+export type SubjectClassroomMaterialRow = {
   id: string;
   subject_id: string;
   classroom_id: string;
-  lesson_date: string;
-  summary: string;
-  teacher_id: string;
   academic_year_id: string | null;
-  homework?: string | null;
+  title: string;
+  notes: string | null;
+  link_url: string | null;
+  sort_order: number;
+  created_by: string | null;
 };
 
 type ClassroomOption = { id: string; name: string };
@@ -42,12 +43,12 @@ type Props = {
   schoolId: string;
   academicYearId: string | null;
   classrooms: ClassroomOption[];
-  editing: LessonLogRow | null;
+  editing: SubjectClassroomMaterialRow | null;
   defaultClassroomId?: string;
   onSaved: () => void;
 };
 
-export function LessonLogFormDialog({
+export function SubjectClassroomMaterialFormDialog({
   open,
   onOpenChange,
   subjectId,
@@ -60,32 +61,35 @@ export function LessonLogFormDialog({
 }: Props) {
   const { t } = useTranslation("pages", { keyPrefix: "disciplina_detalhe" });
   const [classroomId, setClassroomId] = useState("");
-  const [lessonDate, setLessonDate] = useState(new Date().toISOString().slice(0, 10));
-  const [summary, setSummary] = useState("");
+  const [title, setTitle] = useState("");
+  const [notes, setNotes] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     if (editing) {
       setClassroomId(editing.classroom_id);
-      setLessonDate(editing.lesson_date.slice(0, 10));
-      setSummary(editing.summary);
+      setTitle(editing.title);
+      setNotes(editing.notes ?? "");
+      setLinkUrl(editing.link_url ?? "");
     } else {
       setClassroomId(defaultClassroomId ?? classrooms[0]?.id ?? "");
-      setLessonDate(new Date().toISOString().slice(0, 10));
-      setSummary("");
+      setTitle("");
+      setNotes("");
+      setLinkUrl("");
     }
   }, [open, editing, classrooms, defaultClassroomId]);
 
   const save = async () => {
-    if (!classroomId || !summary.trim()) {
-      toast({ title: t("toast_required"), variant: "destructive" });
+    if (!classroomId || !title.trim()) {
+      toast({ title: t("material_toast_required"), variant: "destructive" });
       return;
     }
     setSaving(true);
     const { data: userData } = await supabase.auth.getUser();
-    const teacherId = userData.user?.id;
-    if (!teacherId) {
+    const userId = userData.user?.id;
+    if (!userId) {
       toast({ title: t("toast_session"), variant: "destructive" });
       setSaving(false);
       return;
@@ -96,29 +100,36 @@ export function LessonLogFormDialog({
       subject_id: subjectId,
       classroom_id: classroomId,
       academic_year_id: academicYearId,
-      lesson_date: lessonDate,
-      summary: summary.trim(),
-      homework: null,
-      teacher_id: teacherId,
+      title: title.trim(),
+      notes: notes.trim() || null,
+      link_url: linkUrl.trim() || null,
+      created_by: userId,
     };
 
     if (editing) {
-      const { error } = await supabase.from("subject_lesson_logs").update(payload).eq("id", editing.id);
+      const { error } = await supabase
+        .from("subject_classroom_materials")
+        .update({
+          title: payload.title,
+          notes: payload.notes,
+          link_url: payload.link_url,
+        })
+        .eq("id", editing.id);
       if (error) {
-        toast({ title: t("toast_save_error"), description: error.message, variant: "destructive" });
+        toast({ title: t("material_toast_save_error"), description: error.message, variant: "destructive" });
         setSaving(false);
         return;
       }
     } else {
-      const { error } = await supabase.from("subject_lesson_logs").insert(payload);
+      const { error } = await supabase.from("subject_classroom_materials").insert(payload);
       if (error) {
-        toast({ title: t("toast_save_error"), description: error.message, variant: "destructive" });
+        toast({ title: t("material_toast_save_error"), description: error.message, variant: "destructive" });
         setSaving(false);
         return;
       }
     }
 
-    toast({ title: editing ? t("toast_updated") : t("toast_created") });
+    toast({ title: editing ? t("material_toast_updated") : t("material_toast_created") });
     setSaving(false);
     onOpenChange(false);
     onSaved();
@@ -128,8 +139,8 @@ export function LessonLogFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{editing ? t("form_edit_title") : t("form_new_title")}</DialogTitle>
-          <DialogDescription>{t("form_desc")}</DialogDescription>
+          <DialogTitle>{editing ? t("material_form_edit_title") : t("material_form_new_title")}</DialogTitle>
+          <DialogDescription>{t("material_form_desc")}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
           <div className="grid gap-2">
@@ -148,16 +159,28 @@ export function LessonLogFormDialog({
             </Select>
           </div>
           <div className="grid gap-2">
-            <Label>{t("form_date")}</Label>
-            <Input type="date" value={lessonDate} onChange={(e) => setLessonDate(e.target.value)} />
+            <Label>{t("material_form_title")}</Label>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={t("material_form_title_placeholder")}
+            />
           </div>
           <div className="grid gap-2">
-            <Label>{t("form_summary")}</Label>
+            <Label>{t("material_form_notes")}</Label>
             <Textarea
-              value={summary}
-              onChange={(e) => setSummary(e.target.value)}
-              placeholder={t("form_summary_placeholder")}
-              rows={5}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder={t("material_form_notes_placeholder")}
+              rows={3}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label>{t("material_form_link")}</Label>
+            <Input
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              placeholder={t("material_form_link_placeholder")}
             />
           </div>
         </div>

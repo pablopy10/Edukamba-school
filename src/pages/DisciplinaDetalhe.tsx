@@ -7,8 +7,8 @@ import {
   Calendar,
   Clock,
   Contact,
-  FileText,
   MapPin,
+  Package,
   Pencil,
   Plus,
   Presentation,
@@ -40,6 +40,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { LessonLogFormDialog, type LessonLogRow } from "@/components/disciplinas/LessonLogFormDialog";
+import {
+  SubjectClassroomMaterialFormDialog,
+  type SubjectClassroomMaterialRow,
+} from "@/components/disciplinas/SubjectClassroomMaterialFormDialog";
 
 type SubjectRow = { id: string; name: string; code: string | null; school_id: string };
 
@@ -95,13 +99,18 @@ const DisciplinaDetalhe = () => {
   const [classrooms, setClassrooms] = useState<ClassroomBrief[]>([]);
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
   const [lessonLogs, setLessonLogs] = useState<LessonLogRow[]>([]);
+  const [classroomMaterials, setClassroomMaterials] = useState<SubjectClassroomMaterialRow[]>([]);
   const [teacherSubjectClassroomIds, setTeacherSubjectClassroomIds] = useState<string[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const [logsClassroomFilter, setLogsClassroomFilter] = useState<string>("all");
+  const [materialsClassroomFilter, setMaterialsClassroomFilter] = useState<string>("all");
   const [logDialogOpen, setLogDialogOpen] = useState(false);
+  const [materialDialogOpen, setMaterialDialogOpen] = useState(false);
   const [editingLog, setEditingLog] = useState<LessonLogRow | null>(null);
+  const [editingMaterial, setEditingMaterial] = useState<SubjectClassroomMaterialRow | null>(null);
   const [deleteLogId, setDeleteLogId] = useState<string | null>(null);
+  const [deleteMaterialId, setDeleteMaterialId] = useState<string | null>(null);
 
   const hooksReady =
     !roleLoading &&
@@ -138,10 +147,7 @@ const DisciplinaDetalhe = () => {
     if (!id) return;
     let q = supabase
       .from("subject_lesson_logs")
-      .select(
-        `*, subject_lesson_materials(id, title, link_url, content_text, sort_order),
-         classrooms(name)`,
-      )
+      .select("*")
       .eq("subject_id", id)
       .order("lesson_date", { ascending: false })
       .limit(80);
@@ -152,6 +158,23 @@ const DisciplinaDetalhe = () => {
       return;
     }
     setLessonLogs((data ?? []) as LessonLogRow[]);
+  }, [id, selectedYearId, t]);
+
+  const loadClassroomMaterials = useCallback(async () => {
+    if (!id) return;
+    let q = supabase
+      .from("subject_classroom_materials")
+      .select("*")
+      .eq("subject_id", id)
+      .order("sort_order")
+      .order("title");
+    if (selectedYearId) q = q.eq("academic_year_id", selectedYearId);
+    const { data, error } = await q;
+    if (error) {
+      toast({ title: t("toast_materials_load_error"), description: error.message, variant: "destructive" });
+      return;
+    }
+    setClassroomMaterials((data ?? []) as SubjectClassroomMaterialRow[]);
   }, [id, selectedYearId, t]);
 
   useEffect(() => {
@@ -277,11 +300,13 @@ const DisciplinaDetalhe = () => {
   useEffect(() => {
     if (!subject?.id) return;
     void loadLessonLogs();
-  }, [subject?.id, selectedYearId, loadLessonLogs]);
+    void loadClassroomMaterials();
+  }, [subject?.id, selectedYearId, loadLessonLogs, loadClassroomMaterials]);
 
   useEffect(() => {
     if (visibleClassroomsForLogs.length === 1) {
       setLogsClassroomFilter(visibleClassroomsForLogs[0].id);
+      setMaterialsClassroomFilter(visibleClassroomsForLogs[0].id);
     }
   }, [visibleClassroomsForLogs]);
 
@@ -292,6 +317,14 @@ const DisciplinaDetalhe = () => {
     if (logsClassroomFilter !== "all") list = list.filter((l) => l.classroom_id === logsClassroomFilter);
     return list;
   }, [lessonLogs, logsClassroomFilter, isParent, isStudent, parentClassroomIds, studentClassroomId]);
+
+  const filteredMaterials = useMemo(() => {
+    let list = classroomMaterials;
+    if (isParent) list = list.filter((m) => parentClassroomIds.includes(m.classroom_id));
+    if (isStudent && studentClassroomId) list = list.filter((m) => m.classroom_id === studentClassroomId);
+    if (materialsClassroomFilter !== "all") list = list.filter((m) => m.classroom_id === materialsClassroomFilter);
+    return list;
+  }, [classroomMaterials, materialsClassroomFilter, isParent, isStudent, parentClassroomIds, studentClassroomId]);
 
   const schedulesByDay = useMemo(() => {
     const m = new Map<number, ScheduleRow[]>();
@@ -314,6 +347,17 @@ const DisciplinaDetalhe = () => {
       await loadLessonLogs();
     }
     setDeleteLogId(null);
+  };
+
+  const handleDeleteMaterial = async () => {
+    if (!deleteMaterialId) return;
+    const { error } = await supabase.from("subject_classroom_materials").delete().eq("id", deleteMaterialId);
+    if (error) toast({ title: t("material_toast_delete_error"), description: error.message, variant: "destructive" });
+    else {
+      toast({ title: t("material_toast_deleted") });
+      await loadClassroomMaterials();
+    }
+    setDeleteMaterialId(null);
   };
 
   if (!hooksReady || loading) return <PageLoadingSkeleton />;
@@ -358,7 +402,7 @@ const DisciplinaDetalhe = () => {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-border bg-card p-4 shadow-soft">
           <p className="text-xs text-muted-foreground">{t("stat_teachers")}</p>
           <p className="mt-1 text-2xl font-bold">{teachers.length}</p>
@@ -371,6 +415,10 @@ const DisciplinaDetalhe = () => {
           <p className="text-xs text-muted-foreground">{t("stat_lessons")}</p>
           <p className="mt-1 text-2xl font-bold">{filteredLogs.length}</p>
         </div>
+        <div className="rounded-xl border border-border bg-card p-4 shadow-soft">
+          <p className="text-xs text-muted-foreground">{t("stat_materials")}</p>
+          <p className="mt-1 text-2xl font-bold">{filteredMaterials.length}</p>
+        </div>
       </div>
 
       <Tabs defaultValue="sumarios" className="w-full">
@@ -379,6 +427,7 @@ const DisciplinaDetalhe = () => {
           <TabsTrigger value="turmas">{t("tab_classrooms")}</TabsTrigger>
           <TabsTrigger value="horario">{t("tab_schedule")}</TabsTrigger>
           <TabsTrigger value="sumarios">{t("tab_lessons")}</TabsTrigger>
+          <TabsTrigger value="materiais">{t("tab_materials")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="professores" className="mt-4">
@@ -520,12 +569,6 @@ const DisciplinaDetalhe = () => {
                         </Badge>
                       </div>
                       <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed">{log.summary}</p>
-                      {log.homework ? (
-                        <p className="mt-2 text-sm text-muted-foreground">
-                          <span className="font-medium text-foreground">{t("homework_label")}: </span>
-                          {log.homework}
-                        </p>
-                      ) : null}
                     </div>
                     {canManageLogs &&
                       manageableClassrooms.some((c) => c.id === log.classroom_id) &&
@@ -547,35 +590,110 @@ const DisciplinaDetalhe = () => {
                       </div>
                     )}
                   </div>
-                  {(log.subject_lesson_materials ?? []).length > 0 && (
-                    <ul className="mt-4 space-y-2 border-t border-border pt-3">
-                      {(log.subject_lesson_materials ?? [])
-                        .sort((a, b) => a.sort_order - b.sort_order)
-                        .map((m) => (
-                          <li key={m.id} className="text-sm">
-                            <div className="flex items-start gap-2">
-                              <FileText className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                              <div>
-                                <p className="font-medium">{m.title}</p>
-                                {m.link_url ? (
-                                  <a
-                                    href={m.link_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-primary underline-offset-2 hover:underline"
-                                  >
-                                    {m.link_url}
-                                  </a>
-                                ) : null}
-                                {m.content_text ? (
-                                  <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">{m.content_text}</p>
-                                ) : null}
-                              </div>
-                            </div>
-                          </li>
-                        ))}
-                    </ul>
-                  )}
+                </article>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="materiais" className="mt-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">{t("materials_hint")}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              {visibleClassroomsForLogs.length > 1 && (
+                <Select value={materialsClassroomFilter} onValueChange={setMaterialsClassroomFilter}>
+                  <SelectTrigger className="w-[200px] bg-card">
+                    <SelectValue placeholder={t("filter_classroom")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(isSchoolManagementRole(role) || isTeacher) && (
+                      <SelectItem value="all">{t("all_classrooms")}</SelectItem>
+                    )}
+                    {visibleClassroomsForLogs.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {canManageLogs && (
+                <Button
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => {
+                    setEditingMaterial(null);
+                    setMaterialDialogOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                  {t("add_material")}
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {filteredMaterials.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+              {t("empty_materials")}
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {filteredMaterials.map((material) => (
+                <article key={material.id} className="rounded-xl border border-border bg-card p-4 shadow-soft">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary" className="gap-1">
+                          <Users className="h-3 w-3" />
+                          {classroomName(material.classroom_id)}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 flex items-start gap-2">
+                        <Package className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                        <div className="min-w-0">
+                          <p className="font-medium">{material.title}</p>
+                          {material.notes ? (
+                            <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{material.notes}</p>
+                          ) : null}
+                          {material.link_url ? (
+                            <a
+                              href={material.link_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-1 inline-block text-sm text-primary underline-offset-2 hover:underline"
+                            >
+                              {material.link_url}
+                            </a>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                    {canManageLogs &&
+                      manageableClassrooms.some((c) => c.id === material.classroom_id) &&
+                      material.created_by === currentUserId && (
+                      <div className="flex gap-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => {
+                            setEditingMaterial(material);
+                            setMaterialDialogOpen(true);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="text-destructive"
+                          onClick={() => setDeleteMaterialId(material.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </article>
               ))}
             </div>
@@ -584,17 +702,30 @@ const DisciplinaDetalhe = () => {
       </Tabs>
 
       {canManageLogs && subject && (
-        <LessonLogFormDialog
-          open={logDialogOpen}
-          onOpenChange={setLogDialogOpen}
-          subjectId={subject.id}
-          schoolId={subject.school_id}
-          academicYearId={selectedYearId}
-          classrooms={manageableClassrooms}
-          editing={editingLog}
-          defaultClassroomId={logsClassroomFilter !== "all" ? logsClassroomFilter : undefined}
-          onSaved={() => void loadLessonLogs()}
-        />
+        <>
+          <LessonLogFormDialog
+            open={logDialogOpen}
+            onOpenChange={setLogDialogOpen}
+            subjectId={subject.id}
+            schoolId={subject.school_id}
+            academicYearId={selectedYearId}
+            classrooms={manageableClassrooms}
+            editing={editingLog}
+            defaultClassroomId={logsClassroomFilter !== "all" ? logsClassroomFilter : undefined}
+            onSaved={() => void loadLessonLogs()}
+          />
+          <SubjectClassroomMaterialFormDialog
+            open={materialDialogOpen}
+            onOpenChange={setMaterialDialogOpen}
+            subjectId={subject.id}
+            schoolId={subject.school_id}
+            academicYearId={selectedYearId}
+            classrooms={manageableClassrooms}
+            editing={editingMaterial}
+            defaultClassroomId={materialsClassroomFilter !== "all" ? materialsClassroomFilter : undefined}
+            onSaved={() => void loadClassroomMaterials()}
+          />
+        </>
       )}
 
       <AlertDialog open={!!deleteLogId} onOpenChange={(o) => !o && setDeleteLogId(null)}>
@@ -605,6 +736,18 @@ const DisciplinaDetalhe = () => {
           <AlertDialogFooter>
             <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={() => void handleDeleteLog()}>{t("delete")}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!deleteMaterialId} onOpenChange={(o) => !o && setDeleteMaterialId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("material_delete_title")}</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleDeleteMaterial()}>{t("delete")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
