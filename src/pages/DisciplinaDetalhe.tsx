@@ -171,11 +171,11 @@ const DisciplinaDetalhe = () => {
     if (selectedYearId) q = q.eq("academic_year_id", selectedYearId);
     const { data, error } = await q;
     if (error) {
-      toast({ title: t("toast_materials_load_error"), description: error.message, variant: "destructive" });
+      setClassroomMaterials([]);
       return;
     }
     setClassroomMaterials((data ?? []) as SubjectClassroomMaterialRow[]);
-  }, [id, selectedYearId, t]);
+  }, [id, selectedYearId]);
 
   useEffect(() => {
     if (!hooksReady || !id) return;
