@@ -222,7 +222,7 @@ const DisciplinaDetalhe = () => {
 
         const canAccess = (() => {
           if (isSchoolManagementRole(role)) return true;
-          if (isTeacher && myTeacherClassrooms.size > 0) return true;
+          if (isTeacher) return true;
           if (isParent && classroomList.some((c) => parentClassroomIds.includes(c.id))) return true;
           if (isStudent && studentSubjectIds.includes(id)) return true;
           return false;
