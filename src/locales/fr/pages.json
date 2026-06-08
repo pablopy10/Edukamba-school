@@ -1036,7 +1036,7 @@
     "empty_classrooms": "Aucune classe programmée pour cette matière.",
     "empty_schedule": "Aucun emploi du temps défini pour cette matière.",
     "empty_lessons": "Pas encore de résumés pour les classes sélectionnées.",
-    "lessons_hint": "Les enseignants peuvent enregistrer le contenu de chaque cours pour consultation par les parents.",
+    "lessons_hint": "Seul l'enseignant qui dispense cette matière dans la classe peut enregistrer les résumés de cours pour les parents.",
     "filter_classroom": "Filtrer la classe",
     "all_classrooms": "Toutes les classes",
     "add_lesson": "Nouveau résumé",

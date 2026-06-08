@@ -96,30 +96,36 @@ const DisciplinaDetalhe = () => {
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
   const [lessonLogs, setLessonLogs] = useState<LessonLogRow[]>([]);
   const [teacherSubjectClassroomIds, setTeacherSubjectClassroomIds] = useState<string[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const [logsClassroomFilter, setLogsClassroomFilter] = useState<string>("all");
   const [logDialogOpen, setLogDialogOpen] = useState(false);
   const [editingLog, setEditingLog] = useState<LessonLogRow | null>(null);
   const [deleteLogId, setDeleteLogId] = useState<string | null>(null);
 
-  const hooksReady = !roleLoading && !teacherLoading && !parentLoading && !studentLoading;
+  const hooksReady =
+    !roleLoading &&
+    !teacherLoading &&
+    (!isParent || !parentLoading) &&
+    (!isStudent || !studentLoading);
+
+  const parentIdsKey = useMemo(() => [...parentClassroomIds].sort().join(","), [parentClassroomIds]);
+  const studentSubjectIdsKey = useMemo(() => [...studentSubjectIds].sort().join(","), [studentSubjectIds]);
 
   const exitRoute = useMemo(() => {
     if (isParent || isStudent) return "/dashboard";
     return "/disciplinas";
   }, [isParent, isStudent]);
 
-  const canManageLogs = useMemo(() => {
-    if (isSchoolManagementRole(role)) return true;
-    if (isTeacher && teacherSubjectClassroomIds.length > 0) return true;
-    return false;
-  }, [role, isTeacher, teacherSubjectClassroomIds]);
+  const canManageLogs = useMemo(
+    () => isTeacher && teacherSubjectClassroomIds.length > 0,
+    [isTeacher, teacherSubjectClassroomIds],
+  );
 
   const manageableClassrooms = useMemo(() => {
-    if (isSchoolManagementRole(role)) return classrooms;
-    if (isTeacher) return classrooms.filter((c) => teacherSubjectClassroomIds.includes(c.id));
-    return [];
-  }, [role, isTeacher, classrooms, teacherSubjectClassroomIds]);
+    if (!isTeacher) return [];
+    return classrooms.filter((c) => teacherSubjectClassroomIds.includes(c.id));
+  }, [isTeacher, classrooms, teacherSubjectClassroomIds]);
 
   const visibleClassroomsForLogs = useMemo(() => {
     if (isSchoolManagementRole(role) || isTeacher) return classrooms;
@@ -194,6 +200,7 @@ const DisciplinaDetalhe = () => {
 
         const { data: auth } = await supabase.auth.getUser();
         const uid = auth.user?.id;
+        if (!cancelled) setCurrentUserId(uid ?? null);
 
         rows.forEach((r) => {
           if (r.teacher_id && r.profiles?.full_name) {
@@ -239,7 +246,6 @@ const DisciplinaDetalhe = () => {
           })),
         );
 
-        await loadLessonLogs();
       } catch (e: unknown) {
         if (cancelled) return;
         const msg = e instanceof Error ? e.message : t("load_error");
@@ -263,12 +269,15 @@ const DisciplinaDetalhe = () => {
     isTeacher,
     isParent,
     isStudent,
-    parentClassroomIds,
-    studentSubjectIds,
+    parentIdsKey,
+    studentSubjectIdsKey,
     selectedYearId,
-    loadLessonLogs,
-    t,
   ]);
+
+  useEffect(() => {
+    if (!subject?.id) return;
+    void loadLessonLogs();
+  }, [subject?.id, selectedYearId, loadLessonLogs]);
 
   useEffect(() => {
     if (visibleClassroomsForLogs.length === 1) {
@@ -309,7 +318,16 @@ const DisciplinaDetalhe = () => {
 
   if (!hooksReady || loading) return <PageLoadingSkeleton />;
 
-  if (!subject) return null;
+  if (!subject) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center shadow-soft">
+        <p className="text-sm text-muted-foreground">{t("not_found")}</p>
+        <Button variant="outline" size="sm" className="mt-4" asChild>
+          <Link to={exitRoute}>{t("back")}</Link>
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className={cn("flex flex-col gap-6", native && "pb-4")}>
@@ -509,7 +527,9 @@ const DisciplinaDetalhe = () => {
                         </p>
                       ) : null}
                     </div>
-                    {canManageLogs && manageableClassrooms.some((c) => c.id === log.classroom_id) && (
+                    {canManageLogs &&
+                      manageableClassrooms.some((c) => c.id === log.classroom_id) &&
+                      log.teacher_id === currentUserId && (
                       <div className="flex gap-1">
                         <Button
                           size="icon"

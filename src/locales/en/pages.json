@@ -1036,7 +1036,7 @@
     "empty_classrooms": "No classes scheduled for this subject.",
     "empty_schedule": "No timetable defined for this subject.",
     "empty_lessons": "No lesson summaries yet for the selected classes.",
-    "lessons_hint": "Teachers can record what was taught on each lesson date for parents to review.",
+    "lessons_hint": "Only the teacher who teaches this subject in the class can record lesson summaries for parents to review.",
     "filter_classroom": "Filter class",
     "all_classrooms": "All classes",
     "add_lesson": "New summary",

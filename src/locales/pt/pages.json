@@ -1064,7 +1064,7 @@
     "empty_classrooms": "Nenhuma turma com horário nesta disciplina.",
     "empty_schedule": "Sem horário definido para esta disciplina.",
     "empty_lessons": "Ainda não há sumários registados para as turmas seleccionadas.",
-    "lessons_hint": "Os professores podem registar a matéria leccionada em cada data de aula para os encarregados consultarem.",
+    "lessons_hint": "Apenas o professor que lecciona a disciplina na turma pode registar a matéria de cada data de aula para os encarregados consultarem.",
     "filter_classroom": "Filtrar turma",
     "all_classrooms": "Todas as turmas",
     "add_lesson": "Novo sumário",
