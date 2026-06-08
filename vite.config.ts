@@ -9,6 +9,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const hasSentryUpload = Boolean(env.SENTRY_AUTH_TOKEN && env.SENTRY_ORG && env.SENTRY_PROJECT);
 
+  const supabaseUrl = env.VITE_SUPABASE_URL?.replace(/\/+$/, "");
+
   return {
   server: {
     host: "::",
@@ -16,6 +18,15 @@ export default defineConfig(({ mode }) => {
     hmr: {
       overlay: false,
     },
+    proxy: supabaseUrl
+      ? {
+          "/api/financeiro/saft": {
+            target: supabaseUrl,
+            changeOrigin: true,
+            rewrite: () => "/functions/v1/api-financeiro-saft",
+          },
+        }
+      : undefined,
   },
   plugins: [
     react(),

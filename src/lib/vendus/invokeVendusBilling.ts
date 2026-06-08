@@ -140,15 +140,38 @@ export async function invokeVendusDescarregarSaft(
   };
 }
 
+function financeiroSaftUrl(mes: number, ano: number): string {
+  const qs = new URLSearchParams({ mes: String(mes), ano: String(ano) });
+  return `/api/financeiro/saft?${qs}`;
+}
+
+/** Descarrega SAF-T do Vendus via GET /api/financeiro/saft?mes=&ano= */
+export async function downloadFinanceiroSaftFile(mes: number, ano: number): Promise<void> {
+  const token = await getAccessToken();
+  const res = await fetch(financeiroSaftUrl(mes, ano), {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "",
+      Accept: "application/xml",
+    },
+  });
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error((errBody as { error?: string }).error ?? `Erro HTTP ${res.status}`);
+  }
+
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const match = /filename="?([^";\n]+)"?/i.exec(disposition);
+  const filename = match?.[1]?.trim() || `SAFT_Vendus_${ano}-${String(mes).padStart(2, "0")}.xml`;
+  const blob = await res.blob();
+  triggerBrowserDownload(blob, filename);
+}
+
 /** Descarrega ficheiro SAF-T do Vendus conforme mês/ano seleccionados. */
 export async function downloadVendusSaftFile(mes: number, ano: number): Promise<void> {
-  const res = await fetchVendusBillingFile({
-    action: "download_saft",
-    mes,
-    ano,
-  });
-  if (!res.ok) throw new Error(res.message);
-  triggerBrowserDownload(res.blob, res.filename);
+  await downloadFinanceiroSaftFile(mes, ano);
 }
 
 /** Descarrega PDF de fatura Vendus (staff ou encarregado autorizado). */

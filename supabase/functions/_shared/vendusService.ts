@@ -9,6 +9,7 @@ import axios, { AxiosError, type AxiosInstance } from "https://esm.sh/axios@1.7.
 
 /** URL oficial documentada; api.vendus.ao/v1 pode ser configurada via env. */
 const DEFAULT_VENDUS_BASE_URL = "https://www.vendus.co.ao/ws/v1.1";
+const DEFAULT_VENDUS_SAFT_EXPORT_URL = "https://api.vendus.ao/v1/exports/saft";
 
 export type VendusDocumentType = "FT" | "FR";
 
@@ -537,9 +538,22 @@ export class VendusService {
     };
   }
 
+  private decodeSaftXmlPayload(raw: string): string {
+    const trimmed = raw.trim();
+    if (!trimmed) return "";
+    if (trimmed.startsWith("<?xml") || trimmed.startsWith("<")) return trimmed;
+    try {
+      return new TextDecoder().decode(
+        Uint8Array.from(atob(trimmed.replace(/\s/g, "")), (c) => c.charCodeAt(0)),
+      );
+    } catch {
+      throw new VendusApiError("Não foi possível decodificar o XML SAF-T devolvido pelo Vendus.", 500, trimmed);
+    }
+  }
+
   /**
-   * Exporta SAF-T via GET /taxauthority/saft/?year=&month=
-   * Devolve XML bruto (decodifica base64 se necessário).
+   * Exporta SAF-T via GET https://api.vendus.ao/v1/exports/saft?year=&month=
+   * Com fallback para /taxauthority/saft/ na API clássica.
    */
   async descarregarSaft(mes: number, ano: number): Promise<ResultadoSaftVendus> {
     if (!Number.isInteger(ano) || ano < 2000 || ano > 2100) {
@@ -547,6 +561,43 @@ export class VendusService {
     }
     if (!Number.isInteger(mes) || mes < 1 || mes > 12) {
       throw new VendusApiError("Mês inválido para exportação SAF-T (1-12).");
+    }
+
+    const exportUrl = (Deno.env.get("VENDUS_SAFT_EXPORT_URL")?.trim() || DEFAULT_VENDUS_SAFT_EXPORT_URL)
+      .replace(/\/+$/, "");
+    const params = new URLSearchParams({ year: String(ano), month: String(mes) });
+    const authHeader = "Basic " + btoa(`${this.apiKey}:`);
+
+    const exportRes = await fetch(`${exportUrl}?${params}`, {
+      method: "GET",
+      headers: {
+        Authorization: authHeader,
+        Accept: "application/xml, application/json, text/xml, */*",
+      },
+    });
+
+    if (exportRes.ok) {
+      const contentType = exportRes.headers.get("content-type") ?? "";
+      if (contentType.includes("xml")) {
+        const xml = (await exportRes.text()).trim();
+        if (xml) return { ano, mes, xml };
+      }
+
+      const payload = await exportRes.json().catch(() => null);
+      const rawXmlField =
+        payload && typeof payload === "object"
+          ? String((payload as { xml?: string }).xml ?? "").trim()
+          : "";
+      if (rawXmlField) {
+        return { ano, mes, xml: this.decodeSaftXmlPayload(rawXmlField) };
+      }
+    }
+
+    const exportDetail = await exportRes.text().catch(() => "");
+    if (exportRes.status !== 404) {
+      console.warn(
+        `Vendus exports/saft HTTP ${exportRes.status}; fallback taxauthority/saft. Detalhe: ${exportDetail.slice(0, 300)}`,
+      );
     }
 
     const data = await this.request<{ year?: number | string; month?: number | string; xml?: string }>(
@@ -558,24 +609,22 @@ export class VendusService {
 
     const rawXmlField = data?.xml;
     if (!rawXmlField?.trim()) {
-      throw new VendusApiError("Vendus não devolveu conteúdo SAF-T para o período indicado.", 404, data);
-    }
-
-    let xml = rawXmlField.trim();
-    if (!xml.startsWith("<?xml") && !xml.startsWith("<")) {
-      try {
-        xml = new TextDecoder().decode(
-          Uint8Array.from(atob(xml.replace(/\s/g, "")), (c) => c.charCodeAt(0)),
-        );
-      } catch {
-        throw new VendusApiError("Não foi possível decodificar o XML SAF-T devolvido pelo Vendus.", 500, data);
-      }
+      throw new VendusApiError(
+        exportRes.ok
+          ? "Vendus não devolveu conteúdo SAF-T para o período indicado."
+          : extractVendusErrorMessage(
+              exportDetail,
+              `Vendus SAF-T indisponível (HTTP ${exportRes.status}).`,
+            ),
+        exportRes.ok ? 404 : exportRes.status,
+        exportRes.ok ? data : exportDetail,
+      );
     }
 
     return {
       ano,
       mes,
-      xml,
+      xml: this.decodeSaftXmlPayload(rawXmlField),
     };
   }
 }

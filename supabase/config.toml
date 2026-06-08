@@ -31,3 +31,7 @@ verify_jwt = false
 # Envia PDF de proposta comercial pelo Brevo. Valida SUPER_ADMIN dentro do handler (OPTIONS sem JWT ok).
 [functions.send-sales-proposal-email]
 verify_jwt = false
+
+# GET com JWT no Authorization; validação de perfil/escola no handler.
+[functions.api-financeiro-saft]
+verify_jwt = true
