@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Search, Filter, Plus, Pencil, Trash2, Contact, Loader2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -165,7 +166,9 @@ const Disciplinas = () => {
             <Contact className="h-5 w-5" strokeWidth={1.75} />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-foreground">{s.name}</p>
+            <Link to={`/disciplinas/${s.id}`} className="font-semibold text-foreground hover:text-primary hover:underline">
+              {s.name}
+            </Link>
             <div className="mt-3 flex flex-wrap gap-2">
               <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-xs font-medium text-foreground">
                 {t("code_badge", { code: codeLbl })}
@@ -332,7 +335,9 @@ const Disciplinas = () => {
                             <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", colorStyles[color])}>
                               <Contact className="h-5 w-5" strokeWidth={1.75} />
                             </div>
-                            <p className="font-semibold text-foreground">{s.name}</p>
+                            <Link to={`/disciplinas/${s.id}`} className="font-semibold text-foreground hover:text-primary hover:underline">
+              {s.name}
+            </Link>
                           </div>
                         </td>
                         <td className="py-4 pr-4 text-foreground">{s.code ?? "—"}</td>

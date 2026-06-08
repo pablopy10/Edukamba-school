@@ -84,7 +84,7 @@ interface ScheduleRow {
   start_time: string;
   end_time: string;
   room: string | null;
-  subjects: { name: string } | null;
+  subjects: { id: string; name: string } | null;
   profiles: { full_name: string } | null;
 }
 
@@ -227,7 +227,7 @@ const AlunoPerfil = () => {
         const [schRes, assRes, teaRes] = await Promise.all([
           supabase
             .from("schedules")
-            .select("day_of_week, start_time, end_time, room, subjects(name), profiles!schedules_teacher_id_fkey(full_name)")
+            .select("day_of_week, start_time, end_time, room, subjects(id, name), profiles!schedules_teacher_id_fkey(full_name)")
             .eq("classroom_id", studentRow.classroom_id)
             .order("day_of_week")
             .order("start_time"),
@@ -604,6 +604,14 @@ const AlunoPerfil = () => {
       if (s.day_of_week >= 1 && s.day_of_week <= 5) days[s.day_of_week].push(s);
     });
     return days;
+  }, [schedule]);
+
+  const subjectIdByName = useMemo(() => {
+    const map = new Map<string, string>();
+    schedule.forEach((s) => {
+      if (s.subjects?.id && s.subjects?.name) map.set(s.subjects.name, s.subjects.id);
+    });
+    return map;
   }, [schedule]);
 
   const statusIcon = (status: string) => {
@@ -1149,9 +1157,19 @@ const AlunoPerfil = () => {
                       {scheduleByDay[d].length === 0 && <p className="text-xs italic text-muted-foreground">—</p>}
                       {scheduleByDay[d].map((s, i) => {
                         const subj = s.subjects?.name ?? "—";
+                        const subjectId = s.subjects?.id;
                         return (
                           <div key={i} className={cn("rounded-lg p-2.5 text-xs", avatarStyles[colorFor(subj)])}>
-                            <p className="font-semibold">{subj}</p>
+                            {subjectId ? (
+                              <Link
+                                to={`/disciplinas/${subjectId}`}
+                                className="block font-semibold underline-offset-2 hover:underline"
+                              >
+                                {subj}
+                              </Link>
+                            ) : (
+                              <p className="font-semibold">{subj}</p>
+                            )}
                             <p className="opacity-80">{s.start_time?.slice(0, 5)} — {s.end_time?.slice(0, 5)}</p>
                             {s.room && <p className="opacity-70">{s.room}</p>}
                           </div>
@@ -1209,12 +1227,20 @@ const AlunoPerfil = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {subjectsAvg.map((g) => (
+                  {subjectsAvg.map((g) => {
+                    const subjectId = subjectIdByName.get(g.name);
+                    return (
                     <tr key={g.name} className="border-b border-border last:border-0 hover:bg-muted/40">
                       <td className="py-3.5 pl-5 pr-4">
                         <div className="flex items-center gap-3">
                           <div className={cn("h-8 w-8 rounded-lg", avatarStyles[g.color])} />
-                          <span className="font-medium text-foreground">{g.name}</span>
+                          {subjectId ? (
+                            <Link to={`/disciplinas/${subjectId}`} className="font-medium text-foreground hover:text-primary hover:underline">
+                              {g.name}
+                            </Link>
+                          ) : (
+                            <span className="font-medium text-foreground">{g.name}</span>
+                          )}
                         </div>
                       </td>
                       <td className="py-3.5 pr-4 text-center text-muted-foreground">{g.n}</td>
@@ -1228,7 +1254,8 @@ const AlunoPerfil = () => {
                         )}>{g.avg.toFixed(1)}</span>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

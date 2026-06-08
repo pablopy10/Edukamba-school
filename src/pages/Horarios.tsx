@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { Plus, Settings2, User, MapPin, Pencil, Trash2, Sun, Sunset, Moon, Loader2, AlertCircle, ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -681,7 +682,16 @@ const Horarios = () => {
                           )}
                         >
                           <div className="mb-2 flex items-start justify-between gap-2">
-                            <h3 className="text-base font-semibold leading-tight text-inherit">{subjectName}</h3>
+                            {nativeReadOnly && s.subject_id ? (
+                              <Link
+                                to={`/disciplinas/${s.subject_id}`}
+                                className="text-base font-semibold leading-tight text-inherit underline-offset-2 hover:underline"
+                              >
+                                {subjectName}
+                              </Link>
+                            ) : (
+                              <h3 className="text-base font-semibold leading-tight text-inherit">{subjectName}</h3>
+                            )}
                             {!nativeReadOnly && (
                               <div className="flex shrink-0 gap-1">
                                 <button
@@ -1037,6 +1047,7 @@ const SlotRow = ({
               <ScheduleCell
                 key={s.id}
                 schedule={s}
+                subjectId={s.subject_id}
                 subjectName={s.subject_id ? subjectMap.get(s.subject_id) ?? "—" : "—"}
                 teacherName={s.teacher_id ? teacherMap.get(s.teacher_id) ?? "—" : "—"}
                 classroomName={classroomMap.get(s.classroom_id) ?? "—"}
@@ -1056,6 +1067,7 @@ const SlotRow = ({
 
 const ScheduleCell = ({
   schedule,
+  subjectId,
   subjectName,
   teacherName,
   classroomName,
@@ -1066,6 +1078,7 @@ const ScheduleCell = ({
   readOnly,
 }: {
   schedule: ScheduleRow;
+  subjectId: string | null;
   subjectName: string;
   teacherName: string;
   classroomName: string;
@@ -1092,7 +1105,16 @@ const ScheduleCell = ({
     >
       <div className="flex items-start justify-between gap-1">
         <div className="min-w-0">
-          <p className="truncate text-sm font-bold leading-tight">{subjectName}</p>
+          {readOnly && subjectId ? (
+            <Link
+              to={`/disciplinas/${subjectId}`}
+              className="block truncate text-sm font-bold leading-tight underline-offset-2 hover:underline"
+            >
+              {subjectName}
+            </Link>
+          ) : (
+            <p className="truncate text-sm font-bold leading-tight">{subjectName}</p>
+          )}
           <p className="truncate text-[11px] opacity-80">{classroomName} · {schedule.start_time}–{schedule.end_time}</p>
         </div>
         {!readOnly && (

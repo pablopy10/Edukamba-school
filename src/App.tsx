@@ -25,6 +25,7 @@ import Cursos from "./pages/Cursos.tsx";
 import Turmas from "./pages/Turmas.tsx";
 import TurmaDetalhe from "./pages/TurmaDetalhe.tsx";
 import Disciplinas from "./pages/Disciplinas.tsx";
+import DisciplinaDetalhe from "./pages/DisciplinaDetalhe.tsx";
 import Educadores from "./pages/Educadores.tsx";
 import Presencas from "./pages/Presencas.tsx";
 import Horarios from "./pages/Horarios.tsx";
@@ -160,6 +161,7 @@ const App = () => (
                         <Route path="/turmas" element={<Turmas />} />
                         <Route path="/turmas/:id" element={<TurmaDetalhe />} />
                         <Route path="/disciplinas" element={<Disciplinas />} />
+                        <Route path="/disciplinas/:id" element={<DisciplinaDetalhe />} />
                         <Route path="/educadores" element={<Educadores />} />
                         <Route path="/presencas" element={<Presencas />} />
                         <Route path="/horario" element={<Horarios />} />
