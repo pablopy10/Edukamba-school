@@ -63,7 +63,6 @@ export function SubjectClassroomMaterialFormDialog({
   const [classroomId, setClassroomId] = useState("");
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
-  const [linkUrl, setLinkUrl] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -72,12 +71,10 @@ export function SubjectClassroomMaterialFormDialog({
       setClassroomId(editing.classroom_id);
       setTitle(editing.title);
       setNotes(editing.notes ?? "");
-      setLinkUrl(editing.link_url ?? "");
     } else {
       setClassroomId(defaultClassroomId ?? classrooms[0]?.id ?? "");
       setTitle("");
       setNotes("");
-      setLinkUrl("");
     }
   }, [open, editing, classrooms, defaultClassroomId]);
 
@@ -102,7 +99,6 @@ export function SubjectClassroomMaterialFormDialog({
       academic_year_id: academicYearId,
       title: title.trim(),
       notes: notes.trim() || null,
-      link_url: linkUrl.trim() || null,
       created_by: userId,
     };
 
@@ -112,7 +108,6 @@ export function SubjectClassroomMaterialFormDialog({
         .update({
           title: payload.title,
           notes: payload.notes,
-          link_url: payload.link_url,
         })
         .eq("id", editing.id);
       if (error) {
@@ -173,14 +168,6 @@ export function SubjectClassroomMaterialFormDialog({
               onChange={(e) => setNotes(e.target.value)}
               placeholder={t("material_form_notes_placeholder")}
               rows={3}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label>{t("material_form_link")}</Label>
-            <Input
-              value={linkUrl}
-              onChange={(e) => setLinkUrl(e.target.value)}
-              placeholder={t("material_form_link_placeholder")}
             />
           </div>
         </div>
