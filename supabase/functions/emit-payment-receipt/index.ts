@@ -6,7 +6,7 @@
  * Body: { payment_ids: string[] }
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { emitVendusInvoiceForPayment } from "../_shared/vendusPaymentFlow.ts";
+import { emitVendusInvoiceForPayment, resolveStudentIdFromPayment } from "../_shared/vendusPaymentFlow.ts";
 import { logVendusFailure } from "../_shared/vendusAuth.ts";
 import { externalBillingUserMessage } from "../_shared/externalBillingUserMessage.ts";
 import { VendusApiError } from "../_shared/vendusService.ts";
@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
         const { data: payment, error: payErr } = await admin
           .from("payments")
           .select(
-            "id, school_id, student_id, amount_paid, method, payment_date, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, meal_fee_id, event_fee_id",
+            "id, school_id, amount_paid, method, payment_date, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, meal_fee_id, event_fee_id",
           )
           .eq("id", paymentId)
           .single();
@@ -74,6 +74,8 @@ Deno.serve(async (req) => {
           results.push({ payment_id: paymentId, status: "error", detail: payErr?.message ?? "Pagamento não encontrado." });
           continue;
         }
+
+        const studentId = await resolveStudentIdFromPayment(admin, payment);
 
         const { data: school } = await admin
           .from("schools")
@@ -106,7 +108,7 @@ Deno.serve(async (req) => {
 
           if (vendusApiKey) {
             try {
-              const vendusResult = await emitVendusInvoiceForPayment(admin, vendusApiKey, payment);
+              const vendusResult = await emitVendusInvoiceForPayment(admin, vendusApiKey, { ...payment, student_id: studentId });
               const descBase = String(existing.description ?? "Pagamento").trim();
               const descWithDoc = vendusResult.vendusDocumentNumber
                 ? `${descBase} · ${vendusResult.vendusDocumentNumber}`
@@ -163,7 +165,7 @@ Deno.serve(async (req) => {
         const { data: student } = await admin
           .from("students")
           .select("full_name, tax_id, parent_id")
-          .eq("id", payment.student_id ?? "")
+          .eq("id", studentId ?? "")
           .maybeSingle();
 
         let parentTaxId: string | null = null;
@@ -216,7 +218,7 @@ Deno.serve(async (req) => {
 
         if (vendusApiKey) {
           try {
-            const vendusResult = await emitVendusInvoiceForPayment(admin, vendusApiKey, payment);
+            const vendusResult = await emitVendusInvoiceForPayment(admin, vendusApiKey, { ...payment, student_id: studentId });
             vendusMeta = {
               vendusDocumentId: vendusResult.vendusDocumentId,
               vendusDocumentNumber: vendusResult.vendusDocumentNumber,
@@ -248,7 +250,7 @@ Deno.serve(async (req) => {
         const { data: receipt, error: insErr } = await admin.from("payment_receipts").insert({
           school_id: payment.school_id,
           payment_id: paymentId,
-          student_id: payment.student_id,
+          student_id: studentId,
           receipt_number: receiptNumber,
           amount: payment.amount_paid,
           payment_method: payment.method,
@@ -266,12 +268,12 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        if (payment.student_id) {
+        if (studentId) {
           const { data: lastStmt } = await admin
             .from("account_statements")
             .select("balance_after")
             .eq("school_id", payment.school_id)
-            .eq("student_id", payment.student_id)
+            .eq("student_id", studentId)
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
@@ -279,7 +281,7 @@ Deno.serve(async (req) => {
           const prevBalance = Number(lastStmt?.balance_after ?? 0);
           await admin.from("account_statements").insert({
             school_id: payment.school_id,
-            student_id: payment.student_id,
+            student_id: studentId,
             movement_type: "RC",
             description: `${receiptNumber} - ${description}`,
             debit_amount: 0,

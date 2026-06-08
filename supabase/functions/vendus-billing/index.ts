@@ -53,23 +53,11 @@ Deno.serve(async (req) => {
       if (!keyCtx.ok) return keyCtx.response;
 
       const vendusDoc = new VendusService(keyCtx.vendusApiKey);
-      const pdfUrl = vendusDoc.getPdfUrl(documentId);
-      const pdfRes = await fetch(pdfUrl, {
-        headers: { Authorization: "Basic " + btoa(`${keyCtx.vendusApiKey}:`) },
-      });
-      if (!pdfRes.ok) {
-        const errText = await pdfRes.text().catch(() => "");
-        throw new VendusApiError(
-          `Falha ao obter PDF (${pdfRes.status}).`,
-          pdfRes.status,
-          errText.slice(0, 500),
-        );
-      }
+      const pdfBytes = await vendusDoc.fetchDocumentPdf(documentId);
       const safeName = (access.documentNumber ?? `vendus-${documentId}`)
         .replace(/[^\w\s./-]+/g, "")
         .replace(/\s+/g, "_")
         .trim() || `vendus-${documentId}`;
-      const pdfBytes = new Uint8Array(await pdfRes.arrayBuffer());
       return new Response(pdfBytes, {
         status: 200,
         headers: {

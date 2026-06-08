@@ -8,6 +8,7 @@ import {
   VendusApiError,
   type DadosFaturaPropinas,
   type ItemFaturaVendus,
+  normalizeVendusDate,
 } from "./vendusService.ts";
 import { logVendusFailure } from "./vendusAuth.ts";
 
@@ -19,13 +20,7 @@ const MONTHS_PT = [
 /** Mapeamento simplificado método Edukamba → ID Vendus (configurável por escola no futuro). */
 const DEFAULT_VENDUS_PAYMENT_METHOD = "NU";
 
-type PaymentForVendus = {
-  id: string;
-  school_id: string;
-  student_id: string | null;
-  amount_paid: number;
-  method: string | null;
-  payment_date: string | null;
+type PaymentFeeRefs = {
   student_fee_id: string | null;
   activity_fee_id: string | null;
   transport_fee_id: string | null;
@@ -33,6 +28,38 @@ type PaymentForVendus = {
   meal_fee_id: string | null;
   event_fee_id: string | null;
 };
+
+type PaymentForVendus = PaymentFeeRefs & {
+  id: string;
+  school_id: string;
+  student_id?: string | null;
+  amount_paid: number;
+  method: string | null;
+  payment_date: string | null;
+};
+
+const FEE_TABLE_BY_REF: [keyof PaymentFeeRefs, string][] = [
+  ["student_fee_id", "student_fees"],
+  ["activity_fee_id", "activity_fees"],
+  ["transport_fee_id", "transport_fees"],
+  ["enrollment_fee_id", "enrollment_fees"],
+  ["meal_fee_id", "meal_fees"],
+  ["event_fee_id", "event_fees"],
+];
+
+/** payments não tem student_id — obtém-se via FK da taxa associada. */
+export async function resolveStudentIdFromPayment(
+  admin: SupabaseClient,
+  payment: PaymentFeeRefs,
+): Promise<string | null> {
+  for (const [refKey, table] of FEE_TABLE_BY_REF) {
+    const feeId = payment[refKey];
+    if (!feeId) continue;
+    const { data } = await admin.from(table).select("student_id").eq("id", feeId).maybeSingle();
+    if (data?.student_id) return data.student_id as string;
+  }
+  return null;
+}
 
 export type VendusEmitFromPaymentResult = {
   vendusDocumentId: string;
@@ -49,23 +76,28 @@ function mapPaymentMethod(method: string | null): string {
   return DEFAULT_VENDUS_PAYMENT_METHOD;
 }
 
+/** Propinas: isento (ISE). Transporte, refeições, matrículas: regime geral NOR 14%. */
+function monthYearLabel(monthIndex: unknown, dueDate: unknown): string | null {
+  const month = Number(monthIndex);
+  const year = dueDate ? new Date(String(dueDate)).getFullYear() : NaN;
+  const monthLabel = month >= 1 && month <= 12 ? MONTHS_PT[month - 1] : null;
+  if (monthLabel && Number.isFinite(year)) return `${monthLabel} ${year}`;
+  return null;
+}
+
 async function resolveLineItem(
   admin: SupabaseClient,
   payment: PaymentForVendus,
-): Promise<{ titulo: string; taxExemption: string | null; referencia: string }> {
+): Promise<{ titulo: string; taxId: "ISE" | "NOR"; referencia: string }> {
   if (payment.student_fee_id) {
     const { data: fee } = await admin
       .from("student_fees")
       .select("month_index, due_date")
       .eq("id", payment.student_fee_id)
       .maybeSingle();
-    const month = Number(fee?.month_index);
-    const year = fee?.due_date ? new Date(String(fee.due_date)).getFullYear() : NaN;
-    const monthLabel = month >= 1 && month <= 12 ? MONTHS_PT[month - 1] : null;
-    const titulo = monthLabel && year
-      ? `Propina - ${monthLabel} ${year}`
-      : "Propina / serviços educativos";
-    return { titulo, taxExemption: "M11", referencia: "PROPINA" };
+    const period = monthYearLabel(fee?.month_index, fee?.due_date);
+    const titulo = period ? `Propina - ${period}` : "Propina / serviços educativos";
+    return { titulo, taxId: "ISE", referencia: "PROPINA" };
   }
   if (payment.enrollment_fee_id) {
     const { data: fee } = await admin
@@ -74,21 +106,35 @@ async function resolveLineItem(
       .eq("id", payment.enrollment_fee_id)
       .maybeSingle();
     const titulo = fee?.fee_type === "RENEWAL" ? "Renovação de matrícula" : "Taxa de matrícula";
-    return { titulo, taxExemption: "M11", referencia: "MATRICULA" };
+    return { titulo, taxId: "NOR", referencia: "MATRICULA" };
   }
   if (payment.activity_fee_id) {
-    return { titulo: "Atividade extracurricular", taxExemption: null, referencia: "EXTRACURRICULAR" };
+    return { titulo: "Atividade extracurricular", taxId: "NOR", referencia: "EXTRACURRICULAR" };
   }
   if (payment.transport_fee_id) {
-    return { titulo: "Transporte escolar", taxExemption: null, referencia: "TRANSPORTE" };
+    const { data: fee } = await admin
+      .from("transport_fees")
+      .select("month_index, due_date")
+      .eq("id", payment.transport_fee_id)
+      .maybeSingle();
+    const period = monthYearLabel(fee?.month_index, fee?.due_date);
+    const titulo = period ? `Transporte escolar - ${period}` : "Transporte escolar";
+    return { titulo, taxId: "NOR", referencia: "TRANSPORTE" };
   }
   if (payment.meal_fee_id) {
-    return { titulo: "Refeições escolares", taxExemption: null, referencia: "REFEICOES" };
+    const { data: fee } = await admin
+      .from("meal_fees")
+      .select("month_index, due_date")
+      .eq("id", payment.meal_fee_id)
+      .maybeSingle();
+    const period = monthYearLabel(fee?.month_index, fee?.due_date);
+    const titulo = period ? `Refeições escolares - ${period}` : "Refeições escolares";
+    return { titulo, taxId: "NOR", referencia: "REFEICOES" };
   }
   if (payment.event_fee_id) {
-    return { titulo: "Evento escolar", taxExemption: null, referencia: "EVENTO" };
+    return { titulo: "Evento escolar", taxId: "NOR", referencia: "EVENTO" };
   }
-  return { titulo: "Serviços educativos", taxExemption: "M11", referencia: "SERVICO" };
+  return { titulo: "Serviços educativos", taxId: "ISE", referencia: "SERVICO" };
 }
 
 export async function emitVendusInvoiceForPayment(
@@ -98,10 +144,15 @@ export async function emitVendusInvoiceForPayment(
 ): Promise<VendusEmitFromPaymentResult> {
   const vendus = new VendusService(vendusApiKey);
 
+  const studentId = payment.student_id ?? await resolveStudentIdFromPayment(admin, payment);
+  if (!studentId) {
+    throw new VendusApiError("Pagamento sem aluno associado — impossível emitir fatura.");
+  }
+
   const { data: student } = await admin
     .from("students")
     .select("full_name, tax_id, parent_id")
-    .eq("id", payment.student_id ?? "")
+    .eq("id", studentId)
     .maybeSingle();
 
   if (!student?.parent_id) {
@@ -137,16 +188,15 @@ export async function emitVendusInvoiceForPayment(
   }
 
   const line = await resolveLineItem(admin, payment);
-  const paymentDate = payment.payment_date ?? new Date().toISOString().slice(0, 10);
+  const paymentDate = normalizeVendusDate(payment.payment_date);
   const amount = Number(payment.amount_paid);
 
   const item: ItemFaturaVendus = {
     titulo: line.titulo,
     referencia: line.referencia,
-    quantidade: "1",
+    quantidade: 1,
     precoBruto: amount,
-    taxExemption: line.taxExemption,
-    taxExemptionLaw: line.taxExemption ? "Isenção no domínio da educação (AGT Angola)" : undefined,
+    taxId: line.taxId,
   };
 
   const dadosFatura: DadosFaturaPropinas = {

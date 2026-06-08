@@ -3,6 +3,13 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { dateLocaleTag } from "@/lib/i18nDateLocale";
+import { ChargeRulePeriodFields } from "@/components/finance/ChargeRulePeriodFields";
+import {
+  billingMonthKeysFromRule,
+  defaultBillingMonthKeys,
+  formatBillingPeriodRange,
+  rulePeriodPayloadFromMonthKeys,
+} from "@/lib/finance/chargeRuleBillingPeriod";
 import {
   chargeRuleDueDateForPeriodIndex,
   domainChargeRpcName,
@@ -34,24 +41,7 @@ import { canValidateSchoolPaymentProofs } from "@/lib/schoolStaffRoles";
 type FeeRecurrence = "monthly" | "quarterly" | "semester" | "yearly";
 type ChargeTargetScope = "all_enrolled" | "classrooms" | "students";
 
-function recurrenceStepMonths(r: FeeRecurrence): number {
-  if (r === "quarterly") return 3;
-  if (r === "semester") return 6;
-  if (r === "yearly") return 12;
-  return 1;
-}
-
-function countBillingPeriods(startMonth: number, endMonth: number, recurrence: FeeRecurrence): number {
-  const step = recurrenceStepMonths(recurrence);
-  let m = startMonth;
-  for (let c = 1; c < 48; c++) {
-    if (m === endMonth) return c;
-    m = ((m - 1 + step) % 12) + 1;
-  }
-  return 1;
-}
-
-type AcademicYear = { id: string; label: string; is_active: boolean | null; start_date?: string | null };
+type AcademicYear = { id: string; label: string; is_active: boolean | null; start_date?: string | null; end_date?: string | null };
 type StudentLite = { id: string; full_name: string; classroom_id: string | null };
 type ClassroomLite = { id: string; name: string; academic_year_id?: string | null };
 
@@ -66,6 +56,8 @@ type ActivityRuleRow = {
   months_count: number;
   start_month: number;
   end_month: number | null;
+  billing_start_date?: string | null;
+  billing_end_date?: string | null;
   recurrence: string;
   generate_all_upfront: boolean;
   notes: string | null;
@@ -84,6 +76,8 @@ type TransportRuleRow = {
   months_count: number;
   start_month: number;
   end_month: number | null;
+  billing_start_date?: string | null;
+  billing_end_date?: string | null;
   recurrence: string;
   generate_all_upfront: boolean;
   notes: string | null;
@@ -102,6 +96,8 @@ type MealRuleRow = {
   months_count: number;
   start_month: number;
   end_month: number | null;
+  billing_start_date?: string | null;
+  billing_end_date?: string | null;
   recurrence: string;
   generate_all_upfront: boolean;
   notes: string | null;
@@ -120,6 +116,8 @@ type EventRuleRow = {
   months_count: number;
   start_month: number;
   end_month: number | null;
+  billing_start_date?: string | null;
+  billing_end_date?: string | null;
   recurrence: string;
   generate_all_upfront: boolean;
   notes: string | null;
@@ -233,8 +231,8 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
     monthly_amount: "0",
     recurrence: "monthly" as FeeRecurrence,
     due_day: "10",
-    start_month: "9",
-    end_month: "6",
+    billing_period_start: "",
+    billing_period_end: "",
     notes: "",
     generate_all_upfront: false,
   });
@@ -252,7 +250,7 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
   const load = useCallback(async () => {
     if (!schoolId) return;
     setLoading(true);
-    const yRes = await supabase.from("academic_years").select("id, label, is_active, start_date").eq("school_id", schoolId).order("start_date", { ascending: true });
+    const yRes = await supabase.from("academic_years").select("id, label, is_active, start_date, end_date").eq("school_id", schoolId).order("start_date", { ascending: true });
     const yList = (yRes.data ?? []) as AcademicYear[];
     setYears(yList);
     const active = yList.find((y) => y.is_active) ?? yList[0];
@@ -519,6 +517,8 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
 
   const openNew = () => {
     setEditingRule(null);
+    const activeYear = years.find((y) => y.id === activeYearId);
+    const defaults = defaultBillingMonthKeys(activeYear);
     setRuleForm({
       entity_id: "",
       target_scope: "all_enrolled",
@@ -527,8 +527,8 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
       monthly_amount: "0",
       recurrence: "monthly",
       due_day: "10",
-      start_month: "9",
-      end_month: "6",
+      billing_period_start: defaults.start,
+      billing_period_end: defaults.end,
       notes: "",
       generate_all_upfront: false,
     });
@@ -558,6 +558,8 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
       classroomIds = (r.event_charge_rule_classrooms ?? []).map((x) => x.classroom_id);
       studentIds = (r.event_charge_rule_students ?? []).map((x) => x.student_id);
     }
+    const yearForRule = years.find((y) => y.id === (r.academic_year_id ?? activeYearId));
+    const periodKeys = billingMonthKeysFromRule(r, yearForRule);
     setRuleForm({
       entity_id: entityId,
       target_scope: ts,
@@ -566,8 +568,8 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
       monthly_amount: String(r.monthly_amount),
       recurrence: (r.recurrence as FeeRecurrence) || "monthly",
       due_day: String(r.due_day),
-      start_month: String(r.start_month),
-      end_month: String(r.end_month ?? r.start_month),
+      billing_period_start: periodKeys.start,
+      billing_period_end: periodKeys.end,
       notes: r.notes ?? "",
       generate_all_upfront: !!r.generate_all_upfront,
     });
@@ -576,9 +578,15 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
 
   const saveRule = async () => {
     if (!schoolId) return;
-    const startMonth = Math.max(1, Math.min(12, Number(ruleForm.start_month) || 9));
-    const endMonth = Math.max(1, Math.min(12, Number(ruleForm.end_month) || startMonth));
-    const periods = countBillingPeriods(startMonth, endMonth, ruleForm.recurrence);
+    if (!ruleForm.billing_period_start || !ruleForm.billing_period_end) {
+      toast({ title: "Indica o período de cobrança (início e fim)", variant: "destructive" });
+      return;
+    }
+    const periodPayload = rulePeriodPayloadFromMonthKeys(
+      ruleForm.billing_period_start,
+      ruleForm.billing_period_end,
+      ruleForm.recurrence,
+    );
     if (!ruleForm.entity_id.trim()) {
       toast({
         title:
@@ -607,9 +615,11 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
       target_scope: ruleForm.target_scope,
       monthly_amount: Number(ruleForm.monthly_amount) || 0,
       due_day: Math.max(1, Math.min(28, Number(ruleForm.due_day) || 10)),
-      months_count: Math.max(1, Math.min(36, periods)),
-      start_month: startMonth,
-      end_month: endMonth,
+      months_count: periodPayload.months_count,
+      start_month: periodPayload.start_month,
+      end_month: periodPayload.end_month,
+      billing_start_date: periodPayload.billing_start_date,
+      billing_end_date: periodPayload.billing_end_date,
       recurrence: ruleForm.recurrence,
       generate_all_upfront: ruleForm.generate_all_upfront,
       notes: ruleForm.notes.trim() || null,
@@ -768,6 +778,28 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
 
     toast({ title: editingRule ? t("toast_updated") : t("toast_created") });
     setRuleDialog(false);
+
+    if (ruleId && supportsRuleDetail) {
+      const domain =
+        variant === "activity" ? "activity" : variant === "transport" ? "transport" : "meal";
+      const { data: autoGenerated, error: backfillErr } = await supabase.rpc(
+        "backfill_recurring_charges_for_domain_rule",
+        { _domain: domain, _charge_rule_id: ruleId },
+      );
+      if (backfillErr) {
+        toast({
+          title: editingRule ? t("toast_updated") : t("toast_created"),
+          description: `Não foi possível gerar cobranças automaticamente: ${backfillErr.message}`,
+          variant: "destructive",
+        });
+      } else if ((autoGenerated as number | null) ?? 0) > 0) {
+        toast({
+          title: "Cobranças geradas",
+          description: `${autoGenerated} cobrança(s) criada(s) automaticamente (períodos em atraso e mês corrente).`,
+        });
+      }
+    }
+
     await load();
   };
 
@@ -1001,33 +1033,15 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div className="grid gap-2">
-                <Label>{t("start_month")}</Label>
-                <Select value={ruleForm.start_month} onValueChange={(v) => setRuleForm((f) => ({ ...f, start_month: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {monthNamesShort.map((label, idx) => {
-                      const v = String(idx + 1);
-                      return <SelectItem key={v} value={v}>{label}</SelectItem>;
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label>{t("end_month")}</Label>
-                <Select value={ruleForm.end_month} onValueChange={(v) => setRuleForm((f) => ({ ...f, end_month: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {monthNamesShort.map((label, idx) => {
-                      const v = String(idx + 1);
-                      return <SelectItem key={v} value={v}>{label}</SelectItem>;
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">{t("periods_hint")}</p>
+            <ChargeRulePeriodFields
+              startValue={ruleForm.billing_period_start}
+              endValue={ruleForm.billing_period_end}
+              onStartChange={(v) => setRuleForm((f) => ({ ...f, billing_period_start: v }))}
+              onEndChange={(v) => setRuleForm((f) => ({ ...f, billing_period_end: v }))}
+              startLabel={t("billing_period_start")}
+              endLabel={t("billing_period_end")}
+              hint={t("periods_hint")}
+            />
 
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
               <div>
@@ -1084,11 +1098,19 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
                     </p>
                     <p className="text-muted-foreground">
                       {t("detail_calendar_line", {
-                        start: monthNamesLong[ruleDetailRule.start_month - 1],
-                        end:
-                          ruleDetailRule.end_month != null
-                            ? `${t("arrow_range")}${monthNamesLong[ruleDetailRule.end_month - 1]}`
-                            : "",
+                        start: formatBillingPeriodRange(
+                          billingMonthKeysFromRule(
+                            ruleDetailRule,
+                            years.find((y) => y.id === ruleDetailYearId),
+                          ).start,
+                          billingMonthKeysFromRule(
+                            ruleDetailRule,
+                            years.find((y) => y.id === ruleDetailYearId),
+                          ).end,
+                          monthNamesLong,
+                          localeTag,
+                        ),
+                        end: "",
                         periods: t("period_count", { count: ruleDetailRule.months_count }),
                       })}
                     </p>

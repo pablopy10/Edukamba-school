@@ -12,13 +12,14 @@ export type DadosClienteVendus = {
   vendusClientId?: string | null;
 };
 
+export type VendusTaxId = "NOR" | "OUT" | "INT" | "IVA-CAB" | "RED" | "ISE";
+
 export type ItemFaturaVendus = {
   titulo: string;
   referencia?: string;
   quantidade?: number | string;
   precoBruto: number | string;
-  taxExemption?: string | null;
-  taxExemptionLaw?: string | null;
+  taxId?: VendusTaxId;
   descontoValor?: number | string | null;
   descontoPercentagem?: number | string | null;
 };

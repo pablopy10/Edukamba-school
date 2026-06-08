@@ -67,6 +67,14 @@ import {
 import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 import { uploadFileToR2, R2UploadError } from "@/lib/r2/uploadFileToR2";
 import { openFileUrl } from "@/lib/r2/resolveFileUrl";
+import { ChargeRulePeriodFields } from "@/components/finance/ChargeRulePeriodFields";
+import {
+  billingMonthKeysFromRule,
+  chargeRuleDueDateForPeriodIndex,
+  defaultBillingMonthKeys,
+  formatBillingPeriodRange,
+  rulePeriodPayloadFromMonthKeys,
+} from "@/lib/finance/chargeRuleBillingPeriod";
 
 type StaffValidatedInsertResult = { error: string | null; paymentId?: string };
 
@@ -85,17 +93,6 @@ function recurrenceStepMonths(r: FeeRecurrence): number {
   return 1;
 }
 
-/** Número de períodos de cobrança entre mês início e mês fim (inclusive), conforme a recorrência. */
-function countBillingPeriods(startMonth: number, endMonth: number, recurrence: FeeRecurrence): number {
-  const step = recurrenceStepMonths(recurrence);
-  let m = startMonth;
-  for (let c = 1; c < 48; c++) {
-    if (m === endMonth) return c;
-    m = ((m - 1 + step) % 12) + 1;
-  }
-  return 1;
-}
-
 type FeeRule = {
   id: string;
   school_id: string;
@@ -106,6 +103,8 @@ type FeeRule = {
   months_count: number;
   start_month: number;
   end_month: number | null;
+  billing_start_date?: string | null;
+  billing_end_date?: string | null;
   notes: string | null;
   target_scope: string;
   recurrence: string;
@@ -128,7 +127,7 @@ function formatRecurrenceLabel(r: string | undefined, labels: Record<FeeRecurren
   return labels[k] ?? String(r ?? "");
 }
 
-type AcademicYear = { id: string; label: string; is_active: boolean | null; start_date?: string | null };
+type AcademicYear = { id: string; label: string; is_active: boolean | null; start_date?: string | null; end_date?: string | null };
 type StudentLite = { id: string; full_name: string; classroom_id: string | null };
 type ClassroomLite = { id: string; name: string; academic_year_id?: string | null; grade_level?: string | null };
 
@@ -148,24 +147,6 @@ type FeeListRow = {
     classroom?: { id: string; name: string } | null;
   } | null;
 };
-
-/** Data de vencimento e índice de mês civil (1–12), alinhado com `generate_student_fees_for_year`. */
-function feeRuleDueDateForPeriodIndex(
-  rule: Pick<FeeRule, "start_month" | "due_day" | "recurrence" | "months_count">,
-  academicYearStartDate: string | null | undefined,
-  periodIndex: number,
-): { monthIndex: number; dueIso: string } | null {
-  if (!academicYearStartDate?.trim() || periodIndex < 0 || periodIndex >= rule.months_count) return null;
-  const step = recurrenceStepMonths(rule.recurrence as FeeRecurrence);
-  const im = periodIndex * step;
-  const monthIdx = ((rule.start_month - 1 + im) % 12) + 1;
-  const m = /^(\d{4})-\d{2}-\d{2}/.exec(academicYearStartDate);
-  const startYear = m ? Number(m[1]) : new Date().getFullYear();
-  const yearPart = startYear + Math.floor((rule.start_month - 1 + im) / 12);
-  const day = Math.min(Number(rule.due_day) || 10, 28);
-  const dueIso = `${yearPart}-${String(monthIdx).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  return { monthIndex: monthIdx, dueIso };
-}
 
 /** Alunos abrangidos por esta regra no ano lectivo seleccionado (pré-visualização; a RPC valida prioridade entre regras). */
 function studentsMatchingFeeRule(
@@ -449,8 +430,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     monthly_amount: "0",
     recurrence: "monthly" as FeeRecurrence,
     due_day: "10",
-    start_month: "9",
-    end_month: "6",
+    billing_period_start: "",
+    billing_period_end: "",
     notes: "",
     generate_all_upfront: false,
   });
@@ -989,7 +970,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       setUsaFaturacaoExterna(schoolRow?.usa_faturacao_externa ?? false);
     }
 
-    const yRes = await supabase.from("academic_years").select("id, label, is_active, start_date").eq("school_id", sId).order("start_date", { ascending: true });
+    const yRes = await supabase.from("academic_years").select("id, label, is_active, start_date, end_date").eq("school_id", sId).order("start_date", { ascending: true });
 
     if (yRes.error) toast({ title: "Erro a carregar anos letivos", description: yRes.error.message, variant: "destructive" });
 
@@ -1364,6 +1345,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   // Fee rules
   const openNewRule = () => {
     setEditingRule(null);
+    const activeYear = years.find((y) => y.id === activeYearId);
+    const defaults = defaultBillingMonthKeys(activeYear);
     setRuleForm({
       target_scope: "grade_level",
       grade_level: "",
@@ -1372,8 +1355,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       monthly_amount: "0",
       recurrence: "monthly",
       due_day: "10",
-      start_month: "9",
-      end_month: "6",
+      billing_period_start: defaults.start,
+      billing_period_end: defaults.end,
       notes: "",
       generate_all_upfront: false,
     });
@@ -1382,6 +1365,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   const openEditRule = (r: FeeRule) => {
     setEditingRule(r);
     const ts = (r.target_scope as FeeTargetScope) || "grade_level";
+    const yearForRule = years.find((y) => y.id === (r.academic_year_id ?? activeYearId));
+    const periodKeys = billingMonthKeysFromRule(r, yearForRule);
     setRuleForm({
       target_scope: ts,
       grade_level: r.grade_level ?? "",
@@ -1390,8 +1375,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       monthly_amount: String(r.monthly_amount),
       recurrence: (r.recurrence as FeeRecurrence) || "monthly",
       due_day: String(r.due_day),
-      start_month: String(r.start_month),
-      end_month: String(r.end_month ?? r.start_month),
+      billing_period_start: periodKeys.start,
+      billing_period_end: periodKeys.end,
       notes: r.notes ?? "",
       generate_all_upfront: !!r.generate_all_upfront,
     });
@@ -1399,9 +1384,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   };
   const saveRule = async () => {
     if (!schoolId) return;
-    const startMonth = Math.max(1, Math.min(12, Number(ruleForm.start_month) || 9));
-    const endMonth = Math.max(1, Math.min(12, Number(ruleForm.end_month) || startMonth));
-    const periods = countBillingPeriods(startMonth, endMonth, ruleForm.recurrence);
+    if (!ruleForm.billing_period_start || !ruleForm.billing_period_end) {
+      toast({ title: "Indica o período de cobrança (início e fim)", variant: "destructive" });
+      return;
+    }
+    const periodPayload = rulePeriodPayloadFromMonthKeys(
+      ruleForm.billing_period_start,
+      ruleForm.billing_period_end,
+      ruleForm.recurrence,
+    );
     if (ruleForm.target_scope === "grade_level" && !ruleForm.grade_level.trim()) {
       toast({ title: "Indica o nível de ensino", variant: "destructive" });
       return;
@@ -1422,9 +1413,11 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         ruleForm.target_scope === "grade_level" ? ruleForm.grade_level.trim() : null,
       monthly_amount: Number(ruleForm.monthly_amount) || 0,
       due_day: Math.max(1, Math.min(28, Number(ruleForm.due_day) || 10)),
-      months_count: Math.max(1, Math.min(36, periods)),
-      start_month: startMonth,
-      end_month: endMonth,
+      months_count: periodPayload.months_count,
+      start_month: periodPayload.start_month,
+      end_month: periodPayload.end_month,
+      billing_start_date: periodPayload.billing_start_date,
+      billing_end_date: periodPayload.billing_end_date,
       recurrence: ruleForm.recurrence,
       generate_all_upfront: ruleForm.generate_all_upfront,
       notes: ruleForm.notes.trim() || null,
@@ -1472,37 +1465,23 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     toast({ title: editingRule ? "Regra actualizada" : "Regra criada" });
     setRuleDialog(false);
 
-    // Gerar automaticamente propinas para meses anteriores e mês corrente
-    // (ex: regra começa em Março, estamos em Maio → gera Março, Abril, Maio)
-    if (ruleForm.academic_year_id) {
-      let studentIds: string[] = [];
-      if (ruleForm.target_scope === "students" && ruleForm.student_ids.length > 0) {
-        studentIds = ruleForm.student_ids;
-      } else if (ruleForm.target_scope === "classrooms" && ruleForm.classroom_ids.length > 0) {
-        const { data: classStudents } = await supabase
-          .from("students")
-          .select("id")
-          .in("classroom_id", ruleForm.classroom_ids);
-        studentIds = (classStudents ?? []).map(s => s.id);
-      } else if (ruleForm.target_scope === "grade_level" && ruleForm.grade_level) {
-        const { data: gradeStudents } = await supabase
-          .from("students")
-          .select("id, classrooms!inner(grade_level)")
-          .eq("classrooms.grade_level", ruleForm.grade_level);
-        studentIds = (gradeStudents ?? []).map(s => s.id);
-      }
-      if (studentIds.length > 0) {
-        let autoGenerated = 0;
-        for (const sid of studentIds) {
-          const { data: created } = await supabase.rpc("generate_student_fees_for_year", {
-            _student_id: sid,
-            _academic_year_id: ruleForm.academic_year_id,
-          });
-          autoGenerated += (created as number | null) ?? 0;
-        }
-        if (autoGenerated > 0) {
-          toast({ title: "Cobranças geradas", description: `${autoGenerated} cobrança(s) criada(s) automaticamente (meses anteriores e corrente).` });
-        }
+    // Gerar automaticamente propinas para períodos em atraso e mês corrente
+    if (activeYearId) {
+      const { data: autoGenerated, error: backfillErr } = await supabase.rpc(
+        "backfill_recurring_charges_for_fee_rule",
+        { _fee_rule_id: ruleId },
+      );
+      if (backfillErr) {
+        toast({
+          title: "Regra guardada",
+          description: `Não foi possível gerar cobranças automaticamente: ${backfillErr.message}`,
+          variant: "destructive",
+        });
+      } else if ((autoGenerated as number | null) ?? 0) > 0) {
+        toast({
+          title: "Cobranças geradas",
+          description: `${autoGenerated} cobrança(s) criada(s) automaticamente (meses anteriores e corrente).`,
+        });
       }
     }
 
@@ -1584,7 +1563,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     const n = ruleDetailRule.months_count;
     for (const st of elig) {
       for (let p = 0; p < n; p++) {
-        const dd = feeRuleDueDateForPeriodIndex(ruleDetailRule, ruleDetailYearStart, p);
+        const dd = chargeRuleDueDateForPeriodIndex(ruleDetailRule, ruleDetailYearStart, p);
         if (!dd) continue;
         const fee = findTuitionFeeForPeriod(allFees, st.id, ruleDetailYearId, dd.monthIndex, dd.dueIso);
         rows.push({
@@ -5752,8 +5731,18 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                             <td className="py-2.5 px-3">{fmtAOA(Number(r.monthly_amount))}</td>
                             <td className="py-2.5 px-3 whitespace-nowrap">{tuitionT("due_day_short", { day: r.due_day })}</td>
                             <td className="py-2.5 px-3 text-muted-foreground">
-                              {monthNamesLong[r.start_month - 1]}
-                              {r.end_month != null ? `${tuitionT("arrow_range")}${monthNamesLong[r.end_month - 1]}` : ""}
+                              {(() => {
+                                const keys = billingMonthKeysFromRule(
+                                  r,
+                                  years.find((y) => y.id === r.academic_year_id),
+                                );
+                                return formatBillingPeriodRange(
+                                  keys.start,
+                                  keys.end,
+                                  monthNamesLong,
+                                  dateLocaleTag,
+                                );
+                              })()}
                               <span className="text-xs"> · {tuitionT("period_count", { count: r.months_count })}</span>
                             </td>
                             <td className="py-2.5 px-3">
@@ -5928,29 +5917,17 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                   onChange={(e) => setRuleForm({ ...ruleForm, due_day: e.target.value })}
                 />
               </div>
-              <div className="grid gap-2">
-                <Label>{tuitionT("start_month_label")}</Label>
-                <Select value={ruleForm.start_month} onValueChange={(v) => setRuleForm({ ...ruleForm, start_month: v })}>
-                  <SelectTrigger className="bg-card"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {monthNamesLong.map((m, i) => (
-                      <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label>{tuitionT("end_month_label")}</Label>
-                <Select value={ruleForm.end_month} onValueChange={(v) => setRuleForm({ ...ruleForm, end_month: v })}>
-                  <SelectTrigger className="bg-card"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {monthNamesLong.map((m, i) => (
-                      <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
+
+            <ChargeRulePeriodFields
+              startValue={ruleForm.billing_period_start}
+              endValue={ruleForm.billing_period_end}
+              onStartChange={(v) => setRuleForm((f) => ({ ...f, billing_period_start: v }))}
+              onEndChange={(v) => setRuleForm((f) => ({ ...f, billing_period_end: v }))}
+              startLabel={tuitionT("billing_period_start_label")}
+              endLabel={tuitionT("billing_period_end_label")}
+              hint={tuitionT("billing_period_hint")}
+            />
 
             <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border px-3 py-2">
               <div className="flex items-center justify-between gap-2">
@@ -6017,8 +5994,19 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                   </p>
                   <p className="text-muted-foreground">
                     {tuitionT("detail_calendar_line", {
-                      start: monthNamesLong[ruleDetailRule.start_month - 1],
-                      end: ruleDetailRule.end_month != null ? `${tuitionT("arrow_range")}${monthNamesLong[ruleDetailRule.end_month - 1]}` : "",
+                      start: formatBillingPeriodRange(
+                        billingMonthKeysFromRule(
+                          ruleDetailRule,
+                          years.find((y) => y.id === ruleDetailYearId),
+                        ).start,
+                        billingMonthKeysFromRule(
+                          ruleDetailRule,
+                          years.find((y) => y.id === ruleDetailYearId),
+                        ).end,
+                        monthNamesLong,
+                        dateLocaleTag,
+                      ),
+                      end: "",
                       periods: tuitionT("period_count", { count: ruleDetailRule.months_count }),
                     })}
                   </p>
