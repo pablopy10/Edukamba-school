@@ -5,14 +5,14 @@ import {
 } from "@/lib/finance/chargeRuleBillingPeriod";
 import { domainChargeRpcName } from "@/lib/finance/chargeRulePeriods";
 
-/** Período em atraso ou do mês corrente (alinhado com charge_rule_period_is_due_now). */
+/** Período até ao mês corrente (inclusive), alinhado com charge_rule_period_is_due_now. */
 export function isBillingPeriodDueNow(dueIso: string, generateAllUpfront: boolean): boolean {
   if (generateAllUpfront) return true;
   const due = new Date(`${dueIso}T12:00:00`);
   const today = new Date();
-  today.setHours(12, 0, 0, 0);
-  if (due.getTime() <= today.getTime()) return true;
-  return due.getFullYear() === today.getFullYear() && due.getMonth() === today.getMonth();
+  const dueAbs = due.getFullYear() * 12 + due.getMonth();
+  const todayAbs = today.getFullYear() * 12 + today.getMonth();
+  return dueAbs <= todayAbs;
 }
 
 type TuitionBackfillRule = ChargeRuleBillingShape & {
