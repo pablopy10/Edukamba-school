@@ -73,7 +73,7 @@ export const MobileBottomNav = () => {
       style={{ paddingBottom: "max(0.3rem, var(--sab-r))" }}
       aria-label={t("nav.mobile_nav_label")}
     >
-      <div className="mx-auto flex max-w-[1600px] justify-evenly gap-0 px-0 pb-1 pt-1">
+      <div className="mx-auto flex w-full justify-evenly gap-0 px-0 pb-1 pt-1">
         {visible.map((item) => {
           const Icon = item.icon;
           const active = routeActive(location.pathname, item.to);

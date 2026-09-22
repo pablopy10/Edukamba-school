@@ -152,7 +152,7 @@ export function SuperAdminPortal() {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:max-w-none lg:px-10 lg:py-10">
+        <main className="w-full flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
           <Outlet />
         </main>
       </div>
