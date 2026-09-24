@@ -2044,16 +2044,12 @@ const Definicoes = () => {
         {activeTab === "faturacao" && (
           <div className="flex flex-col gap-6">
             {/* Faturação externa */}
-            <SectionCard title="Faturação externa" desc="Configure se a escola usa software de faturação de terceiros. Com faturação externa activa, as FR são emitidas automaticamente na validação de pagamentos.">
+            <SectionCard title="Faturação externa" desc="Configure se a escola usa software de faturação de terceiros. Com faturação externa activa, o Edukamba não gera FT/FR fiscais internas e pode notificar o sistema externo via webhook.">
               <div className="flex flex-col gap-4">
-                <div className="rounded-xl bg-pastel-blue/20 p-4 text-xs text-muted-foreground">
-                  A integração com o software de faturação é gerida pela plataforma Edukamba em background (multi-conta / marca branca).
-                  Contacte o suporte para activar ou alterar a integração.
-                </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold text-foreground">Usar faturação externa</p>
-                    <p className="text-xs text-muted-foreground">Quando activo, o sistema não gera FT/FR fiscais internas — emite FR via integração externa ou webhook genérico.</p>
+                    <p className="text-xs text-muted-foreground">Quando activo, o sistema não gera FT/FR fiscais internas — emite comprovativo interno e, se configurado, notifica o webhook.</p>
                   </div>
                   <label className="relative inline-flex cursor-pointer items-center">
                     <input
@@ -2068,7 +2064,7 @@ const Definicoes = () => {
                 </div>
                 {school.usa_faturacao_externa && (
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground">URL do Webhook (fallback)</label>
+                    <label className="text-xs font-medium text-muted-foreground">URL do Webhook</label>
                     <input
                       className={inputCls(false)}
                       value={school.webhook_billing_url ?? ""}
@@ -2076,7 +2072,7 @@ const Definicoes = () => {
                       disabled={!settingsAdmin}
                       onChange={(e) => setSchool({ ...school, webhook_billing_url: e.target.value })}
                     />
-                    <p className="mt-1 text-xs text-muted-foreground">Usado quando a integração automática de faturação não está activa. Com integração activa, a FR é emitida automaticamente.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Notificado quando um pagamento é validado (opcional).</p>
                   </div>
                 )}
               </div>

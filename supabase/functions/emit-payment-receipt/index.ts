@@ -1,15 +1,10 @@
 /**
  * Emite Comprovativo de Recebimento interno (não fiscal) para escolas com faturação externa.
- * Com vendus_api_key configurada: emite FR no Vendus e regista metadados fiscais.
- * Sem Vendus: dispara webhook genérico para sistema externo.
+ * Dispara webhook genérico quando configurado.
  *
  * Body: { payment_ids: string[] }
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { emitVendusInvoiceForPayment, resolveStudentIdFromPayment } from "../_shared/vendusPaymentFlow.ts";
-import { logVendusFailure } from "../_shared/vendusAuth.ts";
-import { externalBillingUserMessage } from "../_shared/externalBillingUserMessage.ts";
-import { VendusApiError } from "../_shared/vendusService.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,11 +23,53 @@ type ReceiptResult = {
   status: "created" | "skipped" | "error";
   receipt_id?: string;
   receipt_number?: string;
-  vendus_document_id?: string;
-  vendus_document_number?: string;
-  vendus_pdf_url?: string;
   detail?: string;
 };
+
+type PaymentRow = {
+  id: string;
+  school_id: string;
+  amount_paid: number;
+  method: string | null;
+  payment_date: string | null;
+  student_fee_id: string | null;
+  activity_fee_id: string | null;
+  transport_fee_id: string | null;
+  enrollment_fee_id: string | null;
+  meal_fee_id: string | null;
+  event_fee_id: string | null;
+};
+
+async function resolveStudentIdFromPayment(
+  admin: ReturnType<typeof createClient>,
+  payment: PaymentRow,
+): Promise<string | null> {
+  if (payment.student_fee_id) {
+    const { data } = await admin.from("student_fees").select("student_id").eq("id", payment.student_fee_id).maybeSingle();
+    if (data?.student_id) return data.student_id;
+  }
+  if (payment.activity_fee_id) {
+    const { data } = await admin.from("activity_fees").select("student_id").eq("id", payment.activity_fee_id).maybeSingle();
+    if (data?.student_id) return data.student_id;
+  }
+  if (payment.transport_fee_id) {
+    const { data } = await admin.from("transport_fees").select("student_id").eq("id", payment.transport_fee_id).maybeSingle();
+    if (data?.student_id) return data.student_id;
+  }
+  if (payment.enrollment_fee_id) {
+    const { data } = await admin.from("enrollment_fees").select("student_id").eq("id", payment.enrollment_fee_id).maybeSingle();
+    if (data?.student_id) return data.student_id;
+  }
+  if (payment.meal_fee_id) {
+    const { data } = await admin.from("meal_fees").select("student_id").eq("id", payment.meal_fee_id).maybeSingle();
+    if (data?.student_id) return data.student_id;
+  }
+  if (payment.event_fee_id) {
+    const { data } = await admin.from("event_fees").select("student_id").eq("id", payment.event_fee_id).maybeSingle();
+    if (data?.student_id) return data.student_id;
+  }
+  return null;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -75,89 +112,27 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const studentId = await resolveStudentIdFromPayment(admin, payment);
+        const studentId = await resolveStudentIdFromPayment(admin, payment as PaymentRow);
 
         const { data: school } = await admin
           .from("schools")
-          .select("webhook_billing_url, webhook_billing_secret, vendus_api_key, usa_faturacao_externa")
+          .select("webhook_billing_url, webhook_billing_secret, usa_faturacao_externa")
           .eq("id", payment.school_id)
           .single();
 
-        const vendusApiKey = school?.vendus_api_key?.trim() ?? "";
-
         const { data: existing } = await admin
           .from("payment_receipts")
-          .select("id, receipt_number, description, vendus_document_id, vendus_document_number, vendus_pdf_url")
+          .select("id, receipt_number")
           .eq("payment_id", paymentId)
           .maybeSingle();
 
         if (existing) {
-          if (existing.vendus_document_id?.trim()) {
-            results.push({
-              payment_id: paymentId,
-              status: "skipped",
-              receipt_id: existing.id,
-              receipt_number: existing.receipt_number,
-              vendus_document_id: existing.vendus_document_id ?? undefined,
-              vendus_document_number: existing.vendus_document_number ?? undefined,
-              vendus_pdf_url: existing.vendus_pdf_url ?? undefined,
-              detail: "Comprovativo já existe.",
-            });
-            continue;
-          }
-
-          if (vendusApiKey) {
-            try {
-              const vendusResult = await emitVendusInvoiceForPayment(admin, vendusApiKey, { ...payment, student_id: studentId });
-              const descBase = String(existing.description ?? "Pagamento").trim();
-              const descWithDoc = vendusResult.vendusDocumentNumber
-                ? `${descBase} · ${vendusResult.vendusDocumentNumber}`
-                : descBase;
-              await admin
-                .from("payment_receipts")
-                .update({
-                  description: descWithDoc,
-                  vendus_document_id: vendusResult.vendusDocumentId,
-                  vendus_document_number: vendusResult.vendusDocumentNumber,
-                  vendus_pdf_url: vendusResult.vendusPdfUrl,
-                })
-                .eq("id", existing.id);
-
-              results.push({
-                payment_id: paymentId,
-                status: "created",
-                receipt_id: existing.id,
-                receipt_number: existing.receipt_number,
-                vendus_document_id: vendusResult.vendusDocumentId,
-                vendus_document_number: vendusResult.vendusDocumentNumber,
-                vendus_pdf_url: vendusResult.vendusPdfUrl,
-                detail: "Fatura emitida (comprovativo já existia).",
-              });
-            } catch (vendusErr) {
-              const msg = vendusErr instanceof Error ? vendusErr.message : String(vendusErr);
-              await logVendusFailure(admin, {
-                schoolId: payment.school_id,
-                operation: "emit_payment_receipt_vendus_retry",
-                paymentId: payment.id,
-                errorMessage: msg,
-                httpStatus: vendusErr instanceof VendusApiError ? vendusErr.status ?? null : null,
-                responsePayload: vendusErr instanceof VendusApiError ? vendusErr.vendusPayload : undefined,
-              });
-              results.push({
-                payment_id: paymentId,
-                status: "error",
-                detail: externalBillingUserMessage(msg),
-              });
-            }
-            continue;
-          }
-
           results.push({
             payment_id: paymentId,
             status: "skipped",
             receipt_id: existing.id,
             receipt_number: existing.receipt_number,
-            detail: "Comprovativo já existe (integração fiscal não configurada).",
+            detail: "Comprovativo já existe.",
           });
           continue;
         }
@@ -210,43 +185,6 @@ Deno.serve(async (req) => {
         if (payment.meal_fee_id) description = "Pagamento de refeições";
         if (payment.event_fee_id) description = "Pagamento de evento";
 
-        let vendusMeta: {
-          vendusDocumentId?: string;
-          vendusDocumentNumber?: string;
-          vendusPdfUrl?: string;
-        } = {};
-
-        if (vendusApiKey) {
-          try {
-            const vendusResult = await emitVendusInvoiceForPayment(admin, vendusApiKey, { ...payment, student_id: studentId });
-            vendusMeta = {
-              vendusDocumentId: vendusResult.vendusDocumentId,
-              vendusDocumentNumber: vendusResult.vendusDocumentNumber,
-              vendusPdfUrl: vendusResult.vendusPdfUrl,
-            };
-            if (vendusResult.vendusDocumentNumber) {
-              description = `${description} · ${vendusResult.vendusDocumentNumber}`;
-            }
-          } catch (vendusErr) {
-            const msg = vendusErr instanceof Error ? vendusErr.message : String(vendusErr);
-            await logVendusFailure(admin, {
-              schoolId: payment.school_id,
-              operation: "emit_payment_receipt_vendus",
-              paymentId: payment.id,
-              profileId: student?.parent_id ?? null,
-              errorMessage: msg,
-              httpStatus: vendusErr instanceof VendusApiError ? vendusErr.status ?? null : null,
-              responsePayload: vendusErr instanceof VendusApiError ? vendusErr.vendusPayload : undefined,
-            });
-            results.push({
-              payment_id: paymentId,
-              status: "error",
-              detail: externalBillingUserMessage(msg),
-            });
-            continue;
-          }
-        }
-
         const { data: receipt, error: insErr } = await admin.from("payment_receipts").insert({
           school_id: payment.school_id,
           payment_id: paymentId,
@@ -258,9 +196,6 @@ Deno.serve(async (req) => {
           description,
           cliente_nome: clienteNome,
           cliente_nif: clienteNif,
-          vendus_document_id: vendusMeta.vendusDocumentId ?? null,
-          vendus_document_number: vendusMeta.vendusDocumentNumber ?? null,
-          vendus_pdf_url: vendusMeta.vendusPdfUrl ?? null,
         }).select("id, receipt_number").single();
 
         if (insErr) {
@@ -291,8 +226,7 @@ Deno.serve(async (req) => {
           });
         }
 
-        // Webhook genérico apenas quando Vendus NÃO está configurado
-        if (!vendusApiKey && school?.webhook_billing_url?.trim()) {
+        if (school?.webhook_billing_url?.trim()) {
           try {
             const webhookPayload = {
               event: "payment.validated",
@@ -323,9 +257,6 @@ Deno.serve(async (req) => {
           status: "created",
           receipt_id: receipt!.id,
           receipt_number: receipt!.receipt_number,
-          vendus_document_id: vendusMeta.vendusDocumentId,
-          vendus_document_number: vendusMeta.vendusDocumentNumber,
-          vendus_pdf_url: vendusMeta.vendusPdfUrl,
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);

@@ -337,13 +337,10 @@ async function emitOne(
     const billingClient = adminSb ?? sb;
     const { data: schoolBilling } = await billingClient
       .from("schools")
-      .select("usa_faturacao_externa, vendus_api_key")
+      .select("usa_faturacao_externa")
       .eq("id", payment.school_id)
       .maybeSingle();
-    if (
-      schoolBilling?.usa_faturacao_externa === true ||
-      (schoolBilling?.vendus_api_key?.trim() ?? "") !== ""
-    ) {
+    if (schoolBilling?.usa_faturacao_externa === true) {
       return {
         payment_id,
         status: "skipped",

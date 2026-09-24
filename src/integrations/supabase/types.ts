@@ -3060,7 +3060,6 @@ export type Database = {
           school_id: string | null
           support_context_school_id: string | null
           tax_id: string | null
-          vendus_client_id: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -3075,7 +3074,6 @@ export type Database = {
           school_id?: string | null
           support_context_school_id?: string | null
           tax_id?: string | null
-          vendus_client_id?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -3090,7 +3088,6 @@ export type Database = {
           school_id?: string | null
           support_context_school_id?: string | null
           tax_id?: string | null
-          vendus_client_id?: string | null
         }
         Relationships: [
           {
@@ -3744,7 +3741,6 @@ export type Database = {
           usage_brevo_emails_sent_mt: number
           usage_proof_storage_bytes_estimate: number
           usa_faturacao_externa: boolean
-          vendus_api_key: string | null
           webhook_billing_secret: string | null
           webhook_billing_url: string | null
         }
@@ -3768,7 +3764,6 @@ export type Database = {
           usage_brevo_emails_sent_mt?: number
           usage_proof_storage_bytes_estimate?: number
           usa_faturacao_externa?: boolean
-          vendus_api_key?: string | null
           webhook_billing_secret?: string | null
           webhook_billing_url?: string | null
         }
@@ -3792,7 +3787,6 @@ export type Database = {
           usage_brevo_emails_sent_mt?: number
           usage_proof_storage_bytes_estimate?: number
           usa_faturacao_externa?: boolean
-          vendus_api_key?: string | null
           webhook_billing_secret?: string | null
           webhook_billing_url?: string | null
         }

@@ -48,7 +48,6 @@ import {
   type EmitFiscalInvoicesResult,
 } from "@/lib/fiscal/invokeEmitFiscalInvoices";
 import { invokeEmitPaymentReceipt } from "@/lib/fiscal/invokeEmitPaymentReceipt";
-import { downloadVendusDocumentPdf } from "@/lib/vendus/invokeVendusBilling";
 import { sendNotificationWithPush } from "@/lib/notifications/sendNotificationWithPush";
 import { downloadFiscalInvoicePdfById } from "@/lib/fiscal/downloadFiscalInvoicePdf";
 import { invokeCancelFiscalInvoice } from "@/lib/fiscal/invokeCancelFiscalInvoice";
@@ -522,13 +521,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   const [invoiceByPaymentId, setInvoiceByPaymentId] = useState<
     Record<string, { invoiceId: string; documentNumber: string; invoiceStatus: "N" | "A" }>
   >({});
-  /** Fatura Vendus (FR) por id de pagamento — faturação externa. */
-  const [vendusByPaymentId, setVendusByPaymentId] = useState<
-    Record<string, { documentId: string; documentNumber: string }>
-  >({});
   const [downloadingInvoicePdfId, setDownloadingInvoicePdfId] = useState<string | null>(null);
-  const [downloadingVendusDocId, setDownloadingVendusDocId] = useState<string | null>(null);
-  const [emittingVendusPaymentId, setEmittingVendusPaymentId] = useState<string | null>(null);
   const [cancelInvoiceDialog, setCancelInvoiceDialog] = useState<{
     invoiceId: string;
     documentNumber: string;
@@ -955,13 +948,11 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     // Carregar flag de faturação externa
     const { data: billingFlags } = await supabase.rpc("get_school_billing_flags", { _school_id: sId });
     const flagsRow = (Array.isArray(billingFlags) ? billingFlags[0] : billingFlags) as
-      | { usa_faturacao_externa?: boolean; vendus_configured?: boolean }
+      | { usa_faturacao_externa?: boolean }
       | null
       | undefined;
     if (flagsRow) {
-      setUsaFaturacaoExterna(
-        !!(flagsRow.usa_faturacao_externa || flagsRow.vendus_configured),
-      );
+      setUsaFaturacaoExterna(!!flagsRow.usa_faturacao_externa);
     } else {
       const { data: schoolRow } = await supabase
         .from("schools")
@@ -1711,52 +1702,12 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
 
     async function loadInvoicesForPayments() {
       if (!schoolId) {
-        if (!cancelled) {
-          setInvoiceByPaymentId({});
-          setVendusByPaymentId({});
-        }
+        if (!cancelled) setInvoiceByPaymentId({});
         return;
       }
       const pidList = validatedPaymentIdsForInvoiceFetch;
-      if (pidList.length === 0) {
-        if (!cancelled) {
-          setInvoiceByPaymentId({});
-          setVendusByPaymentId({});
-        }
-        return;
-      }
-
-      if (usaFaturacaoExterna) {
-        const vendusNext: Record<string, { documentId: string; documentNumber: string }> = {};
-        for (const slice of chunkBySize(pidList, 200)) {
-          const { data, error } = await supabase
-            .from("payment_receipts")
-            .select("payment_id, vendus_document_id, vendus_document_number")
-            .eq("school_id", schoolId)
-            .in("payment_id", slice);
-          if (error) {
-            if (!cancelled)
-              toast({
-                title: "Erro ao carregar faturas",
-                description: error.message,
-                variant: "destructive",
-              });
-            return;
-          }
-          for (const row of data ?? []) {
-            const payId = row.payment_id as string | null;
-            const docId = String(row.vendus_document_id ?? "").trim();
-            if (!payId?.trim() || !docId) continue;
-            vendusNext[payId] = {
-              documentId: docId,
-              documentNumber: String(row.vendus_document_number ?? "").trim(),
-            };
-          }
-        }
-        if (!cancelled) {
-          setVendusByPaymentId(vendusNext);
-          setInvoiceByPaymentId({});
-        }
+      if (pidList.length === 0 || usaFaturacaoExterna) {
+        if (!cancelled) setInvoiceByPaymentId({});
         return;
       }
 
@@ -1789,10 +1740,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         }
       }
 
-      if (!cancelled) {
-        setInvoiceByPaymentId(next);
-        setVendusByPaymentId({});
-      }
+      if (!cancelled) setInvoiceByPaymentId(next);
     }
 
     void loadInvoicesForPayments();
@@ -1821,28 +1769,25 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       });
       if (!flagsErr && billingFlags) {
         const row = (Array.isArray(billingFlags) ? billingFlags[0] : billingFlags) as
-          | { usa_faturacao_externa?: boolean; vendus_configured?: boolean }
+          | { usa_faturacao_externa?: boolean }
           | null
           | undefined;
-        useExternalBilling = !!(row?.usa_faturacao_externa || row?.vendus_configured);
+        useExternalBilling = !!row?.usa_faturacao_externa;
         if (useExternalBilling !== usaFaturacaoExterna) {
           setUsaFaturacaoExterna(useExternalBilling);
         }
       }
     }
 
-    // Escola com faturação externa: comprovativo interno + Vendus (se configurado) ou webhook
+    // Escola com faturação externa: comprovativo interno + webhook
     if (useExternalBilling) {
       const rx = await invokeEmitPaymentReceipt(ids);
       const created = rx.results?.filter((r) => r.status === "created") ?? [];
       const errored = rx.results?.filter((r) => r.status === "error") ?? [];
-      const withVendus = (rx.results ?? []).filter((r) => r.vendus_document_id?.trim());
       if (created.length > 0) {
         toast({
           title: created.length > 1 ? "Comprovativos gerados" : "Comprovativo gerado",
-          description: withVendus.length > 0
-            ? `${withVendus.length} fatura(s) FR emitida(s).`
-            : `${created.length} comprovativo(s) criado(s). Sistema externo notificado.`,
+          description: `${created.length} comprovativo(s) criado(s). Sistema externo notificado.`,
         });
       }
       if (errored.length > 0) {
@@ -1853,20 +1798,6 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         });
       } else if (!rx.ok && rx.message) {
         toast({ title: "Erro no comprovativo", description: rx.message, variant: "destructive" });
-      }
-      if (withVendus.length > 0) {
-        setVendusByPaymentId((prev) => {
-          const next = { ...prev };
-          for (const r of rx.results ?? []) {
-            const docId = r.vendus_document_id?.trim();
-            if (!docId || !r.payment_id) continue;
-            next[r.payment_id] = {
-              documentId: docId,
-              documentNumber: r.vendus_document_number?.trim() ?? "",
-            };
-          }
-          return next;
-        });
       }
       return { ok: rx.ok, results: [], message: rx.message };
     }
@@ -3226,31 +3157,6 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     }
   };
 
-  const downloadVendusPdf = async (
-    vendus: { documentId: string; documentNumber: string },
-    paymentId: string,
-  ) => {
-    setDownloadingVendusDocId(vendus.documentId);
-    try {
-      await downloadVendusDocumentPdf({
-        documentId: vendus.documentId,
-        paymentId,
-        filenameHint: vendus.documentNumber || undefined,
-      });
-      toast({
-        title: "Fatura transferida",
-        description: vendus.documentNumber
-          ? `Documento ${vendus.documentNumber} descarregado.`
-          : "PDF da fatura descarregado.",
-      });
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast({ title: "Erro ao descarregar fatura", description: msg, variant: "destructive" });
-    } finally {
-      setDownloadingVendusDocId(null);
-    }
-  };
-
   const confirmCancelInvoice = async () => {
     if (!cancelInvoiceDialog) return;
     let reasonText: string;
@@ -3349,77 +3255,10 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     }
   };
 
-  const retryEmitVendusForPayment = async (paymentId: string) => {
-    if (!paymentId.trim()) return;
-    setEmittingVendusPaymentId(paymentId);
-    try {
-      await emitFtAfterValidation([paymentId]);
-    } finally {
-      setEmittingVendusPaymentId(null);
-    }
-  };
-
   /** Menu FR na lista quando a cobrança está paga e o pagamento validado. */
   const invoiceActionsForValidatedPayment = (feeMarkedPaid: boolean, pay?: PaymentListRow) => {
     if (!feeMarkedPaid || !pay || pay.status !== "validado" || !pay.id?.trim()) return null;
-
-    if (usaFaturacaoExterna) {
-      const vendus = vendusByPaymentId[pay.id];
-      if (!vendus?.documentId) {
-        const busy = emittingVendusPaymentId === pay.id;
-        return (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-8 text-xs shrink-0"
-            disabled={busy}
-            title="Emitir fatura FR"
-            onClick={() => void retryEmitVendusForPayment(pay.id)}
-          >
-            {busy ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <FileDown className="h-3 w-3 mr-1" />}
-            Emitir FR
-          </Button>
-        );
-      }
-      const busy = downloadingVendusDocId === vendus.documentId;
-      const menuTitle = vendus.documentNumber
-        ? `Fatura ${vendus.documentNumber}`
-        : "Fatura";
-
-      return (
-        <div className="flex flex-col items-center gap-0.5">
-          {vendus.documentNumber ? (
-            <Badge variant="outline" className="border-primary/40 text-primary text-[10px] px-1 py-0">
-              {vendus.documentNumber}
-            </Badge>
-          ) : null}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 shrink-0 text-primary"
-                disabled={busy}
-                title={menuTitle}
-              >
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem
-                className="gap-2"
-                onClick={() => void downloadVendusPdf(vendus, pay.id)}
-              >
-                <FileDown className="h-4 w-4" />
-                Descarregar fatura (PDF)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      );
-    }
+    if (usaFaturacaoExterna) return null;
 
     const inv = invoiceByPaymentId[pay.id];
     if (!inv?.invoiceId) return null;

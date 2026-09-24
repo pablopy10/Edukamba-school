@@ -3,10 +3,6 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
-    {
-      "source": "/api/financeiro/saft",
-      "destination": "https://mrjftwvygqoimexwgclm.supabase.co/functions/v1/api-financeiro-saft"
-    },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
