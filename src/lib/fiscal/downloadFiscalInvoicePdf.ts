@@ -8,6 +8,15 @@ const fmtAOA = (n: number) =>
 
 /** Gera o PDF FACTURA‑RECIBO a partir da linha `invoices` já carregada (RLS aplica‑se só na lectura inicial). */
 export async function downloadFiscalInvoicePdfFromInvoice(invoice: Tables<"invoices">): Promise<void> {
+  const invWithPdf = invoice as Tables<"invoices"> & { pdf_url?: string | null };
+  if (invWithPdf.pdf_url?.trim()) {
+    try {
+      window.open(invWithPdf.pdf_url.trim(), "_blank");
+      return;
+    } catch {
+      /* fallback para geração no cliente */
+    }
+  }
   const payload = await resolveFiscalInvoicePdfInput(invoice, fmtAOA);
   const doc = buildInvoicePdf(payload);
   const base = invoice.document_number?.trim()?.replace(/\s+/g, "_") || invoice.id.slice(0, 8);
@@ -22,6 +31,27 @@ export async function downloadFiscalInvoicePdfById(invoiceId: string): Promise<v
   if (error) throw new Error(error.message);
   if (!inv) throw new Error("Fatura não encontrada ou sem permissão.");
   await downloadFiscalInvoicePdfFromInvoice(inv as Tables<"invoices">);
+}
+
+/** Carrega `invoices` pelo id e abre o PDF num novo separador do navegador. */
+export async function openFiscalInvoicePdfInNewTab(invoiceId: string): Promise<void> {
+  const id = invoiceId?.trim();
+  if (!id) throw new Error("Identificador de fatura inválido.");
+  const { data: inv, error } = await supabase.from("invoices").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!inv) throw new Error("Fatura não encontrada ou sem permissão.");
+
+  const invWithPdf = inv as Tables<"invoices"> & { pdf_url?: string | null };
+  if (invWithPdf.pdf_url?.trim()) {
+    window.open(invWithPdf.pdf_url.trim(), "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  const payload = await resolveFiscalInvoicePdfInput(inv as Tables<"invoices">, fmtAOA);
+  const doc = buildInvoicePdf(payload);
+  const blob = doc.output("blob");
+  const blobUrl = URL.createObjectURL(blob);
+  window.open(blobUrl, "_blank", "noopener,noreferrer");
 }
 
 /**

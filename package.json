@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "test:billing": "vitest run src/test/fiscalModule.test.ts",
     "demo:billing": "node --import tsx scripts/test-fiscal-demo.ts",
+    "r2:cors": "node --import tsx scripts/update-r2-cors.ts",
     "postinstall": "patch-package --error-on-fail false"
   },
   "dependencies": {

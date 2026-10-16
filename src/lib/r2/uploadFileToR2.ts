@@ -271,7 +271,8 @@ export async function uploadFileToR2(
     if (canUseEdgeFallback && shouldFallbackToEdgeUpload(presignErr)) {
       try {
         return await uploadViaEdgeFunction(prepared, prefix, onProgress);
-      } catch {
+      } catch (edgeErr) {
+        console.warn("[uploadFileToR2] Fallback uploadViaEdgeFunction falhou:", edgeErr);
         /* mantém erro do presign (inclui dica CORS) */
       }
     }

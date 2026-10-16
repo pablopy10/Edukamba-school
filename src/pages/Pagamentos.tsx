@@ -19,7 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import {
   Loader2, Plus, Pencil, Trash2, PlayCircle, Bell, Search, CheckCircle2, XCircle, Eye, FileText, Upload, Bus,
-  GraduationCap, FileDown, Utensils, CalendarDays, MoreVertical, Ban, Receipt,
+  GraduationCap, FileDown, Utensils, CalendarDays, MoreVertical, Ban, Receipt, ExternalLink,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -47,9 +47,10 @@ import {
   invokeEmitFiscalInvoices,
   type EmitFiscalInvoicesResult,
 } from "@/lib/fiscal/invokeEmitFiscalInvoices";
+import { emitFiscalInvoiceDirect } from "@/lib/fiscal/emitFiscalInvoiceDirect";
 import { invokeEmitPaymentReceipt } from "@/lib/fiscal/invokeEmitPaymentReceipt";
 import { sendNotificationWithPush } from "@/lib/notifications/sendNotificationWithPush";
-import { downloadFiscalInvoicePdfById } from "@/lib/fiscal/downloadFiscalInvoicePdf";
+import { downloadFiscalInvoicePdfById, openFiscalInvoicePdfInNewTab } from "@/lib/fiscal/downloadFiscalInvoicePdf";
 import { invokeCancelFiscalInvoice } from "@/lib/fiscal/invokeCancelFiscalInvoice";
 import { invokeCreditNote } from "@/lib/fiscal/invokeCreditNote";
 import { downloadCreditNotePdfById } from "@/lib/fiscal/downloadCreditNotePdf";
@@ -216,6 +217,7 @@ type PaymentListRow = {
   notes: string | null;
   rejection_reason: string | null;
   submitted_by: string | null;
+  invoice_id?: string | null;
 };
 
 type ActivityFeeRow = {
@@ -456,6 +458,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   const [classrooms, setClassrooms] = useState<ClassroomLite[]>([]);
   const [payments, setPayments] = useState<PaymentListRow[]>([]);
   const [validatingId, setValidatingId] = useState<string | null>(null);
+  const [emittingFtFeeId, setEmittingFtFeeId] = useState<string | null>(null);
   const [bulkValidating, setBulkValidating] = useState(false);
   const [bulkRemindingTuition, setBulkRemindingTuition] = useState(false);
   const [bulkSelectedActivityFeeIds, setBulkSelectedActivityFeeIds] = useState<Set<string>>(() => new Set());
@@ -517,9 +520,12 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   const [enSearch, setEnSearch] = useState("");
   const [remindingEnFeeId, setRemindingEnFeeId] = useState<string | null>(null);
 
-  /** Fatura fiscal (FACTURA‑RECIBO) por id de pagamento — para ícone/link na lista. */
+  /** Fatura fiscal (FACTURA‑RECIBO) por id de pagamento e por id de cobrança — para ícone/link na lista. */
   const [invoiceByPaymentId, setInvoiceByPaymentId] = useState<
-    Record<string, { invoiceId: string; documentNumber: string; invoiceStatus: "N" | "A" }>
+    Record<string, { invoiceId: string; documentNumber: string; invoiceStatus: "N" | "A"; pdfUrl?: string | null }>
+  >({});
+  const [invoiceByFeeId, setInvoiceByFeeId] = useState<
+    Record<string, { invoiceId: string; documentNumber: string; invoiceStatus: "N" | "A"; pdfUrl?: string | null }>
   >({});
   const [downloadingInvoicePdfId, setDownloadingInvoicePdfId] = useState<string | null>(null);
   const [cancelInvoiceDialog, setCancelInvoiceDialog] = useState<{
@@ -658,40 +664,63 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       }
 
       const isPaid = newStatus === "paid";
-      const { error } = await supabase.from(table).update({ is_paid: isPaid }).eq("id", feeId);
 
-      if (error) {
-        toast({ title: "Erro", description: error.message, variant: "destructive" });
-      } else {
-        toast({ title: "Sucesso", description: "Estado do pagamento alterado com sucesso." });
-        // Update local state
-        if (kind === "fee") {
-          setAllFees(prevFees =>
-            prevFees.map(f => f.id === feeId ? { ...f, is_paid: isPaid } : f)
-          );
-        } else if (kind === "activity") {
-          setAllActivityFees(prevFees =>
-            prevFees.map(f => f.id === feeId ? { ...f, is_paid: isPaid } : f)
-          );
-        } else if (kind === "transport") {
-          setAllTransportFees(prevFees =>
-            prevFees.map(f => f.id === feeId ? { ...f, is_paid: isPaid } : f)
-          );
-        } else if (kind === "meal") {
-          setAllMealFees(prevFees =>
-            prevFees.map(f => f.id === feeId ? { ...f, is_paid: isPaid } : f)
-          );
-        } else if (kind === "event") {
-          setAllEventFees(prevFees =>
-            prevFees.map(f => f.id === feeId ? { ...f, is_paid: isPaid } : f)
-          );
-        } else if (kind === "enrollment") {
-          setAllEnrollmentFees(prevFees =>
-            prevFees.map(f => f.id === feeId ? { ...f, is_paid: isPaid } : f)
-          );
+      if (isPaid) {
+        const { data: userRes } = await supabase.auth.getUser();
+        const userId = userRes.user?.id ?? null;
+        let payId: string | null = null;
+
+        // Verificar se já existe registo em payments
+        let existingPay: PaymentListRow | undefined = undefined;
+        if (kind === "fee") existingPay = latestPaymentByFee.get(feeId);
+        else if (kind === "activity") existingPay = activityPayments.find((p) => p.activity_fee_id === feeId);
+        else if (kind === "transport") existingPay = transportPayments.find((p) => p.transport_fee_id === feeId);
+        else if (kind === "meal") existingPay = mealPayments.find((p) => p.meal_fee_id === feeId);
+        else if (kind === "event") existingPay = eventPayments.find((p) => p.event_fee_id === feeId);
+        else if (kind === "enrollment") existingPay = enrollmentPayments.find((p) => p.enrollment_fee_id === feeId);
+
+        if (existingPay?.id) {
+          payId = existingPay.id;
+          if (existingPay.status !== "validado") {
+            await supabase
+              .from("payments")
+              .update({
+                status: "validado",
+                validated_by: userId,
+                validated_at: new Date().toISOString(),
+              })
+              .eq("id", existingPay.id);
+          }
+          const { error: feeErr } = await supabase.from(table).update({ is_paid: true }).eq("id", feeId);
+          if (feeErr) {
+            toast({ title: "Erro ao atualizar cobrança", description: feeErr.message, variant: "destructive" });
+            return;
+          }
+        } else {
+          const insRes = await insertStaffValidatedCharge(kind, fee, userId);
+          if (insRes.error) {
+            toast({ title: "Erro ao registar pagamento", description: insRes.error, variant: "destructive" });
+            return;
+          }
+          payId = insRes.paymentId ?? null;
         }
-        setStatusChangeDialog(null);
+
+        // Emitir fatura fiscal AGT
+        if (payId) {
+          await emitFtAfterValidation([payId]);
+        }
+        toast({ title: "Sucesso", description: "Pagamento registado e fatura emitida com sucesso." });
+      } else {
+        const { error } = await supabase.from(table).update({ is_paid: false }).eq("id", feeId);
+        if (error) {
+          toast({ title: "Erro", description: error.message, variant: "destructive" });
+          return;
+        }
+        toast({ title: "Sucesso", description: "Estado do pagamento alterado com sucesso." });
       }
+
+      setStatusChangeDialog(null);
+      await fetchAll();
     } finally {
       setStatusChanging(false);
     }
@@ -779,8 +808,22 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       }
     }
     const amount = Number(recordAmount) || Number(fee.amount_due);
+    const parentId = fee.student?.parent_id ?? null;
+    const paymentMethodUpper =
+      recordMethod === "multicaixa_express"
+        ? "MULTICAIXA_EXPRESS"
+        : recordMethod === "tpa"
+        ? "TPA"
+        : recordMethod === "numerario"
+        ? "NUMERARIO"
+        : "TRANSFERENCIA";
+
     const insertPayload = isParent ? {
+      amount: amount,
       amount_paid: amount,
+      student_id: studentId,
+      payer_id: parentId ?? studentId,
+      payment_method: paymentMethodUpper,
       method: recordMethod,
       proof_url: proofPath,
       status: "pendente",
@@ -794,7 +837,11 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       event_fee_id: kind === "event" ? fee.id : null,
       enrollment_fee_id: kind === "enrollment" ? fee.id : null,
     } : {
+      amount: amount,
       amount_paid: amount,
+      student_id: studentId,
+      payer_id: parentId ?? studentId,
+      payment_method: paymentMethodUpper,
       method: recordMethod,
       proof_url: proofPath,
       status: "validado",
@@ -853,8 +900,17 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     if (!schoolId) return { error: "Sem escola" };
     if (!userId) return { error: "Sessão inválida" };
     const amount = Number((fee as { amount_due: number }).amount_due) || 0;
+    const studentId =
+      (fee as { student_id?: string; student?: { id?: string; parent_id?: string | null } }).student_id ??
+      fee.student?.id ??
+      null;
+    const parentId = fee.student?.parent_id ?? null;
     const { data: payRow, error: insErr } = await supabase.from("payments").insert({
+      amount: amount,
       amount_paid: amount,
+      student_id: studentId,
+      payer_id: parentId ?? studentId,
+      payment_method: "TRANSFERENCIA",
       method: "transferencia",
       proof_url: null,
       status: "validado",
@@ -885,7 +941,6 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                 ? await supabase.from("event_fees").update({ is_paid: true }).eq("id", fee.id)
                 : await supabase.from("enrollment_fees").update({ is_paid: true }).eq("id", fee.id);
     if (feeErr) return { error: feeErr.message };
-    const parentId = fee.student?.parent_id ?? null;
     if (parentId) {
       let title = "Pagamento registado";
       let description = "";
@@ -1031,7 +1086,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         if (feeIds.length > 0) {
           const { data: payRows } = await supabase
             .from("payments")
-            .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+            .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by, invoice_id")
             .in("student_fee_id", feeIds)
             .order("payment_date", { ascending: false });
           setPayments((payRows ?? []) as PaymentListRow[]);
@@ -1702,52 +1757,74 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
 
     async function loadInvoicesForPayments() {
       if (!schoolId) {
-        if (!cancelled) setInvoiceByPaymentId({});
-        return;
-      }
-      const pidList = validatedPaymentIdsForInvoiceFetch;
-      if (pidList.length === 0 || usaFaturacaoExterna) {
-        if (!cancelled) setInvoiceByPaymentId({});
-        return;
-      }
-
-      const next: Record<string, { invoiceId: string; documentNumber: string; invoiceStatus: "N" | "A" }> = {};
-      for (const slice of chunkBySize(pidList, 200)) {
-        const { data, error } = await supabase
-          .from("invoices")
-          .select("id, payment_id, document_number, invoice_status")
-          .eq("school_id", schoolId)
-          .in("payment_id", slice);
-
-        if (error) {
-          if (!cancelled)
-            toast({
-              title: "Erro ao carregar faturas",
-              description: error.message,
-              variant: "destructive",
-            });
-          return;
+        if (!cancelled) {
+          setInvoiceByPaymentId({});
+          setInvoiceByFeeId({});
         }
-        for (const row of data ?? []) {
-          const payId = row.payment_id as string | null;
-          if (!payId?.trim()) continue;
-          const st = String(row.invoice_status ?? "N").trim().toUpperCase();
-          next[payId] = {
-            invoiceId: row.id as string,
-            documentNumber: String(row.document_number ?? "").trim(),
-            invoiceStatus: st === "A" ? "A" : "N",
-          };
+        return;
+      }
+
+      const nextPay: Record<string, { invoiceId: string; documentNumber: string; invoiceStatus: "N" | "A"; pdfUrl?: string | null }> = {};
+      const nextFee: Record<string, { invoiceId: string; documentNumber: string; invoiceStatus: "N" | "A"; pdfUrl?: string | null }> = {};
+
+      // 1. Carregar faturas da escola
+      const { data: recentInvoices } = await supabase
+        .from("invoices")
+        .select("id, payment_id, student_id, document_number, invoice_status, pdf_url")
+        .eq("school_id", schoolId)
+        .order("doc_number", { ascending: false })
+        .limit(500);
+
+      const invMap = new Map<string, { invoiceId: string; documentNumber: string; invoiceStatus: "N" | "A"; pdfUrl?: string | null }>();
+
+      for (const row of recentInvoices ?? []) {
+        const payId = row.payment_id as string | null;
+        const st = String(row.invoice_status ?? "N").trim().toUpperCase();
+        const item = {
+          invoiceId: row.id as string,
+          documentNumber: String(row.document_number ?? "").trim(),
+          invoiceStatus: (st === "A" ? "A" : "N") as "N" | "A",
+          pdfUrl: (row as { pdf_url?: string | null }).pdf_url ?? null,
+        };
+        invMap.set(row.id as string, item);
+        if (payId?.trim()) {
+          nextPay[payId] = item;
         }
       }
 
-      if (!cancelled) setInvoiceByPaymentId(next);
+      // 2. Carregar pagamentos associados a faturas ou cobranças
+      const { data: payRowsWithInvoice } = await supabase
+        .from("payments")
+        .select("id, student_fee_id, activity_fee_id, transport_fee_id, meal_fee_id, event_fee_id, enrollment_fee_id, invoice_id, status")
+        .eq("school_id", schoolId);
+
+      for (const p of payRowsWithInvoice ?? []) {
+        let invItem = p.invoice_id ? invMap.get(p.invoice_id) : undefined;
+        if (!invItem && p.id && nextPay[p.id]) {
+          invItem = nextPay[p.id];
+        }
+        if (invItem) {
+          nextPay[p.id] = invItem;
+          if (p.student_fee_id) nextFee[p.student_fee_id] = invItem;
+          if (p.activity_fee_id) nextFee[p.activity_fee_id] = invItem;
+          if (p.transport_fee_id) nextFee[p.transport_fee_id] = invItem;
+          if (p.meal_fee_id) nextFee[p.meal_fee_id] = invItem;
+          if (p.event_fee_id) nextFee[p.event_fee_id] = invItem;
+          if (p.enrollment_fee_id) nextFee[p.enrollment_fee_id] = invItem;
+        }
+      }
+
+      if (!cancelled) {
+        setInvoiceByPaymentId(nextPay);
+        setInvoiceByFeeId(nextFee);
+      }
     }
 
     void loadInvoicesForPayments();
     return () => {
       cancelled = true;
     };
-  }, [schoolId, validatedPaymentIdsForInvoiceFetch, usaFaturacaoExterna]);
+  }, [schoolId, validatedPaymentIdsForInvoiceFetch]);
 
   const pendingValidations = useMemo(() => {
     return allFees
@@ -1779,30 +1856,12 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       }
     }
 
-    // Escola com faturação externa: comprovativo interno + webhook
+    // Se usa faturação externa, notifica os comprovativos/webhook em background mas NÃO bloqueia a emissão fiscal AGT do Edukamba
     if (useExternalBilling) {
-      const rx = await invokeEmitPaymentReceipt(ids);
-      const created = rx.results?.filter((r) => r.status === "created") ?? [];
-      const errored = rx.results?.filter((r) => r.status === "error") ?? [];
-      if (created.length > 0) {
-        toast({
-          title: created.length > 1 ? "Comprovativos gerados" : "Comprovativo gerado",
-          description: `${created.length} comprovativo(s) criado(s). Sistema externo notificado.`,
-        });
-      }
-      if (errored.length > 0) {
-        toast({
-          title: "Erro ao emitir fatura",
-          description: errored.map((r) => r.detail ?? r.payment_id).filter(Boolean).join(" · "),
-          variant: "destructive",
-        });
-      } else if (!rx.ok && rx.message) {
-        toast({ title: "Erro no comprovativo", description: rx.message, variant: "destructive" });
-      }
-      return { ok: rx.ok, results: [], message: rx.message };
+      void invokeEmitPaymentReceipt(ids);
     }
 
-    // Fluxo normal: emitir FT fiscal (AGT)
+    // Fluxo principal: emitir FT fiscal certificada pela AGT
     const fx = await invokeEmitFiscalInvoices(ids);
     const emitted = fx.results?.filter((r) => r.status === "emitted" && r.invoice_id?.trim()) ?? [];
     const skipped = fx.results?.filter((r) => r.status === "skipped") ?? [];
@@ -1822,6 +1881,36 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           };
         }
         return next;
+      });
+
+      setInvoiceByFeeId((prev) => {
+        const next = { ...prev };
+        for (const r of emitted) {
+          const pid = r.payment_id?.trim();
+          const iid = r.invoice_id?.trim();
+          if (!pid || !iid) continue;
+          const p = payments.find((x) => x.id === pid) ||
+                    activityPayments.find((x) => x.id === pid) ||
+                    transportPayments.find((x) => x.id === pid) ||
+                    mealPayments.find((x) => x.id === pid) ||
+                    eventPayments.find((x) => x.id === pid) ||
+                    enrollmentPayments.find((x) => x.id === pid);
+          const fid = p?.student_fee_id || p?.activity_fee_id || p?.transport_fee_id || p?.meal_fee_id || p?.event_fee_id || p?.enrollment_fee_id;
+          if (fid) {
+            next[fid] = {
+              invoiceId: iid,
+              documentNumber: r.document_number?.trim() ?? "",
+              invoiceStatus: "N",
+            };
+          }
+        }
+        return next;
+      });
+
+      const firstDoc = emitted[0].document_number || "Fatura fiscal";
+      toast({
+        title: "Fatura emitida com sucesso",
+        description: emitted.length === 1 ? `${firstDoc} gerada e enviada ao encarregado.` : `${emitted.length} faturas geradas com sucesso.`,
       });
     }
 
@@ -3157,6 +3246,18 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     }
   };
 
+  const openInvoicePdfInNewTabHandler = async (inv: { invoiceId: string; documentNumber: string; pdfUrl?: string | null }) => {
+    setDownloadingInvoicePdfId(inv.invoiceId);
+    try {
+      await openFiscalInvoicePdfInNewTab(inv.invoiceId);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: fiscalT("pdf_error_title"), description: msg, variant: "destructive" });
+    } finally {
+      setDownloadingInvoicePdfId(null);
+    }
+  };
+
   const confirmCancelInvoice = async () => {
     if (!cancelInvoiceDialog) return;
     let reasonText: string;
@@ -3255,96 +3356,251 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     }
   };
 
+  const handleEmitFtForFee = async (
+    fee: FeeListRow | ActivityFeeRow | TransportFeeRow | MealFeeRow | EventFeeRow | EnrollmentFeeRow,
+    kind: "fee" | "activity" | "transport" | "meal" | "event" | "enrollment",
+    pay?: PaymentListRow,
+  ) => {
+    if (!schoolId) return;
+    setEmittingFtFeeId(fee.id);
+    try {
+      let payId = pay?.id;
+      const { data: userRes } = await supabase.auth.getUser();
+      const userId = userRes.user?.id ?? null;
+
+      if (!payId) {
+        const ins = await insertStaffValidatedCharge(kind, fee, userId);
+        if (ins.error || !ins.paymentId) {
+          toast({
+            title: "Erro ao criar pagamento",
+            description: ins.error || "Não foi possível criar o registo de liquidação.",
+            variant: "destructive",
+          });
+          return;
+        }
+        payId = ins.paymentId;
+      } else if (pay && pay.status !== "validado") {
+        await supabase
+          .from("payments")
+          .update({
+            status: "validado",
+            validated_by: userId,
+            validated_at: new Date().toISOString(),
+          })
+          .eq("id", pay.id);
+      }
+
+      // 1. Chamar a RPC transacional PostgreSQL validate_and_invoice_payment
+      const { data: rpcRows, error: rpcErr } = await supabase.rpc("validate_and_invoice_payment", {
+        _payment_id: payId,
+        _admin_user_id: userId,
+        _doc_type: "FT",
+        _channels: ["EMAIL"],
+      });
+
+      let invId: string | null = null;
+      let docNum: string | null = null;
+
+      if (!rpcErr && rpcRows) {
+        const row = Array.isArray(rpcRows) ? rpcRows[0] : rpcRows;
+        if (row?.invoice_id) {
+          invId = row.invoice_id;
+          docNum = row.document_number;
+        }
+      }
+
+      // 2. Fallback: emissão direta no cliente emitFiscalInvoiceDirect
+      if (!invId) {
+        const fallbackRes = await emitFiscalInvoiceDirect(payId);
+        if (fallbackRes.ok && fallbackRes.invoice_id) {
+          invId = fallbackRes.invoice_id;
+          docNum = fallbackRes.document_number ?? "FT";
+        } else {
+          throw new Error(fallbackRes.message || rpcErr?.message || "Não foi possível emitir a fatura fiscal.");
+        }
+      }
+
+      const invItem = {
+        invoiceId: invId,
+        documentNumber: docNum ?? "FT",
+        invoiceStatus: "N" as const,
+      };
+
+      // Atualizar o estado local imediatamente para refletir na UI sem delay
+      setInvoiceByPaymentId((prev) => ({ ...prev, [payId!]: invItem }));
+      if (fee?.id) {
+        setInvoiceByFeeId((prev) => ({ ...prev, [fee.id]: invItem }));
+      }
+
+      toast({
+        title: "Fatura emitida com sucesso!",
+        description: `${docNum} emitida e certificada pela AGT.`,
+      });
+
+      await fetchAll();
+    } catch (err: unknown) {
+      toast({
+        title: "Erro ao emitir fatura",
+        description: err instanceof Error ? err.message : String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setEmittingFtFeeId(null);
+    }
+  };
+
   /** Menu FR na lista quando a cobrança está paga e o pagamento validado. */
-  const invoiceActionsForValidatedPayment = (feeMarkedPaid: boolean, pay?: PaymentListRow) => {
-    if (!feeMarkedPaid || !pay || pay.status !== "validado" || !pay.id?.trim()) return null;
-    if (usaFaturacaoExterna) return null;
+  const invoiceActionsForValidatedPayment = (
+    feeMarkedPaid: boolean,
+    pay?: PaymentListRow,
+    fee?: FeeListRow | ActivityFeeRow | TransportFeeRow | MealFeeRow | EventFeeRow | EnrollmentFeeRow,
+    kind: "fee" | "activity" | "transport" | "meal" | "event" | "enrollment" = "fee",
+  ) => {
+    if (!feeMarkedPaid) return null;
 
-    const inv = invoiceByPaymentId[pay.id];
-    if (!inv?.invoiceId) return null;
-    const busy = downloadingInvoicePdfId === inv.invoiceId;
-    const isCancelled = inv.invoiceStatus === "A";
-    const menuTitle = inv.documentNumber
-      ? fiscalT("menu_title", { document: inv.documentNumber })
-      : fiscalT("menu_title_generic");
+    const inv =
+      (pay?.id ? invoiceByPaymentId[pay.id] : undefined) ||
+      (fee?.id ? invoiceByFeeId[fee.id] : undefined) ||
+      (pay?.invoice_id ? { invoiceId: pay.invoice_id, documentNumber: "FT", invoiceStatus: "N" as const } : undefined);
 
-    return (
-      <div className="flex flex-col items-center gap-0.5">
-        {isCancelled && (
-          <Badge variant="outline" className="border-destructive text-destructive text-[10px] px-1 py-0">
-            {fiscalT("badge_cancelled")}
-          </Badge>
-        )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 shrink-0 text-primary"
-              disabled={busy || cancellingInvoiceId === inv.invoiceId}
-              title={menuTitle}
-            >
-              {busy || cancellingInvoiceId === inv.invoiceId ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <MoreVertical className="h-4 w-4" />
+    const isEmitting = fee?.id ? emittingFtFeeId === fee.id : false;
+
+    // Se a fatura já existe, exibir o link clicável que abre num novo separador:
+    if (inv?.invoiceId) {
+      const busy = downloadingInvoicePdfId === inv.invoiceId;
+      const isCancelled = inv.invoiceStatus === "A";
+      const docLabel = inv.documentNumber || "FT";
+
+      return (
+        <div className="flex items-center justify-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => void openInvoicePdfInNewTabHandler(inv)}
+            disabled={busy}
+            className="inline-flex items-center gap-1 font-mono text-xs font-semibold text-primary underline underline-offset-4 hover:text-primary/80 transition-colors py-0.5 px-1.5 rounded hover:bg-primary/10 cursor-pointer"
+            title="Clique para abrir a fatura noutro separador do browser"
+          >
+            {busy ? (
+              <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+            ) : (
+              <ExternalLink className="h-3 w-3 text-primary shrink-0" />
+            )}
+            <span>{docLabel}</span>
+          </button>
+          {isCancelled && (
+            <Badge variant="outline" className="border-destructive text-destructive text-[10px] px-1 py-0">
+              {fiscalT("badge_cancelled")}
+            </Badge>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
+                disabled={busy || cancellingInvoiceId === inv.invoiceId}
+                title={docLabel}
+              >
+                {busy || cancellingInvoiceId === inv.invoiceId ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <MoreVertical className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem
+                className="gap-2 cursor-pointer font-medium text-primary"
+                onClick={() => void openInvoicePdfInNewTabHandler(inv)}
+              >
+                <ExternalLink className="h-4 w-4" />
+                Abrir num novo separador
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="gap-2 cursor-pointer"
+                onClick={() => void downloadInvoicePdf(inv)}
+              >
+                <FileDown className="h-4 w-4" />
+                {fiscalT("action_download_pdf")}
+              </DropdownMenuItem>
+              {!isParent && canCancelInvoice && pay?.id && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+                    disabled={isCancelled}
+                    onClick={() => {
+                      if (isCancelled) return;
+                      setCancelReasonCode("data_error_nif");
+                      setCancelReasonOther("");
+                      setCancelInvoiceDialog({
+                        invoiceId: inv.invoiceId,
+                        documentNumber: inv.documentNumber,
+                        paymentId: pay.id,
+                      });
+                    }}
+                  >
+                    <Ban className="h-4 w-4" />
+                    {fiscalT("action_cancel_invoice")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="gap-2 cursor-pointer"
+                    disabled={isCancelled}
+                    onClick={() => {
+                      if (isCancelled) return;
+                      setCreditNoteReasonCode("data_error");
+                      setCreditNoteReasonOther("");
+                      setCreditNotePartialAmount("");
+                      setCreditNoteDialog({
+                        invoiceId: inv.invoiceId,
+                        documentNumber: inv.documentNumber,
+                        paymentId: pay.id,
+                        grossTotal: pay.amount_paid || 0,
+                      });
+                    }}
+                  >
+                    <Receipt className="h-4 w-4" />
+                    {fiscalT("action_credit_note")}
+                  </DropdownMenuItem>
+                </>
               )}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuItem
-              className="gap-2"
-              onClick={() => void downloadInvoicePdf(inv)}
-            >
-              <FileDown className="h-4 w-4" />
-              {fiscalT("action_download_pdf")}
-            </DropdownMenuItem>
-            {!isParent && canCancelInvoice && (
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      );
+    }
+
+    // Se está PAGO mas ainda não tem fatura emitida:
+    if (!isParent && fee) {
+      return (
+        <div className="flex items-center justify-center">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 text-[11px] gap-1 px-2.5 border-primary/40 text-primary hover:bg-primary/10 hover:border-primary font-medium"
+            disabled={isEmitting}
+            onClick={() => void handleEmitFtForFee(fee, kind, pay)}
+            title="Gerar e certificar fatura fiscal AGT (FT) para este pagamento"
+          >
+            {isEmitting ? (
               <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="gap-2 text-destructive focus:text-destructive"
-                  disabled={isCancelled}
-                  onClick={() => {
-                    if (isCancelled) return;
-                    setCancelReasonCode("data_error_nif");
-                    setCancelReasonOther("");
-                    setCancelInvoiceDialog({
-                      invoiceId: inv.invoiceId,
-                      documentNumber: inv.documentNumber,
-                      paymentId: pay.id,
-                    });
-                  }}
-                >
-                  <Ban className="h-4 w-4" />
-                  {fiscalT("action_cancel_invoice")}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="gap-2"
-                  disabled={isCancelled}
-                  onClick={() => {
-                    if (isCancelled) return;
-                    setCreditNoteReasonCode("data_error");
-                    setCreditNoteReasonOther("");
-                    setCreditNotePartialAmount("");
-                    setCreditNoteDialog({
-                      invoiceId: inv.invoiceId,
-                      documentNumber: inv.documentNumber,
-                      paymentId: pay.id,
-                      grossTotal: pay.amount_paid || 0,
-                    });
-                  }}
-                >
-                  <Receipt className="h-4 w-4" />
-                  {fiscalT("action_credit_note")}
-                </DropdownMenuItem>
+                <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                <span>A emitir…</span>
+              </>
+            ) : (
+              <>
+                <FileText className="h-3 w-3 shrink-0" />
+                <span>Emitir FT</span>
               </>
             )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    );
+          </Button>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   if (parentLoading || (chargesEmbeddedOnly && role === "TEACHER" && homeroomStudentsLoading))
@@ -3661,7 +3917,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                           <th className="py-2 px-2">{tuitionT("col_due")}</th>
                           <th className="py-2 px-2">{tuitionT("col_value")}</th>
                           <th className="py-2 px-2">{tuitionT("col_status")}</th>
-                          <th className="py-2 px-2 text-center w-12" title="FACTURA‑RECIBO AGT">
+                          <th className="py-2 px-2 text-center min-w-[100px]" title="FACTURA‑RECIBO AGT">
                             {tuitionT("col_ft_abbr")}
                           </th>
                           <th className="py-2 px-2 text-right">{tuitionT("col_action_right")}</th>
@@ -3705,7 +3961,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   <Badge variant="secondary">{tuitionT("status_pending")}</Badge>
                                 )}
                               </td>
-                              <td className="py-2 px-2 align-middle text-center">{invoiceActionsForValidatedPayment(!!f.is_paid, pay)}</td>
+                              <td className="py-2 px-2 align-middle text-center">{invoiceActionsForValidatedPayment(!!f.is_paid, pay, f, "fee")}</td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
                                   {pendingValidation && pay && !isParent && (
@@ -4066,7 +4322,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   <Badge variant="secondary">{tuitionT("status_pending")}</Badge>
                                 )}
                               </td>
-                              <td className="py-2 px-2 align-middle text-center">{invoiceActionsForValidatedPayment(!!f.is_paid, pay)}</td>
+                              <td className="py-2 px-2 align-middle text-center">{invoiceActionsForValidatedPayment(!!f.is_paid, pay, f, "activity")}</td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
                                   {pendingValidation && pay && !isParent && (
@@ -4422,7 +4678,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   <Badge variant="secondary">{tuitionT("status_pending")}</Badge>
                                 )}
                               </td>
-                              <td className="py-2 px-2 align-middle text-center">{invoiceActionsForValidatedPayment(!!f.is_paid, pay)}</td>
+                              <td className="py-2 px-2 align-middle text-center">{invoiceActionsForValidatedPayment(!!f.is_paid, pay, f, "transport")}</td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
                                   {pendingValidation && pay && !isParent && (
@@ -4778,7 +5034,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   <Badge variant="secondary">{tuitionT("status_pending")}</Badge>
                                 )}
                               </td>
-                              <td className="py-2 px-2 align-middle text-center">{invoiceActionsForValidatedPayment(!!f.is_paid, pay)}</td>
+                              <td className="py-2 px-2 align-middle text-center">{invoiceActionsForValidatedPayment(!!f.is_paid, pay, f, "meal")}</td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
                                   {pendingValidation && pay && !isParent && (
@@ -5141,7 +5397,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   <Badge variant="secondary">{tuitionT("status_pending")}</Badge>
                                 )}
                               </td>
-                              <td className="py-2 px-2 align-middle text-center">{invoiceActionsForValidatedPayment(!!f.is_paid, pay)}</td>
+                              <td className="py-2 px-2 align-middle text-center">{invoiceActionsForValidatedPayment(!!f.is_paid, pay, f, "event")}</td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
                                   {pendingValidation && pay && !isParent && (
@@ -5491,7 +5747,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                                   <Badge variant="secondary">{tuitionT("status_pending")}</Badge>
                                 )}
                               </td>
-                              <td className="py-2 px-2 align-middle text-center">{invoiceActionsForValidatedPayment(!!f.is_paid, pay)}</td>
+                              <td className="py-2 px-2 align-middle text-center">{invoiceActionsForValidatedPayment(!!f.is_paid, pay, f, "enrollment")}</td>
                               <td className="py-2 px-2 text-right">
                                 <div className="flex flex-wrap justify-end gap-2">
                                   {pendingValidation && pay && !isParent && (

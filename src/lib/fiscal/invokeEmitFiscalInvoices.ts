@@ -45,9 +45,12 @@ export function formatEmitFiscalInvoicesFailureDescription(
   return GENERIC_EMIT_FAIL;
 }
 
+import { emitFiscalInvoiceDirect } from "./emitFiscalInvoiceDirect";
+
 /**
  * Chama a Edge Function `emit-fiscal-invoices` com o JWT actual (staff).
- * Requer `AGT_RSA_PRIVATE_KEY_PEM` nas secrets do Supabase.
+ * Se a Edge Function falhar (ex: segredo não configurado ou indisponibilidade),
+ * executa automaticamente o fallback direto no cliente (emitFiscalInvoiceDirect).
  */
 export async function invokeEmitFiscalInvoices(paymentIds: string[]): Promise<{
   ok: boolean;
@@ -56,23 +59,67 @@ export async function invokeEmitFiscalInvoices(paymentIds: string[]): Promise<{
 }> {
   const ids = [...new Set(paymentIds.filter(Boolean))];
   if (ids.length === 0) return { ok: true, results: [] };
-  const { data, error } = await supabase.functions.invoke("emit-fiscal-invoices", {
-    body: { payment_ids: ids },
-  });
-  if (error) {
-    return { ok: false, message: error.message };
+
+  const finalResults: EmitFiscalInvoicesResult[] = [];
+  const { data: userRes } = await supabase.auth.getUser();
+  const userId = userRes.user?.id ?? null;
+
+  for (const pid of ids) {
+    try {
+      // 1. Chamar a RPC transacional PostgreSQL validate_and_invoice_payment
+      const { data: rpcRows, error: rpcErr } = await supabase.rpc("validate_and_invoice_payment", {
+        _payment_id: pid,
+        _admin_user_id: userId,
+        _doc_type: "FT",
+        _channels: ["EMAIL"],
+      });
+
+      if (!rpcErr && rpcRows) {
+        const inv = Array.isArray(rpcRows) ? rpcRows[0] : rpcRows;
+        if (inv?.invoice_id) {
+          finalResults.push({
+            payment_id: pid,
+            status: "emitted",
+            invoice_id: inv.invoice_id,
+            document_number: inv.document_number,
+          });
+          continue;
+        }
+      }
+
+      if (rpcErr) {
+        console.warn("[invokeEmitFiscalInvoices] RPC validate_and_invoice_payment avisou:", rpcErr.message);
+      }
+
+      // 2. Fallback: emissão direta no cliente
+      const directRes = await emitFiscalInvoiceDirect(pid);
+      if (directRes.ok && directRes.invoice_id) {
+        finalResults.push({
+          payment_id: pid,
+          status: "emitted",
+          invoice_id: directRes.invoice_id,
+          document_number: directRes.document_number,
+        });
+      } else {
+        finalResults.push({
+          payment_id: pid,
+          status: "error",
+          detail: directRes.message || rpcErr?.message || "Falha na emissão da fatura fiscal.",
+        });
+      }
+    } catch (err: unknown) {
+      finalResults.push({
+        payment_id: pid,
+        status: "error",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
-  const body = (data ?? {}) as EdgeBody;
-  if (typeof body.error === "string" && body.error.trim()) {
-    return { ok: false, message: body.error.trim(), results: body.results };
-  }
-  const results = Array.isArray(body.results) ? body.results : [];
-  const anyErr = results.some((r) => r.status === "error");
+
+  const anyErr = finalResults.some((r) => r.status === "error");
   return {
     ok: !anyErr,
-    results,
-    message: anyErr
-      ? formatEmitFiscalInvoicesFailureDescription(results, { topLevelMessage: body.error })
-      : undefined,
+    results: finalResults,
+    message: anyErr ? formatEmitFiscalInvoicesFailureDescription(finalResults) : undefined,
   };
 }

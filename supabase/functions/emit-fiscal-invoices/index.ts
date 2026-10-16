@@ -337,7 +337,7 @@ async function emitOne(
     const billingClient = adminSb ?? sb;
     const { data: schoolBilling } = await billingClient
       .from("schools")
-      .select("usa_faturacao_externa")
+      .select("usa_faturacao_externa, tax_id")
       .eq("id", payment.school_id)
       .maybeSingle();
     if (schoolBilling?.usa_faturacao_externa === true) {
@@ -461,9 +461,16 @@ async function emitOne(
 
     const document_hash = await sha1HexUtf8(plaintext);
     const signatureBase64 = signPlaintextRSA_SHA1_PKCS1(plaintext, pem);
-    const hash_control = (((Math.max(seq, 1) - 1) % 10) + 1).toString();
+    const hash_control =
+      signatureBase64.length >= 31
+        ? `${signatureBase64[0]}${signatureBase64[10]}${signatureBase64[20]}${signatureBase64[30]}`
+        : (((Math.max(seq, 1) - 1) % 10) + 1).toString();
 
-    const { data: inserted, error: insErr } = await sb.from("invoices").insert({
+    const schoolNif = (schoolBilling as { tax_id?: string | null })?.tax_id || "000000000";
+    const qrDate = invoiceDateYYYYMMDD.replace(/\D/g, "");
+    const qrPayload = `A:${schoolNif}*B:${cliente_nif}*C:AO*D:FT*E:N*F:${qrDate}*G:${documentNumberFull}*H:${hash_control}*I1:${formatTotalForSigning(baseAmount)}*I2:${formatTotalForSigning(ivaAmount)}*I3:${totalStr}`;
+
+    const invoiceInsertPayload: Record<string, unknown> = {
       school_id: payment.school_id,
       payment_id: payment.id,
       student_id: ctx.student_id,
@@ -471,6 +478,7 @@ async function emitOne(
       series,
       doc_number: seq,
       document_number: documentNumberFull,
+      doc_type: "FT",
       invoice_date: invoiceDateYYYYMMDD,
       invoice_issued_at: issuedAtISO,
       gross_total: gross,
@@ -486,7 +494,9 @@ async function emitOne(
       hash_control,
       cliente_nome: ctx.cliente_nome,
       cliente_nif,
-    }).select("*").single();
+    };
+
+    const { data: inserted, error: insErr } = await sb.from("invoices").insert(invoiceInsertPayload).select("*").single();
 
     if (insErr) {
       if (insErr.code === "23505") {
@@ -495,15 +505,72 @@ async function emitOne(
       return { payment_id, status: "error", detail: insErr.message };
     }
 
-    // Enviar email com PDF da fatura em anexo ao encarregado
+    // Gravar qr_code_payload se coluna existir
+    try {
+      await sb.from("invoices").update({ qr_code_payload: qrPayload }).eq("id", inserted.id);
+    } catch {
+      /* não bloqueante */
+    }
+
+    let pdfPublicUrl: string | null = null;
+    // Enviar email com PDF da fatura em anexo ao encarregado e guardar PDF no storage
     if (inserted?.id) {
       try {
         const emailClient = adminSb ?? sb;
         const pdfBytes = await buildOfficialFiscalInvoicePdfBytes(emailClient, invoiceRowToPdfPayload(inserted));
+
+        // Upload para Cloudflare R2 se configurado
+        const accountId = Deno.env.get("CLOUDFLARE_ACCOUNT_ID");
+        const accessKeyId = Deno.env.get("CLOUDFLARE_ACCESS_KEY_ID");
+        const secretAccessKey = Deno.env.get("CLOUDFLARE_SECRET_ACCESS_KEY");
+        const bucket = Deno.env.get("R2_BUCKET_NAME");
+        const publicBase = Deno.env.get("R2_PUBLIC_BASE_URL");
+
+        if (accountId && accessKeyId && secretAccessKey && bucket && publicBase) {
+          try {
+            const { PutObjectCommand, S3Client } = await import("npm:@aws-sdk/client-s3@3.700.0");
+            const s3 = new S3Client({
+              region: "auto",
+              endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+              credentials: { accessKeyId, secretAccessKey },
+            });
+            const key = `documents/${payment.school_id}/${inserted.id}.pdf`;
+            await s3.send(
+              new PutObjectCommand({
+                Bucket: bucket,
+                Key: key,
+                Body: pdfBytes,
+                ContentType: "application/pdf",
+              }),
+            );
+            const base = publicBase.replace(/\/+$/, "");
+            pdfPublicUrl = `${base}/${key}`;
+            try {
+              await sb.from("invoices").update({ pdf_url: pdfPublicUrl }).eq("id", inserted.id);
+            } catch {
+              /* coluna pdf_url */
+            }
+          } catch (r2Err) {
+            console.warn("Upload do PDF para R2 falhou (não-bloqueante):", r2Err);
+          }
+        }
+
+        // Atualizar payment com relação 1:1, canais de distribuição e PDF
+        try {
+          await sb.from("payments").update({
+            invoice_id: inserted.id,
+            sent_at: new Date().toISOString(),
+            channels_sent: ["EMAIL"],
+            pdf_url: pdfPublicUrl,
+          }).eq("id", payment.id);
+        } catch {
+          /* colunas de auditoria */
+        }
+
         await sendInvoiceIssuedEmailForId(emailClient, String(inserted.id), pdfBytes);
       } catch (emailErr) {
         // Falha no email não deve bloquear a emissão da fatura
-        console.warn("Email da fatura falhou (não-bloqueante):", emailErr instanceof Error ? emailErr.message : emailErr);
+        console.warn("Email/PDF da fatura falhou (não-bloqueante):", emailErr instanceof Error ? emailErr.message : emailErr);
       }
     }
 

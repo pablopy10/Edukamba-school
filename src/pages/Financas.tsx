@@ -17,7 +17,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet, AlertCircle, RefreshCw, Repeat, Power, FileSpreadsheet, FileText } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet, AlertCircle, RefreshCw, Repeat, Power, FileSpreadsheet, FileText, Receipt, FileDown } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -32,6 +32,7 @@ import {
 import { useUserRole } from "@/hooks/useUserRole";
 import { canValidateSchoolPaymentProofs, isSchoolManagementOrTeacher } from "@/lib/schoolStaffRoles";
 import { SaftExportCard } from "@/components/fiscal/SaftExportCard";
+import { downloadFiscalInvoicePdfById } from "@/lib/fiscal/downloadFiscalInvoicePdf";
 import {
   enrichErpPaymentsWithStudentNames,
   fetchValidatedPaymentsForErpYear,
@@ -155,6 +156,67 @@ const Financas = () => {
   const [erpLoading, setErpLoading] = useState(false);
   const [erpExportFilter, setErpExportFilter] = useState<"all" | "pending" | "exported">("all");
   const [erpExporting, setErpExporting] = useState(false);
+
+  // Estado para Faturas Emitidas (AGT)
+  type SchoolInvoiceItem = {
+    id: string;
+    document_number: string | null;
+    doc_type: string | null;
+    invoice_date: string | null;
+    gross_total: number | null;
+    net_total: number | null;
+    tax_payable: number | null;
+    cliente_nome: string | null;
+    cliente_nif: string | null;
+    invoice_status: string | null;
+    created_at: string;
+    pdf_url: string | null;
+  };
+  const [invoicesList, setInvoicesList] = useState<SchoolInvoiceItem[]>([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [downloadingInvId, setDownloadingInvId] = useState<string | null>(null);
+
+  const loadInvoices = useCallback(async () => {
+    if (!schoolId) return;
+    setInvoicesLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("invoices")
+        .select("id, document_number, doc_type, invoice_date, gross_total, net_total, tax_payable, cliente_nome, cliente_nif, invoice_status, created_at, pdf_url")
+        .eq("school_id", schoolId)
+        .order("created_at", { ascending: false });
+      if (!error && data) {
+        setInvoicesList(data as SchoolInvoiceItem[]);
+      }
+    } finally {
+      setInvoicesLoading(false);
+    }
+  }, [schoolId]);
+
+  useEffect(() => {
+    if (schoolId) {
+      void loadInvoices();
+    }
+  }, [schoolId, loadInvoices]);
+
+  const handleDownloadInvoice = async (invId: string, docNum?: string | null) => {
+    setDownloadingInvId(invId);
+    try {
+      await downloadFiscalInvoicePdfById(invId);
+      toast({
+        title: "PDF descarregado",
+        description: docNum ? `Fatura ${docNum} transferida com sucesso.` : "Documento transferido com sucesso.",
+      });
+    } catch (e: unknown) {
+      toast({
+        title: "Erro ao descarregar PDF",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    } finally {
+      setDownloadingInvId(null);
+    }
+  };
 
   const fetchAll = async () => {
     setLoading(true);
@@ -607,6 +669,9 @@ const Financas = () => {
             <TabsTrigger value="expenses">{t("tabs.expenses")}</TabsTrigger>
             <TabsTrigger value="recurring">{t("tabs.recurring")}</TabsTrigger>
             <TabsTrigger value="categories">{t("tabs.categories")}</TabsTrigger>
+            <TabsTrigger value="invoices" className="gap-1.5">
+              <Receipt className="h-3.5 w-3.5" /> Faturas Emitidas (AGT)
+            </TabsTrigger>
             {staffCanExportErp && !native && (
               <TabsTrigger value="erp-payments" className="gap-1.5">
                 <FileSpreadsheet className="h-3.5 w-3.5" /> {t("tabs.erp_payments")}
@@ -781,6 +846,128 @@ const Financas = () => {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="invoices" className="space-y-4">
+            <Card>
+              <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Receipt className="h-5 w-5 text-primary" /> Faturas Emitidas (AGT)
+                  </CardTitle>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Documentos fiscais certificados pela AGT emitidos com QR Code oficial e numeração sequencial EDK.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  disabled={invoicesLoading}
+                  onClick={() => void loadInvoices()}
+                >
+                  <RefreshCw className={cn("h-4 w-4", invoicesLoading && "animate-spin")} />
+                  Atualizar
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {invoicesLoading ? (
+                  <div className="flex justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : invoicesList.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <Receipt className="mx-auto h-12 w-12 text-muted-foreground/40 mb-3" />
+                    <p className="text-base font-medium">Nenhuma fatura emitida ainda</p>
+                    <p className="mt-1 text-sm text-muted-foreground max-w-md mx-auto">
+                      As faturas são geradas automaticamente quando valida pagamentos de propinas na página de Propinas, ou pode clicar em &quot;Emitir FT&quot; em qualquer cobrança paga.
+                    </p>
+                    <div className="mt-4">
+                      <Link to="/propinas">
+                        <Button size="sm" variant="outline">
+                          Ir para Lista de Propinas
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="py-2.5 px-3">Documento</th>
+                          <th className="py-2.5 px-3">Data</th>
+                          <th className="py-2.5 px-3">Cliente / Adquirente</th>
+                          <th className="py-2.5 px-3">NIF</th>
+                          <th className="py-2.5 px-3 text-right">Total Ilíquido</th>
+                          <th className="py-2.5 px-3 text-center">Estado</th>
+                          <th className="py-2.5 px-3 text-right">PDF</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {invoicesList.map((inv) => {
+                          const isCancelled = inv.invoice_status === "A";
+                          const isDownloading = downloadingInvId === inv.id;
+                          return (
+                            <tr key={inv.id} className="border-b hover:bg-muted/30 transition-colors">
+                              <td className="py-3 px-3">
+                                <span className="font-mono font-semibold text-primary">
+                                  {inv.document_number || "FT"}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 text-muted-foreground whitespace-nowrap">
+                                {inv.invoice_date
+                                  ? new Date(inv.invoice_date).toLocaleDateString("pt-PT")
+                                  : new Date(inv.created_at).toLocaleDateString("pt-PT")}
+                              </td>
+                              <td className="py-3 px-3 font-medium">
+                                {inv.cliente_nome || "Consumidor Final"}
+                              </td>
+                              <td className="py-3 px-3 font-mono text-xs text-muted-foreground">
+                                {inv.cliente_nif || "999999999"}
+                              </td>
+                              <td className="py-3 px-3 text-right font-semibold">
+                                {fmtAOA(Number(inv.gross_total || 0))}
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                {isCancelled ? (
+                                  <Badge variant="outline" className="border-destructive text-destructive text-xs">
+                                    Anulada
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-0 text-xs font-normal">
+                                    Válida
+                                  </Badge>
+                                )}
+                              </td>
+                              <td className="py-3 px-3 text-right">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 gap-1.5 text-xs font-medium"
+                                  disabled={isDownloading}
+                                  onClick={() => void handleDownloadInvoice(inv.id, inv.document_number)}
+                                  title="Descarregar PDF oficial da fatura AGT"
+                                >
+                                  {isDownloading ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <FileDown className="h-3.5 w-3.5 text-primary" />
+                                  )}
+                                  <span>Descarregar PDF</span>
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </CardContent>
