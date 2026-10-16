@@ -83,6 +83,16 @@ export type FiscalInvoicePdfInput = {
   cancellationReason?: string | null;
   /** Referência à Pró-Forma que originou esta FT (OrderReferences AGT). Ex: "PP 2026/4" */
   orderReferencePP?: string | null;
+  /** Tipo de Documento ('FT', 'FR', 'NC', 'PF', etc.) */
+  docType?: string | null;
+  /** Imagem Base64 / DataUrl do QR Code oficial AGT */
+  qrCodeDataUrl?: string | null;
+  /** Hash Control oficial (4 caracteres extraídos do hash: 1º, 11º, 21º, 31º) */
+  hashControl?: string | null;
+  /** Número de certificação da AGT */
+  certificationNumber?: string | null;
+  /** Versão do software */
+  softwareVersion?: string | null;
 };
 
 /** @deprecated use FiscalInvoicePdfInput */
@@ -889,21 +899,45 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
     footY += pxMm(12);
   }
 
-  /* Hash control: apenas 4 caracteres extraídos do hash (posições 1,11,21,31) + hífen */
-  const fullHash = opts.documentHashFootnote?.trim() || "";
-  const hashChar1 = fullHash.charAt(0) || "0";
-  const hashChar2 = fullHash.charAt(10) || "0";
-  const hashChar3 = fullHash.charAt(20) || "0";
-  const hashChar4 = fullHash.charAt(30) || "0";
-  const hashControl4 = `${hashChar1}${hashChar2}${hashChar3}${hashChar4}-`;
+  /* QR Code oficial AGT */
+  const qrSize = pxMm(24);
+  const qrY = Math.min(pageH - margin - qrSize - pxMm(10), footY + pxMm(4));
+  if (opts.qrCodeDataUrl) {
+    try {
+      doc.addImage(opts.qrCodeDataUrl, "PNG", margin, qrY, qrSize, qrSize);
+    } catch {
+      // Ignora erro se imagem for inválida
+    }
+  }
 
-  /* .watermark + processado por computador */
-  const wmY = Math.min(pageH - pxMm(16), footY + pxMm(20));
+  /* Hash control: 1º, 11º, 21º, 31º caracteres da assinatura digital */
+  let hashControl = (opts.hashControl || "").trim();
+  if (!hashControl) {
+    const fullHash = (opts.digitalSignatureSha1 || opts.documentHashFootnote || "").trim();
+    if (fullHash.length >= 31) {
+      hashControl = `${fullHash.charAt(0)}${fullHash.charAt(10)}${fullHash.charAt(20)}${fullHash.charAt(30)}`;
+    } else {
+      hashControl = fullHash.slice(0, 4).padEnd(4, "0");
+    }
+  }
+
+  const certNumber = opts.certificationNumber?.trim() || "0/AGT/2026";
+  const softVersion = opts.softwareVersion?.trim() || "1.0.0";
+  const legalCertificationMention = `${hashControl} - Processado por programa validado n.º ${certNumber} EduCamba v${softVersion}`;
+
+  /* Rodapé legal obrigatório AGT */
+  const wmY = Math.min(pageH - pxMm(14), qrY + qrSize + pxMm(6));
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(pxToPt(10));
+  doc.setFontSize(pxToPt(9));
   doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
-  doc.text(`Hash: ${hashControl4} | Processado por programa válido nº31.1/AGT20`, margin, wmY);
+  doc.text(legalCertificationMention, margin, wmY);
   doc.text(opts.schoolName || "", rhs, wmY, { align: "right" });
+
+  /* Marca d'água obrigatória se for Fatura Pró-Forma (PF) */
+  const isProforma = opts.docType === "PF" || opts.documentNumber.startsWith("PF");
+  if (isProforma) {
+    drawProformaNoticeOverlay(doc, pageW, pageH);
+  }
 
   if (opts.isCancelled) {
     drawCancelledInvoiceOverlay(doc, pageW, pageH, opts.cancellationReason);
@@ -976,3 +1010,24 @@ function drawCancelledInvoiceOverlay(
   doc.setTextColor(0, 0, 0);
   doc.setDrawColor(0, 0, 0);
 }
+
+/** Marca d'água obrigatória AGT para Fatura Pró-Forma */
+function drawProformaNoticeOverlay(doc: jsPDF, pageW: number, pageH: number): void {
+  const cx = pageW / 2;
+  const cy = pageH / 2;
+
+  const d = doc as jsPDF & { saveGraphicsState?: () => void; restoreGraphicsState?: () => void };
+  d.saveGraphicsState?.();
+  setPdfTextOpacity(doc, 0.14);
+  doc.setTextColor(150, 150, 150);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(28);
+  doc.text("ESTE DOCUMENTO NÃO SERVE DE FATURA", cx, cy, {
+    align: "center",
+    angle: 35,
+    baseline: "middle",
+  });
+  setPdfTextOpacity(doc, 1);
+  d.restoreGraphicsState?.();
+}
+

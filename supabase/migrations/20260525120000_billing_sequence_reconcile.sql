@@ -1,11 +1,11 @@
 -- Corrige «Documento anterior sem hash»: sincroniza numeração com faturas existentes
 -- e preenche document_hash a partir de agt_signing_plaintext quando possível.
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
 
 -- Preenche hash SHA-1 (hex) em linhas antigas que guardaram plaintext mas não hash.
 UPDATE public.invoices
-SET document_hash = lower(encode(digest(convert_to(agt_signing_plaintext, 'UTF8'), 'sha1'), 'hex'))
+SET document_hash = lower(encode(extensions.digest(convert_to(agt_signing_plaintext, 'UTF8'), 'sha1'), 'hex'))
 WHERE (document_hash IS NULL OR trim(document_hash) = '')
   AND agt_signing_plaintext IS NOT NULL
   AND trim(agt_signing_plaintext) <> '';

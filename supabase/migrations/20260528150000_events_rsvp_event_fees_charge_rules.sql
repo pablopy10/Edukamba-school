@@ -132,6 +132,7 @@ ALTER TABLE public.event_charge_rules
     OR (target_scope IN ('classrooms', 'students'))
   );
 
+DROP TRIGGER IF EXISTS trg_event_charge_rules_updated ON public.event_charge_rules;
 CREATE TRIGGER trg_event_charge_rules_updated
   BEFORE UPDATE ON public.event_charge_rules
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -238,6 +239,7 @@ CREATE TABLE IF NOT EXISTS public.event_fees (
 CREATE INDEX IF NOT EXISTS idx_event_fees_event ON public.event_fees(event_id);
 CREATE INDEX IF NOT EXISTS idx_event_fees_student ON public.event_fees(student_id);
 
+DROP TRIGGER IF EXISTS trg_event_fees_updated ON public.event_fees;
 CREATE TRIGGER trg_event_fees_updated
   BEFORE UPDATE ON public.event_fees
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();

@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS public.enrollment_charge_rule_students (
 
 CREATE INDEX IF NOT EXISTS idx_enrollment_charge_rule_students_student ON public.enrollment_charge_rule_students(student_id);
 
+DROP TRIGGER IF EXISTS trg_enrollment_charge_rules_updated ON public.enrollment_charge_rules;
 CREATE TRIGGER trg_enrollment_charge_rules_updated
   BEFORE UPDATE ON public.enrollment_charge_rules
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
