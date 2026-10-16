@@ -771,4 +771,28 @@ describe("Módulo de Faturação Certificada AGT Angola (EduKamba)", () => {
     const dataUrl = await generateAgtQrDataUrl(payload);
     expect(dataUrl.startsWith("data:image/png;base64,")).toBe(true);
   });
+
+  // ─── TESTE DA CHAVE PÚBLICA OFICIAL AGT (2048-BIT) ────────────────────────
+  it("Valida e analisa a chave pública oficial AGT (RSA 2048-bit)", () => {
+    const officialPublicKeyPem = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvU12hTtB91vRlukR3CIN
+sDfcQwqhdDqA0jMTcjdHS8xnTUwGM643ilVosigq8J9/yZYqqRXUHJekhh7Ldssb
+Eerr6xRDIWGfhrrkVMmCrHjbN4k//U5EH35WMiRcTGDiVsRVclWmQISIJ02XgAUx
+RqIFyvFBgNQVM0cofTJWjCEGDsCD2zW4vP6iJUx3Ly5jy6w9WAT8ctBRhQfeMMwF
+IJsnk+O5AiNKUWo8ojhILR5iPpW8thu8HRMjPiPzWSVP/p3397quYZMi+hwlJ7wz
+yVzKZ8mDNg8w929Na0Cps7+5CEIOCK8bKNEZE876l1v3fP2yRP4zebd147wUpd/I
+DwIDAQAB
+-----END PUBLIC KEY-----`;
+
+    // 1. Deve importar sem erros
+    const forge = require("node-forge");
+    const pubKey = forge.pki.publicKeyFromPem(officialPublicKeyPem);
+    expect(pubKey).toBeDefined();
+
+    // 2. Comprimento do módulo deve ser exatamente 2048 bits
+    expect(pubKey.n.bitLength()).toBe(2048);
+
+    // 3. Expoente público padrão 65537 (0x10001)
+    expect(pubKey.e.intValue()).toBe(65537);
+  });
 });

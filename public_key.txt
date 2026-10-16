@@ -1,7 +1,10 @@
-MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDSOk0k3r86LHOiwLIAO+UyThlU
-wjRlVDcHLd4Mj+BUOxxefi7/spEDtKEGACPVawLyPiIynyG+mNKeFCiW2hqTPykH
-MlUj/ogZ+ElG5lQhwkbPfXyx9K5aF7DwqGTdu6uh8eFQX8Myuz6Bq6geFBzLBMnR
-MLVu05UTGrb9+eUlJwIDAQAB
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvU12hTtB91vRlukR3CIN
+sDfcQwqhdDqA0jMTcjdHS8xnTUwGM643ilVosigq8J9/yZYqqRXUHJekhh7Ldssb
+Eerr6xRDIWGfhrrkVMmCrHjbN4k//U5EH35WMiRcTGDiVsRVclWmQISIJ02XgAUx
+RqIFyvFBgNQVM0cofTJWjCEGDsCD2zW4vP6iJUx3Ly5jy6w9WAT8ctBRhQfeMMwF
+IJsnk+O5AiNKUWo8ojhILR5iPpW8thu8HRMjPiPzWSVP/p3397quYZMi+hwlJ7wz
+yVzKZ8mDNg8w929Na0Cps7+5CEIOCK8bKNEZE876l1v3fP2yRP4zebd147wUpd/I
+DwIDAQAB
 
 
 NIF do Representante Legal
@@ -39,7 +42,7 @@ Edukamba
 public_key.txt
 i
 Versão da Chave Pública
-1.0
+1.1
 * A Aplicação é do Tipo Open Source
 * Solicitação de envio de documentos por webservice
 * Qual é o Tipo de Aplicação
