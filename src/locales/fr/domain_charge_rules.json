@@ -80,5 +80,14 @@
   "toast_charge_created": "Facturation créée",
   "generate_one": "Générer",
   "close": "Fermer",
-  "amount_aoa": "{{amount}} AOA"
+  "amount_aoa": "{{amount}} AOA",
+  "target_all_enrolled_hint": "Facturation appliquée exclusivement à tous les élèves activement inscrits à cette {{entity}}.",
+  "target_classrooms_hint": "Seuls les élèves de ces classes inscrits à cette {{entity}} seront facturés.",
+  "target_students_hint": "Seuls les élèves inscrits à cette {{entity}} peuvent être sélectionnés pour la facturation.",
+  "select_entity_first": "Veuillez d'abord sélectionner la {{entity}} pour afficher les élèves inscrits.",
+  "loading_enrolled": "Chargement des élèves inscrits...",
+  "no_enrolled_students": "Aucun élève activement inscrit à cette {{entity}}. Pour les activités extrascolaires, le transport et les repas, les cibles de facturation sont exclusivement les élèves inscrits.",
+  "search_enrolled_placeholder": "Rechercher un élève inscrit...",
+  "no_student_found": "Aucun élève trouvé dans la recherche.",
+  "enrolled_count": "{{count}} élève(s) inscrit(s)"
 }

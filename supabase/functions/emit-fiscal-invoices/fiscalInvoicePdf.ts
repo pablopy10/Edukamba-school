@@ -525,6 +525,11 @@ function drawCancelledInvoiceOverlay(
   doc.setDrawColor(0, 0, 0);
 }
 
+function getHashControl(hash: string): string {
+  if (!hash || hash.length < 31) return "";
+  return `${hash[0]}${hash[10]}${hash[20]}${hash[30]}`;
+}
+
 export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
@@ -783,18 +788,16 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
     });
   }
 
-  const wmY = Math.min(pageH - pxMm(16), hx + pxMm(40));
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(pxToPt(10));
-  doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
-  doc.text("Processado por programa válido nº31.1/AGT20", rhs, wmY, { align: "right" });
-  doc.setFontSize(pxToPt(10));
-  doc.text("Edukamba — dados dinâmicos conforme o portal.", rhs, wmY + pxMm(14), { align: "right" });
+  const rawHash = (opts.digitalSignatureSha1 || opts.documentHashFootnote || "").trim();
+  const hashControl = getHashControl(rawHash) || (rawHash.length >= 4 ? rawHash.slice(0, 4) : "0000");
+  const legalCertificationMention = `${hashControl} - Processado por programa validado n.º 99/AGT/2026 Edukamba v1.0.0`;
 
+  const wmY = Math.min(pageH - pxMm(16), hx + pxMm(40));
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(pxToPt(10));
-  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-  doc.text("edukamba.com", rhs, pageH - margin, { align: "right" });
+  doc.setFontSize(pxToPt(9));
+  doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
+  doc.text(legalCertificationMention, margin, wmY);
+  doc.text(opts.schoolName.trim() || "", rhs, wmY, { align: "right" });
 
   if (opts.isCancelled) {
     drawCancelledInvoiceOverlay(doc, pageW, pageH, opts.cancellationReason);

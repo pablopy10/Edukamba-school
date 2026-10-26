@@ -80,5 +80,14 @@
   "toast_charge_created": "Cobrança criada",
   "generate_one": "Gerar",
   "close": "Fechar",
-  "amount_aoa": "{{amount}} AOA"
+  "amount_aoa": "{{amount}} AOA",
+  "target_all_enrolled_hint": "Cobrança aplicada exclusivamente a todos os alunos que estiverem com inscrição ativa nesta {{entity}}.",
+  "target_classrooms_hint": "Apenas os alunos destas turmas inscritos nesta {{entity}} serão cobrados.",
+  "target_students_hint": "Apenas alunos inscritos nesta {{entity}} podem ser selecionados para cobrança.",
+  "select_entity_first": "Selecione primeiro a {{entity}} para listar os alunos inscritos.",
+  "loading_enrolled": "A carregar alunos inscritos...",
+  "no_enrolled_students": "Nenhum aluno inscrito nesta {{entity}} com estado ativo. Para extracurriculares, transporte e refeições, os alvos de cobranças são exclusivamente os alunos inscritos.",
+  "search_enrolled_placeholder": "Pesquisar aluno inscrito...",
+  "no_student_found": "Nenhum aluno encontrado na pesquisa.",
+  "enrolled_count": "{{count}} aluno(s) inscrito(s)"
 }

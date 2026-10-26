@@ -80,5 +80,14 @@
   "toast_charge_created": "Charge created",
   "generate_one": "Generate",
   "close": "Close",
-  "amount_aoa": "{{amount}} AOA"
+  "amount_aoa": "{{amount}} AOA",
+  "target_all_enrolled_hint": "Charges apply exclusively to all students actively enrolled in this {{entity}}.",
+  "target_classrooms_hint": "Only students in these classes who are enrolled in this {{entity}} will be billed.",
+  "target_students_hint": "Only students enrolled in this {{entity}} can be selected for billing.",
+  "select_entity_first": "Please select the {{entity}} first to list enrolled students.",
+  "loading_enrolled": "Loading enrolled students...",
+  "no_enrolled_students": "No students actively enrolled in this {{entity}}. For extracurriculars, transport, and meals, billing targets are exclusively enrolled students.",
+  "search_enrolled_placeholder": "Search enrolled student...",
+  "no_student_found": "No students found in search.",
+  "enrolled_count": "{{count}} enrolled student(s)"
 }

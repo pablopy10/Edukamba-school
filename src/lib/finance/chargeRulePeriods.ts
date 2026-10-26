@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 export type FeeRecurrence = "monthly" | "quarterly" | "semester" | "yearly";
 
 export {
@@ -9,6 +11,79 @@ export {
   rulePeriodPayloadFromMonthKeys,
   type ChargeRuleBillingShape,
 } from "@/lib/finance/chargeRuleBillingPeriod";
+
+/**
+ * Verifica se um registo de inscrição em atividade, transporte ou refeição está ativo.
+ * Para extracurriculares, transporte e refeições, os alvos de cobranças são apenas
+ * os alunos que estiverem inscritos com estado ativo.
+ */
+export function isDomainEnrollmentActive(status?: string | null): boolean {
+  if (!status) return true;
+  const s = status.trim().toLowerCase();
+  const inactiveStatuses = [
+    "cancelada",
+    "cancelado",
+    "cancelled",
+    "canceled",
+    "inativa",
+    "inativo",
+    "inactive",
+    "suspensa",
+    "suspenso",
+    "suspended",
+  ];
+  return !inactiveStatuses.includes(s);
+}
+
+/**
+ * Obtém os IDs dos alunos que possuem inscrição ativa numa atividade, rota ou plano de refeições.
+ */
+export async function fetchEnrolledStudentIdsForDomainEntity(
+  supabaseClient: SupabaseClient,
+  schoolId: string,
+  variant: "activity" | "transport" | "meal" | "event",
+  entityId: string,
+): Promise<Set<string>> {
+  const enrolledIds = new Set<string>();
+  if (!schoolId || !entityId || variant === "event") return enrolledIds;
+
+  if (variant === "activity") {
+    const { data } = await supabaseClient
+      .from("extracurricular_enrollments")
+      .select("student_id, status")
+      .eq("school_id", schoolId)
+      .eq("activity_id", entityId);
+    (data ?? []).forEach((row: { student_id: string; status?: string | null }) => {
+      if (isDomainEnrollmentActive(row.status)) {
+        enrolledIds.add(row.student_id);
+      }
+    });
+  } else if (variant === "transport") {
+    const { data } = await supabaseClient
+      .from("transport_enrollments")
+      .select("student_id, status")
+      .eq("school_id", schoolId)
+      .eq("route_id", entityId);
+    (data ?? []).forEach((row: { student_id: string; status?: string | null }) => {
+      if (isDomainEnrollmentActive(row.status)) {
+        enrolledIds.add(row.student_id);
+      }
+    });
+  } else if (variant === "meal") {
+    const { data } = await supabaseClient
+      .from("meal_enrollments")
+      .select("student_id, status")
+      .eq("school_id", schoolId)
+      .eq("meal_program_id", entityId);
+    (data ?? []).forEach((row: { student_id: string; status?: string | null }) => {
+      if (isDomainEnrollmentActive(row.status)) {
+        enrolledIds.add(row.student_id);
+      }
+    });
+  }
+
+  return enrolledIds;
+}
 
 export type ChargeRulePeriodShape = {
   start_month: number;

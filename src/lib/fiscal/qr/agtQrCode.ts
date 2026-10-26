@@ -24,6 +24,23 @@ export interface AgtQrParams {
   totalIva: number | string;
   /** Total do Documento / Bruto */
   totalDocumento: number | string;
+  /** Formato de saída: 'structured' (Padrão A:*B:*C:*) ou 'url' (Padrão Quiosque AGT Oficial) */
+  format?: "structured" | "url";
+}
+
+/**
+ * Constrói o URL oficial da AGT (Administração Geral Tributária - Angola)
+ * para consulta e validação imediata de faturas eletrónicas no Quiosque Tributário.
+ * Em conformidade com o Manual de Integração API Facturação Electrónica e Decreto Presidencial n.º 292/18:
+ * https://quiosqueagt.minfin.gov.ao/facturacao-eletronica/consultar-fe?emissor={NIF}&document={NUM_DOC}
+ */
+export function buildAgtQrUrl(params: {
+  nifEmissor: string;
+  numDoc: string;
+}): string {
+  const nifEmissor = (params.nifEmissor || "5000000000").trim();
+  const numDoc = (params.numDoc || "").trim();
+  return `https://quiosqueagt.minfin.gov.ao/facturacao-eletronica/consultar-fe?emissor=${encodeURIComponent(nifEmissor)}&document=${encodeURIComponent(numDoc)}`;
 }
 
 /**
@@ -39,9 +56,16 @@ function normalizeDateYYYYMMDD(raw: string): string {
 
 /**
  * Constrói a string do QR Code oficial da AGT Angola:
+ * No formato 'structured' (padrão):
  * A:{NIF_EMISSOR}*B:{NIF_CLIENTE}*C:{PAIS}*D:{TIPO_DOC}*E:{ESTADO}*F:{DATA}*G:{NUM_DOC}*H:{HASH_4_CHARS}*I1:{TOTAL_LIQUIDO}*I2:{TOTAL_IVA}*I3:{TOTAL_DOCUMENTO}
+ * No formato 'url':
+ * https://quiosqueagt.minfin.gov.ao/facturacao-eletronica/consultar-fe?emissor={NIF}&document={NUM_DOC}
  */
 export function buildAgtQrPayload(params: AgtQrParams): string {
+  if (params.format === "url") {
+    return buildAgtQrUrl({ nifEmissor: params.nifEmissor, numDoc: params.numDoc });
+  }
+
   const nifEmissor = params.nifEmissor.trim();
   const nifCliente = (params.nifCliente || "999999999").trim();
   const pais = (params.pais || "AO").trim().toUpperCase();
@@ -59,8 +83,25 @@ export function buildAgtQrPayload(params: AgtQrParams): string {
 
 /**
  * Analisa uma string do QR Code AGT e extrai os campos estruturados.
+ * Suporta tanto a URL oficial de validação da AGT quanto a string delimitada por asteriscos.
  */
 export function parseAgtQrPayload(payload: string): Partial<AgtQrParams> {
+  if (!payload) return {};
+
+  // Se for o URL oficial de validação da AGT
+  if (payload.includes("quiosqueagt.minfin.gov.ao") || payload.includes("consultar-fe")) {
+    try {
+      const url = new URL(payload);
+      return {
+        nifEmissor: url.searchParams.get("emissor") || undefined,
+        numDoc: url.searchParams.get("document") || undefined,
+        pais: "AO",
+      };
+    } catch {
+      /* Continua para fallback estruturado caso não seja URL válida */
+    }
+  }
+
   const parts = payload.split("*");
   const result: Record<string, string> = {};
 
@@ -90,15 +131,16 @@ export function parseAgtQrPayload(payload: string): Partial<AgtQrParams> {
 
 /**
  * Gera o DataURL em base64 da imagem PNG do QR Code para exibição em PDF ou HTML.
+ * Por padrão usa resolução nítida de 512px e margem de 4 módulos (quiet zone oficial ISO/IEC 18004).
  */
 export async function generateAgtQrDataUrl(
   payload: string,
-  options?: { width?: number; margin?: number }
+  options?: { width?: number; margin?: number; errorCorrectionLevel?: "L" | "M" | "Q" | "H" }
 ): Promise<string> {
   return QRCode.toDataURL(payload, {
-    errorCorrectionLevel: "M",
-    width: options?.width ?? 128,
-    margin: options?.margin ?? 1,
+    errorCorrectionLevel: options?.errorCorrectionLevel ?? "M",
+    width: options?.width ?? 512,
+    margin: options?.margin ?? 4,
     color: {
       dark: "#000000",
       light: "#ffffff",

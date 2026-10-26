@@ -450,7 +450,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   const [generateYearId, setGenerateYearId] = useState<string>("");
 
   const [allFees, setAllFees] = useState<FeeListRow[]>([]);
-  const [feeFilter, setFeeFilter] = useState<"all" | "paid" | "pending" | "overdue">("pending");
+  const [feeFilter, setFeeFilter] = useState<"all" | "paid" | "pending" | "overdue">("all");
   const [feeYearFilter, setFeeYearFilter] = useState<string>("all");
   const [feeClassroomFilter, setFeeClassroomFilter] = useState<string>("all");
   const [feeSearch, setFeeSearch] = useState("");
@@ -476,7 +476,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   // Activity fees (extracurriculares)
   const [allActivityFees, setAllActivityFees] = useState<ActivityFeeRow[]>([]);
   const [activityPayments, setActivityPayments] = useState<PaymentListRow[]>([]);
-  const [actFilter, setActFilter] = useState<"all" | "paid" | "pending" | "overdue">("pending");
+  const [actFilter, setActFilter] = useState<"all" | "paid" | "pending" | "overdue">("all");
   const [actYearFilter, setActYearFilter] = useState<string>("all");
   const [actActivityFilter, setActActivityFilter] = useState<string>("all");
   const [actSearch, setActSearch] = useState("");
@@ -486,7 +486,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   // Transport fees
   const [allTransportFees, setAllTransportFees] = useState<TransportFeeRow[]>([]);
   const [transportPayments, setTransportPayments] = useState<PaymentListRow[]>([]);
-  const [trFilter, setTrFilter] = useState<"all" | "paid" | "pending" | "overdue">("pending");
+  const [trFilter, setTrFilter] = useState<"all" | "paid" | "pending" | "overdue">("all");
   const [trYearFilter, setTrYearFilter] = useState<string>("all");
   const [trRouteFilter, setTrRouteFilter] = useState<string>("all");
   const [trSearch, setTrSearch] = useState("");
@@ -495,7 +495,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
 
   const [allMealFees, setAllMealFees] = useState<MealFeeRow[]>([]);
   const [mealPayments, setMealPayments] = useState<PaymentListRow[]>([]);
-  const [meFilter, setMeFilter] = useState<"all" | "paid" | "pending" | "overdue">("pending");
+  const [meFilter, setMeFilter] = useState<"all" | "paid" | "pending" | "overdue">("all");
   const [meYearFilter, setMeYearFilter] = useState<string>("all");
   const [meProgramFilter, setMeProgramFilter] = useState<string>("all");
   const [meSearch, setMeSearch] = useState("");
@@ -504,7 +504,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
 
   const [allEventFees, setAllEventFees] = useState<EventFeeRow[]>([]);
   const [eventPayments, setEventPayments] = useState<PaymentListRow[]>([]);
-  const [evFilter, setEvFilter] = useState<"all" | "paid" | "pending" | "overdue">("pending");
+  const [evFilter, setEvFilter] = useState<"all" | "paid" | "pending" | "overdue">("all");
   const [evYearFilter, setEvYearFilter] = useState<string>("all");
   const [evEventFilter, setEvEventFilter] = useState<string>("all");
   const [evSearch, setEvSearch] = useState("");
@@ -514,7 +514,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
   // Enrollment fees (matrículas / renovações)
   const [allEnrollmentFees, setAllEnrollmentFees] = useState<EnrollmentFeeRow[]>([]);
   const [enrollmentPayments, setEnrollmentPayments] = useState<PaymentListRow[]>([]);
-  const [enFilter, setEnFilter] = useState<"all" | "paid" | "pending" | "overdue">("pending");
+  const [enFilter, setEnFilter] = useState<"all" | "paid" | "pending" | "overdue">("all");
   const [enYearFilter, setEnYearFilter] = useState<string>("all");
   const [enTypeFilter, setEnTypeFilter] = useState<"all" | "NEW" | "RENEWAL">("all");
   const [enSearch, setEnSearch] = useState("");

@@ -50,8 +50,8 @@ export class SaftGenerator {
     const { company, fiscalYear, startDate, endDate, dateCreated } = params;
     const software = {
       companyNif: params.software?.companyNif || "5000000000",
-      companyName: params.software?.companyName || "EduCamba Lda",
-      productName: params.software?.productName || "EduCamba",
+      companyName: params.software?.companyName || "Edukamba Lda",
+      productName: params.software?.productName || "Edukamba",
       productVersion: params.software?.productVersion || "1.0.0",
       certificationNumber: params.software?.certificationNumber || "0/AGT/2026",
     };

@@ -14,6 +14,7 @@ import {
 import {
   chargeRuleDueDateForPeriodIndex,
   domainChargeRpcName,
+  fetchEnrolledStudentIdsForDomainEntity,
   findDomainFeeForPeriod,
   studentsMatchingDomainChargeRule,
   type DomainChargeRuleRow,
@@ -238,6 +239,9 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
     generate_all_upfront: false,
   });
   const [deleteRule, setDeleteRule] = useState<string | null>(null);
+  const [dialogEnrolledStudentIds, setDialogEnrolledStudentIds] = useState<Set<string>>(() => new Set());
+  const [dialogEnrolledLoading, setDialogEnrolledLoading] = useState(false);
+  const [studentSearch, setStudentSearch] = useState("");
 
   const supportsRuleDetail = variant === "activity" || variant === "transport" || variant === "meal";
   const [ruleDetailOpen, setRuleDetailOpen] = useState(false);
@@ -247,6 +251,36 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
   const [ruleDetailFees, setRuleDetailFees] = useState<DomainFeeLite[]>([]);
   const [ruleDetailEnrolledIds, setRuleDetailEnrolledIds] = useState<Set<string>>(() => new Set());
   const [ruleDetailFeesLoading, setRuleDetailFeesLoading] = useState(false);
+
+  const loadDialogEnrolledStudents = useCallback(
+    async (entityId: string) => {
+      if (!schoolId || !entityId || variant === "event") {
+        setDialogEnrolledStudentIds(new Set());
+        return;
+      }
+      setDialogEnrolledLoading(true);
+      try {
+        const enrolled = await fetchEnrolledStudentIdsForDomainEntity(supabase, schoolId, variant, entityId);
+        setDialogEnrolledStudentIds(enrolled);
+      } catch (err) {
+        console.error("Error loading enrolled students for entity:", err);
+      } finally {
+        setDialogEnrolledLoading(false);
+      }
+    },
+    [schoolId, variant],
+  );
+
+  const selectableStudents = useMemo(() => {
+    if (variant === "event") return students;
+    return students.filter((s) => dialogEnrolledStudentIds.has(s.id));
+  }, [students, dialogEnrolledStudentIds, variant]);
+
+  const filteredSelectableStudents = useMemo(() => {
+    const q = studentSearch.trim().toLowerCase();
+    if (!q) return selectableStudents;
+    return selectableStudents.filter((s) => s.full_name.toLowerCase().includes(q));
+  }, [selectableStudents, studentSearch]);
 
   const load = useCallback(async () => {
     if (!schoolId) return;
@@ -344,14 +378,8 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
       if (!entityId) return;
       setRuleDetailFeesLoading(true);
 
-      const enrolledIds = new Set<string>();
+      const enrolledIds = await fetchEnrolledStudentIdsForDomainEntity(supabase, schoolId, variant, entityId);
       if (variant === "activity") {
-        const { data } = await supabase
-          .from("extracurricular_enrollments")
-          .select("student_id")
-          .eq("school_id", schoolId)
-          .eq("activity_id", entityId);
-        (data ?? []).forEach((row: { student_id: string }) => enrolledIds.add(row.student_id));
         const { data: fees } = await supabase
           .from("activity_fees")
           .select("id, student_id, academic_year_id, month_index, due_date, amount_due, is_paid")
@@ -360,12 +388,6 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
           .eq("academic_year_id", yearId);
         setRuleDetailFees((fees ?? []) as DomainFeeLite[]);
       } else if (variant === "transport") {
-        const { data } = await supabase
-          .from("transport_enrollments")
-          .select("student_id")
-          .eq("school_id", schoolId)
-          .eq("route_id", entityId);
-        (data ?? []).forEach((row: { student_id: string }) => enrolledIds.add(row.student_id));
         const { data: fees } = await supabase
           .from("transport_fees")
           .select("id, student_id, academic_year_id, month_index, due_date, amount_due, is_paid")
@@ -374,12 +396,6 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
           .eq("academic_year_id", yearId);
         setRuleDetailFees((fees ?? []) as DomainFeeLite[]);
       } else if (variant === "meal") {
-        const { data } = await supabase
-          .from("meal_enrollments")
-          .select("student_id")
-          .eq("school_id", schoolId)
-          .eq("meal_program_id", entityId);
-        (data ?? []).forEach((row: { student_id: string }) => enrolledIds.add(row.student_id));
         const { data: fees } = await supabase
           .from("meal_fees")
           .select("id, student_id, academic_year_id, month_index, due_date, amount_due, is_paid")
@@ -518,6 +534,8 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
 
   const openNew = () => {
     setEditingRule(null);
+    setDialogEnrolledStudentIds(new Set());
+    setStudentSearch("");
     const activeYear = years.find((y) => y.id === activeYearId);
     const defaults = defaultBillingMonthKeys(activeYear);
     setRuleForm({
@@ -538,6 +556,7 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
 
   const openEdit = (r: RuleRow) => {
     setEditingRule(r);
+    setStudentSearch("");
     const ts = (r.target_scope as ChargeTargetScope) || "all_enrolled";
     let entityId = "";
     let classroomIds: string[] = [];
@@ -574,6 +593,11 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
       notes: r.notes ?? "",
       generate_all_upfront: !!r.generate_all_upfront,
     });
+    if (entityId) {
+      void loadDialogEnrolledStudents(entityId);
+    } else {
+      setDialogEnrolledStudentIds(new Set());
+    }
     setRuleDialog(true);
   };
 
@@ -606,9 +630,20 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
       toast({ title: "Seleccione pelo menos uma turma", variant: "destructive" });
       return;
     }
-    if (ruleForm.target_scope === "students" && ruleForm.student_ids.length === 0) {
-      toast({ title: "Seleccione pelo menos um aluno", variant: "destructive" });
-      return;
+    if (ruleForm.target_scope === "students") {
+      const allowedStudentIds =
+        variant === "event"
+          ? ruleForm.student_ids
+          : ruleForm.student_ids.filter((sid) => dialogEnrolledStudentIds.has(sid));
+      if (allowedStudentIds.length === 0) {
+        toast({
+          title: "Nenhum aluno inscrito selecionado",
+          description: "Para extracurriculares, transporte e refeições, os alvos de cobranças são apenas os alunos que estiverem inscritos.",
+          variant: "destructive",
+        });
+        return;
+      }
+      ruleForm.student_ids = allowedStudentIds;
     }
     const base = {
       school_id: schoolId,
@@ -790,29 +825,12 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
         generate_all_upfront: base.generate_all_upfront,
       };
 
-      const enrolledIds = new Set<string>();
-      if (variant === "activity") {
-        const { data } = await supabase
-          .from("extracurricular_enrollments")
-          .select("student_id")
-          .eq("school_id", schoolId)
-          .eq("activity_id", ruleForm.entity_id);
-        (data ?? []).forEach((row: { student_id: string }) => enrolledIds.add(row.student_id));
-      } else if (variant === "transport") {
-        const { data } = await supabase
-          .from("transport_enrollments")
-          .select("student_id")
-          .eq("school_id", schoolId)
-          .eq("route_id", ruleForm.entity_id);
-        (data ?? []).forEach((row: { student_id: string }) => enrolledIds.add(row.student_id));
-      } else if (variant === "meal") {
-        const { data } = await supabase
-          .from("meal_enrollments")
-          .select("student_id")
-          .eq("school_id", schoolId)
-          .eq("meal_program_id", ruleForm.entity_id);
-        (data ?? []).forEach((row: { student_id: string }) => enrolledIds.add(row.student_id));
-      }
+      const enrolledIds = await fetchEnrolledStudentIdsForDomainEntity(
+        supabase,
+        schoolId,
+        variant,
+        ruleForm.entity_id,
+      );
 
       const eligStudents = studentsMatchingDomainChargeRule(
         savedRule as DomainChargeRuleRow,
@@ -998,7 +1016,13 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
           <div className="grid gap-3">
             <div className="grid gap-2">
               <Label>{entityLabel}</Label>
-              <Select value={ruleForm.entity_id} onValueChange={(v) => setRuleForm((f) => ({ ...f, entity_id: v }))}>
+              <Select
+                value={ruleForm.entity_id}
+                onValueChange={(v) => {
+                  setRuleForm((f) => ({ ...f, entity_id: v }));
+                  void loadDialogEnrolledStudents(v);
+                }}
+              >
                 <SelectTrigger><SelectValue placeholder={t("choose_entity", { entity: entityLabel })} /></SelectTrigger>
                 <SelectContent>
                   {options.map((o) => (
@@ -1018,11 +1042,25 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
                   <SelectItem value="students">{t("target_students_option")}</SelectItem>
                 </SelectContent>
               </Select>
+              {ruleForm.target_scope === "all_enrolled" && variant !== "event" && (
+                <p className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
+                  {t("target_all_enrolled_hint", {
+                    defaultValue: `Cobrança aplicada exclusivamente a todos os alunos que estiverem com inscrição ativa nesta ${entityLabel.toLowerCase()}.`,
+                  })}
+                </p>
+              )}
             </div>
 
             {ruleForm.target_scope === "classrooms" && (
               <div className="grid gap-2">
                 <Label className="flex items-center gap-2"><Users className="h-4 w-4" /> {t("classrooms_label")}</Label>
+                {variant !== "event" && (
+                  <p className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
+                    {t("target_classrooms_hint", {
+                      defaultValue: `Apenas os alunos destas turmas inscritos nesta ${entityLabel.toLowerCase()} serão cobrados.`,
+                    })}
+                  </p>
+                )}
                 <ScrollArea className="h-40 rounded-md border border-border p-3">
                   {classroomsForYear.map((c) => (
                     <label key={c.id} className="flex cursor-pointer items-center gap-2 py-1">
@@ -1046,23 +1084,85 @@ export function DomainChargeRulesPanel({ variant, schoolId, role }: Props) {
 
             {ruleForm.target_scope === "students" && (
               <div className="grid gap-2">
-                <Label>{t("students_label")}</Label>
-                <ScrollArea className="h-40 rounded-md border border-border p-3">
-                  {students.map((s) => (
-                    <label key={s.id} className="flex cursor-pointer items-center gap-2 py-1">
-                      <Checkbox
-                        checked={ruleForm.student_ids.includes(s.id)}
-                        onCheckedChange={(v) =>
-                          setRuleForm((f) => ({
-                            ...f,
-                            student_ids: v ? [...f.student_ids, s.id] : f.student_ids.filter((x) => x !== s.id),
-                          }))
-                        }
+                <div className="flex items-center justify-between">
+                  <Label>{t("students_label")}</Label>
+                  {variant !== "event" && ruleForm.entity_id && (
+                    <span className="text-xs text-muted-foreground">
+                      {dialogEnrolledLoading ? (
+                        <span className="inline-flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" /> {t("loading_enrolled", { defaultValue: "A verificar..." })}
+                        </span>
+                      ) : (
+                        t("enrolled_count", {
+                          count: selectableStudents.length,
+                          defaultValue: `${selectableStudents.length} aluno(s) inscrito(s)`,
+                        })
+                      )}
+                    </span>
+                  )}
+                </div>
+
+                {variant !== "event" && (
+                  <p className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
+                    {t("target_students_hint", {
+                      defaultValue: `Apenas alunos inscritos nesta ${entityLabel.toLowerCase()} podem ser selecionados para cobrança.`,
+                    })}
+                  </p>
+                )}
+
+                {variant !== "event" && !ruleForm.entity_id ? (
+                  <div className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+                    {t("select_entity_first", {
+                      entity: entityLabel.toLowerCase(),
+                      defaultValue: `Selecione primeiro a ${entityLabel.toLowerCase()} para listar os alunos inscritos.`,
+                    })}
+                  </div>
+                ) : dialogEnrolledLoading ? (
+                  <div className="flex items-center justify-center py-6 text-xs text-muted-foreground">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t("loading_enrolled", { defaultValue: "A carregar alunos inscritos..." })}
+                  </div>
+                ) : selectableStudents.length === 0 && variant !== "event" ? (
+                  <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+                    {t("no_enrolled_students", {
+                      entity: entityLabel.toLowerCase(),
+                      defaultValue: `Nenhum aluno inscrito nesta ${entityLabel.toLowerCase()} com estado ativo. Para extracurriculares, transporte e refeições, os alvos de cobranças são exclusivamente os alunos inscritos.`,
+                    })}
+                  </div>
+                ) : (
+                  <>
+                    {selectableStudents.length > 5 && (
+                      <Input
+                        type="search"
+                        placeholder={t("search_enrolled_placeholder", { defaultValue: "Pesquisar aluno inscrito..." })}
+                        value={studentSearch}
+                        onChange={(e) => setStudentSearch(e.target.value)}
+                        className="h-8 text-xs"
                       />
-                      <span className="text-sm">{s.full_name}</span>
-                    </label>
-                  ))}
-                </ScrollArea>
+                    )}
+                    <ScrollArea className="h-40 rounded-md border border-border p-3">
+                      {filteredSelectableStudents.length === 0 ? (
+                        <p className="py-4 text-center text-xs text-muted-foreground">
+                          {t("no_student_found", { defaultValue: "Nenhum aluno encontrado na pesquisa." })}
+                        </p>
+                      ) : (
+                        filteredSelectableStudents.map((s) => (
+                          <label key={s.id} className="flex cursor-pointer items-center gap-2 py-1">
+                            <Checkbox
+                              checked={ruleForm.student_ids.includes(s.id)}
+                              onCheckedChange={(v) =>
+                                setRuleForm((f) => ({
+                                  ...f,
+                                  student_ids: v ? [...f.student_ids, s.id] : f.student_ids.filter((x) => x !== s.id),
+                                }))
+                              }
+                            />
+                            <span className="text-sm">{s.full_name}</span>
+                          </label>
+                        ))
+                      )}
+                    </ScrollArea>
+                  </>
+                )}
               </div>
             )}
 

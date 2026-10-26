@@ -101,16 +101,26 @@ export function calculateSha1Hex(text: string): string {
 }
 
 /**
+ * Extração dos 4 Caracteres do Hash (1.º, 11.º, 21.º e 31.º caracteres da assinatura SHA-1):
+ * Padrão oficial AGT para exibição em rodapés de documentos certificados.
+ */
+export function getHashControl(hash: string): string {
+  if (!hash || hash.length < 31) return "";
+  return `${hash[0]}${hash[10]}${hash[20]}${hash[30]}`;
+}
+
+/**
  * Extrai os 4 caracteres de controlo para impressão:
  * 1.º, 11.º, 21.º e 31.º caracteres da assinatura digital Base64 (índices 0, 10, 20, 30).
  */
 export function extractHashControl(signatureBase64: string): string {
-  const sig = signatureBase64.trim();
+  const sig = signatureBase64?.trim() ?? "";
+  if (!sig) return "";
   if (sig.length < 31) {
     // Fallback se chave for menor em testes fictícios
     return sig.slice(0, 4).padEnd(4, "0");
   }
-  return `${sig.charAt(0)}${sig.charAt(10)}${sig.charAt(20)}${sig.charAt(30)}`;
+  return getHashControl(sig);
 }
 
 /**
@@ -121,7 +131,7 @@ export function buildCertificationFooter(
   certNumber = "0/AGT/2026",
   version = "1.0.0"
 ): string {
-  return `${hashControl} - Processado por programa validado n.º ${certNumber} EduCamba v${version}`;
+  return `${hashControl} - Processado por programa validado n.º ${certNumber} Edukamba v${version}`;
 }
 
 /**

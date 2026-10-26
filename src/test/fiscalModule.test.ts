@@ -99,7 +99,7 @@ describe("Módulo de Faturação Certificada AGT Angola (EduKamba)", () => {
     expect(document.hash).toBeTruthy();
     expect(document.hashControl.length).toBe(4);
     expect(document.certificationFooter).toBe(
-      `${document.hashControl} - Processado por programa validado n.º 99/AGT/2026 EduCamba v2.1.0`
+      `${document.hashControl} - Processado por programa validado n.º 99/AGT/2026 Edukamba v2.1.0`
     );
 
     // Validação da assinatura com a chave pública

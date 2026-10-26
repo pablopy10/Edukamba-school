@@ -223,7 +223,7 @@ export async function validateAndInvoicePayment(
 
   let qrCodeDataUrl = "";
   try {
-    qrCodeDataUrl = await generateAgtQrDataUrl(qrPayload, { width: 140, margin: 1 });
+    qrCodeDataUrl = await generateAgtQrDataUrl(qrPayload, { width: 512, margin: 4 });
   } catch {
     /* QR code opcional se ambiente não suportar canvas */
   }

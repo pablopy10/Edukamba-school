@@ -2,6 +2,9 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import { getHashControl } from "./crypto/agtCrypto";
+import { buildAgtQrPayload, buildAgtQrUrl, generateAgtQrDataUrl } from "./qr/agtQrCode";
+import { getTaxRuleForLine } from "./educationalTaxRules";
 
 /** Design alinhado à fatura moderna Edukamba (CSS de referência) */
 /** Marca #1a3a5a */
@@ -39,13 +42,19 @@ const PT_MONTH_NAMES = [
 ] as const;
 
 export type FiscalInvoiceLine = {
+  lineNumber?: number;
   description: string;
   quantity: number;
   unitPriceFmt: string;
   totalAmountFmt: string;
   discountPct?: string;
-  /** Taxa IVA: "14%", "Isento (M11)", etc. */
+  discountAmountFmt?: string;
+  /** Taxa IVA: "14%", "7%", "0%", "Isento (M11)", etc. */
   taxLabel?: string;
+  taxPercentage?: number;
+  exemptionCode?: string | null;
+  exemptionReason?: string | null;
+  totalNetFmt?: string;
 };
 
 export type FiscalInvoicePdfInput = {
@@ -59,8 +68,13 @@ export type FiscalInvoicePdfInput = {
   invoiceDateYYYYMMDD: string;
   /** Hora de emissão (hh:mm:ss) para exibir no PDF */
   issuedAtTime?: string;
+  /** Registo no sistema exato: AAAA-MM-DD HH:MM:SS */
+  systemEntryTimestamp?: string;
+  /** Identificação da via: Original, Duplicado, 2.ª via em conformidade com o original */
+  copyType?: "Original" | "Duplicado" | "2.ª via em conformidade com o original" | string;
   clienteNome: string;
   clienteNif: string;
+  clienteAddress?: string | null;
   /** Nome para exibição como encarregado (quando distinto dos dados estritamente fiscais). */
   encarregadoNome?: string | null;
   studentName: string;
@@ -70,6 +84,8 @@ export type FiscalInvoicePdfInput = {
   grossTotalFmt: string;
   /** Subtotal (soma das bases sem IVA). Se omitido, usa grossTotalFmt. */
   subtotalFmt?: string;
+  /** Total de descontos formatado */
+  totalDiscountFmt?: string;
   /** Valor total do IVA. Se omitido, assume 0. */
   ivaFmt?: string;
   /** Quadro de Resumo de IVA (obrigatório AGT quando há taxas mistas) */
@@ -83,10 +99,15 @@ export type FiscalInvoicePdfInput = {
   cancellationReason?: string | null;
   /** Referência à Pró-Forma que originou esta FT (OrderReferences AGT). Ex: "PP 2026/4" */
   orderReferencePP?: string | null;
+  /** Referência do documento original (se NC ou conversão) */
+  referencedDocNumber?: string | null;
+  referencedDocDate?: string | null;
   /** Tipo de Documento ('FT', 'FR', 'NC', 'PF', etc.) */
   docType?: string | null;
   /** Imagem Base64 / DataUrl do QR Code oficial AGT */
   qrCodeDataUrl?: string | null;
+  /** Payload de texto bruto do QR Code AGT */
+  qrCodePayload?: string | null;
   /** Hash Control oficial (4 caracteres extraídos do hash: 1º, 11º, 21º, 31º) */
   hashControl?: string | null;
   /** Número de certificação da AGT */
@@ -414,179 +435,259 @@ export async function resolveFiscalInvoicePdfInput(
   const gross = Number(invoice.gross_total);
   const totalFmt = formatMoney(Number.isFinite(gross) ? gross : 0);
 
+  // Normalização do Adquirente (Regra AGT: 999999999 e Consumidor Final se omitido)
+  const isGeneric = !invoice.cliente_nif?.trim() || invoice.cliente_nif.trim() === "999999999";
+  const clienteNifFinal = isGeneric ? "999999999" : invoice.cliente_nif.trim();
+  const clienteNomeFinal = isGeneric ? "Consumidor Final" : (invoice.cliente_nome?.trim() || "Cliente");
+
+  // Identificação do Tipo de Documento
+  const docType = (invoice as Record<string, unknown>).doc_type
+    ? String((invoice as Record<string, unknown>).doc_type)
+    : invoice.document_number.startsWith("FT")
+    ? "FT"
+    : invoice.document_number.startsWith("NC")
+    ? "NC"
+    : invoice.document_number.startsWith("PF")
+    ? "PF"
+    : "FR";
+
+  // Timestamp de gravação no sistema (AAAA-MM-DD HH:MM:SS)
+  const systemEntryTimestamp = (() => {
+    const iso = (invoice as { invoice_issued_at?: string }).invoice_issued_at;
+    if (iso) {
+      const d = new Date(iso);
+      if (!isNaN(d.getTime())) {
+        const pad = (n: number) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      }
+    }
+    return `${invoice.invoice_date.slice(0, 10)} 12:00:00`;
+  })();
+
+  // Extração dos 4 caracteres de controlo do Hash (1º, 11º, 21º, 31º)
+  const rawHash = (invoice.digital_signature_sha1_b64 || invoice.document_hash || "").trim();
+  const hashControl = getHashControl(rawHash) || (rawHash.length >= 4 ? rawHash.slice(0, 4) : "0000");
+
+  // Geração do QR Code Oficial AGT
+  // Conforme o Manual de Integração API Facturação Electrónica AGT e Decreto Presidencial n.º 292/18,
+  // o código codifica o URL oficial de consulta do Quiosque Tributário da AGT (https://quiosqueagt.minfin.gov.ao)
+  // garantindo leitura universal em smartphones (iOS/Android/Google Lens) e eliminando mensagens de erro "não foram encontrados dados".
+  let qrCodeDataUrlFinal: string | null = null;
+  let qrCodePayloadFinal: string | null = null;
+  try {
+    const schoolNif = school?.nif?.trim() || "5000000000";
+    const docNum = invoice.document_number.trim();
+    qrCodePayloadFinal = buildAgtQrUrl({
+      nifEmissor: schoolNif,
+      numDoc: docNum,
+    });
+    qrCodeDataUrlFinal = await generateAgtQrDataUrl(qrCodePayloadFinal, { width: 512, margin: 4 });
+  } catch (qrErr) {
+    console.warn("Erro ao gerar QR Code AGT para PDF:", qrErr);
+  }
+
+  // Parse e classificação de linhas com regras tributárias educacionais
+  const parsedLines = (() => {
+    const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+    const parts = lineDescription.split(";").map((s) => s.trim()).filter(Boolean);
+
+    if (parts.length > 1) {
+      return parts.map((part, idx) => {
+        const match3 = /^(.+):(\d[\d\s.,]*):(\d+(?:_M\d+)?)$/.exec(part);
+        if (match3) {
+          const desc = cap(match3[1].trim());
+          const val = parseFloat(match3[2].replace(/\s/g, "").replace(",", ".")) || 0;
+          const ivaPctStr = match3[3].trim();
+          const isM04 = ivaPctStr === "0_M04";
+          const isM11 = ivaPctStr === "0_M11" || ivaPctStr === "0";
+          const pct = isM04 || isM11 ? 0 : (parseFloat(ivaPctStr) || 0);
+          const lineTotal = Math.round((val + (val * pct) / 100) * 100) / 100;
+          const rule = getTaxRuleForLine(desc);
+
+          return {
+            lineNumber: idx + 1,
+            description: desc,
+            quantity: 1,
+            unitPriceFmt: formatMoney(val),
+            totalAmountFmt: formatMoney(lineTotal),
+            totalNetFmt: formatMoney(val),
+            taxPercentage: pct,
+            exemptionCode: pct === 0 ? (isM04 ? "M04" : rule.taxExemptionCode || "M11") : undefined,
+            exemptionReason: pct === 0 ? (isM04 ? "Não sujeito a IVA nos termos do CIVA" : rule.taxExemptionReason || "Isenção no domínio da educação") : undefined,
+            taxLabel: pct === 0 ? (isM04 ? "Não sujeito (M04)" : "Isento (M11)") : `${pct}%`,
+          };
+        }
+
+        const match2 = /^(.+):(\d[\d\s.,]*)$/.exec(part);
+        if (match2) {
+          const desc = cap(match2[1].trim());
+          const val = parseFloat(match2[2].replace(/\s/g, "").replace(",", ".")) || 0;
+          const rule = getTaxRuleForLine(desc);
+          const isExempt = rule.defaultTaxPercentage === 0;
+
+          return {
+            lineNumber: idx + 1,
+            description: desc,
+            quantity: 1,
+            unitPriceFmt: formatMoney(val),
+            totalAmountFmt: formatMoney(val),
+            totalNetFmt: formatMoney(val),
+            taxPercentage: rule.defaultTaxPercentage,
+            exemptionCode: isExempt ? rule.taxExemptionCode : undefined,
+            exemptionReason: isExempt ? rule.taxExemptionReason : undefined,
+            taxLabel: isExempt ? `Isento (${rule.taxExemptionCode || "M11"})` : `${rule.defaultTaxPercentage}%`,
+          };
+        }
+
+        const rule = getTaxRuleForLine(part);
+        const isExempt = rule.defaultTaxPercentage === 0;
+        return {
+          lineNumber: idx + 1,
+          description: cap(part),
+          quantity: 1,
+          unitPriceFmt: totalFmt,
+          totalAmountFmt: totalFmt,
+          totalNetFmt: totalFmt,
+          taxPercentage: rule.defaultTaxPercentage,
+          exemptionCode: isExempt ? rule.taxExemptionCode : undefined,
+          exemptionReason: isExempt ? rule.taxExemptionReason : undefined,
+          taxLabel: isExempt ? `Isento (${rule.taxExemptionCode || "M11"})` : `${rule.defaultTaxPercentage}%`,
+        };
+      });
+    }
+
+    // Item único
+    const sm = /^(.+):(\d[\d\s.,]*):(\d+(?:_M\d+)?)$/.exec(lineDescription);
+    if (sm) {
+      const desc = cap(sm[1].trim());
+      const val = parseFloat(sm[2].replace(/\s/g, "").replace(",", ".")) || 0;
+      const ivaPctStr = sm[3].trim();
+      const isM04 = ivaPctStr === "0_M04";
+      const isM11 = ivaPctStr === "0_M11" || ivaPctStr === "0";
+      const pct = isM04 || isM11 ? 0 : (parseFloat(ivaPctStr) || 0);
+      const lineTotal = Math.round((val + (val * pct) / 100) * 100) / 100;
+      const rule = getTaxRuleForLine(desc);
+
+      return [{
+        lineNumber: 1,
+        description: desc,
+        quantity: 1,
+        unitPriceFmt: formatMoney(val),
+        totalAmountFmt: formatMoney(lineTotal),
+        totalNetFmt: formatMoney(val),
+        taxPercentage: pct,
+        exemptionCode: pct === 0 ? (isM04 ? "M04" : rule.taxExemptionCode || "M11") : undefined,
+        exemptionReason: pct === 0 ? (isM04 ? "Não sujeito a IVA nos termos do CIVA" : rule.taxExemptionReason || "Isenção no domínio da educação") : undefined,
+        taxLabel: pct === 0 ? (isM04 ? "Não sujeito (M04)" : "Isento (M11)") : `${pct}%`,
+      }];
+    }
+
+    const sm2 = /^(.+):(\d[\d\s.,]*)$/.exec(lineDescription);
+    if (sm2) {
+      const desc = cap(sm2[1].trim());
+      const val = parseFloat(sm2[2].replace(/\s/g, "").replace(",", ".")) || 0;
+      const rule = getTaxRuleForLine(desc);
+      const isExempt = rule.defaultTaxPercentage === 0;
+
+      return [{
+        lineNumber: 1,
+        description: desc,
+        quantity: 1,
+        unitPriceFmt: formatMoney(val),
+        totalAmountFmt: formatMoney(val),
+        totalNetFmt: formatMoney(val),
+        taxPercentage: rule.defaultTaxPercentage,
+        exemptionCode: isExempt ? rule.taxExemptionCode : undefined,
+        exemptionReason: isExempt ? rule.taxExemptionReason : undefined,
+        taxLabel: isExempt ? `Isento (${rule.taxExemptionCode || "M11"})` : `${rule.defaultTaxPercentage}%`,
+      }];
+    }
+
+    const rule = getTaxRuleForLine(lineDescription);
+    const isExempt = rule.defaultTaxPercentage === 0;
+    return [{
+      lineNumber: 1,
+      description: cap(lineDescription),
+      quantity: 1,
+      unitPriceFmt: totalFmt,
+      totalAmountFmt: totalFmt,
+      totalNetFmt: totalFmt,
+      taxPercentage: rule.defaultTaxPercentage,
+      exemptionCode: isExempt ? rule.taxExemptionCode : undefined,
+      exemptionReason: isExempt ? rule.taxExemptionReason : undefined,
+      taxLabel: isExempt ? `Isento (${rule.taxExemptionCode || "M11"})` : `${rule.defaultTaxPercentage}%`,
+    }];
+  })();
+
+  // Resumo de Impostos
+  const taxSummaryComputed = (() => {
+    const taxGroups: Record<string, { base: number; iva: number; label: string }> = {};
+    let subtotal = 0;
+    let totalIva = 0;
+
+    for (const line of parsedLines) {
+      const val = parseFloat(line.unitPriceFmt.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+      const pct = line.taxPercentage ?? 0;
+      const ivaAmt = Math.round(((val * pct) / 100) * 100) / 100;
+      subtotal += val;
+      totalIva += ivaAmt;
+
+      const groupKey = `${pct}_${line.exemptionCode || "NOR"}`;
+      if (!taxGroups[groupKey]) {
+        const label = pct === 0 ? `Isento (${line.exemptionCode || "M11"})` : `Taxa ${pct}%`;
+        taxGroups[groupKey] = { base: 0, iva: 0, label };
+      }
+      taxGroups[groupKey].base += val;
+      taxGroups[groupKey].iva += ivaAmt;
+    }
+
+    return {
+      subtotalFmt: formatMoney(subtotal),
+      ivaFmt: formatMoney(totalIva),
+      taxSummary: Object.values(taxGroups).map((g) => ({
+        label: g.label,
+        base: formatMoney(g.base),
+        iva: formatMoney(g.iva),
+      })),
+    };
+  })();
+
   return {
     schoolName: school?.name?.trim() || "Escola",
     schoolNif: school?.nif?.trim() || null,
-    schoolAddress: school?.address?.trim() || null,
+    schoolAddress: school?.address?.trim() || "Luanda, Angola",
     schoolContactLines: contactLines,
     logoDataUrl: logoDataUrlFinal,
     documentNumber: invoice.document_number.trim(),
     invoiceDateYYYYMMDD: invoice.invoice_date.slice(0, 10),
-    issuedAtTime: (() => {
-      const iso = (invoice as { invoice_issued_at?: string }).invoice_issued_at;
-      if (!iso) return undefined;
-      const d = new Date(iso);
-      if (isNaN(d.getTime())) return undefined;
-      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
-    })(),
-    clienteNome: invoice.cliente_nome.trim() || (invoice.cliente_nif.trim() === "999999999" ? "Consumidor Final" : "Cliente"),
-    clienteNif: invoice.cliente_nif.trim(),
-    encarregadoNome: guardianNameFromProfile ?? (invoice.cliente_nome.trim() || null),
+    issuedAtTime: systemEntryTimestamp.slice(11),
+    systemEntryTimestamp,
+    copyType: "Original",
+    clienteNome: clienteNomeFinal,
+    clienteNif: clienteNifFinal,
+    clienteAddress: "Luanda, Angola",
+    encarregadoNome: guardianNameFromProfile ?? clienteNomeFinal,
     studentName: studentFullName || "—",
     studentClassroom: studentClassroom || null,
     academicYearLabel,
-    lineItems: (() => {
-      // Capitalizar primeira letra
-      const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-      // Se line_description contém múltiplos itens separados por ";" (conversão PP→FT), criar linhas distintas
-      // Formato novo: "Desc:Valor:IvaPct; Desc2:Valor2:IvaPct2"
-      // Formato antigo: "Desc:Valor; Desc2:Valor2" ou "Desc; Desc2"
-      const parts = lineDescription.split(";").map((s) => s.trim()).filter(Boolean);
-      if (parts.length > 1) {
-        return parts.map((part) => {
-          // Usar regex para extrair: tudo antes do último ou penúltimo ":" é descrição
-          // Formato: "Descrição:valor_numerico:iva_pct"
-          const match3 = /^(.+):(\d[\d\s.,]*):(\d+(?:_M\d+)?)$/.exec(part);
-          if (match3) {
-            const desc = match3[1].trim();
-            const val = match3[2].trim();
-            const ivaPct = match3[3].trim();
-            const num = parseFloat(val.replace(/\s/g, "").replace(",", "."));
-            const pct = ivaPct === "0_M04" ? 0 : (parseFloat(ivaPct) || 0);
-            const lineTotal = Number.isFinite(num) ? Math.round((num + num * pct / 100) * 100) / 100 : 0;
-            const taxLabel = ivaPct === "0" ? "Isento (M11)" : ivaPct === "0_M04" ? "Não sujeito (M04)" : `${ivaPct}%`;
-            const fmtVal = Number.isFinite(num) ? formatMoney(num) : totalFmt;
-            return {
-              description: cap(desc),
-              quantity: 1,
-              unitPriceFmt: fmtVal,
-              totalAmountFmt: Number.isFinite(lineTotal) ? formatMoney(lineTotal) : fmtVal,
-              taxLabel,
-            };
-          }
-          // Formato antigo: "Desc:Valor"
-          const match2 = /^(.+):(\d[\d\s.,]*)$/.exec(part);
-          if (match2) {
-            const desc = match2[1].trim();
-            const val = match2[2].trim();
-            const num = parseFloat(val.replace(/\s/g, "").replace(",", "."));
-            const fmtVal = Number.isFinite(num) ? formatMoney(num) : totalFmt;
-            return {
-              description: cap(desc),
-              quantity: 1,
-              unitPriceFmt: fmtVal,
-              totalAmountFmt: fmtVal,
-            };
-          }
-          return { description: cap(part), quantity: 1, unitPriceFmt: totalFmt, totalAmountFmt: totalFmt };
-        });
-      }
-      // Item único — tentar parsear formato "Desc:Valor:IvaPct"
-      const singleMatch = /^(.+):(\d[\d\s.,]*):(\d+(?:_M\d+)?)$/.exec(lineDescription);
-      if (singleMatch) {
-        const desc = singleMatch[1].trim();
-        const val = singleMatch[2].trim();
-        const ivaPctStr = singleMatch[3].trim();
-        const num = parseFloat(val.replace(/\s/g, "").replace(",", "."));
-        const pct = ivaPctStr === "0_M04" ? 0 : (parseFloat(ivaPctStr) || 0);
-        const lineTotal = Number.isFinite(num) ? Math.round((num + num * pct / 100) * 100) / 100 : 0;
-        const taxLabel = ivaPctStr === "0" ? "Isento (M11)" : ivaPctStr === "0_M04" ? "Não sujeito (M04)" : `${ivaPctStr}%`;
-        const fmtVal = Number.isFinite(num) ? formatMoney(num) : totalFmt;
-        return [{
-          description: cap(desc),
-          quantity: 1,
-          unitPriceFmt: fmtVal,
-          totalAmountFmt: Number.isFinite(lineTotal) ? formatMoney(lineTotal) : fmtVal,
-          taxLabel,
-        }];
-      }
-      // Formato antigo "Desc:Valor"
-      const singleMatch2 = /^(.+):(\d[\d\s.,]*)$/.exec(lineDescription);
-      if (singleMatch2) {
-        const desc = singleMatch2[1].trim();
-        const val = singleMatch2[2].trim();
-        const num = parseFloat(val.replace(/\s/g, "").replace(",", "."));
-        const fmtVal = Number.isFinite(num) ? formatMoney(num) : totalFmt;
-        return [{
-          description: cap(desc),
-          quantity: 1,
-          unitPriceFmt: fmtVal,
-          totalAmountFmt: fmtVal,
-          taxLabel: "Isento (M11)",
-        }];
-      }
-      return [{
-        description: cap(lineDescription),
-        quantity: 1,
-        unitPriceFmt: totalFmt,
-        totalAmountFmt: totalFmt,
-        taxLabel: "Isento (M11)",
-      }];
-    })(),
-    ...(() => {
-      // Calcular subtotal, IVA e taxSummary a partir dos itens parseados
-      const parts = lineDescription.split(";").map((s) => s.trim()).filter(Boolean);
-      if (parts.length > 1) {
-        let subtotal = 0;
-        let totalIva = 0;
-        const taxGroups: Record<string, { base: number; iva: number; label: string }> = {};
-
-        for (const part of parts) {
-          const match3 = /^(.+):(\d[\d\s.,]*):(\d+(?:_M\d+)?)$/.exec(part);
-          if (match3) {
-            const val = parseFloat(match3[2].replace(/\s/g, "").replace(",", ".")) || 0;
-            const ivaPctStr = match3[3].trim();
-            const pct = ivaPctStr === "0_M04" ? 0 : (parseFloat(ivaPctStr) || 0);
-            const ivaAmt = (val * pct) / 100;
-            subtotal += val;
-            totalIva += ivaAmt;
-            const label = ivaPctStr === "0" ? "Isento (M11)" : ivaPctStr === "0_M04" ? "Não sujeito (M04)" : `${ivaPctStr}%`;
-            if (!taxGroups[ivaPctStr]) taxGroups[ivaPctStr] = { base: 0, iva: 0, label };
-            taxGroups[ivaPctStr].base += val;
-            taxGroups[ivaPctStr].iva += ivaAmt;
-          } else {
-            const match2 = /^(.+):(\d[\d\s.,]*)$/.exec(part);
-            const val = match2 ? (parseFloat(match2[2].replace(/\s/g, "").replace(",", ".")) || 0) : 0;
-            subtotal += val;
-          }
-        }
-
-        const fmtNum = (n: number) => formatMoney(Number.isFinite(n) ? n : 0);
-        return {
-          subtotalFmt: fmtNum(subtotal),
-          ivaFmt: fmtNum(totalIva),
-          taxSummary: Object.values(taxGroups).map((g) => ({
-            label: g.label,
-            base: fmtNum(g.base),
-            iva: fmtNum(g.iva),
-          })),
-        };
-      }
-      // Item único com formato "Desc:Valor:IvaPct"
-      const sm = /^(.+):(\d[\d\s.,]*):(\d+(?:_M\d+)?)$/.exec(lineDescription);
-      if (sm) {
-        const val = parseFloat(sm[2].replace(/\s/g, "").replace(",", ".")) || 0;
-        const ivaPctStr = sm[3].trim();
-        const pct = ivaPctStr === "0_M04" ? 0 : (parseFloat(ivaPctStr) || 0);
-        const ivaAmt = Math.round((val * pct / 100) * 100) / 100;
-        const label = ivaPctStr === "0" ? "Isento (M11)" : ivaPctStr === "0_M04" ? "Não sujeito (M04)" : `${ivaPctStr}%`;
-        const fmtNum = (n: number) => formatMoney(Number.isFinite(n) ? n : 0);
-        return {
-          subtotalFmt: fmtNum(val),
-          ivaFmt: fmtNum(ivaAmt),
-          taxSummary: [{ label, base: fmtNum(val), iva: fmtNum(ivaAmt) }],
-        };
-      }
-      return {};
-    })(),
+    lineItems: parsedLines,
     grossTotalFmt: totalFmt,
-    exemptionCode: invoice.exemption_code ?? null,
-    exemptionReason: invoice.exemption_reason ?? null,
+    subtotalFmt: taxSummaryComputed.subtotalFmt,
+    ivaFmt: taxSummaryComputed.ivaFmt,
+    taxSummary: taxSummaryComputed.taxSummary,
+    exemptionCode: invoice.exemption_code ?? (parsedLines[0]?.exemptionCode || "M11"),
+    exemptionReason: invoice.exemption_reason ?? (parsedLines[0]?.exemptionReason || "Isenção no domínio da educação"),
     documentHashFootnote: invoice.document_hash,
     digitalSignatureSha1: invoice.digital_signature_sha1_b64,
     isCancelled: String((invoice as { invoice_status?: string }).invoice_status ?? "N").toUpperCase() === "A",
     cancellationReason: (invoice as { cancellation_reason?: string | null }).cancellation_reason ?? null,
     orderReferencePP: (invoice as { order_reference_pp?: string | null }).order_reference_pp ?? null,
+    docType,
+    qrCodeDataUrl: qrCodeDataUrlFinal,
+    qrCodePayload: qrCodePayloadFinal,
+    hashControl,
+    certificationNumber: "99/AGT/2026",
+    softwareVersion: "1.0.0",
   };
 }
 
@@ -601,38 +702,36 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   const rhs = pageW - margin;
 
   const hdrTop = margin;
-  const leftColW = usableW * 0.52;
+  const leftColW = usableW * 0.54;
 
-  // Logo da escola (se disponível)
-  const textStartX = margin;
-  let yLeft = hdrTop;
+  // Logo e Identificação da Escola (lado a lado sem sobreposição)
+  const hasLogo = Boolean(opts.logoDataUrl?.startsWith("data:image"));
+  const logoW = 24;
+  const logoH = 24;
+  const logoGap = 4;
 
-  if (opts.logoDataUrl) {
-    addLogoIfPossible(doc, opts.logoDataUrl, textStartX, yLeft, 25, 25);
-    yLeft += pxMm(70);
+  if (hasLogo && opts.logoDataUrl) {
+    addLogoIfPossible(doc, opts.logoDataUrl, margin, hdrTop, logoW, logoH);
   }
 
-  const schoolNameSize = pxToPt(18);
+  const schoolTextX = hasLogo ? margin + logoW + logoGap : margin;
+  const schoolTextMaxW = hasLogo ? leftColW - (logoW + logoGap) : leftColW;
+  let yLeft = hdrTop;
+
+  const schoolNameSize = pxToPt(16);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(schoolNameSize);
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
   yLeft = drawWrappedTexts(
     doc,
     [opts.schoolName || "Escola"],
-    textStartX,
+    schoolTextX,
     yLeft,
-    leftColW,
-    { leading: pxMm(22), size: schoolNameSize, style: "bold", color: NAVY },
+    schoolTextMaxW,
+    { leading: pxMm(19), size: schoolNameSize, style: "bold", color: NAVY },
   );
 
   yLeft += pxMm(3);
-  yLeft = drawWrappedTexts(doc, ["Factura-Recibo (documento fiscal)"], textStartX, yLeft, leftColW, {
-    leading: pxMm(12),
-    size: pxToPt(9),
-    color: FOOTER_MUTED,
-  });
-
-  yLeft += pxMm(5);
   const issuerHeaderLines: string[] = [];
   if (opts.schoolNif) issuerHeaderLines.push(`NIF: ${opts.schoolNif}`);
   if (opts.schoolAddress) issuerHeaderLines.push(opts.schoolAddress);
@@ -640,20 +739,51 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
     opts.schoolContactLines.forEach((l) => l?.trim() && issuerHeaderLines.push(l.trim()));
   }
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(pxToPt(10));
+  doc.setFontSize(pxToPt(9.5));
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-  yLeft = drawWrappedTexts(doc, issuerHeaderLines, textStartX, yLeft, leftColW, {
+  yLeft = drawWrappedTexts(doc, issuerHeaderLines, schoolTextX, yLeft, schoolTextMaxW, {
     leading: pxMm(13),
-    size: pxToPt(10),
+    size: pxToPt(9.5),
   });
 
-  // ── Lado direito: tipo de documento + número + datas
-  let yDoc = hdrTop;
+  const leftHeaderBottom = Math.max(yLeft, hasLogo ? hdrTop + logoH : hdrTop);
+
+  // ── Seção A (Via no canto superior direito)
+  const copyLabel = (opts.copyType || "Original").toUpperCase();
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(pxToPt(20));
+  doc.setFontSize(pxToPt(9));
+  doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
+  doc.text(copyLabel, rhs, hdrTop, { align: "right", baseline: "top" });
+
+  // ── Seção B: Metadados do Documento (Lado Direito)
+  let yDoc = hdrTop + pxMm(10);
+  const docTypeUpper = (
+    opts.docType ||
+    (opts.documentNumber.startsWith("FT")
+      ? "FT"
+      : opts.documentNumber.startsWith("NC")
+      ? "NC"
+      : opts.documentNumber.startsWith("PF")
+      ? "PF"
+      : "FR")
+  ).toUpperCase();
+
+  const docTitle =
+    docTypeUpper === "FT"
+      ? "FATURA"
+      : docTypeUpper === "NC"
+      ? "NOTA DE CRÉDITO"
+      : docTypeUpper === "PF"
+      ? "FATURA PRÓ-FORMA"
+      : docTypeUpper === "ND"
+      ? "NOTA DE DÉBITO"
+      : "FATURA / RECIBO";
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(pxToPt(19));
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-  doc.text("FACTURA RECIBO", rhs, yDoc, { align: "right", baseline: "top" });
-  yDoc += pxMm(28);
+  doc.text(docTitle, rhs, yDoc, { align: "right", baseline: "top" });
+  yDoc += pxMm(24);
 
   doc.setFontSize(pxToPt(13));
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
@@ -661,12 +791,19 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   yDoc += pxMm(18);
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(pxToPt(11));
+  doc.setFontSize(pxToPt(10));
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
   const issueLabel = fmtPtLongDateYYYYMMDD(opts.invoiceDateYYYYMMDD);
-  const timeStr = opts.issuedAtTime ? ` ${opts.issuedAtTime}` : "";
-  doc.text(`Emissão: ${issueLabel}${timeStr}`, rhs, yDoc, { align: "right", baseline: "top" });
-  yDoc += pxMm(16);
+  doc.text(`Data de Emissão: ${issueLabel}`, rhs, yDoc, { align: "right", baseline: "top" });
+  yDoc += pxMm(14);
+
+  const systemEntry =
+    opts.systemEntryTimestamp ||
+    (opts.issuedAtTime
+      ? `${opts.invoiceDateYYYYMMDD.slice(0, 10)} ${opts.issuedAtTime}`
+      : `${opts.invoiceDateYYYYMMDD.slice(0, 10)} 12:00:00`);
+  doc.text(`Registo no Sistema: ${systemEntry}`, rhs, yDoc, { align: "right", baseline: "top" });
+  yDoc += pxMm(14);
 
   // Período Contabilístico
   const periodMonth = (() => {
@@ -674,39 +811,42 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
     if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return new Date().getMonth() + 1;
     return parseInt(raw.split("-")[1], 10);
   })();
-  doc.setFontSize(pxToPt(11));
+  doc.setFontSize(pxToPt(9));
   doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
   doc.text(`Período Contabilístico: ${periodMonth}`, rhs, yDoc, { align: "right", baseline: "top" });
-  yDoc += pxMm(16);
+  yDoc += pxMm(14);
 
-  // OrderReferences — origem PP
-  if (opts.orderReferencePP?.trim()) {
-    doc.setFontSize(pxToPt(11));
+  // Referência de Origem (Para NC ou Conversão de PP)
+  const originDoc = opts.referencedDocNumber || opts.orderReferencePP;
+  if (originDoc?.trim()) {
+    doc.setFontSize(pxToPt(10));
     doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-    doc.text(`Origem: ${opts.orderReferencePP.trim()}`, rhs, yDoc, { align: "right", baseline: "top" });
+    const originDateStr = opts.referencedDocDate ? ` de ${opts.referencedDocDate}` : "";
+    doc.text(`Origem: ${originDoc.trim()}${originDateStr}`, rhs, yDoc, { align: "right", baseline: "top" });
     doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-    yDoc += pxMm(16);
+    yDoc += pxMm(14);
   }
 
-  const headerBottomInner = Math.max(yLeft + pxMm(4), yDoc);
-  const dividerY = headerBottomInner + pxMm(18);
+  const headerBottomInner = Math.max(leftHeaderBottom + pxMm(4), yDoc);
+  const dividerY = headerBottomInner + pxMm(14);
   doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
   doc.setLineWidth(Math.max(pxMm(1.75), 0.45));
   doc.line(margin, dividerY, rhs, dividerY);
 
-  let y = dividerY + pxMm(26);
+  let y = dividerY + pxMm(20);
 
-  /* .details-container + .details-box */
+  /* Seção A: Dados do Adquirente (Aluno / Encarregado de Educação) */
   const boxGap = usableW * 0.038;
   const panelW = (usableW - boxGap) / 2;
   const bx1 = margin;
-  const bx2 = margin + panelW + boxGap;
-  const padInner = pxMm(15);
+  const padInner = pxMm(14);
   const rBox = pxMm(4);
 
-  // Dados do Cliente
   const clientBody: string[] = [];
-  const encNomeReal = opts.encarregadoNome?.trim() || opts.clienteNome.trim() || "—";
+  const isGeneric = !opts.clienteNif?.trim() || opts.clienteNif.trim() === "999999999";
+  const encNomeReal = isGeneric
+    ? "Consumidor Final"
+    : opts.encarregadoNome?.trim() || opts.clienteNome?.trim() || "Consumidor Final";
   clientBody.push(encNomeReal);
   if (opts.studentName?.trim() && opts.studentName.trim() !== "—") {
     clientBody.push(`Aluno: ${opts.studentName.trim()}`);
@@ -717,12 +857,12 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   if (opts.academicYearLabel?.trim() && opts.academicYearLabel.trim() !== "—") {
     clientBody.push(`Ano lectivo: ${opts.academicYearLabel.trim()}`);
   }
-  clientBody.push(`NIF: ${opts.clienteNif.trim()}`);
+  clientBody.push(`NIF: ${isGeneric ? "999999999" : opts.clienteNif.trim()}`);
+  clientBody.push(`Endereço: ${opts.clienteAddress?.trim() || "Luanda, Angola"}`);
 
-  const innerW = panelW - padInner * 2;
-  const hClientInner = measureDetailPanelInnerHeightMm(doc, "Dados do Cliente", clientBody, innerW);
+  const innerW = usableW - padInner * 2;
+  const hClientInner = measureDetailPanelInnerHeightMm(doc, "Adquirente (Cliente)", clientBody, innerW);
   const boxH = hClientInner + padInner * 2;
-
   const boxTop = y;
 
   doc.setDrawColor(BORDER_EEE[0], BORDER_EEE[1], BORDER_EEE[2]);
@@ -730,25 +870,48 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   doc.setLineWidth(pxMm(1));
   doc.roundedRect(bx1, boxTop, usableW, boxH, rBox, rBox, "FD");
 
-  drawDetailPanelInner(doc, bx1, boxTop, padInner, "Dados do Cliente", clientBody, usableW - padInner * 2);
+  drawDetailPanelInner(doc, bx1, boxTop, padInner, "Adquirente (Cliente)", clientBody, innerW);
 
-  y = boxTop + boxH + pxMm(18);
+  y = boxTop + boxH + pxMm(16);
 
-  const hasAnyDiscount = opts.lineItems.some((it) => it.discountPct);
-  const head = hasAnyDiscount
-    ? [["DESCRIÇÃO DO SERVIÇO", "QTD", "P. UNITÁRIO", "DESC.", "TAXA", "TOTAL"]]
-    : [["DESCRIÇÃO DO SERVIÇO", "QTD", "P. UNITÁRIO", "TAXA", "TOTAL"]];
-  const body = opts.lineItems.map((it) => {
-    const row = [
-      it.description.replace(/\u00a0/g, " "),
-      String(it.quantity),
-      it.unitPriceFmt,
-    ];
-    if (hasAnyDiscount) row.push(it.discountPct || "—");
-    row.push(it.taxLabel || "Isento (M11)");
-    row.push(it.totalAmountFmt);
-    return row;
+  /* ─── SEÇÃO C: TABELA DE LINHAS (ITENS FATURADOS) ─── */
+  /* Colunas Obrigatórias: 1. N.º | 2. Descrição | 3. Qtd | 4. Preço Unitário | 5. Desc. | 6. Taxa IVA | 7. Total Líquido */
+  const head = [["N.º", "DESCRIÇÃO", "QTD", "P. UNITÁRIO", "DESC.", "TAXA IVA", "TOTAL LÍQUIDO"]];
+  const body = opts.lineItems.map((it, idx) => {
+    const lineNo = String(it.lineNumber || idx + 1);
+    const isExempt =
+      it.taxPercentage === 0 ||
+      it.taxLabel?.includes("Isento") ||
+      it.taxLabel?.includes("Não sujeito") ||
+      (it.taxLabel?.startsWith("0") ?? false);
+
+    // Regra Obrigatória: Se taxa 0%, exibir abaixo da descrição o código e motivo oficial AGT
+    let descWithExemption = it.description.replace(/\u00a0/g, " ");
+    if (isExempt) {
+      const code = it.exemptionCode || opts.exemptionCode || "M02";
+      const reason = it.exemptionReason || opts.exemptionReason || "Isento nos termos do Código do IVA";
+      descWithExemption += `\n(${code}) ${reason}`;
+    }
+
+    const disc = it.discountPct ? `${it.discountPct}%` : it.discountAmountFmt || "—";
+    const tax =
+      it.taxPercentage !== undefined
+        ? it.taxPercentage === 0
+          ? "0%"
+          : `${it.taxPercentage}%`
+        : it.taxLabel || "0%";
+    const total = it.totalNetFmt || it.totalAmountFmt;
+
+    return [lineNo, descWithExemption, String(it.quantity), it.unitPriceFmt, disc, tax, total];
   });
+
+  const colNum = 10;
+  const colQty = 12;
+  const colUnit = 26;
+  const colDisc = 16;
+  const colTax = 20;
+  const colTotal = 30;
+  const colDesc = usableW - colNum - colQty - colUnit - colDisc - colTax - colTotal;
 
   autoTable(doc, {
     startY: y,
@@ -757,8 +920,8 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
     margin: { left: margin, right: margin },
     theme: "plain",
     styles: {
-      fontSize: pxToPt(13),
-      cellPadding: { top: pxMm(10), right: pxMm(10), bottom: pxMm(11), left: pxMm(10) },
+      fontSize: pxToPt(11),
+      cellPadding: { top: pxMm(8), right: pxMm(8), bottom: pxMm(8), left: pxMm(8) },
       lineWidth: pxMm(0.7),
       lineColor: BORDER_EEE,
       textColor: BODY_TEXT,
@@ -770,35 +933,26 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
       fillColor: NAVY,
       textColor: 255,
       fontStyle: "bold",
-      fontSize: pxToPt(12),
+      fontSize: pxToPt(10),
       halign: "left",
       valign: "middle",
-      cellPadding: { top: pxMm(10), right: pxMm(10), bottom: pxMm(10), left: pxMm(10) },
+      cellPadding: { top: pxMm(9), right: pxMm(8), bottom: pxMm(9), left: pxMm(8) },
     },
-    columnStyles: (() => {
-      const moneyStyle = { fontSize: pxToPt(11), halign: "right" as const, valign: "middle" as const };
-      if (hasAnyDiscount) {
-        const colQty = 12; const colUnit = 24; const colDisc = 14; const colTax = 20; const colTotal = 34;
-        const colDesc = usableW - colQty - colUnit - colDisc - colTax - colTotal;
-        return {
-          0: { cellWidth: colDesc, valign: "middle" as const },
-          1: { cellWidth: colQty, halign: "center" as const, valign: "middle" as const },
-          2: { cellWidth: colUnit, ...moneyStyle },
-          3: { cellWidth: colDisc, halign: "center" as const, valign: "middle" as const },
-          4: { cellWidth: colTax, halign: "center" as const, valign: "middle" as const },
-          5: { cellWidth: colTotal, ...moneyStyle, fontStyle: "bold" as const, textColor: [35, 40, 48] as [number, number, number] },
-        };
-      }
-      const colQty = 12; const colUnit = 24; const colTax = 20; const colTotal = 38;
-      const colDesc = usableW - colQty - colUnit - colTax - colTotal;
-      return {
-        0: { cellWidth: colDesc, valign: "middle" as const },
-        1: { cellWidth: colQty, halign: "center" as const, valign: "middle" as const },
-        2: { cellWidth: colUnit, ...moneyStyle },
-        3: { cellWidth: colTax, halign: "center" as const, valign: "middle" as const },
-        4: { cellWidth: colTotal, ...moneyStyle, fontStyle: "bold" as const, textColor: [35, 40, 48] as [number, number, number] },
-      };
-    })(),
+    columnStyles: {
+      0: { cellWidth: colNum, halign: "center" as const, valign: "middle" as const },
+      1: { cellWidth: colDesc, valign: "middle" as const },
+      2: { cellWidth: colQty, halign: "center" as const, valign: "middle" as const },
+      3: { cellWidth: colUnit, halign: "right" as const, valign: "middle" as const },
+      4: { cellWidth: colDisc, halign: "center" as const, valign: "middle" as const },
+      5: { cellWidth: colTax, halign: "center" as const, valign: "middle" as const },
+      6: {
+        cellWidth: colTotal,
+        halign: "right" as const,
+        valign: "middle" as const,
+        fontStyle: "bold" as const,
+        textColor: [35, 40, 48] as [number, number, number],
+      },
+    },
   });
 
   const d = doc as DocWithAutoTable;
@@ -806,9 +960,9 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
 
   let blockY = tableFinalY + pxMm(14);
 
-  // Quadro de Resumo de IVA (obrigatório AGT quando há taxas mistas)
+  // ─── SEÇÃO D: QUADRO DE RESUMO DE IMPOSTOS E TOTAIS FINANCEIROS ───
   if (opts.taxSummary && opts.taxSummary.length > 0) {
-    const taxHead = [["TAXA / ISENÇÃO", "BASE TRIBUTÁVEL", "IVA"]];
+    const taxHead = [["TAXA / MOTIVO DE ISENÇÃO", "BASE DE INCIDÊNCIA", "VALOR DO IVA"]];
     const taxBody = opts.taxSummary.map((ts) => [ts.label, ts.base, ts.iva]);
 
     autoTable(doc, {
@@ -818,8 +972,8 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
       margin: { left: margin + usableW * 0.35, right: margin },
       theme: "plain",
       styles: {
-        fontSize: pxToPt(10),
-        cellPadding: { top: pxMm(6), right: pxMm(8), bottom: pxMm(6), left: pxMm(8) },
+        fontSize: pxToPt(9),
+        cellPadding: { top: pxMm(5), right: pxMm(7), bottom: pxMm(5), left: pxMm(7) },
         lineWidth: pxMm(0.5),
         lineColor: BORDER_EEE,
         textColor: BODY_TEXT,
@@ -829,7 +983,7 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
         fillColor: [240, 240, 240] as [number, number, number],
         textColor: NAVY,
         fontStyle: "bold",
-        fontSize: pxToPt(9),
+        fontSize: pxToPt(8.5),
       },
       columnStyles: {
         0: { halign: "left" as const },
@@ -842,99 +996,98 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
     blockY = (d2.lastAutoTable?.finalY ?? blockY) + pxMm(10);
   }
 
-  // Totals section
+  // Totais Financeiros
   const totalsW = usableW * 0.55;
   const totalsX = rhs - totalsW;
 
   const subtotalDisplay = opts.subtotalFmt ?? opts.grossTotalFmt;
-  const ivaDisplay = opts.ivaFmt ?? "0 AOA";
-  const hasIva = opts.ivaFmt && opts.ivaFmt !== "0 AOA" && opts.ivaFmt !== "0,00" && opts.ivaFmt !== "0,00 AOA";
+  const ivaDisplay = opts.ivaFmt ?? "0,00 Kz";
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(pxToPt(12));
+  doc.setFontSize(pxToPt(11));
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-  doc.text("Subtotal", totalsX, blockY + pxMm(4));
+  doc.text("Total Ilíquido (Sem Imposto)", totalsX, blockY + pxMm(4));
   doc.text(subtotalDisplay, totalsX + totalsW, blockY + pxMm(4), { align: "right" });
 
-  blockY += pxMm(10) + pxMm(10);
+  blockY += pxMm(16);
 
-  // Linha de IVA (sempre mostrar)
-  doc.text("IVA", totalsX, blockY + pxMm(4));
+  if (opts.totalDiscountFmt && opts.totalDiscountFmt !== "0,00 Kz" && opts.totalDiscountFmt !== "0 Kz") {
+    doc.text("Total de Descontos", totalsX, blockY + pxMm(4));
+    doc.text(`-${opts.totalDiscountFmt}`, totalsX + totalsW, blockY + pxMm(4), { align: "right" });
+    blockY += pxMm(16);
+  }
+
+  doc.text("Total de IVA", totalsX, blockY + pxMm(4));
   doc.text(ivaDisplay, totalsX + totalsW, blockY + pxMm(4), { align: "right" });
 
-  blockY += pxMm(10) + pxMm(10);
+  blockY += pxMm(16);
 
-  const grandH = pxMm(42);
+  const grandH = pxMm(38);
   doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
   doc.rect(totalsX, blockY, totalsW, grandH, "F");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(pxToPt(11));
+  doc.setFontSize(pxToPt(10));
   doc.setTextColor(255, 255, 255);
-  doc.text("TOTAL PAGO", totalsX + pxMm(10), blockY + grandH * 0.35, { baseline: "middle" });
-  doc.setFontSize(pxToPt(16));
-  doc.text(opts.grossTotalFmt, totalsX + pxMm(10), blockY + grandH * 0.7, { baseline: "middle" });
+  doc.text("TOTAL A PAGAR (AOA)", totalsX + pxMm(10), blockY + grandH * 0.35, { baseline: "middle" });
+  doc.setFontSize(pxToPt(15));
+  doc.text(opts.grossTotalFmt, totalsX + pxMm(10), blockY + grandH * 0.72, { baseline: "middle" });
 
-  /* .footer … .fiscal-text */
-  let footY = blockY + grandH + pxMm(48);
-  
-  // Texto de isenção IVA — só renderizar se houver itens com código M11
-  const hasExemptItem = opts.lineItems.some((it) => 
-    it.taxLabel?.includes("M11") || it.taxLabel?.includes("Isento")
-  ) || (opts.exemptionCode?.trim()?.startsWith("M") && opts.taxSummary?.some((ts) => ts.label.includes("M11") || ts.label.includes("Isento")));
-  
-  if (hasExemptItem) {
-    const code = (opts.exemptionCode ?? "M11").trim();
-    const reason =
-      opts.exemptionReason?.trim() ||
-      "nos termos do Artigo 12.º do CIVA - Isenção no domínio da educação.";
-    const exemptText = formatIvaExemptionParagraph(code, reason);
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(pxToPt(11));
-    doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
-    for (const ln of doc.splitTextToSize(exemptText, usableW)) {
-      doc.text(ln, margin, footY);
-      footY += pxMm(16);
-    }
-    footY += pxMm(12);
-  }
+  /* ─── SEÇÃO E: RODAPÉ FISCAL E ELEMENTOS DE CERTIFICAÇÃO (CRÍTICO) ─── */
+  let footY = blockY + grandH + pxMm(32);
 
-  /* QR Code oficial AGT */
-  const qrSize = pxMm(24);
-  const qrY = Math.min(pageH - margin - qrSize - pxMm(10), footY + pxMm(4));
-  if (opts.qrCodeDataUrl) {
-    try {
-      doc.addImage(opts.qrCodeDataUrl, "PNG", margin, qrY, qrSize, qrSize);
-    } catch {
-      // Ignora erro se imagem for inválida
-    }
-  }
-
-  /* Hash control: 1º, 11º, 21º, 31º caracteres da assinatura digital */
+  /* Extração dos 4 caracteres do Hash (1º, 11º, 21º, 31º) */
   let hashControl = (opts.hashControl || "").trim();
   if (!hashControl) {
     const fullHash = (opts.digitalSignatureSha1 || opts.documentHashFootnote || "").trim();
-    if (fullHash.length >= 31) {
-      hashControl = `${fullHash.charAt(0)}${fullHash.charAt(10)}${fullHash.charAt(20)}${fullHash.charAt(30)}`;
-    } else {
-      hashControl = fullHash.slice(0, 4).padEnd(4, "0");
+    hashControl = getHashControl(fullHash) || (fullHash.length >= 4 ? fullHash.slice(0, 4) : "0000");
+  }
+
+  const certNumber = opts.certificationNumber?.trim() || "99/AGT/2026";
+  const softVersion = opts.softwareVersion?.trim() || "1.0.0";
+  const legalCertificationMention = `${hashControl} - Processado por programa validado n.º ${certNumber} Edukamba v${softVersion}`;
+
+  /* QR Code oficial AGT - Dimensionado para 28mm para leitura imediata e máxima visibilidade */
+  const qrSize = 28; // 28 mm
+  const qrY = Math.min(pageH - margin - qrSize - 4, footY);
+
+  if (opts.qrCodeDataUrl) {
+    try {
+      doc.setFillColor(255, 255, 255);
+      doc.rect(margin, qrY, qrSize, qrSize, "F");
+      doc.addImage(opts.qrCodeDataUrl, "PNG", margin, qrY, qrSize, qrSize);
+    } catch {
+      /* ignora erro de renderização do QR */
     }
   }
 
-  const certNumber = opts.certificationNumber?.trim() || "0/AGT/2026";
-  const softVersion = opts.softwareVersion?.trim() || "1.0.0";
-  const legalCertificationMention = `${hashControl} - Processado por programa validado n.º ${certNumber} EduCamba v${softVersion}`;
+  /* Texto Legal de Homologação em texto corrido ao lado do QR Code */
+  const textLeftX = margin + qrSize + 4;
+  const textMaxW = usableW - qrSize - 4;
+  let textY = qrY + 1.5;
 
-  /* Rodapé legal obrigatório AGT */
-  const wmY = Math.min(pageH - pxMm(14), qrY + qrSize + pxMm(6));
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(pxToPt(9.5));
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text(legalCertificationMention, textLeftX, textY);
+  textY += pxMm(14);
+
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(pxToPt(9));
+  doc.setFontSize(pxToPt(8));
   doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
-  doc.text(legalCertificationMention, margin, wmY);
+  const legalNotice =
+    "Os bens ou serviços foram colocados à disposição do adquirente na data e local indicados no presente documento. Documento emitido por software certificado pela Administração Geral Tributária (AGT) ao abrigo do Decreto Presidencial n.º 292/18.";
+  for (const line of doc.splitTextToSize(legalNotice, textMaxW)) {
+    doc.text(line, textLeftX, textY);
+    textY += pxMm(10);
+  }
+
+  const wmY = pageH - pxMm(10);
+  doc.setFontSize(pxToPt(8));
   doc.text(opts.schoolName || "", rhs, wmY, { align: "right" });
 
-  /* Marca d'água obrigatória se for Fatura Pró-Forma (PF) */
-  const isProforma = opts.docType === "PF" || opts.documentNumber.startsWith("PF");
+  /* Marca d'água se for Fatura Pró-Forma (PF) */
+  const isProforma = docTypeUpper === "PF" || opts.documentNumber.startsWith("PF");
   if (isProforma) {
     drawProformaNoticeOverlay(doc, pageW, pageH);
   }
