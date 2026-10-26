@@ -127,11 +127,17 @@ export function extractHashControl(signatureBase64: string): string {
  * Monta o texto de rodapé legal obrigatório com a menção de certificação AGT.
  */
 export function buildCertificationFooter(
-  hashControl: string,
+  hashControlOrOptions: string | { hashControl: string; certificationNumber?: string; softwareVersion?: string },
   certNumber = "0/AGT/2026",
   version = "1.0.0"
 ): string {
-  return `${hashControl} - Processado por programa validado n.º ${certNumber} Edukamba v${version}`;
+  if (typeof hashControlOrOptions === "object" && hashControlOrOptions !== null) {
+    const ctrl = hashControlOrOptions.hashControl;
+    const cert = hashControlOrOptions.certificationNumber || "0/AGT/2026";
+    const ver = hashControlOrOptions.softwareVersion || "1.0.0";
+    return `${ctrl} - Processado por programa validado n.º ${cert} Edukamba v${ver}`;
+  }
+  return `${hashControlOrOptions} - Processado por programa validado n.º ${certNumber} Edukamba v${version}`;
 }
 
 /**

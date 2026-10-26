@@ -54,6 +54,8 @@ export type {
 // Serviços e Tipos Gerais
 export { FiscalEmissionService } from "./services/fiscalEmissionService";
 export { FiscalSeriesService } from "./services/fiscalSeriesService";
+export { CreditNoteService, issueCreditNote } from "./services/creditNoteService";
 export { calculateFiscalDocument } from "./services/fiscalCalculations";
 export { AgtFiscalEngine } from "./AgtFiscalEngine";
 export type * from "./types";
+

@@ -38,6 +38,8 @@ export interface FiscalLineInput {
   taxExemptionCode?: string;
   /** Motivo da isenção (obrigatório se taxa for 0, ex: 'Isenção no domínio da educação') */
   taxExemptionReason?: string;
+  /** Número da fatura original retificada na linha (NC) */
+  referencedDocumentNumber?: string;
 }
 
 export interface CalculatedFiscalLine extends FiscalLineInput {

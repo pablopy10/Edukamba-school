@@ -54,6 +54,8 @@ import { downloadFiscalInvoicePdfById, openFiscalInvoicePdfInNewTab } from "@/li
 import { invokeCancelFiscalInvoice } from "@/lib/fiscal/invokeCancelFiscalInvoice";
 import { invokeCreditNote } from "@/lib/fiscal/invokeCreditNote";
 import { downloadCreditNotePdfById } from "@/lib/fiscal/downloadCreditNotePdf";
+import { CreditNoteBadge, CreditNoteAmountDisplay } from "@/components/fiscal/CreditNoteBadge";
+import { CreditNoteModal } from "@/components/fiscal/CreditNoteModal";
 import {
   FISCAL_CANCELLATION_REASON_CODES,
   type FiscalCancellationReasonCode,
@@ -218,7 +220,13 @@ type PaymentListRow = {
   rejection_reason: string | null;
   submitted_by: string | null;
   invoice_id?: string | null;
+  has_credit_note?: boolean | null;
+  credit_note_id?: string | null;
+  credit_note_number?: string | null;
+  credited_amount?: number | null;
+  credited_at?: string | null;
 };
+
 
 type ActivityFeeRow = {
   id: string;
@@ -522,17 +530,45 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
 
   /** Fatura fiscal (FACTURA‑RECIBO) por id de pagamento e por id de cobrança — para ícone/link na lista. */
   const [invoiceByPaymentId, setInvoiceByPaymentId] = useState<
-    Record<string, { invoiceId: string; documentNumber: string; invoiceStatus: "N" | "A"; pdfUrl?: string | null }>
+    Record<string, {
+      invoiceId: string;
+      documentNumber: string;
+      invoiceStatus: "N" | "A";
+      pdfUrl?: string | null;
+      creditStatus?: "NONE" | "PARTIALLY_CREDITED" | "FULLY_CREDITED" | null;
+      creditedAmount?: number | null;
+      creditNoteId?: string | null;
+      creditNoteNumber?: string | null;
+      creditReason?: string | null;
+    }>
   >({});
   const [invoiceByFeeId, setInvoiceByFeeId] = useState<
-    Record<string, { invoiceId: string; documentNumber: string; invoiceStatus: "N" | "A"; pdfUrl?: string | null }>
+    Record<string, {
+      invoiceId: string;
+      documentNumber: string;
+      invoiceStatus: "N" | "A";
+      pdfUrl?: string | null;
+      creditStatus?: "NONE" | "PARTIALLY_CREDITED" | "FULLY_CREDITED" | null;
+      creditedAmount?: number | null;
+      creditNoteId?: string | null;
+      creditNoteNumber?: string | null;
+      creditReason?: string | null;
+    }>
   >({});
+  const [creditNoteModalTarget, setCreditNoteModalTarget] = useState<{
+    invoiceId: string;
+    documentNumber: string;
+    grossTotal: number;
+    alreadyCredited?: number;
+    items?: Array<{ description: string; amount: number; ivaPct?: number }>;
+  } | null>(null);
   const [downloadingInvoicePdfId, setDownloadingInvoicePdfId] = useState<string | null>(null);
   const [cancelInvoiceDialog, setCancelInvoiceDialog] = useState<{
     invoiceId: string;
     documentNumber: string;
     paymentId: string;
   } | null>(null);
+
   const [cancelReasonCode, setCancelReasonCode] = useState<FiscalCancellationReasonCode>("data_error_nif");
   const [cancelReasonOther, setCancelReasonOther] = useState("");
   const [cancellingInvoiceId, setCancellingInvoiceId] = useState<string | null>(null);
@@ -1086,7 +1122,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         if (feeIds.length > 0) {
           const { data: payRows } = await supabase
             .from("payments")
-            .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by, invoice_id")
+            .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by, invoice_id, has_credit_note, credit_note_id, credit_note_number, credited_amount, credited_at")
             .in("student_fee_id", feeIds)
             .order("payment_date", { ascending: false });
           setPayments((payRows ?? []) as PaymentListRow[]);
@@ -1145,7 +1181,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         if (actFeeIds.length > 0) {
           const { data: actPayRows } = await supabase
             .from("payments")
-            .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+            .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by, invoice_id, has_credit_note, credit_note_id, credit_note_number, credited_amount, credited_at")
             .in("activity_fee_id", actFeeIds)
             .order("payment_date", { ascending: false });
           setActivityPayments((actPayRows ?? []) as PaymentListRow[]);
@@ -1188,7 +1224,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         if (trFeeIds.length > 0) {
           const { data: trPayRows } = await supabase
             .from("payments")
-            .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+            .select("id, student_fee_id, activity_fee_id, transport_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by, invoice_id, has_credit_note, credit_note_id, credit_note_number, credited_amount, credited_at")
             .in("transport_fee_id", trFeeIds)
             .order("payment_date", { ascending: false });
           setTransportPayments((trPayRows ?? []) as PaymentListRow[]);
@@ -1231,7 +1267,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         if (meFeeIds.length > 0) {
           const { data: mePayRows } = await supabase
             .from("payments")
-            .select("id, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, meal_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+            .select("id, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, meal_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by, invoice_id, has_credit_note, credit_note_id, credit_note_number, credited_amount, credited_at")
             .in("meal_fee_id", meFeeIds)
             .order("payment_date", { ascending: false });
           setMealPayments((mePayRows ?? []) as PaymentListRow[]);
@@ -1267,7 +1303,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         if (evFeeIds.length > 0) {
           const { data: evPayRows } = await supabase
             .from("payments")
-            .select("id, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, meal_fee_id, event_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+            .select("id, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, meal_fee_id, event_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by, invoice_id, has_credit_note, credit_note_id, credit_note_number, credited_amount, credited_at")
             .in("event_fee_id", evFeeIds)
             .order("payment_date", { ascending: false });
           setEventPayments((evPayRows ?? []) as PaymentListRow[]);
@@ -1309,7 +1345,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         if (enFeeIds.length > 0) {
           const { data: enPayRows } = await supabase
             .from("payments")
-            .select("id, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, meal_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by")
+            .select("id, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, meal_fee_id, amount_paid, method, status, proof_url, payment_date, notes, rejection_reason, submitted_by, invoice_id, has_credit_note, credit_note_id, credit_note_number, credited_amount, credited_at")
             .in("enrollment_fee_id", enFeeIds)
             .order("payment_date", { ascending: false });
           setEnrollmentPayments((enPayRows ?? []) as PaymentListRow[]);
@@ -1764,27 +1800,81 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         return;
       }
 
-      const nextPay: Record<string, { invoiceId: string; documentNumber: string; invoiceStatus: "N" | "A"; pdfUrl?: string | null }> = {};
-      const nextFee: Record<string, { invoiceId: string; documentNumber: string; invoiceStatus: "N" | "A"; pdfUrl?: string | null }> = {};
+      const nextPay: Record<string, {
+        invoiceId: string;
+        documentNumber: string;
+        invoiceStatus: "N" | "A";
+        pdfUrl?: string | null;
+        creditStatus?: "NONE" | "PARTIALLY_CREDITED" | "FULLY_CREDITED" | null;
+        creditedAmount?: number | null;
+        creditNoteId?: string | null;
+        creditNoteNumber?: string | null;
+        creditReason?: string | null;
+      }> = {};
+      const nextFee: Record<string, {
+        invoiceId: string;
+        documentNumber: string;
+        invoiceStatus: "N" | "A";
+        pdfUrl?: string | null;
+        creditStatus?: "NONE" | "PARTIALLY_CREDITED" | "FULLY_CREDITED" | null;
+        creditedAmount?: number | null;
+        creditNoteId?: string | null;
+        creditNoteNumber?: string | null;
+        creditReason?: string | null;
+      }> = {};
 
       // 1. Carregar faturas da escola
       const { data: recentInvoices } = await supabase
         .from("invoices")
-        .select("id, payment_id, student_id, document_number, invoice_status, pdf_url")
+        .select("id, payment_id, student_id, document_number, invoice_status, pdf_url, credit_status, credited_amount, doc_type, original_invoice_id, credit_reason, line_description, gross_total")
         .eq("school_id", schoolId)
         .order("doc_number", { ascending: false })
-        .limit(500);
+        .limit(600);
 
-      const invMap = new Map<string, { invoiceId: string; documentNumber: string; invoiceStatus: "N" | "A"; pdfUrl?: string | null }>();
+      // Mapear Notas de Crédito por fatura de origem
+      const ncByOriginalInvoiceId = new Map<string, { id: string; documentNumber: string; grossTotal: number; reason?: string }>();
+      for (const row of recentInvoices ?? []) {
+        const dType = (row as { doc_type?: string }).doc_type?.toUpperCase();
+        const origId = (row as { original_invoice_id?: string | null }).original_invoice_id;
+        if (dType === "NC" && origId) {
+          ncByOriginalInvoiceId.set(origId, {
+            id: row.id as string,
+            documentNumber: String(row.document_number ?? "").trim(),
+            grossTotal: Number(row.gross_total || 0),
+            reason: (row as { credit_reason?: string | null }).credit_reason ?? undefined,
+          });
+        }
+      }
+
+      const invMap = new Map<string, {
+        invoiceId: string;
+        documentNumber: string;
+        invoiceStatus: "N" | "A";
+        pdfUrl?: string | null;
+        creditStatus?: "NONE" | "PARTIALLY_CREDITED" | "FULLY_CREDITED" | null;
+        creditedAmount?: number | null;
+        creditNoteId?: string | null;
+        creditNoteNumber?: string | null;
+        creditReason?: string | null;
+      }>();
 
       for (const row of recentInvoices ?? []) {
         const payId = row.payment_id as string | null;
         const st = String(row.invoice_status ?? "N").trim().toUpperCase();
+        const linkedNC = ncByOriginalInvoiceId.get(row.id as string);
+        const credStatus = (row as { credit_status?: string }).credit_status as "NONE" | "PARTIALLY_CREDITED" | "FULLY_CREDITED" | undefined;
+        const credAmount = Number((row as { credited_amount?: number }).credited_amount ?? linkedNC?.grossTotal ?? 0);
+
         const item = {
           invoiceId: row.id as string,
           documentNumber: String(row.document_number ?? "").trim(),
           invoiceStatus: (st === "A" ? "A" : "N") as "N" | "A",
           pdfUrl: (row as { pdf_url?: string | null }).pdf_url ?? null,
+          creditStatus: credStatus || (linkedNC ? "FULLY_CREDITED" : "NONE"),
+          creditedAmount: credAmount,
+          creditNoteId: linkedNC?.id || null,
+          creditNoteNumber: linkedNC?.documentNumber || null,
+          creditReason: (row as { credit_reason?: string | null }).credit_reason || linkedNC?.reason || null,
         };
         invMap.set(row.id as string, item);
         if (payId?.trim()) {
@@ -1795,7 +1885,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       // 2. Carregar pagamentos associados a faturas ou cobranças
       const { data: payRowsWithInvoice } = await supabase
         .from("payments")
-        .select("id, student_fee_id, activity_fee_id, transport_fee_id, meal_fee_id, event_fee_id, enrollment_fee_id, invoice_id, status")
+        .select("id, student_fee_id, activity_fee_id, transport_fee_id, meal_fee_id, event_fee_id, enrollment_fee_id, invoice_id, status, has_credit_note, credit_note_id, credit_note_number, credited_amount, credited_at")
         .eq("school_id", schoolId);
 
       for (const p of payRowsWithInvoice ?? []) {
@@ -1804,6 +1894,12 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           invItem = nextPay[p.id];
         }
         if (invItem) {
+          if (p.has_credit_note) {
+            invItem.creditNoteId = p.credit_note_id || invItem.creditNoteId;
+            invItem.creditNoteNumber = p.credit_note_number || invItem.creditNoteNumber;
+            invItem.creditedAmount = p.credited_amount || invItem.creditedAmount;
+            invItem.creditStatus = invItem.creditStatus === "NONE" ? "PARTIALLY_CREDITED" : invItem.creditStatus;
+          }
           nextPay[p.id] = invItem;
           if (p.student_fee_id) nextFee[p.student_fee_id] = invItem;
           if (p.activity_fee_id) nextFee[p.activity_fee_id] = invItem;
@@ -1813,6 +1909,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           if (p.enrollment_fee_id) nextFee[p.enrollment_fee_id] = invItem;
         }
       }
+
 
       if (!cancelled) {
         setInvoiceByPaymentId(nextPay);
@@ -3470,106 +3567,123 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       const busy = downloadingInvoicePdfId === inv.invoiceId;
       const isCancelled = inv.invoiceStatus === "A";
       const docLabel = inv.documentNumber || "FT";
+      const hasNC = pay?.has_credit_note || inv.creditStatus === "FULLY_CREDITED" || inv.creditStatus === "PARTIALLY_CREDITED";
+      const ncNumber = pay?.credit_note_number || inv.creditNoteNumber;
+      const ncId = pay?.credit_note_id || inv.creditNoteId;
+      const creditedAmt = pay?.credited_amount || inv.creditedAmount;
+      const isFullCredit = inv.creditStatus === "FULLY_CREDITED" || (typeof creditedAmt === "number" && creditedAmt >= (pay?.amount_paid || 0));
 
       return (
-        <div className="flex items-center justify-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => void openInvoicePdfInNewTabHandler(inv)}
-            disabled={busy}
-            className="inline-flex items-center gap-1 font-mono text-xs font-semibold text-primary underline underline-offset-4 hover:text-primary/80 transition-colors py-0.5 px-1.5 rounded hover:bg-primary/10 cursor-pointer"
-            title="Clique para abrir a fatura noutro separador do browser"
-          >
-            {busy ? (
-              <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-            ) : (
-              <ExternalLink className="h-3 w-3 text-primary shrink-0" />
-            )}
-            <span>{docLabel}</span>
-          </button>
-          {isCancelled && (
-            <Badge variant="outline" className="border-destructive text-destructive text-[10px] px-1 py-0">
-              {fiscalT("badge_cancelled")}
-            </Badge>
-          )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
-                disabled={busy || cancellingInvoiceId === inv.invoiceId}
-                title={docLabel}
-              >
-                {busy || cancellingInvoiceId === inv.invoiceId ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <MoreVertical className="h-3.5 w-3.5" />
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem
-                className="gap-2 cursor-pointer font-medium text-primary"
-                onClick={() => void openInvoicePdfInNewTabHandler(inv)}
-              >
-                <ExternalLink className="h-4 w-4" />
-                Abrir num novo separador
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="gap-2 cursor-pointer"
-                onClick={() => void downloadInvoicePdf(inv)}
-              >
-                <FileDown className="h-4 w-4" />
-                {fiscalT("action_download_pdf")}
-              </DropdownMenuItem>
-              {!isParent && canCancelInvoice && pay?.id && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="gap-2 text-destructive focus:text-destructive cursor-pointer"
-                    disabled={isCancelled}
-                    onClick={() => {
-                      if (isCancelled) return;
-                      setCancelReasonCode("data_error_nif");
-                      setCancelReasonOther("");
-                      setCancelInvoiceDialog({
-                        invoiceId: inv.invoiceId,
-                        documentNumber: inv.documentNumber,
-                        paymentId: pay.id,
-                      });
-                    }}
-                  >
-                    <Ban className="h-4 w-4" />
-                    {fiscalT("action_cancel_invoice")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="gap-2 cursor-pointer"
-                    disabled={isCancelled}
-                    onClick={() => {
-                      if (isCancelled) return;
-                      setCreditNoteReasonCode("data_error");
-                      setCreditNoteReasonOther("");
-                      setCreditNotePartialAmount("");
-                      setCreditNoteDialog({
-                        invoiceId: inv.invoiceId,
-                        documentNumber: inv.documentNumber,
-                        paymentId: pay.id,
-                        grossTotal: pay.amount_paid || 0,
-                      });
-                    }}
-                  >
-                    <Receipt className="h-4 w-4" />
-                    {fiscalT("action_credit_note")}
-                  </DropdownMenuItem>
-                </>
+        <div className="flex flex-col items-center justify-center gap-1">
+          <div className="flex items-center justify-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => void openInvoicePdfInNewTabHandler(inv)}
+              disabled={busy}
+              className={`inline-flex items-center gap-1 font-mono text-xs font-semibold text-primary underline underline-offset-4 hover:text-primary/80 transition-colors py-0.5 px-1.5 rounded hover:bg-primary/10 cursor-pointer ${
+                isFullCredit ? "line-through opacity-70" : ""
+              }`}
+              title="Clique para abrir a fatura noutro separador do browser"
+            >
+              {busy ? (
+                <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+              ) : (
+                <ExternalLink className="h-3 w-3 text-primary shrink-0" />
               )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+              <span>{docLabel}</span>
+            </button>
+            {isCancelled && (
+              <Badge variant="outline" className="border-destructive text-destructive text-[10px] px-1 py-0">
+                {fiscalT("badge_cancelled")}
+              </Badge>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
+                  disabled={busy || cancellingInvoiceId === inv.invoiceId}
+                  title={docLabel}
+                >
+                  {busy || cancellingInvoiceId === inv.invoiceId ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <MoreVertical className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem
+                  className="gap-2 cursor-pointer font-medium text-primary"
+                  onClick={() => void openInvoicePdfInNewTabHandler(inv)}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Abrir fatura noutro separador
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="gap-2 cursor-pointer"
+                  onClick={() => void downloadInvoicePdf(inv)}
+                >
+                  <FileDown className="h-4 w-4" />
+                  {fiscalT("action_download_pdf")}
+                </DropdownMenuItem>
+                {!isParent && canCancelInvoice && pay?.id && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+                      disabled={isCancelled || isFullCredit}
+                      onClick={() => {
+                        if (isCancelled || isFullCredit) return;
+                        setCancelReasonCode("data_error_nif");
+                        setCancelReasonOther("");
+                        setCancelInvoiceDialog({
+                          invoiceId: inv.invoiceId,
+                          documentNumber: inv.documentNumber,
+                          paymentId: pay.id,
+                        });
+                      }}
+                    >
+                      <Ban className="h-4 w-4" />
+                      {fiscalT("action_cancel_invoice")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="gap-2 text-amber-700 dark:text-amber-400 focus:text-amber-700 cursor-pointer"
+                      disabled={isCancelled || isFullCredit}
+                      onClick={() => {
+                        if (isCancelled || isFullCredit) return;
+                        setCreditNoteModalTarget({
+                          invoiceId: inv.invoiceId,
+                          documentNumber: inv.documentNumber,
+                          grossTotal: pay.amount_paid || Number(fee?.amount_due) || 0,
+                          alreadyCredited: creditedAmt || 0,
+                        });
+                      }}
+                    >
+                      <Receipt className="h-4 w-4" />
+                      Emitir Nota de Crédito / Anular
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          {hasNC && (
+            <CreditNoteBadge
+              creditNoteId={ncId}
+              creditNoteNumber={ncNumber}
+              creditedAmount={creditedAmt}
+              creditedAt={pay?.credited_at}
+              creditReason={inv.creditReason}
+              isFullCredit={isFullCredit}
+            />
+          )}
         </div>
       );
     }
+
 
     // Se está PAGO mas ainda não tem fatura emitida:
     if (!isParent && fee) {
@@ -3927,6 +4041,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                         {filteredFees.slice(0, 200).map((f) => {
                           const overdue = !f.is_paid && new Date(f.due_date).getTime() < Date.now();
                           const pay = latestPaymentByFee.get(f.id);
+                          const inv = (pay?.id ? invoiceByPaymentId[pay.id] : undefined) || invoiceByFeeId[f.id];
                           const pendingValidation = !!pay && pay.status === "pendente";
                           const rejected = !!pay && pay.status === "rejeitado";
                           return (
@@ -3947,7 +4062,16 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <td className="py-2 px-2 text-muted-foreground">{f.student?.classroom?.name ?? "—"}</td>
                               <td className="py-2 px-2">{f.month_index ? monthNamesLong[f.month_index - 1] : "—"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString(dateLocaleTag)}</td>
-                              <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
+                              <td className="py-2 px-2 text-right">
+                                <CreditNoteAmountDisplay
+                                  originalAmount={Number(f.amount_due)}
+                                  hasCreditNote={pay?.has_credit_note || inv?.creditStatus === "FULLY_CREDITED" || inv?.creditStatus === "PARTIALLY_CREDITED"}
+                                  creditNoteNumber={pay?.credit_note_number || inv?.creditNoteNumber}
+                                  creditedAmount={pay?.credited_amount || inv?.creditedAmount}
+                                  creditStatus={inv?.creditStatus}
+                                />
+                              </td>
+
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
                                   <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">{tuitionT("status_paid")}</Badge>
@@ -4288,6 +4412,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                         {filteredActivityFees.slice(0, 200).map((f) => {
                           const overdue = !f.is_paid && new Date(f.due_date).getTime() < Date.now();
                           const pay = latestPaymentByActivityFee.get(f.id);
+                          const inv = (pay?.id ? invoiceByPaymentId[pay.id] : undefined) || invoiceByFeeId[f.id];
                           const pendingValidation = !!pay && pay.status === "pendente";
                           const rejected = !!pay && pay.status === "rejeitado";
                           return (
@@ -4308,7 +4433,16 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <td className="py-2 px-2">{f.activity?.name ?? "—"}</td>
                               <td className="py-2 px-2">{f.month_index ? monthNamesLong[f.month_index - 1] : "—"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString(dateLocaleTag)}</td>
-                              <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
+                              <td className="py-2 px-2 text-right">
+                                <CreditNoteAmountDisplay
+                                  originalAmount={Number(f.amount_due)}
+                                  hasCreditNote={pay?.has_credit_note || inv?.creditStatus === "FULLY_CREDITED" || inv?.creditStatus === "PARTIALLY_CREDITED"}
+                                  creditNoteNumber={pay?.credit_note_number || inv?.creditNoteNumber}
+                                  creditedAmount={pay?.credited_amount || inv?.creditedAmount}
+                                  creditStatus={inv?.creditStatus}
+                                />
+                              </td>
+
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
                                   <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">{tuitionT("status_paid")}</Badge>
@@ -4644,6 +4778,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                         {filteredTransportFees.slice(0, 200).map((f) => {
                           const overdue = !f.is_paid && new Date(f.due_date).getTime() < Date.now();
                           const pay = latestPaymentByTransportFee.get(f.id);
+                          const inv = (pay?.id ? invoiceByPaymentId[pay.id] : undefined) || invoiceByFeeId[f.id];
                           const pendingValidation = !!pay && pay.status === "pendente";
                           const rejected = !!pay && pay.status === "rejeitado";
                           return (
@@ -4664,7 +4799,16 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <td className="py-2 px-2">{f.route?.name ?? "—"}</td>
                               <td className="py-2 px-2">{f.month_index ? monthNamesLong[f.month_index - 1] : "—"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString(dateLocaleTag)}</td>
-                              <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
+                              <td className="py-2 px-2 text-right">
+                                <CreditNoteAmountDisplay
+                                  originalAmount={Number(f.amount_due)}
+                                  hasCreditNote={pay?.has_credit_note || inv?.creditStatus === "FULLY_CREDITED" || inv?.creditStatus === "PARTIALLY_CREDITED"}
+                                  creditNoteNumber={pay?.credit_note_number || inv?.creditNoteNumber}
+                                  creditedAmount={pay?.credited_amount || inv?.creditedAmount}
+                                  creditStatus={inv?.creditStatus}
+                                />
+                              </td>
+
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
                                   <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">{tuitionT("status_paid")}</Badge>
@@ -5000,6 +5144,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                         {filteredMealFees.slice(0, 200).map((f) => {
                           const overdue = !f.is_paid && new Date(f.due_date).getTime() < Date.now();
                           const pay = latestPaymentByMealFee.get(f.id);
+                          const inv = (pay?.id ? invoiceByPaymentId[pay.id] : undefined) || invoiceByFeeId[f.id];
                           const pendingValidation = !!pay && pay.status === "pendente";
                           const rejected = !!pay && pay.status === "rejeitado";
                           return (
@@ -5020,7 +5165,16 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <td className="py-2 px-2">{f.meal_program?.name ?? "—"}</td>
                               <td className="py-2 px-2">{f.month_index ? monthNamesLong[f.month_index - 1] : "—"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString(dateLocaleTag)}</td>
-                              <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
+                              <td className="py-2 px-2 text-right">
+                                <CreditNoteAmountDisplay
+                                  originalAmount={Number(f.amount_due)}
+                                  hasCreditNote={pay?.has_credit_note || inv?.creditStatus === "FULLY_CREDITED" || inv?.creditStatus === "PARTIALLY_CREDITED"}
+                                  creditNoteNumber={pay?.credit_note_number || inv?.creditNoteNumber}
+                                  creditedAmount={pay?.credited_amount || inv?.creditedAmount}
+                                  creditStatus={inv?.creditStatus}
+                                />
+                              </td>
+
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
                                   <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">{tuitionT("status_paid")}</Badge>
@@ -5356,6 +5510,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                         {filteredEventFees.slice(0, 200).map((f) => {
                           const overdue = !f.is_paid && new Date(f.due_date).getTime() < Date.now();
                           const pay = latestPaymentByEventFee.get(f.id);
+                          const inv = (pay?.id ? invoiceByPaymentId[pay.id] : undefined) || invoiceByFeeId[f.id];
                           const pendingValidation = !!pay && pay.status === "pendente";
                           const rejected = !!pay && pay.status === "rejeitado";
                           return (
@@ -5383,7 +5538,16 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               </td>
                               <td className="py-2 px-2">{f.month_index ? monthNamesLong[f.month_index - 1] : "—"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString(dateLocaleTag)}</td>
-                              <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
+                              <td className="py-2 px-2 text-right">
+                                <CreditNoteAmountDisplay
+                                  originalAmount={Number(f.amount_due)}
+                                  hasCreditNote={pay?.has_credit_note || inv?.creditStatus === "FULLY_CREDITED" || inv?.creditStatus === "PARTIALLY_CREDITED"}
+                                  creditNoteNumber={pay?.credit_note_number || inv?.creditNoteNumber}
+                                  creditedAmount={pay?.credited_amount || inv?.creditedAmount}
+                                  creditStatus={inv?.creditStatus}
+                                />
+                              </td>
+
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
                                   <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">{tuitionT("status_paid")}</Badge>
@@ -5713,6 +5877,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                         {filteredEnrollmentFees.slice(0, 200).map((f) => {
                           const overdue = !f.is_paid && new Date(f.due_date).getTime() < Date.now();
                           const pay = latestPaymentByEnrollmentFee.get(f.id);
+                          const inv = (pay?.id ? invoiceByPaymentId[pay.id] : undefined) || invoiceByFeeId[f.id];
                           const pendingValidation = !!pay && pay.status === "pendente";
                           const rejected = !!pay && pay.status === "rejeitado";
                           return (
@@ -5733,7 +5898,15 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                               <td className="py-2 px-2">{f.fee_type === "RENEWAL" ? "Renovação" : "Matrícula"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{f.academic_year?.label ?? "—"}</td>
                               <td className="py-2 px-2 text-muted-foreground">{new Date(f.due_date).toLocaleDateString(dateLocaleTag)}</td>
-                              <td className="py-2 px-2 font-semibold">{fmtAOA(Number(f.amount_due))}</td>
+                              <td className="py-2 px-2 text-right">
+                                <CreditNoteAmountDisplay
+                                  originalAmount={Number(f.amount_due)}
+                                  hasCreditNote={pay?.has_credit_note || inv?.creditStatus === "FULLY_CREDITED" || inv?.creditStatus === "PARTIALLY_CREDITED"}
+                                  creditNoteNumber={pay?.credit_note_number || inv?.creditNoteNumber}
+                                  creditedAmount={pay?.credited_amount || inv?.creditedAmount}
+                                  creditStatus={inv?.creditStatus}
+                                />
+                              </td>
                               <td className="py-2 px-2">
                                 {f.is_paid ? (
                                   <Badge className="bg-pastel-green text-pastel-green-foreground hover:bg-pastel-green">{tuitionT("status_paid")}</Badge>
@@ -6690,6 +6863,22 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {creditNoteModalTarget && (
+        <CreditNoteModal
+          isOpen={!!creditNoteModalTarget}
+          onClose={() => setCreditNoteModalTarget(null)}
+          invoiceId={creditNoteModalTarget.invoiceId}
+          documentNumber={creditNoteModalTarget.documentNumber}
+          grossTotal={creditNoteModalTarget.grossTotal}
+          alreadyCredited={creditNoteModalTarget.alreadyCredited}
+          items={creditNoteModalTarget.items}
+          onSuccess={() => {
+            setCreditNoteModalTarget(null);
+            void fetchAll();
+          }}
+        />
+      )}
     </>
   );
 };

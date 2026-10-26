@@ -54,6 +54,11 @@ export type CreditNotePdfInput = {
   
   /** Referência obrigatória: qual FT está sendo retificada */
   sourceInvoiceNumber: string;
+  /** Data da fatura de origem (se disponível) */
+  sourceInvoiceDate?: string | null;
+  
+  /** Identificação da Via: "Original", "Duplicado", etc. */
+  copyType?: string;
   
   /** Motivo da retificação (obrigatório AGT, 6-60 caracteres) */
   reason: string;
@@ -78,6 +83,8 @@ export type CreditNotePdfInput = {
   exemptionReason?: string | null;
   documentHashFootnote?: string | null;
   digitalSignatureSha1?: string | null;
+  /** Data URL do QR Code oficial AGT (28mm) */
+  qrCodeDataUrl?: string | null;
 };
 
 function fmtPtLongDateYYYYMMDD(yyyymmdd: string): string {
@@ -218,35 +225,40 @@ export function buildCreditNotePdf(opts: CreditNotePdfInput): jsPDF {
   const hdrTop = margin;
   const leftColW = usableW * 0.52;
 
-  const textStartX = margin;
-  let yLeft = hdrTop;
+  const hasLogo = !!opts.logoDataUrl;
+  const logoW = 24;
+  const logoH = 24;
+  const logoGap = 4;
 
-  if (opts.logoDataUrl) {
-    addLogoIfPossible(doc, opts.logoDataUrl, textStartX, yLeft, 25, 25);
-    yLeft += pxMm(70);
+  if (hasLogo && opts.logoDataUrl) {
+    addLogoIfPossible(doc, opts.logoDataUrl, margin, hdrTop, logoW, logoH);
   }
 
-  const schoolNameSize = pxToPt(18);
+  const schoolTextX = hasLogo ? margin + logoW + logoGap : margin;
+  const schoolTextMaxW = hasLogo ? leftColW - (logoW + logoGap) : leftColW;
+  let yLeft = hdrTop;
+
+  const schoolNameSize = pxToPt(16);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(schoolNameSize);
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
   yLeft = drawWrappedTexts(
     doc,
-    [opts.schoolName || "Escola"],
-    textStartX,
+    [opts.schoolName || "Edukamba"],
+    schoolTextX,
     yLeft,
-    leftColW,
-    { leading: pxMm(22), size: schoolNameSize, style: "bold", color: NAVY },
+    schoolTextMaxW,
+    { leading: pxMm(19), size: schoolNameSize, style: "bold", color: NAVY },
   );
 
   yLeft += pxMm(3);
-  yLeft = drawWrappedTexts(doc, ["Nota de Crédito (documento fiscal)"], textStartX, yLeft, leftColW, {
+  yLeft = drawWrappedTexts(doc, ["Nota de Crédito (documento fiscal certificado)"], schoolTextX, yLeft, schoolTextMaxW, {
     leading: pxMm(12),
     size: pxToPt(9),
     color: FOOTER_MUTED,
   });
 
-  yLeft += pxMm(5);
+  yLeft += pxMm(4);
   const ncHeaderLines: string[] = [];
   if (opts.schoolNif) ncHeaderLines.push(`NIF: ${opts.schoolNif}`);
   if (opts.schoolAddress) ncHeaderLines.push(opts.schoolAddress);
@@ -254,43 +266,51 @@ export function buildCreditNotePdf(opts: CreditNotePdfInput): jsPDF {
     opts.schoolContactLines.forEach((l) => l?.trim() && ncHeaderLines.push(l.trim()));
   }
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(pxToPt(10));
+  doc.setFontSize(pxToPt(9.5));
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-  yLeft = drawWrappedTexts(doc, ncHeaderLines, textStartX, yLeft, leftColW, {
+  yLeft = drawWrappedTexts(doc, ncHeaderLines, schoolTextX, yLeft, schoolTextMaxW, {
     leading: pxMm(13),
-    size: pxToPt(10),
+    size: pxToPt(9.5),
   });
 
-  // Lado direito: NOTA DE CRÉDITO
-  let yDoc = hdrTop;
+  // Identificação da Via no canto superior direito
+  const copyLabel = (opts.copyType || "Original").toUpperCase();
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(pxToPt(20));
+  doc.setFontSize(pxToPt(9));
+  doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
+  doc.text(copyLabel, rhs, hdrTop, { align: "right", baseline: "top" });
+
+  // Lado direito: NOTA DE CRÉDITO
+  let yDoc = hdrTop + pxMm(10);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(pxToPt(18));
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
   doc.text("NOTA DE CRÉDITO", rhs, yDoc, { align: "right", baseline: "top" });
-  yDoc += pxMm(28);
+  yDoc += pxMm(24);
 
-  doc.setFontSize(pxToPt(13));
+  doc.setFontSize(pxToPt(12));
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
   doc.text(opts.documentNumber.trim(), rhs, yDoc, { align: "right", baseline: "top" });
-  yDoc += pxMm(18);
+  yDoc += pxMm(16);
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(pxToPt(11));
+  doc.setFontSize(pxToPt(10));
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
   const issueLabel = fmtPtLongDateYYYYMMDD(opts.invoiceDateYYYYMMDD);
   doc.text(`Emissão: ${issueLabel}`, rhs, yDoc, { align: "right", baseline: "top" });
-  yDoc += pxMm(16);
+  yDoc += pxMm(14);
 
   // Documento Retificado (obrigatório AGT)
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(pxToPt(11));
+  doc.setFontSize(pxToPt(10));
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  const originDateStr = opts.sourceInvoiceDate ? ` de ${opts.sourceInvoiceDate}` : "";
   doc.text(`Documento Retificado:`, rhs, yDoc, { align: "right", baseline: "top" });
   yDoc += pxMm(12);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
-  doc.text(opts.sourceInvoiceNumber.trim(), rhs, yDoc, { align: "right", baseline: "top" });
-  yDoc += pxMm(16);
+  doc.text(`${opts.sourceInvoiceNumber.trim()}${originDateStr}`, rhs, yDoc, { align: "right", baseline: "top" });
+  yDoc += pxMm(14);
 
   // Período Contabilístico
   const periodMonth = (() => {
@@ -298,18 +318,18 @@ export function buildCreditNotePdf(opts: CreditNotePdfInput): jsPDF {
     if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return new Date().getMonth() + 1;
     return parseInt(raw.split("-")[1], 10);
   })();
-  doc.setFontSize(pxToPt(11));
+  doc.setFontSize(pxToPt(10));
   doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
   doc.text(`Período Contabilístico: ${periodMonth}`, rhs, yDoc, { align: "right", baseline: "top" });
-  yDoc += pxMm(16);
+  yDoc += pxMm(14);
 
   const headerBottomInner = Math.max(yLeft + pxMm(4), yDoc);
-  const dividerY = headerBottomInner + pxMm(18);
+  const dividerY = headerBottomInner + pxMm(14);
   doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
   doc.setLineWidth(Math.max(pxMm(1.75), 0.45));
   doc.line(margin, dividerY, rhs, dividerY);
 
-  let y = dividerY + pxMm(26);
+  let y = dividerY + pxMm(20);
 
   // Painéis de dados
   const boxGap = usableW * 0.038;
@@ -529,23 +549,57 @@ export function buildCreditNotePdf(opts: CreditNotePdfInput): jsPDF {
     footY += pxMm(12);
   }
 
-  // Hash control
+  // Hash control (4 caracteres de controlo do Hash: 1.º, 11.º, 21.º, 31.º)
   const fullHash = opts.documentHashFootnote?.trim() || "";
   const hashChar1 = fullHash.charAt(0) || "0";
   const hashChar2 = fullHash.charAt(10) || "0";
   const hashChar3 = fullHash.charAt(20) || "0";
   const hashChar4 = fullHash.charAt(30) || "0";
-  const hashControl4 = `${hashChar1}${hashChar2}${hashChar3}${hashChar4}-`;
+  const hashControl4 = `${hashChar1}${hashChar2}${hashChar3}${hashChar4}`;
 
-  const wmY = Math.min(pageH - pxMm(16), footY + pxMm(20));
+  // ── SEÇÃO E: QR CODE OFICIAL AGT (28mm) E HOMOLOGAÇÃO LEGAL ──
+  const qrSize = 28; // 28 mm
+  const qrY = Math.min(pageH - margin - qrSize - 4, footY + pxMm(6));
+
+  if (opts.qrCodeDataUrl) {
+    try {
+      doc.setFillColor(255, 255, 255);
+      doc.rect(margin, qrY, qrSize, qrSize, "F");
+      doc.addImage(opts.qrCodeDataUrl, "PNG", margin, qrY, qrSize, qrSize);
+    } catch {
+      /* ignora erro ao renderizar QR */
+    }
+  }
+
+  // Menção legal ao lado do QR Code
+  const textLeftX = opts.qrCodeDataUrl ? margin + qrSize + 4 : margin;
+  const textMaxW = opts.qrCodeDataUrl ? usableW - qrSize - 4 : usableW;
+  let textY = qrY + 1.5;
+
+  const legalCertificationMention = `${hashControl4}-Processado por programa certificado nº 31.1/AGT/20 Edukamba`;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(pxToPt(9.5));
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text(legalCertificationMention, textLeftX, textY);
+  textY += pxMm(14);
+
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(pxToPt(10));
+  doc.setFontSize(pxToPt(8));
   doc.setTextColor(FOOTER_MUTED[0], FOOTER_MUTED[1], FOOTER_MUTED[2]);
-  doc.text(`Hash: ${hashControl4} | Processado por programa válido nº31.1/AGT20`, margin, wmY);
-  doc.text(opts.schoolName || "", rhs, wmY, { align: "right" });
+  const legalNotice =
+    "Os bens ou serviços foram colocados à disposição do adquirente na data e local indicados no presente documento. Documento emitido por software certificado pela Administração Geral Tributária (AGT) ao abrigo do Decreto Presidencial n.º 292/18.";
+  for (const line of doc.splitTextToSize(legalNotice, textMaxW)) {
+    doc.text(line, textLeftX, textY);
+    textY += pxMm(10);
+  }
+
+  const wmY = pageH - pxMm(10);
+  doc.setFontSize(pxToPt(8));
+  doc.text(opts.schoolName || "Edukamba", rhs, wmY, { align: "right" });
 
   doc.setTextColor(0);
   doc.setDrawColor(0);
 
   return doc;
+
 }

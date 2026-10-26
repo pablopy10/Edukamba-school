@@ -44,3 +44,6 @@ android/app/pepk.jar
 # Windows filesystem artifact
 desktop.ini
 ios/desktop.ini
+
+# Supabase CLI temp files
+supabase/.temp/

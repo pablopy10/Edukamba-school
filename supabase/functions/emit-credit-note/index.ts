@@ -1,14 +1,15 @@
 /**
- * Emite Nota de Crédito (NC) que retifica uma FT existente.
- * Usa a tabela `invoices` com document_number prefixado "NC" para manter
- * compatibilidade com a estrutura existente.
+ * Emite Nota de Crédito (NC) certificada pela AGT que retifica uma fatura existente (FT/FR).
  * 
- * Regras AGT:
- * 1. Nunca apagar ou editar a FT original
- * 2. NC tem numeração própria (NC EDK/1, NC EDK/2...)
- * 3. Referência obrigatória à FT retificada (SourceBilling)
- * 4. Motivo justificado obrigatório (6-60 caracteres)
- * 5. Hash e assinatura AGT próprios
+ * Regras AGT e Decreto Presidencial n.º 292/18:
+ * 1. Imutabilidade fiscal: Nunca apagar ou alterar valores da fatura original
+ * 2. Série e encadeamento próprio (NC EDK/1, NC EDK/2...)
+ * 3. Assinatura digital RSA (SHA-1) encadeada com o hash anterior da série NC
+ * 4. Vinculação obrigatória à fatura de origem (original_invoice_id, original_invoice_number, original_invoice_date)
+ * 5. Consistência de impostos: replica taxas de IVA e motivos de isenção
+ * 6. Bloqueio de saldo e sobrecrédito: valor creditado total não pode exceder o original
+ * 7. Marcação visual de status na fatura original (PARTIALLY_CREDITED ou FULLY_CREDITED)
+ * 8. Atualização de auditoria nos pagamentos associados (has_credit_note, credit_note_number, credited_amount)
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import forge from "https://esm.sh/node-forge@1.3.1";
@@ -29,7 +30,7 @@ function corsJson(body: Record<string, unknown>, status = 200) {
 
 function normalizeReason(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
-  const t = raw.trim().slice(0, 200);
+  const t = raw.trim().slice(0, 250);
   return t.length >= 6 ? t : null;
 }
 
@@ -66,6 +67,12 @@ function formatInvoiceDate(d: Date | string): string {
   return `${y}-${m}-${day}`;
 }
 
+function extractHashControl(sigB64: string): string {
+  const clean = sigB64.trim();
+  if (clean.length < 31) return "0000";
+  return `${clean.charAt(0)}${clean.charAt(10)}${clean.charAt(20)}${clean.charAt(30)}`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return corsJson({ error: "Method not allowed" }, 405);
@@ -73,7 +80,7 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim();
-  
+
   if (!supabaseUrl || !anonKey) return corsJson({ error: "Variáveis Supabase em falta" }, 500);
 
   const authHeader = req.headers.get("Authorization");
@@ -96,12 +103,13 @@ Deno.serve(async (req) => {
   const reason = normalizeReason((body as { reason?: unknown }).reason);
   const partial_amount = (body as { partial_amount?: unknown }).partial_amount;
   const selected_item = (body as { selected_item?: unknown }).selected_item;
+  const items_to_credit = (body as { items_to_credit?: unknown }).items_to_credit;
 
   if (typeof invoice_id !== "string" || !invoice_id.trim()) {
     return corsJson({ error: "invoice_id obrigatório" }, 400);
   }
   if (!reason) {
-    return corsJson({ error: "reason obrigatório (mínimo 6 caracteres)." }, 400);
+    return corsJson({ error: "O motivo da nota de crédito é obrigatório (mínimo 6 caracteres)." }, 400);
   }
 
   const userClient = createClient(supabaseUrl, anonKey, {
@@ -124,7 +132,7 @@ Deno.serve(async (req) => {
     return corsJson({ error: "Sem permissão para emitir notas de crédito." }, 403);
   }
 
-  // Carregar FT original
+  // 1. Carregar fatura original
   const { data: originalInvoice, error: invErr } = await adminClient
     .from("invoices")
     .select("*")
@@ -136,65 +144,127 @@ Deno.serve(async (req) => {
 
   const status = String(originalInvoice.invoice_status ?? "N").trim().toUpperCase();
   if (status === "A") {
-    return corsJson({ error: "Não é possível emitir NC para fatura anulada." }, 409);
+    return corsJson({ error: "Não é possível emitir NC para fatura já anulada." }, 409);
+  }
+
+  const originalTotal = Number(originalInvoice.gross_total);
+  const schoolId = originalInvoice.school_id;
+
+  // 2. Verificar saldo disponível e prevenir sobrecrédito
+  const { data: existingNCs, error: ncQueryErr } = await adminClient
+    .from("invoices")
+    .select("id, gross_total, doc_number, document_number")
+    .or(`original_invoice_id.eq.${originalInvoice.id},referenced_invoice_id.eq.${originalInvoice.id}`)
+    .in("doc_type", ["NC", "nc"]);
+
+  if (ncQueryErr) return corsJson({ error: ncQueryErr.message }, 500);
+
+  const alreadyCredited = (existingNCs || []).reduce((acc, row) => acc + Number(row.gross_total || 0), 0);
+  const remainingBalance = Math.round((originalTotal - alreadyCredited + Number.EPSILON) * 100) / 100;
+
+  if (remainingBalance <= 0.001) {
+    return corsJson({
+      error: `A fatura ${originalInvoice.document_number} já se encontra 100% creditada (Total: ${originalTotal.toFixed(2)} Kz).`,
+    }, 409);
   }
 
   // Determinar valor da NC (total ou parcial)
-  const originalTotal = Number(originalInvoice.gross_total);
-  let ncAmount = originalTotal;
-  if (typeof partial_amount === "number" && partial_amount > 0 && partial_amount < originalTotal) {
-    ncAmount = partial_amount;
+  let ncAmount = remainingBalance;
+  if (typeof partial_amount === "number" && partial_amount > 0) {
+    ncAmount = Math.min(partial_amount, remainingBalance);
   }
 
-  // Obter última NC da escola para numeração sequencial
-  // Usa série separada "NC-EDK" para evitar colisão com FT na constraint (school_id, series, doc_number)
-  const schoolId = originalInvoice.school_id;
-  const ncSeries = "NC-EDK";
+  if (ncAmount > remainingBalance + 0.01) {
+    return corsJson({
+      error: `Sobrecrédito rejeitado: valor solicitado (${ncAmount.toFixed(2)} Kz) excede o saldo remanescente disponível (${remainingBalance.toFixed(2)} Kz).`,
+    }, 400);
+  }
 
-  const { data: lastNC } = await adminClient
-    .from("invoices")
-    .select("document_number, document_hash, doc_number")
-    .eq("school_id", schoolId)
-    .eq("series", ncSeries)
-    .order("doc_number", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const nextNumber = (lastNC?.doc_number ?? 0) + 1;
-
-  const documentNumber = `NC EDK/${nextNumber}`;
+  // 3. Obter ou reservar número na série fiscal de NC
+  const ncSeriesCode = "EDK";
+  const currentFiscalYear = new Date().getFullYear();
   const invoiceDate = formatInvoiceDate(new Date());
   const issuedAt = new Date().toISOString();
+
+  // Tentar reservar número atómico pela RPC oficial da série fiscal
+  let nextNumber: number;
+  let documentNumber: string;
+  let previousHash = "";
+
+  const { data: reserveData, error: reserveErr } = await adminClient.rpc(
+    "billing_reserve_series_next_number",
+    {
+      _school_id: schoolId,
+      _doc_type: "NC",
+      _series_code: ncSeriesCode,
+      _fiscal_year: currentFiscalYear,
+      _document_date: invoiceDate,
+    }
+  );
+
+  if (!reserveErr && reserveData && reserveData.length > 0) {
+    const row = reserveData[0];
+    nextNumber = row.doc_number;
+    documentNumber = row.document_number_full;
+    previousHash = (row.previous_document_hash ?? "").trim();
+  } else {
+    // Fallback sequencial seguro com verificação na tabela invoices
+    const { data: lastNC } = await adminClient
+      .from("invoices")
+      .select("document_number, document_hash, doc_number")
+      .eq("school_id", schoolId)
+      .eq("doc_type", "NC")
+      .order("doc_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    nextNumber = (lastNC?.doc_number ?? 0) + 1;
+    documentNumber = `NC ${ncSeriesCode}/${nextNumber}`;
+    previousHash = (lastNC?.document_hash ?? "").trim();
+  }
+
   const totalStr = formatTotalForSigning(ncAmount);
 
-  // Plaintext AGT para NC: DataFatura;DataHoraCriacao;NumeroFatura;Total;HashAnterior
-  const previousHash = lastNC?.document_hash?.trim() || "";
+  // 4. Plaintext AGT para NC: DataFatura;DataHoraCriacao;NumeroFatura;Total;HashAnterior
   const plaintext = `${invoiceDate};${issuedAt};${documentNumber};${totalStr};${previousHash}`;
 
-  // Hash SHA-1
+  // 5. Criptografia SHA-1 e Assinatura RSA-SHA1
   const documentHash = await sha1HexUtf8(plaintext);
-
-  // Assinatura RSA-SHA1
   const signatureBase64 = signPlaintextRSA_SHA1(plaintext, pem);
+  const hashControl = extractHashControl(signatureBase64);
 
-  // Hash control
-  const hashControl = (((Math.max(nextNumber, 1) - 1) % 10) + 1).toString();
+  // 6. Montar descrição das linhas creditadas
+  let lineDesc = `NC ref. ${originalInvoice.document_number} — ${reason}`;
+  if (typeof selected_item === "string" && selected_item.trim()) {
+    lineDesc += ` [${selected_item.trim()}]`;
+  }
 
-  // Inserir NC na tabela invoices com série separada NC-EDK
+  // 7. Inserir registo da NC na tabela invoices
   const insertPayload: Record<string, unknown> = {
     school_id: schoolId,
     student_id: originalInvoice.student_id ?? null,
     parent_profile_id: originalInvoice.parent_profile_id ?? null,
-    series: ncSeries,
+    payment_id: originalInvoice.payment_id ?? null,
+    series: ncSeriesCode,
     doc_number: nextNumber,
     document_number: documentNumber,
+    doc_type: "NC",
+    document_type: "NC",
     invoice_date: invoiceDate,
     invoice_issued_at: issuedAt,
     gross_total: ncAmount,
+    net_total: ncAmount, // Base educacional padrão ou líquida
+    tax_payable: 0,
     currency: originalInvoice.currency ?? "AOA",
-    line_description: typeof selected_item === "string" && selected_item.trim()
-      ? `NC ref. ${originalInvoice.document_number} — ${reason} [${selected_item.trim()}]`
-      : `NC ref. ${originalInvoice.document_number} — ${reason}`,
+    original_invoice_id: originalInvoice.id,
+    original_invoice_number: originalInvoice.document_number,
+    original_invoice_date: originalInvoice.invoice_date,
+    credit_reason: reason,
+    referenced_invoice_id: originalInvoice.id,
+    original_document_number: originalInvoice.document_number,
+    original_document_date: originalInvoice.invoice_date,
+    rectification_reason: reason,
+    line_description: lineDesc,
     agt_signing_plaintext: plaintext,
     digital_signature_sha1_b64: signatureBase64,
     document_hash: documentHash,
@@ -202,8 +272,8 @@ Deno.serve(async (req) => {
     hash_control: hashControl,
     cliente_nome: originalInvoice.cliente_nome,
     cliente_nif: originalInvoice.cliente_nif,
-    exemption_code: originalInvoice.exemption_code ?? null,
-    exemption_reason: originalInvoice.exemption_reason ?? null,
+    exemption_code: originalInvoice.exemption_code ?? "M11",
+    exemption_reason: originalInvoice.exemption_reason ?? "Isenção no domínio da educação",
     invoice_status: "N",
     cancellation_reason: reason,
   };
@@ -219,10 +289,91 @@ Deno.serve(async (req) => {
     return corsJson({ error: insertErr.message }, 500);
   }
 
+  // 8. Inserir linha correspondente em invoice_lines (para SAF-T completo)
+  try {
+    await adminClient.from("invoice_lines").insert({
+      invoice_id: inserted.id,
+      line_number: 1,
+      product_code: "SERV-EDUC-01",
+      product_description: lineDesc,
+      quantity: 1,
+      unit_of_measure: "UN",
+      unit_price: ncAmount,
+      credit_amount: ncAmount,
+      debit_amount: 0,
+      tax_type: "IVA",
+      tax_country_region: "AO",
+      tax_code: "ISE",
+      tax_percentage: 0,
+      tax_exemption_code: originalInvoice.exemption_code ?? "M11",
+      tax_exemption_reason: originalInvoice.exemption_reason ?? "Isenção no domínio da educação",
+    });
+  } catch (lineErr) {
+    console.warn("emit-credit-note: non-fatal invoice_lines insert issue:", lineErr);
+  }
+
+  // 9. Atualizar estado de crédito na fatura original e auditoria no pagamento
+  const newTotalCredited = Math.round((alreadyCredited + ncAmount + Number.EPSILON) * 100) / 100;
+  const newCreditStatus = newTotalCredited >= (originalTotal - 0.01) ? "FULLY_CREDITED" : "PARTIALLY_CREDITED";
+
+  // Atualizar fatura de origem
+  await adminClient
+    .from("invoices")
+    .update({
+      credit_status: newCreditStatus,
+      credited_amount: newTotalCredited,
+    })
+    .eq("id", originalInvoice.id);
+
+  // Atualizar pagamento associado
+  if (originalInvoice.payment_id) {
+    await adminClient
+      .from("payments")
+      .update({
+        has_credit_note: true,
+        credit_note_id: inserted.id,
+        credit_note_number: documentNumber,
+        credited_amount: newTotalCredited,
+        credited_at: issuedAt,
+      })
+      .eq("id", originalInvoice.payment_id);
+
+    // Atualizar itens do pagamento (se existirem)
+    await adminClient
+      .from("payment_items")
+      .update({
+        has_credit_note: true,
+        credit_note_id: inserted.id,
+        credit_note_number: documentNumber,
+        credited_amount: newTotalCredited,
+        credited_at: issuedAt,
+      })
+      .eq("payment_id", originalInvoice.payment_id);
+  }
+
+  // 10. Confirmar série fiscal
+  try {
+    await adminClient.rpc("billing_commit_series_emission", {
+      _school_id: schoolId,
+      _doc_type: "NC",
+      _series_code: ncSeriesCode,
+      _fiscal_year: currentFiscalYear,
+      _new_hash: documentHash,
+      _doc_date: invoiceDate,
+    });
+  } catch (commitErr) {
+    console.warn("emit-credit-note: non-fatal billing_commit_series_emission issue:", commitErr);
+  }
+
   return corsJson({
     ok: true,
     credit_note_id: inserted.id,
     document_number: inserted.document_number,
     source_invoice_number: originalInvoice.document_number,
+    credited_amount: ncAmount,
+    total_credited: newTotalCredited,
+    credit_status: newCreditStatus,
+    remaining_balance: Math.max(0, originalTotal - newTotalCredited),
+    hash_control: hashControl,
   });
 });

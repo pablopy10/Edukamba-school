@@ -8,6 +8,7 @@ import { useParentChildren } from "@/hooks/useParentChildren";
 import { ArrowLeft, FileDown, Loader2 } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 import { downloadFiscalInvoicePdfFromInvoice } from "@/lib/fiscal/downloadFiscalInvoicePdf";
+import { CreditNoteBadge, CreditNoteAmountDisplay } from "@/components/fiscal/CreditNoteBadge";
 
 type PaymentRow = Pick<
   Tables<"payments">,
@@ -21,7 +22,14 @@ type PaymentRow = Pick<
   | "transport_fee_id"
   | "enrollment_fee_id"
   | "school_id"
->;
+> & {
+  has_credit_note?: boolean | null;
+  credit_note_id?: string | null;
+  credit_note_number?: string | null;
+  credited_amount?: number | null;
+  credited_at?: string | null;
+};
+
 
 type EnrichedPayment = PaymentRow & { label: string; studentLabel: string };
 
@@ -160,10 +168,11 @@ const HistoricoPagamentosEncarregado = () => {
     const { data: pays, error } = await supabase
       .from("payments")
       .select(
-        "id, amount_paid, payment_date, status, method, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, school_id",
+        "id, amount_paid, payment_date, status, method, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, school_id, has_credit_note, credit_note_id, credit_note_number, credited_amount, credited_at",
       )
       .eq("submitted_by", uid)
       .order("payment_date", { ascending: false });
+
 
     if (error) {
       toast({ title: "Erro ao carregar histórico", description: error.message, variant: "destructive" });
@@ -284,9 +293,30 @@ const HistoricoPagamentosEncarregado = () => {
                         <td className="py-3 pr-2">
                           {p.payment_date ? new Date(p.payment_date).toLocaleDateString("pt-PT") : "—"}
                         </td>
-                        <td className="py-3 pr-2 font-medium">{p.label}</td>
+                        <td className="py-3 pr-2">
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className="font-medium">{p.label}</span>
+                            {p.has_credit_note && (
+                              <CreditNoteBadge
+                                creditNoteId={p.credit_note_id}
+                                creditNoteNumber={p.credit_note_number}
+                                creditedAmount={p.credited_amount}
+                                creditedAt={p.credited_at}
+                                isFullCredit={Number(p.credited_amount || 0) >= Number(p.amount_paid || 0)}
+                              />
+                            )}
+                          </div>
+                        </td>
                         <td className="py-3 pr-2">{p.studentLabel || "—"}</td>
-                        <td className="py-3 pr-2 text-right font-semibold">{fmtAOA(Number(p.amount_paid))}</td>
+                        <td className="py-3 pr-2 text-right">
+                          <CreditNoteAmountDisplay
+                            originalAmount={Number(p.amount_paid)}
+                            hasCreditNote={!!p.has_credit_note}
+                            creditNoteNumber={p.credit_note_number}
+                            creditedAmount={p.credited_amount}
+                            isFullCredit={Number(p.credited_amount || 0) >= Number(p.amount_paid || 0)}
+                          />
+                        </td>
                         <td className="py-3 text-right">
                           <Button
                             type="button"
@@ -309,6 +339,7 @@ const HistoricoPagamentosEncarregado = () => {
                             Transferir PDF
                           </Button>
                         </td>
+
                       </tr>
                     );
                   })}

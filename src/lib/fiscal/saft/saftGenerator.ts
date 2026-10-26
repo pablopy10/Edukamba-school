@@ -254,6 +254,13 @@ export class SaftGenerator {
         xml += `          <UnitOfMeasure>${esc(line.unitOfMeasure)}</UnitOfMeasure>\n`;
         xml += `          <UnitPrice>${formatMoney(line.unitPrice)}</UnitPrice>\n`;
         xml += `          <TaxPointDate>${doc.invoiceDate}</TaxPointDate>\n`;
+        if (doc.docType === "NC" && (doc.referencedDocumentNumber || (line as { referencedDocumentNumber?: string }).referencedDocumentNumber)) {
+          const refDoc = (line as { referencedDocumentNumber?: string }).referencedDocumentNumber || doc.referencedDocumentNumber;
+          xml += `          <References>\n`;
+          xml += `            <Reference>${esc(refDoc)}</Reference>\n`;
+          xml += `            <Reason>${esc(doc.rectificationReason || "Retificação de fatura")}</Reason>\n`;
+          xml += `          </References>\n`;
+        }
         xml += `          <Description>${esc(line.productDescription)}</Description>\n`;
 
         if (doc.docType === "NC") {

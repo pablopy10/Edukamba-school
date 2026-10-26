@@ -61,22 +61,29 @@ function normalizeDateYYYYMMDD(raw: string): string {
  * No formato 'url':
  * https://quiosqueagt.minfin.gov.ao/facturacao-eletronica/consultar-fe?emissor={NIF}&document={NUM_DOC}
  */
-export function buildAgtQrPayload(params: AgtQrParams): string {
+export function buildAgtQrPayload(params: AgtQrParams & Record<string, unknown>): string {
+  const nifEm = String(params.nifEmissor || params.schoolNif || "").trim();
+  const nDoc = String(params.numDoc || params.documentNumber || "").trim();
+
   if (params.format === "url") {
-    return buildAgtQrUrl({ nifEmissor: params.nifEmissor, numDoc: params.numDoc });
+    return buildAgtQrUrl({ nifEmissor: nifEm, numDoc: nDoc });
   }
 
-  const nifEmissor = params.nifEmissor.trim();
-  const nifCliente = (params.nifCliente || "999999999").trim();
-  const pais = (params.pais || "AO").trim().toUpperCase();
-  const tipoDoc = params.tipoDoc.trim().toUpperCase();
-  const estado = (params.estado || "N").trim().toUpperCase();
-  const data = normalizeDateYYYYMMDD(params.data);
-  const numDoc = params.numDoc.trim();
-  const hash4 = params.hash4Chars.trim();
-  const i1 = formatMoneyDecimal(params.totalLiquido);
-  const i2 = formatMoneyDecimal(params.totalIva);
-  const i3 = formatMoneyDecimal(params.totalDocumento);
+  const nifEmissor = nifEm;
+  const nifCliente = String(params.nifCliente || params.customerNif || "999999999").trim();
+  const pais = String(params.pais || "AO").trim().toUpperCase();
+  const tipoDoc = String(params.tipoDoc || params.docType || "").trim().toUpperCase();
+  const estado = String(params.estado || params.status || "N").trim().toUpperCase();
+  const rawDate = String(params.data || params.invoiceDate || new Date().toISOString().slice(0, 10));
+  const data = normalizeDateYYYYMMDD(rawDate);
+  const numDoc = nDoc;
+  const hash4 = String(params.hash4Chars || params.hashControl || "").trim();
+  const totDoc = Number(params.totalDocumento ?? params.grossTotal ?? 0);
+  const totLiq = Number(params.totalLiquido ?? params.subtotalNet ?? totDoc);
+  const totIva = Number(params.totalIva ?? params.taxPayable ?? 0);
+  const i1 = formatMoneyDecimal(totLiq);
+  const i2 = formatMoneyDecimal(totIva);
+  const i3 = formatMoneyDecimal(totDoc);
 
   return `A:${nifEmissor}*B:${nifCliente}*C:${pais}*D:${tipoDoc}*E:${estado}*F:${data}*G:${numDoc}*H:${hash4}*I1:${i1}*I2:${i2}*I3:${i3}`;
 }

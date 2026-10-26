@@ -26,6 +26,20 @@ export const CREDIT_NOTE_REASON_LABELS_PT: Record<CreditNoteReasonCode, string> 
 };
 
 /**
+ * Valida a justificativa da Nota de Crédito conforme exigência AGT (mínimo 6 caracteres).
+ */
+export function validateCreditNoteReason(reasonText: string): { isValid: boolean; error?: string } {
+  const t = reasonText?.trim() ?? "";
+  if (!t) {
+    return { isValid: false, error: "A justificativa da nota de crédito é obrigatória." };
+  }
+  if (t.length < 6) {
+    return { isValid: false, error: "A justificativa deve ter no mínimo 6 caracteres." };
+  }
+  return { isValid: true };
+}
+
+/**
  * Resolve o texto do motivo para persistir na BD e exibir no PDF/XML.
  * Mínimo 6 caracteres conforme requisito AGT para campo Reason.
  */
@@ -38,5 +52,9 @@ export function resolveCreditNoteReasonText(
     if (t.length >= 6) return t.slice(0, 200);
     throw new Error("Indique o motivo da nota de crédito (mínimo 6 caracteres).");
   }
-  return CREDIT_NOTE_REASON_LABELS_PT[code];
+  const base = CREDIT_NOTE_REASON_LABELS_PT[code] || "Retificação de fatura";
+  if (customDetail?.trim()) {
+    return `${base}: ${customDetail.trim()}`.slice(0, 200);
+  }
+  return base;
 }
