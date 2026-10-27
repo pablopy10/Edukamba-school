@@ -316,6 +316,7 @@ type EnrollmentFeeRow = {
   student_id: string;
   enrollment_id: string | null;
   academic_year_id: string | null;
+  invoice_id?: string | null;
   student?: {
     id: string;
     full_name: string;
@@ -1329,13 +1330,13 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         const { data: enFees } = await (restrictChargeQueriesToStudents
           ? supabase
               .from("enrollment_fees")
-              .select("id, amount_due, due_date, is_paid, fee_type, student_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), academic_year:academic_years(id, label)")
+              .select("id, amount_due, due_date, is_paid, fee_type, student_id, enrollment_id, academic_year_id, invoice_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), academic_year:academic_years(id, label)")
               .eq("school_id", sId)
               .in("student_id", scopedStudentIds)
               .order("due_date", { ascending: true })
           : supabase
               .from("enrollment_fees")
-              .select("id, amount_due, due_date, is_paid, fee_type, student_id, enrollment_id, academic_year_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), academic_year:academic_years(id, label)")
+              .select("id, amount_due, due_date, is_paid, fee_type, student_id, enrollment_id, academic_year_id, invoice_id, student:students(id, full_name, parent_id, classroom_id, classroom:classrooms(id, name)), academic_year:academic_years(id, label)")
               .eq("school_id", sId)
               .order("due_date", { ascending: true })
         );
@@ -1826,7 +1827,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
       // 1. Carregar faturas da escola
       const { data: recentInvoices } = await supabase
         .from("invoices")
-        .select("id, payment_id, student_id, document_number, invoice_status, pdf_url, credit_status, credited_amount, doc_type, original_invoice_id, credit_reason, line_description, gross_total")
+        .select("id, payment_id, student_id, document_number, invoice_status, pdf_url, credit_status, credited_amount, doc_type, original_invoice_id, credit_reason, line_description, gross_total, enrollment_fee_id")
         .eq("school_id", schoolId)
         .order("doc_number", { ascending: false })
         .limit(600);
@@ -1860,6 +1861,7 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
 
       for (const row of recentInvoices ?? []) {
         const payId = row.payment_id as string | null;
+        const efId = (row as { enrollment_fee_id?: string | null }).enrollment_fee_id;
         const st = String(row.invoice_status ?? "N").trim().toUpperCase();
         const linkedNC = ncByOriginalInvoiceId.get(row.id as string);
         const credStatus = (row as { credit_status?: string }).credit_status as "NONE" | "PARTIALLY_CREDITED" | "FULLY_CREDITED" | undefined;
@@ -1879,6 +1881,9 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         invMap.set(row.id as string, item);
         if (payId?.trim()) {
           nextPay[payId] = item;
+        }
+        if (efId?.trim()) {
+          nextFee[efId] = item;
         }
       }
 
@@ -1907,6 +1912,19 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
           if (p.meal_fee_id) nextFee[p.meal_fee_id] = invItem;
           if (p.event_fee_id) nextFee[p.event_fee_id] = invItem;
           if (p.enrollment_fee_id) nextFee[p.enrollment_fee_id] = invItem;
+        }
+      }
+
+      // 3. Vincular enrollment_fees com invoice_id direto (faturas a crédito ou quitações)
+      const { data: enFeesWithInvoice } = await supabase
+        .from("enrollment_fees")
+        .select("id, invoice_id")
+        .eq("school_id", schoolId)
+        .not("invoice_id", "is", null);
+
+      for (const ef of enFeesWithInvoice ?? []) {
+        if (ef.invoice_id && invMap.has(ef.invoice_id)) {
+          nextFee[ef.id] = invMap.get(ef.invoice_id)!;
         }
       }
 
@@ -3553,16 +3571,22 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
     fee?: FeeListRow | ActivityFeeRow | TransportFeeRow | MealFeeRow | EventFeeRow | EnrollmentFeeRow,
     kind: "fee" | "activity" | "transport" | "meal" | "event" | "enrollment" = "fee",
   ) => {
-    if (!feeMarkedPaid) return null;
-
+    const feeInvoiceId = (fee as { invoice_id?: string | null })?.invoice_id;
     const inv =
       (pay?.id ? invoiceByPaymentId[pay.id] : undefined) ||
       (fee?.id ? invoiceByFeeId[fee.id] : undefined) ||
+      (feeInvoiceId
+        ? {
+            invoiceId: feeInvoiceId,
+            documentNumber: "FT",
+            invoiceStatus: "N" as const,
+          }
+        : undefined) ||
       (pay?.invoice_id ? { invoiceId: pay.invoice_id, documentNumber: "FT", invoiceStatus: "N" as const } : undefined);
 
     const isEmitting = fee?.id ? emittingFtFeeId === fee.id : false;
 
-    // Se a fatura já existe, exibir o link clicável que abre num novo separador:
+    // Se a fatura já existe (emitida como FT a crédito ou FR pronto pagamento), exibir sempre o link clicável:
     if (inv?.invoiceId) {
       const busy = downloadingInvoicePdfId === inv.invoiceId;
       const isCancelled = inv.invoiceStatus === "A";
@@ -3683,6 +3707,8 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
         </div>
       );
     }
+
+    if (!feeMarkedPaid) return null;
 
 
     // Se está PAGO mas ainda não tem fatura emitida:
@@ -5877,7 +5903,10 @@ export function PagamentosFinanceHub({ financePage }: { financePage: PagamentosF
                         {filteredEnrollmentFees.slice(0, 200).map((f) => {
                           const overdue = !f.is_paid && new Date(f.due_date).getTime() < Date.now();
                           const pay = latestPaymentByEnrollmentFee.get(f.id);
-                          const inv = (pay?.id ? invoiceByPaymentId[pay.id] : undefined) || invoiceByFeeId[f.id];
+                          const inv =
+                            (pay?.id ? invoiceByPaymentId[pay.id] : undefined) ||
+                            invoiceByFeeId[f.id] ||
+                            (f.invoice_id ? { invoiceId: f.invoice_id, documentNumber: "FT", invoiceStatus: "N" as const } : undefined);
                           const pendingValidation = !!pay && pay.status === "pendente";
                           const rejected = !!pay && pay.status === "rejeitado";
                           return (

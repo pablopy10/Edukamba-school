@@ -55,6 +55,7 @@ export interface BaseEmissionParams {
   seriesCode?: string;
   notes?: string | null;
   sendEmailWithPdf?: boolean;
+  enrollmentFeeId?: string | null;
 }
 
 export interface IssueCashInvoiceParams extends BaseEmissionParams {
@@ -278,6 +279,7 @@ export class BillingEngineService {
         student_id: params.studentId ?? null,
         parent_profile_id: params.parentProfileId ?? null,
         payment_id: params.paymentId ?? null,
+        enrollment_fee_id: params.enrollmentFeeId ?? null,
         series: seriesCode,
         doc_number: nextNumber,
         document_number: documentNumber,
@@ -334,6 +336,18 @@ export class BillingEngineService {
           .eq("id", params.paymentId);
       } catch (pErr) {
         console.warn("issueCashInvoice: update payment non-fatal:", pErr);
+      }
+    }
+
+    // 7. Atualizar taxa de matrícula associada (se fornecida)
+    if (params.enrollmentFeeId) {
+      try {
+        await supabase
+          .from("enrollment_fees")
+          .update({ invoice_id: inserted.id })
+          .eq("id", params.enrollmentFeeId);
+      } catch (efErr) {
+        console.warn("issueCashInvoice: update enrollment_fees non-fatal:", efErr);
       }
     }
 
@@ -482,6 +496,7 @@ export class BillingEngineService {
         school_id: schoolId,
         student_id: params.studentId ?? null,
         parent_profile_id: params.parentProfileId ?? null,
+        enrollment_fee_id: params.enrollmentFeeId ?? null,
         series: seriesCode,
         doc_number: nextNumber,
         document_number: documentNumber,
@@ -523,7 +538,19 @@ export class BillingEngineService {
       console.warn("issueCreditInvoice: invoice_lines non-fatal:", lineErr);
     }
 
-    // 6. Enviar documento em PDF anexado por email
+    // 6. Atualizar taxa de matrícula associada (se fornecida)
+    if (params.enrollmentFeeId) {
+      try {
+        await supabase
+          .from("enrollment_fees")
+          .update({ invoice_id: inserted.id })
+          .eq("id", params.enrollmentFeeId);
+      } catch (efErr) {
+        console.warn("issueCreditInvoice: update enrollment_fees non-fatal:", efErr);
+      }
+    }
+
+    // 7. Enviar documento em PDF anexado por email
     if (params.sendEmailWithPdf !== false) {
       FiscalEmailService.sendDocumentEmail({
         invoiceId: inserted.id,

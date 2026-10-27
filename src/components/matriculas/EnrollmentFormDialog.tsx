@@ -308,6 +308,7 @@ export const EnrollmentFormDialog = ({
         schoolId: targetSchoolId,
         studentId: targetStudentId,
         paymentId: payRow?.id ?? null,
+        enrollmentFeeId: feeId ?? null,
         paymentMethod: methodStr,
         paymentDate: todayStr,
         customerName,
@@ -333,6 +334,7 @@ export const EnrollmentFormDialog = ({
       const ftRes = await BillingEngineService.issueCreditInvoice({
         schoolId: targetSchoolId,
         studentId: targetStudentId,
+        enrollmentFeeId: feeId ?? null,
         dueDate: targetDueDate,
         customerName,
         customerNif,
