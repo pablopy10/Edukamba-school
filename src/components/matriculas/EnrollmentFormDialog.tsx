@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, Receipt } from "lucide-react";
 import { useAcademicYear } from "@/context/AcademicYearContext";
@@ -83,8 +84,7 @@ export const EnrollmentFormDialog = ({
   const [taxId, setTaxId] = useState("");
 
   // Billing controls
-  const [generateCharge, setGenerateCharge] = useState<boolean>(true);
-  const [generateCashReceipt, setGenerateCashReceipt] = useState<boolean>(false);
+  const [billingOption, setBillingOption] = useState<"cobranca" | "fatura_recibo">("cobranca");
   const [chargeAmount, setChargeAmount] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<string>("TRANSFERENCIA");
   const [dueDate, setDueDate] = useState<string>(() => {
@@ -160,8 +160,7 @@ export const EnrollmentFormDialog = ({
         setResult("EM_CURSO"); setResultNotes(""); setPublishResult(false); setAlreadyPublished(false);
         setTab("renew");
         setFullName(""); setEmail(""); setPhone(""); setBirthDate(""); setGender(""); setEnrollmentNumber(""); setTaxId("");
-        setGenerateCharge(true);
-        setGenerateCashReceipt(false);
+        setBillingOption("cobranca");
         setChargeAmount(defaultRenewalFee);
         const d = new Date();
         d.setDate(d.getDate() + 15);
@@ -232,7 +231,7 @@ export const EnrollmentFormDialog = ({
     const todayStr = new Date().toISOString().slice(0, 10);
     const targetDueDate = dueDate || todayStr;
 
-    if (generateCashReceipt) {
+    if (billingOption === "fatura_recibo") {
       // 1. Criar enrollment_fees liquidada
       const { data: feeRow, error: feeErr } = await supabase
         .from("enrollment_fees")
@@ -410,10 +409,10 @@ export const EnrollmentFormDialog = ({
           return;
         }
 
-        if (!isParent && generateCharge && (chargeAmount <= 0 || isNaN(chargeAmount))) {
+        if (!isParent && (chargeAmount <= 0 || isNaN(chargeAmount))) {
           toast({
             title: "Valor da cobrança obrigatório",
-            description: "Indique um valor superior a 0 Kz para gerar a cobrança / fatura de matrícula.",
+            description: "Indique um valor superior a 0 Kz para gerar o documento fiscal de matrícula.",
             variant: "destructive",
           });
           setLoading(false);
@@ -452,7 +451,7 @@ export const EnrollmentFormDialog = ({
         if (eErr) throw eErr;
 
         // Faturação da matrícula
-        if (!isParent && generateCharge && chargeAmount > 0) {
+        if (!isParent && chargeAmount > 0) {
           const billingRes = await handleEnrollmentBilling({
             targetStudentId: created.id,
             enrollmentId: createdEnrollment.id,
@@ -493,10 +492,10 @@ export const EnrollmentFormDialog = ({
           return;
         }
 
-        if (!isParent && generateCharge && (chargeAmount <= 0 || isNaN(chargeAmount))) {
+        if (!isParent && (chargeAmount <= 0 || isNaN(chargeAmount))) {
           toast({
             title: "Valor da cobrança obrigatório",
-            description: "Indique um valor superior a 0 Kz para gerar a cobrança / fatura de renovação.",
+            description: "Indique um valor superior a 0 Kz para gerar o documento fiscal de renovação.",
             variant: "destructive",
           });
           setLoading(false);
@@ -541,7 +540,7 @@ export const EnrollmentFormDialog = ({
         if (eErr) throw eErr;
 
         // Faturação da renovação
-        if (!isParent && generateCharge && chargeAmount > 0) {
+        if (!isParent && chargeAmount > 0) {
           let customerName = "";
           let customerNif = "";
           const { data: stData } = await supabase
@@ -782,113 +781,125 @@ export const EnrollmentFormDialog = ({
 
         {!isEdit && !isParent && (
           <div className="rounded-xl border border-border/80 bg-muted/20 p-4 sm:p-5 space-y-4">
-            <div className="flex items-center gap-2">
-              <Receipt className="h-5 w-5 text-primary" />
-              <div>
-                <h4 className="text-sm font-semibold text-foreground">Faturação e Cobrança da Matrícula</h4>
-                <p className="text-xs text-muted-foreground">Emissão fiscal AGT vinculada à matrícula do aluno</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Receipt className="h-5 w-5 text-primary" />
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground">Faturação e Cobrança da Matrícula</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Valores predefinidos em Definições &gt; Académico &gt; Custos de Matrícula
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-md bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                {tab === "new" ? "Nova Matrícula" : "Renovação"}: {chargeAmount.toLocaleString("pt-AO")} Kz
               </div>
             </div>
 
-            <div className="space-y-3 pt-1">
-              {/* Checkbox 1: Gerar cobrança */}
-              <label className="flex items-start gap-3 cursor-pointer select-none">
-                <Checkbox
-                  id="chk-generate-charge"
-                  checked={generateCharge}
-                  onCheckedChange={(checked) => {
-                    const v = !!checked;
-                    setGenerateCharge(v);
-                    if (!v) setGenerateCashReceipt(false);
-                  }}
-                  className="mt-0.5"
-                />
-                <div>
-                  <span className="text-sm font-medium text-foreground">Gerar cobrança</span>
-                  <p className="text-xs text-muted-foreground">
-                    {generateCashReceipt
-                      ? "Cria a cobrança e emite a Fatura-Recibo (FR) quitada no ato com comprovativo fiscal."
-                      : "Cria a cobrança e emite uma Fatura (FT) a crédito com lançamento de conta a receber."}
+            {/* Radio button com as duas opções mutuamente exclusivas */}
+            <RadioGroup
+              value={billingOption}
+              onValueChange={(val) => setBillingOption(val as "cobranca" | "fatura_recibo")}
+              className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2"
+            >
+              {/* Opção 1: Gerar cobrança */}
+              <label
+                htmlFor="radio-cobranca"
+                className={`flex items-start gap-3 p-3.5 rounded-lg border transition-all cursor-pointer select-none ${
+                  billingOption === "cobranca"
+                    ? "border-primary bg-primary/5 ring-1 ring-primary/20 shadow-xs"
+                    : "border-border/60 hover:bg-muted/40"
+                }`}
+              >
+                <RadioGroupItem value="cobranca" id="radio-cobranca" className="mt-0.5 shrink-0" />
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-foreground">Gerar cobrança</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                      Fatura (FT)
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Gera a fatura a crédito caso <strong>não vá ser pago no momento</strong> (lançamento de conta a receber).
                   </p>
                 </div>
               </label>
 
-              {/* Checkbox 2: Gerar Fatura-recibo (em baixo da de gerar cobrança) */}
-              <div className="pl-7">
-                <label
-                  className={`flex items-start gap-3 select-none ${
-                    !generateCharge ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-                  }`}
-                >
-                  <Checkbox
-                    id="chk-generate-cash-receipt"
-                    disabled={!generateCharge}
-                    checked={generateCashReceipt}
-                    onCheckedChange={(checked) => {
-                      const v = !!checked;
-                      setGenerateCashReceipt(v);
-                      if (v) setGenerateCharge(true);
-                    }}
-                    className="mt-0.5"
-                  />
-                  <div>
-                    <span className="text-sm font-medium text-foreground">Gerar Fatura-recibo</span>
-                    <p className="text-xs text-muted-foreground">
-                      Quitação imediata: gera a fatura-recibo para o encarregado e/ou para o aluno com envio automático do PDF por email.
-                    </p>
+              {/* Opção 2: Gerar fatura-recibo */}
+              <label
+                htmlFor="radio-fatura-recibo"
+                className={`flex items-start gap-3 p-3.5 rounded-lg border transition-all cursor-pointer select-none ${
+                  billingOption === "fatura_recibo"
+                    ? "border-primary bg-primary/5 ring-1 ring-primary/20 shadow-xs"
+                    : "border-border/60 hover:bg-muted/40"
+                }`}
+              >
+                <RadioGroupItem value="fatura_recibo" id="radio-fatura-recibo" className="mt-0.5 shrink-0" />
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-foreground">Gerar fatura-recibo</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-pastel-green/20 text-pastel-green-foreground">
+                      Fatura-Recibo (FR)
+                    </span>
                   </div>
-                </label>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Gera a fatura-recibo caso o pagamento <strong>vá ser ou foi feito no momento</strong> (quitação imediata).
+                  </p>
+                </div>
+              </label>
+            </RadioGroup>
+
+            {/* Campos da opção selecionada */}
+            <div className="mt-3 grid grid-cols-1 gap-4 pt-3 sm:grid-cols-2 border-t border-border/50">
+              <div>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="charge-amount" className="text-xs font-semibold">
+                    Valor da Matrícula (Kz)
+                  </Label>
+                  <span className="text-[11px] text-muted-foreground">
+                    (Definições: {tab === "new" ? defaultNewFee.toLocaleString("pt-AO") : defaultRenewalFee.toLocaleString("pt-AO")} Kz)
+                  </span>
+                </div>
+                <Input
+                  id="charge-amount"
+                  type="number"
+                  min={0}
+                  step={100}
+                  value={chargeAmount === 0 ? "" : chargeAmount}
+                  onChange={(e) => setChargeAmount(e.target.value === "" ? 0 : Number(e.target.value))}
+                  placeholder="Ex: 25000"
+                  className="mt-1"
+                />
               </div>
 
-              {/* Campos adicionais quando Gerar cobrança estiver ativo */}
-              {generateCharge && (
-                <div className="mt-3 grid grid-cols-1 gap-4 pt-2 sm:grid-cols-2 border-t border-border/50">
-                  <div>
-                    <Label htmlFor="charge-amount" className="text-xs font-semibold">
-                      Valor da Matrícula / Renovação (Kz)
-                    </Label>
-                    <Input
-                      id="charge-amount"
-                      type="number"
-                      min={0}
-                      step={100}
-                      value={chargeAmount === 0 ? "" : chargeAmount}
-                      onChange={(e) => setChargeAmount(e.target.value === "" ? 0 : Number(e.target.value))}
-                      placeholder="Ex: 25000"
-                      className="mt-1"
-                    />
-                  </div>
-
-                  {generateCashReceipt ? (
-                    <div>
-                      <Label className="text-xs font-semibold">Método de Pagamento</Label>
-                      <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                        <SelectTrigger className="mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="TRANSFERENCIA">Transferência Bancária / Express</SelectItem>
-                          <SelectItem value="TPA">Terminal Multicaixa (TPA)</SelectItem>
-                          <SelectItem value="NUMERARIO">Numerário / Dinheiro</SelectItem>
-                          <SelectItem value="DEPOSITO">Depósito Bancário</SelectItem>
-                          <SelectItem value="OUTRO">Outro</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ) : (
-                    <div>
-                      <Label htmlFor="charge-due-date" className="text-xs font-semibold">
-                        Data de Vencimento
-                      </Label>
-                      <Input
-                        id="charge-due-date"
-                        type="date"
-                        value={dueDate}
-                        onChange={(e) => setDueDate(e.target.value)}
-                        className="mt-1"
-                      />
-                    </div>
-                  )}
+              {billingOption === "fatura_recibo" ? (
+                <div>
+                  <Label className="text-xs font-semibold">Método de Pagamento</Label>
+                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="TRANSFERENCIA">Transferência Bancária / Multicaixa Express</SelectItem>
+                      <SelectItem value="TPA">Terminal de Pagamento Automático (TPA)</SelectItem>
+                      <SelectItem value="NUMERARIO">Numerário / Dinheiro</SelectItem>
+                      <SelectItem value="DEPOSITO">Depósito Bancário</SelectItem>
+                      <SelectItem value="OUTRO">Outro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div>
+                  <Label htmlFor="charge-due-date" className="text-xs font-semibold">
+                    Data de Vencimento da Fatura
+                  </Label>
+                  <Input
+                    id="charge-due-date"
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="mt-1"
+                  />
                 </div>
               )}
             </div>
