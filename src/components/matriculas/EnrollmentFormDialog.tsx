@@ -231,8 +231,32 @@ export const EnrollmentFormDialog = ({
     const todayStr = new Date().toISOString().slice(0, 10);
     const targetDueDate = dueDate || todayStr;
 
-    if (billingOption === "fatura_recibo") {
-      // 1. Criar enrollment_fees liquidada
+    const { data: userRes } = await supabase.auth.getUser();
+    const currentUserId = userRes?.user?.id ?? null;
+
+    // Verificar se o trigger tg_generate_enrollment_fee já criou a cobrança para a matrícula
+    const { data: existingFee } = await supabase
+      .from("enrollment_fees")
+      .select("id")
+      .eq("enrollment_id", enrollmentId)
+      .maybeSingle();
+
+    let feeId = existingFee?.id;
+    if (feeId) {
+      const { error: updErr } = await supabase
+        .from("enrollment_fees")
+        .update({
+          amount_due: chargeAmount,
+          due_date: billingOption === "fatura_recibo" ? todayStr : targetDueDate,
+          is_paid: billingOption === "fatura_recibo",
+          fee_type: feeType,
+          notes: billingOption === "fatura_recibo"
+            ? `Liquidado no ato da matrícula (${feeType === "NEW" ? "Nova" : "Renovação"})`
+            : `Fatura de matrícula a crédito (${feeType === "NEW" ? "Nova" : "Renovação"})`,
+        })
+        .eq("id", feeId);
+      if (updErr) console.warn("Erro ao atualizar enrollment_fees:", updErr);
+    } else {
       const { data: feeRow, error: feeErr } = await supabase
         .from("enrollment_fees")
         .insert({
@@ -242,24 +266,35 @@ export const EnrollmentFormDialog = ({
           enrollment_id: enrollmentId,
           fee_type: feeType,
           amount_due: chargeAmount,
-          due_date: todayStr,
-          is_paid: true,
-          notes: `Liquidado no ato da matrícula (${feeType === "NEW" ? "Nova" : "Renovação"})`,
+          due_date: billingOption === "fatura_recibo" ? todayStr : targetDueDate,
+          is_paid: billingOption === "fatura_recibo",
+          notes: billingOption === "fatura_recibo"
+            ? `Liquidado no ato da matrícula (${feeType === "NEW" ? "Nova" : "Renovação"})`
+            : `Fatura de matrícula a crédito (${feeType === "NEW" ? "Nova" : "Renovação"})`,
         })
         .select("id")
         .single();
-
       if (feeErr) console.warn("Erro ao registar enrollment_fees:", feeErr);
+      feeId = feeRow?.id;
+    }
 
-      // 2. Criar payment aprovado
+    if (billingOption === "fatura_recibo") {
+      // 2. Criar payment aprovado com submitted_by e vínculo direto
+      const methodStr = paymentMethod || "TRANSFERENCIA";
       const { data: payRow, error: payErr } = await supabase
         .from("payments")
         .insert({
           school_id: targetSchoolId,
-          enrollment_fee_id: feeRow?.id ?? null,
+          enrollment_fee_id: feeId ?? null,
+          student_id: targetStudentId,
+          amount: chargeAmount,
           amount_paid: chargeAmount,
-          method: paymentMethod || "TRANSFERENCIA",
+          method: methodStr.toLowerCase(),
+          payment_method: methodStr,
           status: "APPROVED",
+          submitted_by: currentUserId,
+          validated_by: currentUserId,
+          validated_at: new Date().toISOString(),
           payment_date: todayStr,
           notes: `Quitação imediata no ato da matrícula (${feeType === "NEW" ? "Nova" : "Renovação"})`,
         })
@@ -273,7 +308,7 @@ export const EnrollmentFormDialog = ({
         schoolId: targetSchoolId,
         studentId: targetStudentId,
         paymentId: payRow?.id ?? null,
-        paymentMethod: paymentMethod || "TRANSFERENCIA",
+        paymentMethod: methodStr,
         paymentDate: todayStr,
         customerName,
         customerNif,
@@ -294,25 +329,6 @@ export const EnrollmentFormDialog = ({
 
       return { type: "FR" as const, result: frRes };
     } else {
-      // 1. Criar enrollment_fees em aberto (FT)
-      const { data: feeRow, error: feeErr } = await supabase
-        .from("enrollment_fees")
-        .insert({
-          school_id: targetSchoolId,
-          student_id: targetStudentId,
-          academic_year_id: targetYearId || null,
-          enrollment_id: enrollmentId,
-          fee_type: feeType,
-          amount_due: chargeAmount,
-          due_date: targetDueDate,
-          is_paid: false,
-          notes: `Fatura de matrícula a crédito (${feeType === "NEW" ? "Nova" : "Renovação"})`,
-        })
-        .select("id")
-        .single();
-
-      if (feeErr) console.warn("Erro ao registar enrollment_fees:", feeErr);
-
       // 2. Emitir FT (Fatura) a crédito com envio por email com PDF
       const ftRes = await BillingEngineService.issueCreditInvoice({
         schoolId: targetSchoolId,

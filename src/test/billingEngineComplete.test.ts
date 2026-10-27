@@ -70,6 +70,18 @@ describe("Motor Fiscal Completo AGT (Angola) — Edukamba", () => {
         "A:5000001234*B:999999999*C:AO*D:FR*E:N*F:20261027*G:FR EDK/1*H:X9Z1*I1:25000.00*I2:0.00*I3:25000.00"
       );
     });
+
+    it("deve formatar o plaintext com grossTotal definido e duas casas decimais", () => {
+      const plaintext = buildAgtSigningPlaintext({
+        invoiceDateYYYYMMDD: "2026-10-27",
+        systemEntryDateISO: "2026-10-27T14:00:00",
+        documentNumberFull: "FR EDK/1",
+        grossTotal: 45000,
+        previousDocumentHash: "",
+      });
+
+      expect(plaintext).toBe("2026-10-27;2026-10-27T14:00:00;FR EDK/1;45000.00;");
+    });
   });
 
   // ─── 3. CENÁRIOS DE EMISSÃO FISCAL (MÁQUINA DE ESTADOS) ───────────────────

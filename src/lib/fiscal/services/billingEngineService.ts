@@ -206,6 +206,8 @@ export class BillingEngineService {
       };
     });
 
+    const grossTotal = totalGross;
+
     // 1. Reservar sequência na série fiscal (com lock pessimista)
     let nextNumber: number;
     let documentNumber: string;
@@ -408,6 +410,8 @@ export class BillingEngineService {
         tax_exemption_reason: taxRate === 0 ? (l.taxExemptionReason || "Isenção no domínio da educação") : null,
       };
     });
+
+    const grossTotal = totalGross;
 
     // 1. Reservar sequência na série fiscal FT
     let nextNumber: number;
@@ -797,6 +801,8 @@ export class BillingEngineService {
         tax_exemption_reason: taxRate === 0 ? (l.taxExemptionReason || "Isenção no domínio da educação") : null,
       };
     });
+
+    const grossTotal = totalGross;
 
     // Pró-forma tem numeração independente e não encadeia em hash fiscal comercial
     const { data: lastPF } = await supabase
