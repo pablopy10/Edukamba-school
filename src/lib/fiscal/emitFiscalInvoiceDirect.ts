@@ -70,7 +70,7 @@ export async function emitFiscalInvoiceDirect(paymentId: string): Promise<Direct
   const { data: pay, error: payErr } = await supabase
     .from("payments")
     .select(
-      "id, school_id, status, amount_paid, validated_at, payment_date, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, meal_fee_id, event_fee_id",
+      "id, school_id, status, amount_paid, validated_at, payment_date, student_id, payer_id, student_fee_id, activity_fee_id, transport_fee_id, enrollment_fee_id, meal_fee_id, event_fee_id",
     )
     .eq("id", pid)
     .maybeSingle();
@@ -80,11 +80,12 @@ export async function emitFiscalInvoiceDirect(paymentId: string): Promise<Direct
   }
 
   // 3. Resolver contexto da taxa / aluno / encarregado
-  let studentId: string | null = null;
+  let studentId: string | null = (pay as { student_id?: string | null })?.student_id ?? null;
   let lineDescription = "Propina / serviços educativos";
   let clienteNome = "Consumidor Final";
   let clienteNif = "999999999";
   let parentProfileId: string | null = null;
+  let feeStudent: { id?: string; full_name?: string | null; parent_id?: string | null } | null = null;
 
   if (pay.student_fee_id) {
     const { data: feeRow } = await supabase
@@ -92,15 +93,8 @@ export async function emitFiscalInvoiceDirect(paymentId: string): Promise<Direct
       .select("student_id, month_index, student:students(id, full_name, parent_id)")
       .eq("id", pay.student_fee_id)
       .maybeSingle();
-    studentId = feeRow?.student_id ?? null;
-    const st = feeRow?.student as { id?: string; full_name?: string | null; parent_id?: string | null } | null;
-    if (st?.full_name) clienteNome = st.full_name;
-    if (st?.parent_id) {
-      parentProfileId = st.parent_id;
-      const { data: prof } = await supabase.from("profiles").select("full_name, nif").eq("id", st.parent_id).maybeSingle();
-      if (prof?.full_name) clienteNome = prof.full_name;
-      if (prof?.nif?.trim()) clienteNif = prof.nif.trim();
-    }
+    studentId = feeRow?.student_id ?? studentId;
+    feeStudent = (feeRow?.student as { id?: string; full_name?: string | null; parent_id?: string | null } | null) ?? null;
     const monthNames = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
     const mName = feeRow?.month_index ? monthNames[feeRow.month_index - 1] : "";
     lineDescription = mName ? `Propina escolar (${mName})` : "Propina escolar";
@@ -110,7 +104,8 @@ export async function emitFiscalInvoiceDirect(paymentId: string): Promise<Direct
       .select("student_id, activity:extracurricular_activities(name), student:students(id, full_name, parent_id)")
       .eq("id", pay.activity_fee_id)
       .maybeSingle();
-    studentId = feeRow?.student_id ?? null;
+    studentId = feeRow?.student_id ?? studentId;
+    feeStudent = (feeRow?.student as { id?: string; full_name?: string | null; parent_id?: string | null } | null) ?? null;
     const actName = (feeRow?.activity as { name?: string | null } | null)?.name ?? "atividade";
     lineDescription = `Atividade extracurricular (${actName})`;
   } else if (pay.transport_fee_id) {
@@ -119,7 +114,8 @@ export async function emitFiscalInvoiceDirect(paymentId: string): Promise<Direct
       .select("student_id, route:transport_routes(name), student:students(id, full_name, parent_id)")
       .eq("id", pay.transport_fee_id)
       .maybeSingle();
-    studentId = feeRow?.student_id ?? null;
+    studentId = feeRow?.student_id ?? studentId;
+    feeStudent = (feeRow?.student as { id?: string; full_name?: string | null; parent_id?: string | null } | null) ?? null;
     const rName = (feeRow?.route as { name?: string | null } | null)?.name ?? "rota";
     lineDescription = `Transporte escolar (${rName})`;
   } else if (pay.enrollment_fee_id) {
@@ -128,7 +124,8 @@ export async function emitFiscalInvoiceDirect(paymentId: string): Promise<Direct
       .select("student_id, fee_type, student:students(id, full_name, parent_id)")
       .eq("id", pay.enrollment_fee_id)
       .maybeSingle();
-    studentId = feeRow?.student_id ?? null;
+    studentId = feeRow?.student_id ?? studentId;
+    feeStudent = (feeRow?.student as { id?: string; full_name?: string | null; parent_id?: string | null } | null) ?? null;
     lineDescription = feeRow?.fee_type === "RENEWAL" ? "Renovação de matrícula" : "Taxa de matrícula";
   } else if (pay.meal_fee_id) {
     const { data: feeRow } = await supabase
@@ -136,7 +133,8 @@ export async function emitFiscalInvoiceDirect(paymentId: string): Promise<Direct
       .select("student_id, meal_program:meal_programs(name), student:students(id, full_name, parent_id)")
       .eq("id", pay.meal_fee_id)
       .maybeSingle();
-    studentId = feeRow?.student_id ?? null;
+    studentId = feeRow?.student_id ?? studentId;
+    feeStudent = (feeRow?.student as { id?: string; full_name?: string | null; parent_id?: string | null } | null) ?? null;
     const mName = (feeRow?.meal_program as { name?: string | null } | null)?.name ?? "refeições";
     lineDescription = `Refeições escolares (${mName})`;
   } else if (pay.event_fee_id) {
@@ -145,9 +143,44 @@ export async function emitFiscalInvoiceDirect(paymentId: string): Promise<Direct
       .select("student_id, event:events(title), student:students(id, full_name, parent_id)")
       .eq("id", pay.event_fee_id)
       .maybeSingle();
-    studentId = feeRow?.student_id ?? null;
+    studentId = feeRow?.student_id ?? studentId;
+    feeStudent = (feeRow?.student as { id?: string; full_name?: string | null; parent_id?: string | null } | null) ?? null;
     const evTitle = (feeRow?.event as { title?: string | null } | null)?.title ?? "evento";
     lineDescription = `Evento escolar (${evTitle})`;
+  }
+
+  // Se o aluno não veio das fees, tentar buscar direto por student_id
+  if (!feeStudent && studentId) {
+    const { data: stRow } = await supabase
+      .from("students")
+      .select("id, full_name, parent_id")
+      .eq("id", studentId)
+      .maybeSingle();
+    if (stRow) feeStudent = stRow;
+  }
+
+  // Preencher nome do cliente e encarregado com validação estrita em profiles
+  if (feeStudent) {
+    if (feeStudent.full_name) clienteNome = feeStudent.full_name;
+    if (feeStudent.parent_id) {
+      const { data: prof } = await supabase.from("profiles").select("full_name, nif").eq("id", feeStudent.parent_id).maybeSingle();
+      if (prof) {
+        parentProfileId = feeStudent.parent_id;
+        if (prof.full_name) clienteNome = prof.full_name;
+        if (prof.nif?.trim()) clienteNif = prof.nif.trim();
+      }
+    }
+  }
+
+  // Se ainda não temos parentProfileId mas o pagamento tem payer_id, verificar se existe em profiles
+  const rawPayerId = (pay as { payer_id?: string | null })?.payer_id;
+  if (!parentProfileId && rawPayerId) {
+    const { data: prof } = await supabase.from("profiles").select("full_name, nif").eq("id", rawPayerId).maybeSingle();
+    if (prof) {
+      parentProfileId = rawPayerId;
+      if (prof.full_name) clienteNome = prof.full_name;
+      if (prof.nif?.trim()) clienteNif = prof.nif.trim();
+    }
   }
 
   // 4. Reservar sequência oficial via billing_reserve_next_invoice
