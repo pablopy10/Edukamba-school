@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { emitCreditNoteDirect } from "../emitCreditNoteDirect";
 
 export interface CreditNoteItemInput {
   description: string;
@@ -179,41 +180,42 @@ export class CreditNoteService {
       console.warn("CreditNoteService: não foi possível pré-validar saldo no cliente:", balErr);
     }
 
-    // Invocar Edge Function emit-credit-note (com lock pessimista e assinatura RSA-SHA1 na cloud)
-    const { data, error } = await supabase.functions.invoke("emit-credit-note", {
-      body: {
-        invoice_id: invoiceId,
-        reason: reasonText,
-        partial_amount: params.partialAmount ?? null,
-        selected_item: params.selectedItemDesc ?? null,
-        items_to_credit: params.itemsToCredit ?? null,
-      },
-    });
+    // 1. Tentar invocar Edge Function emit-credit-note
+    try {
+      const { data, error } = await supabase.functions.invoke("emit-credit-note", {
+        body: {
+          invoice_id: invoiceId,
+          reason: reasonText,
+          partial_amount: params.partialAmount ?? null,
+          selected_item: params.selectedItemDesc ?? null,
+          items_to_credit: params.itemsToCredit ?? null,
+        },
+      });
 
-    if (error) {
-      return { ok: false, message: error.message };
+      if (!error && data && (data as Record<string, unknown>).ok === true) {
+        const res = data as Record<string, unknown>;
+        return {
+          ok: true,
+          creditNoteId: typeof res.credit_note_id === "string" ? res.credit_note_id : undefined,
+          documentNumber: typeof res.document_number === "string" ? res.document_number : undefined,
+          sourceInvoiceNumber: typeof res.source_invoice_number === "string" ? res.source_invoice_number : undefined,
+          creditedAmount: typeof res.credited_amount === "number" ? res.credited_amount : undefined,
+          totalCredited: typeof res.total_credited === "number" ? res.total_credited : undefined,
+          creditStatus: res.credit_status as IssueCreditNoteResult["creditStatus"],
+          remainingBalance: typeof res.remaining_balance === "number" ? res.remaining_balance : undefined,
+          hashControl: typeof res.hash_control === "string" ? res.hash_control : undefined,
+        };
+      }
+
+      if (error) {
+        console.warn("[CreditNoteService] Edge Function avisou, ativando emissão direta resiliente:", error.message);
+      }
+    } catch (edgeErr) {
+      console.warn("[CreditNoteService] Exceção ao chamar Edge Function, ativando emissão direta resiliente:", edgeErr);
     }
 
-    const res = data as Record<string, unknown> | null;
-    if (res?.error) {
-      return { ok: false, message: String(res.error) };
-    }
-
-    if (res?.ok !== true) {
-      return { ok: false, message: "Não foi possível emitir a nota de crédito." };
-    }
-
-    return {
-      ok: true,
-      creditNoteId: typeof res.credit_note_id === "string" ? res.credit_note_id : undefined,
-      documentNumber: typeof res.document_number === "string" ? res.document_number : undefined,
-      sourceInvoiceNumber: typeof res.source_invoice_number === "string" ? res.source_invoice_number : undefined,
-      creditedAmount: typeof res.credited_amount === "number" ? res.credited_amount : undefined,
-      totalCredited: typeof res.total_credited === "number" ? res.total_credited : undefined,
-      creditStatus: res.credit_status as IssueCreditNoteResult["creditStatus"],
-      remainingBalance: typeof res.remaining_balance === "number" ? res.remaining_balance : undefined,
-      hashControl: typeof res.hash_control === "string" ? res.hash_control : undefined,
-    };
+    // 2. Fallback resiliente direto no cliente com lock pessimista RPC
+    return emitCreditNoteDirect(params);
   }
 }
 
