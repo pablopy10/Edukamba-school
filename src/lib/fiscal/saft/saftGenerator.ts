@@ -58,14 +58,16 @@ export class SaftGenerator {
 
     const created = dateCreated || new Date().toISOString().slice(0, 10);
 
-    // Filtrar apenas documentos fiscais comerciais (PF - Proformas são omitidas de SalesInvoices)
+    // Filtrar apenas documentos fiscais comerciais para SalesInvoices (FT, FR, NC, ND) e para Payments (RC)
+    // Proformas (PF) são documentos preliminares e são estritamente omitidos do SAF-T
     const fiscalDocs = params.documents.filter(
       (d) => d.docType === "FT" || d.docType === "FR" || d.docType === "NC" || d.docType === "ND"
     );
+    const paymentDocs = params.documents.filter((d) => d.docType === "RC");
 
-    // 1. Extrair Clientes únicos para MasterFiles
+    // 1. Extrair Clientes únicos para MasterFiles (tanto de faturas como de recibos)
     const customerMap = new Map<string, { nif: string; name: string; city: string; address: string }>();
-    for (const doc of fiscalDocs) {
+    for (const doc of [...fiscalDocs, ...paymentDocs]) {
       const custId = doc.customerNif || "999999999";
       if (!customerMap.has(custId)) {
         customerMap.set(custId, {
@@ -304,6 +306,73 @@ export class SaftGenerator {
     }
 
     xml += `    </SalesInvoices>\n`;
+
+    // ─── SEÇÃO DE PAYMENTS (RC — RECIBOS) ────────────────────────────────────────
+    // Os recibos que liquidam faturas FT prévias entram na tabela Payments,
+    // garantindo quitação financeira sem duplicidade de imposto no SAF-T.
+    if (paymentDocs.length > 0) {
+      let totalPaymentCredit = 0;
+      for (const p of paymentDocs) {
+        totalPaymentCredit = roundMoney(totalPaymentCredit + p.grossTotal);
+      }
+
+      xml += `    <Payments>\n`;
+      xml += `      <NumberOfEntries>${paymentDocs.length}</NumberOfEntries>\n`;
+      xml += `      <TotalDebit>0.00</TotalDebit>\n`;
+      xml += `      <TotalCredit>${formatMoney(totalPaymentCredit)}</TotalCredit>\n`;
+
+      for (const rc of paymentDocs) {
+        const period = parseInt(rc.invoiceDate.slice(5, 7), 10) || 1;
+        const refFt = rc.referencedDocumentNumber || rc.orderReferencePP || "FT";
+
+        xml += `      <Payment>\n`;
+        xml += `        <PaymentRefNo>${esc(rc.documentNumber)}</PaymentRefNo>\n`;
+        xml += `        <Period>${period}</Period>\n`;
+        xml += `        <TransactionDate>${rc.invoiceDate}</TransactionDate>\n`;
+        xml += `        <PaymentType>RC</PaymentType>\n`;
+        xml += `        <Description>${esc(`Quitação de fatura ${refFt}`)}</Description>\n`;
+        xml += `        <SystemID>${esc(rc.id || rc.documentNumber)}</SystemID>\n`;
+        xml += `        <DocumentStatus>\n`;
+        xml += `          <PaymentStatus>N</PaymentStatus>\n`;
+        xml += `          <PaymentStatusDate>${rc.systemEntryDate || rc.invoiceDate + "T12:00:00"}</PaymentStatusDate>\n`;
+        xml += `          <SourceID>${esc(rc.customerNif || "999999999")}</SourceID>\n`;
+        xml += `          <SourcePayment>P</SourcePayment>\n`;
+        xml += `        </DocumentStatus>\n`;
+        xml += `        <PaymentMethod>\n`;
+        xml += `          <PaymentMechanism>OU</PaymentMechanism>\n`;
+        xml += `          <PaymentAmount>${formatMoney(rc.grossTotal)}</PaymentAmount>\n`;
+        xml += `          <PaymentDate>${rc.invoiceDate}</PaymentDate>\n`;
+        xml += `        </PaymentMethod>\n`;
+        xml += `        <SourceDocumentID>\n`;
+        xml += `          <OriginatingON>${esc(refFt)}</OriginatingON>\n`;
+        xml += `          <InvoiceDate>${rc.referencedDocumentDate || rc.invoiceDate}</InvoiceDate>\n`;
+        xml += `          <Description>${esc(`Liquidação de ${refFt}`)}</Description>\n`;
+        xml += `        </SourceDocumentID>\n`;
+        xml += `        <SystemEntryDate>${rc.systemEntryDate || rc.invoiceDate + "T12:00:00"}</SystemEntryDate>\n`;
+        xml += `        <CustomerID>${esc(rc.customerNif || "999999999")}</CustomerID>\n`;
+        xml += `        <Line>\n`;
+        xml += `          <LineNumber>1</LineNumber>\n`;
+        xml += `          <SourceDocumentID>\n`;
+        xml += `            <OriginatingON>${esc(refFt)}</OriginatingON>\n`;
+        xml += `            <InvoiceDate>${rc.referencedDocumentDate || rc.invoiceDate}</InvoiceDate>\n`;
+        xml += `            <Description>${esc(`Liquidação de ${refFt}`)}</Description>\n`;
+        xml += `          </SourceDocumentID>\n`;
+        xml += `          <CreditAmount>${formatMoney(rc.grossTotal)}</CreditAmount>\n`;
+        xml += `        </Line>\n`;
+        xml += `        <DocumentTotals>\n`;
+        xml += `          <TaxPayable>0.00</TaxPayable>\n`;
+        xml += `          <NetTotal>${formatMoney(rc.grossTotal)}</NetTotal>\n`;
+        xml += `          <GrossTotal>${formatMoney(rc.grossTotal)}</GrossTotal>\n`;
+        xml += `          <Settlement>\n`;
+        xml += `            <SettlementAmount>${formatMoney(rc.grossTotal)}</SettlementAmount>\n`;
+        xml += `          </Settlement>\n`;
+        xml += `        </DocumentTotals>\n`;
+        xml += `      </Payment>\n`;
+      }
+
+      xml += `    </Payments>\n`;
+    }
+
     xml += `  </SourceDocuments>\n`;
     xml += `</AuditFile>`;
 
@@ -312,7 +381,8 @@ export class SaftGenerator {
 
   /**
    * Validador de integridade do SAF-T (AO).
-   * Verifica se totais de controlo, linhas, clientes e produtos batem sem discrepâncias.
+   * Verifica se totais de controlo, linhas, clientes e produtos batem sem discrepâncias
+   * tanto na secção SalesInvoices como na secção Payments.
    */
   static validateSaftIntegrity(xmlString: string): {
     isValid: boolean;
@@ -323,53 +393,81 @@ export class SaftGenerator {
       totalCredit: number;
       calculatedDebit: number;
       calculatedCredit: number;
+      paymentsEntries?: number;
+      paymentsTotalCredit?: number;
     };
   } {
     const errors: string[] = [];
 
-    const numEntriesMatch = xmlString.match(/<NumberOfEntries>(\d+)<\/NumberOfEntries>/);
-    const totalDebitMatch = xmlString.match(/<TotalDebit>([0-9.]+)<\/TotalDebit>/);
-    const totalCreditMatch = xmlString.match(/<TotalCredit>([0-9.]+)<\/TotalCredit>/);
+    // 1. Extração da secção SalesInvoices
+    const salesInvoicesMatch = xmlString.match(/<SalesInvoices>([\s\S]*?)<\/SalesInvoices>/);
+    const salesXml = salesInvoicesMatch ? salesInvoicesMatch[1] : xmlString;
+
+    const numEntriesMatch = salesXml.match(/<NumberOfEntries>(\d+)<\/NumberOfEntries>/);
+    const totalDebitMatch = salesXml.match(/<TotalDebit>([0-9.]+)<\/TotalDebit>/);
+    const totalCreditMatch = salesXml.match(/<TotalCredit>([0-9.]+)<\/TotalCredit>/);
 
     const headerEntries = numEntriesMatch ? parseInt(numEntriesMatch[1], 10) : 0;
     const headerDebit = totalDebitMatch ? parseFloat(totalDebitMatch[1]) : 0;
     const headerCredit = totalCreditMatch ? parseFloat(totalCreditMatch[1]) : 0;
 
     // Contar Invoices
-    const invoiceMatches = xmlString.match(/<Invoice>/g);
+    const invoiceMatches = salesXml.match(/<Invoice>/g);
     const actualEntries = invoiceMatches ? invoiceMatches.length : 0;
 
     if (headerEntries !== actualEntries) {
       errors.push(
-        `Discrepância em NumberOfEntries: cabeçalho indica ${headerEntries}, mas existem ${actualEntries} Invoices no XML.`
+        `Discrepância em NumberOfEntries de SalesInvoices: cabeçalho indica ${headerEntries}, mas existem ${actualEntries} Invoices no XML.`
       );
     }
 
-    // Somar débitos e créditos de todas as linhas
+    // Somar débitos e créditos de todas as linhas de SalesInvoices
     let sumDebit = 0;
     const debitRegex = /<DebitAmount>([0-9.]+)<\/DebitAmount>/g;
     let dMatch: RegExpExecArray | null;
-    while ((dMatch = debitRegex.exec(xmlString)) !== null) {
+    while ((dMatch = debitRegex.exec(salesXml)) !== null) {
       sumDebit = roundMoney(sumDebit + parseFloat(dMatch[1]));
     }
 
     let sumCredit = 0;
     const creditRegex = /<CreditAmount>([0-9.]+)<\/CreditAmount>/g;
     let cMatch: RegExpExecArray | null;
-    while ((cMatch = creditRegex.exec(xmlString)) !== null) {
+    while ((cMatch = creditRegex.exec(salesXml)) !== null) {
       sumCredit = roundMoney(sumCredit + parseFloat(cMatch[1]));
     }
 
     if (Math.abs(headerDebit - sumDebit) > 0.01) {
       errors.push(
-        `Discrepância em TotalDebit: cabeçalho indica ${headerDebit.toFixed(2)}, mas a soma das linhas é ${sumDebit.toFixed(2)}.`
+        `Discrepância em TotalDebit de SalesInvoices: cabeçalho indica ${headerDebit.toFixed(2)}, mas a soma das linhas é ${sumDebit.toFixed(2)}.`
       );
     }
 
     if (Math.abs(headerCredit - sumCredit) > 0.01) {
       errors.push(
-        `Discrepância em TotalCredit: cabeçalho indica ${headerCredit.toFixed(2)}, mas a soma das linhas é ${sumCredit.toFixed(2)}.`
+        `Discrepância em TotalCredit de SalesInvoices: cabeçalho indica ${headerCredit.toFixed(2)}, mas a soma das linhas é ${sumCredit.toFixed(2)}.`
       );
+    }
+
+    // 2. Extração da secção Payments (Recibos RC) se existir
+    let payEntries = 0;
+    let payHeaderCredit = 0;
+    const paymentsMatch = xmlString.match(/<Payments>([\s\S]*?)<\/Payments>/);
+    if (paymentsMatch) {
+      const payXml = paymentsMatch[1];
+      const pEntriesMatch = payXml.match(/<NumberOfEntries>(\d+)<\/NumberOfEntries>/);
+      const pCreditMatch = payXml.match(/<TotalCredit>([0-9.]+)<\/TotalCredit>/);
+
+      payEntries = pEntriesMatch ? parseInt(pEntriesMatch[1], 10) : 0;
+      payHeaderCredit = pCreditMatch ? parseFloat(pCreditMatch[1]) : 0;
+
+      const paymentTagMatches = payXml.match(/<Payment>/g);
+      const actualPaymentCount = paymentTagMatches ? paymentTagMatches.length : 0;
+
+      if (payEntries !== actualPaymentCount) {
+        errors.push(
+          `Discrepância em NumberOfEntries de Payments: cabeçalho indica ${payEntries}, mas existem ${actualPaymentCount} Payments no XML.`
+        );
+      }
     }
 
     return {
@@ -381,6 +479,8 @@ export class SaftGenerator {
         totalCredit: headerCredit,
         calculatedDebit: sumDebit,
         calculatedCredit: sumCredit,
+        paymentsEntries: payEntries,
+        paymentsTotalCredit: payHeaderCredit,
       },
     };
   }

@@ -52,10 +52,13 @@ export type {
 } from "./invoicePdf";
 
 // Serviços e Tipos Gerais
+export { BillingEngineService } from "./services/billingEngineService";
+export { FiscalEmailService } from "./services/fiscalEmailService";
 export { FiscalEmissionService } from "./services/fiscalEmissionService";
 export { FiscalSeriesService } from "./services/fiscalSeriesService";
 export { CreditNoteService, issueCreditNote } from "./services/creditNoteService";
 export { calculateFiscalDocument } from "./services/fiscalCalculations";
 export { AgtFiscalEngine } from "./AgtFiscalEngine";
+export { SaftGenerator } from "./saft/saftGenerator";
 export type * from "./types";
 

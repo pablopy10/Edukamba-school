@@ -777,6 +777,8 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
       ? "FATURA PRÓ-FORMA"
       : docTypeUpper === "ND"
       ? "NOTA DE DÉBITO"
+      : docTypeUpper === "RC"
+      ? "RECIBO"
       : "FATURA / RECIBO";
 
   doc.setFont("helvetica", "bold");
@@ -816,13 +818,14 @@ export function buildInvoicePdf(opts: FiscalInvoicePdfInput): jsPDF {
   doc.text(`Período Contabilístico: ${periodMonth}`, rhs, yDoc, { align: "right", baseline: "top" });
   yDoc += pxMm(14);
 
-  // Referência de Origem (Para NC ou Conversão de PP)
+  // Referência de Origem (Para RC, NC ou Conversão de PP)
   const originDoc = opts.referencedDocNumber || opts.orderReferencePP;
   if (originDoc?.trim()) {
     doc.setFontSize(pxToPt(10));
     doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
     const originDateStr = opts.referencedDocDate ? ` de ${opts.referencedDocDate}` : "";
-    doc.text(`Origem: ${originDoc.trim()}${originDateStr}`, rhs, yDoc, { align: "right", baseline: "top" });
+    const originPrefix = docTypeUpper === "RC" ? "Fatura Liquidada:" : "Origem:";
+    doc.text(`${originPrefix} ${originDoc.trim()}${originDateStr}`, rhs, yDoc, { align: "right", baseline: "top" });
     doc.setTextColor(BODY_TEXT[0], BODY_TEXT[1], BODY_TEXT[2]);
     yDoc += pxMm(14);
   }
