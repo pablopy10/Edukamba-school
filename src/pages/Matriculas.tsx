@@ -19,7 +19,6 @@ import { isNativeMobileApp, showPageKpiCards, NATIVE_MOBILE_FAB_BUTTON_CLASSNAME
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PagamentosFinanceHub } from "@/pages/Pagamentos";
-import { EnrollmentChargeRulesPanel } from "@/components/finance/EnrollmentChargeRulesPanel";
 import { ModuleAuthorizationsPanel } from "@/components/authorizations/ModuleAuthorizationsPanel";
 import { effectiveSchoolIdFromProfile } from "@/lib/effectiveTenant";
 import { isSchoolManagementRole } from "@/lib/schoolStaffRoles";
@@ -67,7 +66,7 @@ const Matriculas = () => {
   const showEnrollmentRowActions = !isParent && !enrollmentReadOnly;
   const enrollmentTableColSpan = showEnrollmentRowActions ? 7 : 6;
   const canManageAuthorizations = isSchoolManagementRole(role);
-  const [matriculasTab, setMatriculasTab] = useState<"lista" | "regras" | "pagamentos" | "autorizacoes">("lista");
+  const [matriculasTab, setMatriculasTab] = useState<"lista" | "pagamentos" | "autorizacoes">("lista");
   const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([]);
   const [students, setStudents] = useState<Opt[]>([]);
   const [classrooms, setClassrooms] = useState<Opt[]>([]);
@@ -346,9 +345,6 @@ const Matriculas = () => {
         <Tabs value={matriculasTab} onValueChange={(v) => setMatriculasTab(v as typeof matriculasTab)} className="w-full">
           <TabsList className="flex h-auto w-full flex-wrap gap-1">
             <TabsTrigger value="lista">{t("matriculas.tab_list")}</TabsTrigger>
-            {!isParent && (
-              <TabsTrigger value="regras">{t("matriculas.tab_charge_rules")}</TabsTrigger>
-            )}
             <TabsTrigger value="pagamentos">{t("matriculas.tab_payments")}</TabsTrigger>
             <TabsTrigger value="autorizacoes">
               <FileSignature className="mr-2 h-4 w-4" />
@@ -668,12 +664,6 @@ const Matriculas = () => {
             </div>
           </TabsContent>
 
-          {!isParent && (
-            <TabsContent value="regras" className="mt-4 border-0 bg-transparent p-0 shadow-none">
-              <EnrollmentChargeRulesPanel schoolId={schoolId} role={role} />
-            </TabsContent>
-          )}
-
           <TabsContent value="pagamentos" className="mt-4 border-0 bg-transparent p-0 shadow-none">
             <PagamentosFinanceHub financePage="enrollmentCharges" />
           </TabsContent>
@@ -717,6 +707,7 @@ const Matriculas = () => {
         years={years}
         enrollment={editing}
         onSaved={load}
+        schoolId={schoolId}
       />
 
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>

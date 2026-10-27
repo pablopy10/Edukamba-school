@@ -10,10 +10,11 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, Receipt } from "lucide-react";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useParentChildren } from "@/hooks/useParentChildren";
 import { CreateStudentAccessDialog, ELIGIBLE_GRADES } from "@/components/alunos/CreateStudentAccessDialog";
+import { BillingEngineService } from "@/lib/fiscal";
 
 export type EnrollmentRow = {
   id: string;
@@ -41,9 +42,19 @@ interface Props {
   years: YearOpt[];
   enrollment?: EnrollmentRow | null;
   onSaved: () => void;
+  schoolId?: string | null;
 }
 
-export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms, years, enrollment, onSaved }: Props) => {
+export const EnrollmentFormDialog = ({
+  open,
+  onOpenChange,
+  students,
+  classrooms,
+  years,
+  enrollment,
+  onSaved,
+  schoolId,
+}: Props) => {
   const { t } = useTranslation("pages");
   const { selectedYearId } = useAcademicYear();
   const { isParent, children: parentChildren } = useParentChildren();
@@ -71,6 +82,19 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
   const [enrollmentNumber, setEnrollmentNumber] = useState("");
   const [taxId, setTaxId] = useState("");
 
+  // Billing controls
+  const [generateCharge, setGenerateCharge] = useState<boolean>(true);
+  const [generateCashReceipt, setGenerateCashReceipt] = useState<boolean>(false);
+  const [chargeAmount, setChargeAmount] = useState<number>(0);
+  const [paymentMethod, setPaymentMethod] = useState<string>("TRANSFERENCIA");
+  const [dueDate, setDueDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 15);
+    return d.toISOString().slice(0, 10);
+  });
+  const [defaultNewFee, setDefaultNewFee] = useState<number>(0);
+  const [defaultRenewalFee, setDefaultRenewalFee] = useState<number>(0);
+
   // Post-save: prompt to create student platform access when eligible
   const [accessPrompt, setAccessPrompt] = useState<{ studentId: string; studentName: string; defaultEmail: string | null } | null>(null);
 
@@ -78,6 +102,46 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
     const c = yearClassrooms.find((x) => x.id === cId);
     return !!(c?.grade_level && ELIGIBLE_GRADES.has(c.grade_level));
   };
+
+  // Carregar configurações de taxas da escola
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const loadSettings = async () => {
+      let sId = schoolId;
+      if (!sId) {
+        const { data: userRes } = await supabase.auth.getUser();
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("school_id")
+          .eq("id", userRes.user?.id ?? "")
+          .maybeSingle();
+        sId = profile?.school_id ?? null;
+      }
+      if (!sId || cancelled) return;
+      const { data: schoolData } = await supabase
+        .from("schools")
+        .select("settings")
+        .eq("id", sId)
+        .maybeSingle();
+      if (cancelled || !schoolData) return;
+      const s = schoolData.settings as {
+        enrollment_fee_new?: number;
+        enrollment_fee_renewal?: number;
+      } | null;
+      const dNew = typeof s?.enrollment_fee_new === "number" ? s.enrollment_fee_new : 0;
+      const dRenewal = typeof s?.enrollment_fee_renewal === "number" ? s.enrollment_fee_renewal : 0;
+      setDefaultNewFee(dNew);
+      setDefaultRenewalFee(dRenewal);
+      if (!enrollment) {
+        setChargeAmount(tab === "new" ? dNew : dRenewal);
+      }
+    };
+    void loadSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, schoolId]);
 
   useEffect(() => {
     if (open) {
@@ -96,9 +160,16 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         setResult("EM_CURSO"); setResultNotes(""); setPublishResult(false); setAlreadyPublished(false);
         setTab("renew");
         setFullName(""); setEmail(""); setPhone(""); setBirthDate(""); setGender(""); setEnrollmentNumber(""); setTaxId("");
+        setGenerateCharge(true);
+        setGenerateCashReceipt(false);
+        setChargeAmount(defaultRenewalFee);
+        const d = new Date();
+        d.setDate(d.getDate() + 15);
+        setDueDate(d.toISOString().slice(0, 10));
+        setPaymentMethod("TRANSFERENCIA");
       }
     }
-  }, [open, enrollment, years, selectedYearId]);
+  }, [open, enrollment, years, selectedYearId, defaultRenewalFee]);
 
   // Fetch classrooms for the selected year inside the dialog
   useEffect(() => {
@@ -134,6 +205,140 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
       setClassroomId("");
     }
   }, [yearClassrooms, loadingClassrooms, open]);
+
+  const handleEnrollmentBilling = async ({
+    targetStudentId,
+    enrollmentId,
+    targetSchoolId,
+    targetYearId,
+    feeType,
+    customerName,
+    customerNif,
+  }: {
+    targetStudentId: string;
+    enrollmentId: string;
+    targetSchoolId: string;
+    targetYearId: string;
+    feeType: "NEW" | "RENEWAL";
+    customerName?: string;
+    customerNif?: string;
+  }) => {
+    const yearLabel = years.find((y) => y.id === targetYearId)?.label || "";
+    const lineDesc =
+      feeType === "NEW"
+        ? `Taxa de Matrícula${yearLabel ? ` - ${yearLabel}` : ""}`
+        : `Taxa de Renovação de Matrícula${yearLabel ? ` - ${yearLabel}` : ""}`;
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const targetDueDate = dueDate || todayStr;
+
+    if (generateCashReceipt) {
+      // 1. Criar enrollment_fees liquidada
+      const { data: feeRow, error: feeErr } = await supabase
+        .from("enrollment_fees")
+        .insert({
+          school_id: targetSchoolId,
+          student_id: targetStudentId,
+          academic_year_id: targetYearId || null,
+          enrollment_id: enrollmentId,
+          fee_type: feeType,
+          amount_due: chargeAmount,
+          due_date: todayStr,
+          is_paid: true,
+          notes: `Liquidado no ato da matrícula (${feeType === "NEW" ? "Nova" : "Renovação"})`,
+        })
+        .select("id")
+        .single();
+
+      if (feeErr) console.warn("Erro ao registar enrollment_fees:", feeErr);
+
+      // 2. Criar payment aprovado
+      const { data: payRow, error: payErr } = await supabase
+        .from("payments")
+        .insert({
+          school_id: targetSchoolId,
+          enrollment_fee_id: feeRow?.id ?? null,
+          amount_paid: chargeAmount,
+          method: paymentMethod || "TRANSFERENCIA",
+          status: "APPROVED",
+          payment_date: todayStr,
+          notes: `Quitação imediata no ato da matrícula (${feeType === "NEW" ? "Nova" : "Renovação"})`,
+        })
+        .select("id")
+        .single();
+
+      if (payErr) console.warn("Erro ao registar payments:", payErr);
+
+      // 3. Emitir FR (Fatura-Recibo) com quitação imediata e envio por email com PDF
+      const frRes = await BillingEngineService.issueCashInvoice({
+        schoolId: targetSchoolId,
+        studentId: targetStudentId,
+        paymentId: payRow?.id ?? null,
+        paymentMethod: paymentMethod || "TRANSFERENCIA",
+        paymentDate: todayStr,
+        customerName,
+        customerNif,
+        lines: [
+          {
+            itemType: "MATRICULA",
+            description: lineDesc,
+            quantity: 1,
+            unitPrice: chargeAmount,
+            taxPercentage: 0,
+            taxCode: "ISE",
+            taxExemptionCode: "M11",
+            taxExemptionReason: "Isento nos termos da alínea a) do n.º 1 do artigo 12.º do CIVA",
+          },
+        ],
+        sendEmailWithPdf: true,
+      });
+
+      return { type: "FR" as const, result: frRes };
+    } else {
+      // 1. Criar enrollment_fees em aberto (FT)
+      const { data: feeRow, error: feeErr } = await supabase
+        .from("enrollment_fees")
+        .insert({
+          school_id: targetSchoolId,
+          student_id: targetStudentId,
+          academic_year_id: targetYearId || null,
+          enrollment_id: enrollmentId,
+          fee_type: feeType,
+          amount_due: chargeAmount,
+          due_date: targetDueDate,
+          is_paid: false,
+          notes: `Fatura de matrícula a crédito (${feeType === "NEW" ? "Nova" : "Renovação"})`,
+        })
+        .select("id")
+        .single();
+
+      if (feeErr) console.warn("Erro ao registar enrollment_fees:", feeErr);
+
+      // 2. Emitir FT (Fatura) a crédito com envio por email com PDF
+      const ftRes = await BillingEngineService.issueCreditInvoice({
+        schoolId: targetSchoolId,
+        studentId: targetStudentId,
+        dueDate: targetDueDate,
+        customerName,
+        customerNif,
+        lines: [
+          {
+            itemType: "MATRICULA",
+            description: lineDesc,
+            quantity: 1,
+            unitPrice: chargeAmount,
+            taxPercentage: 0,
+            taxCode: "ISE",
+            taxExemptionCode: "M11",
+            taxExemptionReason: "Isento nos termos da alínea a) do n.º 1 do artigo 12.º do CIVA",
+          },
+        ],
+        sendEmailWithPdf: true,
+      });
+
+      return { type: "FT" as const, result: ftRes };
+    }
+  };
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -204,12 +409,26 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
           setLoading(false);
           return;
         }
+
+        if (!isParent && generateCharge && (chargeAmount <= 0 || isNaN(chargeAmount))) {
+          toast({
+            title: "Valor da cobrança obrigatório",
+            description: "Indique um valor superior a 0 Kz para gerar a cobrança / fatura de matrícula.",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+
         // Need school_id for student creation
-        const { data: userRes } = await supabase.auth.getUser();
-        const { data: profile } = await supabase
-          .from("profiles").select("school_id").eq("id", userRes.user?.id ?? "").maybeSingle();
-        const schoolId = profile?.school_id;
-        if (!schoolId) throw new Error(t("matriculas.form.toast_school_missing"));
+        let resolvedSchoolId = schoolId;
+        if (!resolvedSchoolId) {
+          const { data: userRes } = await supabase.auth.getUser();
+          const { data: profile } = await supabase
+            .from("profiles").select("school_id").eq("id", userRes.user?.id ?? "").maybeSingle();
+          resolvedSchoolId = profile?.school_id;
+        }
+        if (!resolvedSchoolId) throw new Error(t("matriculas.form.toast_school_missing"));
 
         const { data: created, error: sErr } = await supabase.from("students").insert({
           full_name: fullName.trim(),
@@ -220,18 +439,49 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
           gender: gender || null,
           enrollment_number: enrollmentNumber || null,
           classroom_id: classroomId || null,
-          school_id: schoolId,
+          school_id: resolvedSchoolId,
         }).select("id").single();
         if (sErr) throw sErr;
 
-        const { error: eErr } = await supabase.from("enrollments").insert({
+        const { data: createdEnrollment, error: eErr } = await supabase.from("enrollments").insert({
           student_id: created.id,
           classroom_id: classroomId || null,
           academic_year_id: yearId || null,
           status,
-        });
+        }).select("id").single();
         if (eErr) throw eErr;
-        toast({ title: t("matriculas.form.toast_created_student_enrollment") });
+
+        // Faturação da matrícula
+        if (!isParent && generateCharge && chargeAmount > 0) {
+          const billingRes = await handleEnrollmentBilling({
+            targetStudentId: created.id,
+            enrollmentId: createdEnrollment.id,
+            targetSchoolId: resolvedSchoolId,
+            targetYearId: yearId,
+            feeType: "NEW",
+            customerName: fullName.trim(),
+            customerNif: taxId.trim().toUpperCase(),
+          });
+
+          if (billingRes && !billingRes.result.ok) {
+            toast({
+              title: "Matrícula criada com aviso fiscal",
+              description: billingRes.result.message || "Erro ao emitir documento fiscal.",
+              variant: "destructive",
+            });
+          } else if (billingRes && billingRes.result.ok) {
+            const docLabel = billingRes.type === "FR" ? "Fatura-Recibo" : "Fatura";
+            toast({
+              title: t("matriculas.form.toast_created_student_enrollment"),
+              description: `${docLabel} ${billingRes.result.documentNumber} emitida e enviada por email.`,
+            });
+          } else {
+            toast({ title: t("matriculas.form.toast_created_student_enrollment") });
+          }
+        } else {
+          toast({ title: t("matriculas.form.toast_created_student_enrollment") });
+        }
+
         if (classroomId && isClassroomEligible(classroomId)) {
           setAccessPrompt({ studentId: created.id, studentName: fullName.trim(), defaultEmail: email || null });
           triggeredAccessPrompt = true;
@@ -242,6 +492,17 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
           setLoading(false);
           return;
         }
+
+        if (!isParent && generateCharge && (chargeAmount <= 0 || isNaN(chargeAmount))) {
+          toast({
+            title: "Valor da cobrança obrigatório",
+            description: "Indique um valor superior a 0 Kz para gerar a cobrança / fatura de renovação.",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+
         // Prevent duplicate enrollment on the same year
         if (yearId) {
           const { data: dup, error: dErr } = await supabase
@@ -261,14 +522,77 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
             return;
           }
         }
-        const { error } = await supabase.from("enrollments").insert({
+
+        let resolvedSchoolId = schoolId;
+        if (!resolvedSchoolId) {
+          const { data: userRes } = await supabase.auth.getUser();
+          const { data: profile } = await supabase
+            .from("profiles").select("school_id").eq("id", userRes.user?.id ?? "").maybeSingle();
+          resolvedSchoolId = profile?.school_id;
+        }
+        if (!resolvedSchoolId) throw new Error(t("matriculas.form.toast_school_missing"));
+
+        const { data: createdEnrollment, error: eErr } = await supabase.from("enrollments").insert({
           student_id: studentId,
           classroom_id: isParent ? null : (classroomId || null),
           academic_year_id: yearId || null,
           status: isParent ? "PENDING" : status,
-        });
-        if (error) throw error;
-        toast({ title: t("matriculas.form.toast_renewed") });
+        }).select("id").single();
+        if (eErr) throw eErr;
+
+        // Faturação da renovação
+        if (!isParent && generateCharge && chargeAmount > 0) {
+          let customerName = "";
+          let customerNif = "";
+          const { data: stData } = await supabase
+            .from("students")
+            .select("full_name, tax_id, parent_id")
+            .eq("id", studentId)
+            .maybeSingle();
+
+          if (stData) {
+            customerName = stData.full_name;
+            customerNif = stData.tax_id || "";
+            if (stData.parent_id) {
+              const { data: prData } = await supabase
+                .from("profiles")
+                .select("full_name, tax_id")
+                .eq("id", stData.parent_id)
+                .maybeSingle();
+              if (prData?.full_name) customerName = prData.full_name;
+              if (prData?.tax_id) customerNif = prData.tax_id;
+            }
+          }
+
+          const billingRes = await handleEnrollmentBilling({
+            targetStudentId: studentId,
+            enrollmentId: createdEnrollment.id,
+            targetSchoolId: resolvedSchoolId,
+            targetYearId: yearId,
+            feeType: "RENEWAL",
+            customerName,
+            customerNif,
+          });
+
+          if (billingRes && !billingRes.result.ok) {
+            toast({
+              title: "Renovação criada com aviso fiscal",
+              description: billingRes.result.message || "Erro ao emitir documento fiscal.",
+              variant: "destructive",
+            });
+          } else if (billingRes && billingRes.result.ok) {
+            const docLabel = billingRes.type === "FR" ? "Fatura-Recibo" : "Fatura";
+            toast({
+              title: t("matriculas.form.toast_renewed"),
+              description: `${docLabel} ${billingRes.result.documentNumber} emitida e enviada por email.`,
+            });
+          } else {
+            toast({ title: t("matriculas.form.toast_renewed") });
+          }
+        } else {
+          toast({ title: t("matriculas.form.toast_renewed") });
+        }
+
         if (classroomId && isClassroomEligible(classroomId)) {
           const { data: st } = await supabase
             .from("students")
@@ -298,7 +622,7 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
   return (
     <>
     <Dialog open={open && !accessPrompt} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl sm:max-w-3xl w-full max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? t("matriculas.form.title_edit") : t("matriculas.form.title_create")}</DialogTitle>
           <DialogDescription>
@@ -307,7 +631,14 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
         </DialogHeader>
 
         {!isEdit && (
-          <Tabs value={isParent ? "renew" : tab} onValueChange={(v) => setTab(v as "new" | "renew")}>
+          <Tabs
+            value={isParent ? "renew" : tab}
+            onValueChange={(v) => {
+              const nextTab = v as "new" | "renew";
+              setTab(nextTab);
+              setChargeAmount(nextTab === "new" ? defaultNewFee : defaultRenewalFee);
+            }}
+          >
             {!isParent && (
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="new">{t("matriculas.form.tab_new_student")}</TabsTrigger>
@@ -448,6 +779,121 @@ export const EnrollmentFormDialog = ({ open, onOpenChange, students, classrooms,
           </div>
           )}
         </div>
+
+        {!isEdit && !isParent && (
+          <div className="rounded-xl border border-border/80 bg-muted/20 p-4 sm:p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-primary" />
+              <div>
+                <h4 className="text-sm font-semibold text-foreground">Faturação e Cobrança da Matrícula</h4>
+                <p className="text-xs text-muted-foreground">Emissão fiscal AGT vinculada à matrícula do aluno</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-1">
+              {/* Checkbox 1: Gerar cobrança */}
+              <label className="flex items-start gap-3 cursor-pointer select-none">
+                <Checkbox
+                  id="chk-generate-charge"
+                  checked={generateCharge}
+                  onCheckedChange={(checked) => {
+                    const v = !!checked;
+                    setGenerateCharge(v);
+                    if (!v) setGenerateCashReceipt(false);
+                  }}
+                  className="mt-0.5"
+                />
+                <div>
+                  <span className="text-sm font-medium text-foreground">Gerar cobrança</span>
+                  <p className="text-xs text-muted-foreground">
+                    {generateCashReceipt
+                      ? "Cria a cobrança e emite a Fatura-Recibo (FR) quitada no ato com comprovativo fiscal."
+                      : "Cria a cobrança e emite uma Fatura (FT) a crédito com lançamento de conta a receber."}
+                  </p>
+                </div>
+              </label>
+
+              {/* Checkbox 2: Gerar Fatura-recibo (em baixo da de gerar cobrança) */}
+              <div className="pl-7">
+                <label
+                  className={`flex items-start gap-3 select-none ${
+                    !generateCharge ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                  }`}
+                >
+                  <Checkbox
+                    id="chk-generate-cash-receipt"
+                    disabled={!generateCharge}
+                    checked={generateCashReceipt}
+                    onCheckedChange={(checked) => {
+                      const v = !!checked;
+                      setGenerateCashReceipt(v);
+                      if (v) setGenerateCharge(true);
+                    }}
+                    className="mt-0.5"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-foreground">Gerar Fatura-recibo</span>
+                    <p className="text-xs text-muted-foreground">
+                      Quitação imediata: gera a fatura-recibo para o encarregado e/ou para o aluno com envio automático do PDF por email.
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              {/* Campos adicionais quando Gerar cobrança estiver ativo */}
+              {generateCharge && (
+                <div className="mt-3 grid grid-cols-1 gap-4 pt-2 sm:grid-cols-2 border-t border-border/50">
+                  <div>
+                    <Label htmlFor="charge-amount" className="text-xs font-semibold">
+                      Valor da Matrícula / Renovação (Kz)
+                    </Label>
+                    <Input
+                      id="charge-amount"
+                      type="number"
+                      min={0}
+                      step={100}
+                      value={chargeAmount === 0 ? "" : chargeAmount}
+                      onChange={(e) => setChargeAmount(e.target.value === "" ? 0 : Number(e.target.value))}
+                      placeholder="Ex: 25000"
+                      className="mt-1"
+                    />
+                  </div>
+
+                  {generateCashReceipt ? (
+                    <div>
+                      <Label className="text-xs font-semibold">Método de Pagamento</Label>
+                      <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="TRANSFERENCIA">Transferência Bancária / Express</SelectItem>
+                          <SelectItem value="TPA">Terminal Multicaixa (TPA)</SelectItem>
+                          <SelectItem value="NUMERARIO">Numerário / Dinheiro</SelectItem>
+                          <SelectItem value="DEPOSITO">Depósito Bancário</SelectItem>
+                          <SelectItem value="OUTRO">Outro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
+                    <div>
+                      <Label htmlFor="charge-due-date" className="text-xs font-semibold">
+                        Data de Vencimento
+                      </Label>
+                      <Input
+                        id="charge-due-date"
+                        type="date"
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                        className="mt-1"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {isEdit && (
           <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
