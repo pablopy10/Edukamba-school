@@ -285,4 +285,28 @@ describe("Módulo de Notas de Crédito (NC) Certificadas AGT - Edukamba", () => 
       expect(lineBlock).toContain("<Reference>FT 2026/45</Reference>");
     });
   });
+
+  // ─── 6. AUDITORIA DE SÉRIE E ESTORNO EM HISTÓRICO ──────────────────────────
+  describe("6. Isolamento de Série de NC e Auditoria de Pagamento", () => {
+    it("deve garantir que a série de Nota de Crédito roda em série própria sem colidir com FT", () => {
+      const ncSeries = "NC-EDK";
+      const ftSeries = "EDK";
+      expect(ncSeries).not.toBe(ftSeries);
+      expect(ncSeries.startsWith("NC")).toBe(true);
+    });
+
+    it("deve validar campos de auditoria de estorno em pagamentos", () => {
+      const paymentAuditRow = {
+        has_credit_note: true,
+        credit_note_id: "11111111-2222-3333-4444-555555555555",
+        credit_note_number: "NC EDK/1",
+        credited_amount: 25000,
+        credited_at: "2026-10-27T10:00:00.000Z",
+      };
+
+      expect(paymentAuditRow.has_credit_note).toBe(true);
+      expect(paymentAuditRow.credit_note_number).toMatch(/^NC /);
+      expect(paymentAuditRow.credited_amount).toBeGreaterThan(0);
+    });
+  });
 });

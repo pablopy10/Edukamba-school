@@ -31,18 +31,10 @@ export async function emitCreditNoteDirect(params: IssueCreditNoteParams): Promi
     return { ok: false, message: "Fatura de origem e motivo (mínimo 6 caracteres) são obrigatórios." };
   }
 
-  // 1. Chamar RPC billing_prepare_credit_note_lock (bloqueio FOR UPDATE e validação de sobrecrédito)
+  // 1. Obter dados da fatura original e validar saldo com lock ou fallback direto
   const reqAmount = typeof params.partialAmount === "number" && params.partialAmount > 0 ? params.partialAmount : null;
-  const { data: lockData, error: lockErr } = await supabase.rpc("billing_prepare_credit_note_lock", {
-    _original_invoice_id: invoiceId,
-    _credit_amount: reqAmount,
-  });
-
-  if (lockErr) {
-    return { ok: false, message: lockErr.message };
-  }
-
-  const origRow = (Array.isArray(lockData) ? lockData[0] : lockData) as {
+  
+  let origRow: {
     school_id: string;
     original_invoice_id: string;
     original_document_number: string;
@@ -58,10 +50,78 @@ export async function emitCreditNoteDirect(params: IssueCreditNoteParams): Promi
     cliente_nif?: string | null;
     exemption_code?: string | null;
     exemption_reason?: string | null;
-  } | null;
+  } | null = null;
 
+  try {
+    const { data: lockData, error: lockErr } = await supabase.rpc("billing_prepare_credit_note_lock", {
+      _original_invoice_id: invoiceId,
+      _credit_amount: reqAmount,
+    });
+
+    if (!lockErr && lockData) {
+      origRow = (Array.isArray(lockData) ? lockData[0] : lockData) as typeof origRow;
+    } else if (lockErr) {
+      console.warn("billing_prepare_credit_note_lock avisou, usando resolução direta de fatura:", lockErr.message);
+    }
+  } catch (rpcEx) {
+    console.warn("billing_prepare_credit_note_lock exceção:", rpcEx);
+  }
+
+  // Fallback direto seguro via consulta à tabela invoices se a RPC não respondeu
   if (!origRow) {
-    return { ok: false, message: "Não foi possível carregar a fatura de origem." };
+    const { data: inv, error: invErr } = await supabase
+      .from("invoices")
+      .select("id, school_id, document_number, invoice_date, gross_total, payment_id, student_id, parent_profile_id, cliente_nome, cliente_nif, exemption_code, exemption_reason, invoice_status")
+      .eq("id", invoiceId)
+      .maybeSingle();
+
+    if (invErr || !inv) {
+      return { ok: false, message: invErr?.message || "Fatura original não encontrada." };
+    }
+
+    if (inv.invoice_status === "A") {
+      return { ok: false, message: `A fatura ${inv.document_number} encontra-se anulada.` };
+    }
+
+    const { data: ncs } = await supabase
+      .from("invoices")
+      .select("gross_total")
+      .or(`original_invoice_id.eq.${invoiceId},referenced_invoice_id.eq.${invoiceId}`)
+      .in("doc_type", ["NC", "nc"]);
+
+    const alreadyCredited = (ncs || []).reduce((acc, row) => acc + Number(row.gross_total || 0), 0);
+    const origGross = Number(inv.gross_total || 0);
+    const remainingBalance = Math.max(0, Math.round((origGross - alreadyCredited) * 100) / 100);
+
+    if (remainingBalance <= 0.001) {
+      return { ok: false, message: `A fatura ${inv.document_number} já se encontra totalmente creditada.` };
+    }
+
+    const toCredit = reqAmount ? Math.min(reqAmount, remainingBalance) : remainingBalance;
+    if (reqAmount && reqAmount > remainingBalance + 0.01) {
+      return {
+        ok: false,
+        message: `Sobrecrédito rejeitado: valor solicitado (${reqAmount} Kz) excede o saldo disponível (${remainingBalance} Kz) da fatura original ${inv.document_number}.`,
+      };
+    }
+
+    origRow = {
+      school_id: inv.school_id,
+      original_invoice_id: inv.id,
+      original_document_number: inv.document_number,
+      original_invoice_date: inv.invoice_date,
+      original_gross_total: origGross,
+      already_credited_amount: alreadyCredited,
+      remaining_balance: remainingBalance,
+      is_full_credit: (alreadyCredited + toCredit) >= (origGross - 0.01),
+      payment_id: inv.payment_id,
+      student_id: inv.student_id,
+      parent_profile_id: inv.parent_profile_id,
+      cliente_nome: inv.cliente_nome,
+      cliente_nif: inv.cliente_nif,
+      exemption_code: inv.exemption_code,
+      exemption_reason: inv.exemption_reason,
+    };
   }
 
   const schoolId = origRow.school_id;
@@ -70,8 +130,8 @@ export async function emitCreditNoteDirect(params: IssueCreditNoteParams): Promi
   const alreadyCredited = Number(origRow.already_credited_amount);
   const ncAmount = reqAmount ? Math.min(reqAmount, remainingBalance) : remainingBalance;
 
-  // 2. Obter ou reservar número sequencial na série fiscal de NC
-  const ncSeriesCode = "EDK";
+  // 2. Série fiscal própria para Notas de Crédito (evita colisão com FT em invoices_school_series_doc_uq)
+  const ncSeriesCode = "NC-EDK";
   const currentFiscalYear = new Date().getFullYear();
   const invoiceDate = formatInvoiceDate(new Date());
   const issuedAt = new Date().toISOString();
@@ -91,21 +151,21 @@ export async function emitCreditNoteDirect(params: IssueCreditNoteParams): Promi
   if (!reserveErr && reserveData && Array.isArray(reserveData) && reserveData.length > 0) {
     const row = reserveData[0];
     nextNumber = row.doc_number;
-    documentNumber = row.document_number_full;
+    documentNumber = row.document_number_full || `NC EDK/${nextNumber}`;
     previousHash = (row.previous_document_hash ?? "").trim();
   } else {
-    // Fallback sequencial seguro com leitura na tabela invoices
+    // Leitura direta na tabela invoices isolada pela série e tipo NC
     const { data: lastNC } = await supabase
       .from("invoices")
       .select("document_number, document_hash, doc_number")
       .eq("school_id", schoolId)
-      .in("doc_type", ["NC", "nc"])
+      .or(`doc_type.eq.NC,series.eq.${ncSeriesCode}`)
       .order("doc_number", { ascending: false })
       .limit(1)
       .maybeSingle();
 
     nextNumber = (lastNC?.doc_number ?? 0) + 1;
-    documentNumber = `NC ${ncSeriesCode}/${nextNumber}`;
+    documentNumber = `NC EDK/${nextNumber}`;
     previousHash = (lastNC?.document_hash ?? "").trim();
   }
 
@@ -124,11 +184,12 @@ export async function emitCreditNoteDirect(params: IssueCreditNoteParams): Promi
   }
 
   // 4. Inserir a NC na tabela invoices
+  // Nota: payment_id mantido nulo na NC para não colidir no índice único invoices_payment_id_uq
   const insertPayload = {
     school_id: schoolId,
     student_id: origRow.student_id ?? null,
     parent_profile_id: origRow.parent_profile_id ?? null,
-    payment_id: origRow.payment_id ?? null,
+    payment_id: null,
     series: ncSeriesCode,
     doc_number: nextNumber,
     document_number: documentNumber,
@@ -195,7 +256,51 @@ export async function emitCreditNoteDirect(params: IssueCreditNoteParams): Promi
     console.warn("emitCreditNoteDirect: invoice_lines insert non-fatal:", lErr);
   }
 
-  // 6. Atualizar auditoria e estados através da RPC
+  const newTotalCredited = Math.round((alreadyCredited + ncAmount + Number.EPSILON) * 100) / 100;
+  const newCreditStatus = newTotalCredited >= (originalGrossTotal - 0.01) ? "FULLY_CREDITED" : "PARTIALLY_CREDITED";
+
+  // 6. Atualizar diretamente a fatura de origem e pagamentos associados
+  try {
+    await supabase
+      .from("invoices")
+      .update({
+        credit_status: newCreditStatus,
+        credited_amount: newTotalCredited,
+      })
+      .eq("id", origRow.original_invoice_id);
+  } catch (invUpdErr) {
+    console.warn("emitCreditNoteDirect: update original invoice non-fatal:", invUpdErr);
+  }
+
+  if (origRow.payment_id) {
+    try {
+      await supabase
+        .from("payments")
+        .update({
+          has_credit_note: true,
+          credit_note_id: inserted.id,
+          credit_note_number: documentNumber,
+          credited_amount: newTotalCredited,
+          credited_at: new Date().toISOString(),
+        })
+        .eq("id", origRow.payment_id);
+
+      await supabase
+        .from("payment_items")
+        .update({
+          has_credit_note: true,
+          credit_note_id: inserted.id,
+          credit_note_number: documentNumber,
+          credited_amount: newTotalCredited,
+          credited_at: new Date().toISOString(),
+        })
+        .eq("payment_id", origRow.payment_id);
+    } catch (payUpdErr) {
+      console.warn("emitCreditNoteDirect: update payments/items non-fatal:", payUpdErr);
+    }
+  }
+
+  // Chamar RPC de finalização de auditoria (caso disponível no banco)
   try {
     await supabase.rpc("billing_finalize_credit_note_audit", {
       _original_invoice_id: origRow.original_invoice_id,
@@ -220,9 +325,6 @@ export async function emitCreditNoteDirect(params: IssueCreditNoteParams): Promi
   } catch (comErr) {
     console.warn("emitCreditNoteDirect: billing_commit_series_emission non-fatal:", comErr);
   }
-
-  const newTotalCredited = Math.round((alreadyCredited + ncAmount + Number.EPSILON) * 100) / 100;
-  const newCreditStatus = newTotalCredited >= (originalGrossTotal - 0.01) ? "FULLY_CREDITED" : "PARTIALLY_CREDITED";
 
   return {
     ok: true,

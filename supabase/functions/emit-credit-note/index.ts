@@ -180,8 +180,8 @@ Deno.serve(async (req) => {
     }, 400);
   }
 
-  // 3. Obter ou reservar número na série fiscal de NC
-  const ncSeriesCode = "EDK";
+  // 3. Obter ou reservar número na série fiscal de NC (NC-EDK para evitar colisão com FT em invoices_school_series_doc_uq)
+  const ncSeriesCode = "NC-EDK";
   const currentFiscalYear = new Date().getFullYear();
   const invoiceDate = formatInvoiceDate(new Date());
   const issuedAt = new Date().toISOString();
@@ -205,21 +205,21 @@ Deno.serve(async (req) => {
   if (!reserveErr && reserveData && reserveData.length > 0) {
     const row = reserveData[0];
     nextNumber = row.doc_number;
-    documentNumber = row.document_number_full;
+    documentNumber = row.document_number_full || `NC EDK/${nextNumber}`;
     previousHash = (row.previous_document_hash ?? "").trim();
   } else {
-    // Fallback sequencial seguro com verificação na tabela invoices
+    // Fallback sequencial seguro com verificação na tabela invoices para NCs
     const { data: lastNC } = await adminClient
       .from("invoices")
       .select("document_number, document_hash, doc_number")
       .eq("school_id", schoolId)
-      .eq("doc_type", "NC")
+      .or(`doc_type.eq.NC,series.eq.${ncSeriesCode}`)
       .order("doc_number", { ascending: false })
       .limit(1)
       .maybeSingle();
 
     nextNumber = (lastNC?.doc_number ?? 0) + 1;
-    documentNumber = `NC ${ncSeriesCode}/${nextNumber}`;
+    documentNumber = `NC EDK/${nextNumber}`;
     previousHash = (lastNC?.document_hash ?? "").trim();
   }
 
@@ -240,11 +240,12 @@ Deno.serve(async (req) => {
   }
 
   // 7. Inserir registo da NC na tabela invoices
+  // Nota: payment_id nulo para não colidir no índice único invoices_payment_id_uq
   const insertPayload: Record<string, unknown> = {
     school_id: schoolId,
     student_id: originalInvoice.student_id ?? null,
     parent_profile_id: originalInvoice.parent_profile_id ?? null,
-    payment_id: originalInvoice.payment_id ?? null,
+    payment_id: null,
     series: ncSeriesCode,
     doc_number: nextNumber,
     document_number: documentNumber,
